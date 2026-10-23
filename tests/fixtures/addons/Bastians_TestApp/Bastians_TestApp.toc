@@ -1,0 +1,9 @@
+## Interface: 16001, 120105
+## Title: Bastian's Test App
+## Notes: Fixture addon for the Core tests. Never installed.
+## Version: 0.1.0
+## Dependencies: Bastians_Core
+## SavedVariables: BastiansTestAppDB
+## SavedVariablesPerCharacter: BastiansTestAppCharDB
+
+TestApp.lua

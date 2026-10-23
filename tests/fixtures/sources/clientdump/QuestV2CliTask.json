@@ -1,0 +1,12 @@
+{
+  "table": "QuestV2CliTask",
+  "build": "12.1.5.70448",
+  "rowCount": 4,
+  "columns": ["ID", "QuestTitle_lang", "BulletText_lang", "QuestInfoID"],
+  "rows": [
+    {"ID": 26389, "QuestTitle_lang": "WANTED: The Fixture Poster", "BulletText_lang": "", "QuestInfoID": 0},
+    {"ID": 29078, "QuestTitle_lang": "", "BulletText_lang": "", "QuestInfoID": 0},
+    {"ID": 424242, "QuestTitle_lang": "A Task Nobody Can Take", "BulletText_lang": "", "QuestInfoID": 109},
+    {"ID": 4641, "QuestTitle_lang": "  Padded Title  ", "BulletText_lang": "", "QuestInfoID": 0}
+  ]
+}

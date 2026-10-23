@@ -1,0 +1,3 @@
+# Attunements for retail: none. Retail dropped the Classic attunements; the file exists so the
+# build finds one per client (pipeline/bastians_build/attunements.py). Add entries as
+# [[attunement]] tables in the shape of attunements_forever.toml.

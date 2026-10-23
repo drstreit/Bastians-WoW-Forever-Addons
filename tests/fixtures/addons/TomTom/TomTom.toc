@@ -1,0 +1,5 @@
+## Interface: 16001, 120105
+## Title: TomTom (test double)
+## Notes: Fixture: the waypoint API the Map bridge uses.
+
+TomTom.lua

@@ -1,0 +1,8 @@
+## Interface: 16001, 120105
+## Title: Bastian's Data: Text enUS (fixture)
+## Notes: Generated from tests/fixtures/world-mini by the pipeline; the same shape as the real pack.
+## Version: 0.1.0
+## Dependencies: Bastians_Data
+## LoadOnDemand: 1
+
+Generated\Text_enUS.lua

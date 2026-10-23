@@ -1,0 +1,3 @@
+# StyLua skips generated packs and third-party libraries (never reformat vendored code).
+**/Generated/
+**/Libs/

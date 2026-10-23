@@ -1,0 +1,7 @@
+## Interface: 11509
+## Title: |cffFF8000Lib: ItemDB|r |cff999999Vanilla|r
+## Notes: Standalone offline item database — resolve a name to an item link / id (and back) and filter by type / subtype, no client cache needed. Data source for the TOG suite.
+## Author: Pimptasty
+## Version: ItemDB-v1.6.0
+## Category: Library
+## X-Curse-Project-ID: 1558208

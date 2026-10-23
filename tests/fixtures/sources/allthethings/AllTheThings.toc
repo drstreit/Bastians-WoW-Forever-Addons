@@ -1,0 +1,6 @@
+## Title: AllTheThings
+## IconTexture: Interface/Addons/AllTheThings/assets/logo_32x32
+## Name: AllTheThings
+## Author: Crieve
+## Version: 5.4.3
+## Interface: 11509, 16001, 20506, 30405, 38002, 40402, 50504, 120105, 120107

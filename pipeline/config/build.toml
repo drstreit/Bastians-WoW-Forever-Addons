@@ -1,0 +1,173 @@
+# Build configuration: packs, their schemas (field order per type), indexes and size budgets (data.md).
+# A type belongs to exactly one pack. The loader never hard-codes positions: it reads the schema.
+# Field meanings: data.md "Canonical model". Coordinates: spawns = { {uiMapID, x, y, src}, ... } as
+# map fractions; spots = { [uiMapID] = { {x, y, kind, objectiveMask}, ... } }. Money is integer copper.
+
+[packs.world]
+addon = "Bastians_Data_World"
+file = "World.lua"
+# 12 MB since 20.10.2026 (was 10): Classic mob places, up to 12 per map, made the Forever pack 10.9 MB
+budget_kb = 12288
+indexes = ["npc.byZone", "object.byZone", "node.byZone", "area.toMap"]
+
+[packs.world.schema]
+# loot = { {itemID, chance percent}, ... } with lootSrc "classic" (CMaNGOS) or "tdb" (retail, ItemDB)
+npc = ["name", "subname", "level", "levelMax", "zone", "flags", "faction", "spawns", "vendor", "trainer", "loot", "lootSrc", "src"]
+object = ["name", "kind", "zone", "spawns", "loot", "lootSrc", "src"]
+zone = ["name", "parent", "continent", "levelLo", "levelHi", "levelMed", "questsA", "questsH", "mapType"]
+node = ["name", "kind", "profession", "skill", "item", "icon", "spawns", "src"]
+# flight masters from the client's TaxiNodes table (route.md): world yards are the planner's frame,
+# spawns (map fractions) exist when the build had a transform table; faction is A | H | both
+flightpath = ["name", "faction", "continent", "wx", "wy", "spawns", "src"]
+# boats, zeppelins, trams, portals from pipeline/config/transports_<client>.toml (route.md): stops are
+# [uiMapID, x, y, label], world is [continent, wx, wy] per stop when the build had transforms, ride and
+# cycle are seconds (nil = unknown), verified = measured in game
+transport = ["name", "kind", "faction", "stops", "world", "ride", "cycle", "verified", "note", "spawns", "src"]
+
+[packs.quests]
+addon = "Bastians_Data_Quests"
+file = "Quests.lua"
+budget_kb = 6144
+# retail (20.10.2026): 32,409 obtainable quests with a giver, place or zone make 9.0 MB; budget per
+# client, the in-game cost is measured in B11.1 (data.md "Retail data")
+budget_kb_retail = 10240
+# byStart, byTurnIn, followers, chainMembers and chainFrom are the quest graph Quests' Logic reads
+# (B11.1, 21.10.2026): shipped, so no zone page decodes every quest to build them
+indexes = [
+  "quest.byZone", "quest.byGiver", "quest.byEnder", "quest.byItem", "attunement.byFaction",
+  "quest.byStart", "quest.byTurnIn", "quest.followers", "quest.chainMembers", "quest.chainFrom",
+]
+
+[packs.quests.schema]
+quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src"]
+# attunements (quests.md): hand-written lists from pipeline/config/attunements_<client>.toml; steps are
+# [kind, id, label(, standing)] with kind "quest" | "rep" | "item"
+attunement = ["name", "faction", "verified", "note", "steps", "src"]
+
+[packs.items]
+addon = "Bastians_Data_Items"
+file = "Items.lua"
+budget_kb = 8192
+# retail (20.10.2026): 57,726 referenced items make 10.2 MB in format A (the plain name table for
+# search adds 1.7 MB); headroom for the next AllTheThings release
+budget_kb_retail = 11264
+indexes = []
+
+[packs.items.schema]
+item = ["name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew", "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "src"]
+recipe = ["name", "profession", "skill", "item", "count", "reagents", "source", "sourceItem", "foreverNew", "src"]
+
+# the AHSync market export (ahsync-export.md), read with --export; optional: no export, no pack
+[packs.market]
+addon = "Bastians_Data_Market"
+file = "Market.lua"
+# 23.10.2026, the first real export shipped for EU RP (8,281 US beta prices, 1,008 claims):
+# 1,149 KB on disk, 2.3 MB of Lua memory after loading (measured on Lua 5.1)
+budget_kb = 1536
+optional = true
+indexes = ["market.list", "signal.byMarket", "spot.all", "spot.byItem", "strategy.all"]
+
+[packs.market.schema]
+# price keyed "<market>:<itemID>": copper unit prices, nil = unknown, src = the label shown to the player
+price = ["median", "minBuyout", "quantity", "median7d", "median30d", "low30d", "high30d", "salesPerDay", "scanTs", "src"]
+# signal keyed "<market>:<signalID>" (the Today lines); flags such as "needs:<profession>" or "spot:<id>"
+signal = ["module", "action", "item", "horizon", "confidence", "rationale", "capital", "profit", "minutes", "flags", "validUntil", "src"]
+# farm spots by id: items = { {itemID, perHour}, ... }, strategy = the claim behind it
+spot = ["name", "map", "x", "y", "radius", "levelMin", "levelMax", "items", "status", "strategy", "src"]
+# strategies (claims) by id
+strategy = ["kind", "subject", "item", "map", "x", "y", "weight", "reach", "status", "build", "firstSeen", "lastSeen", "src"]
+
+# the Strategies book (strategies-design.md section 6): content/strategies with the export's claims;
+# optional, built with --export when the content folder exists (fixture builds name it with --book)
+[packs.book]
+addon = "Bastians_Data_Strategies"
+file = "Book.lua"
+budget_kb = 1024
+optional = true
+indexes = ["book.toc", "book.mill"]
+
+[packs.book.schema]
+chapter = ["name", "order", "opening", "active"]
+# pages keyed by their permanent id (the file name); shelf = active | back | retired (a tombstone:
+# no text, the date, the reason, the successor); blocks = the text, plate and live precomputed
+page = ["name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate", "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor"]
+# the claims the pages rest on, by claim id: AHSync's own sentence and the sources (channel, date, link)
+rumour = ["claim", "kind", "status", "subject", "sources"]
+# What's new, newest first
+news = ["date", "text", "page"]
+# the Rumour mill (design section 7), by claim id: per chapter the strongest strategies no page
+# tells yet, by rank; the zone, or the claim's own place without one; how many channels and claims
+mill = ["chapter", "rank", "zone", "where", "channels", "claims"]
+
+[packs.text]
+addon = "Bastians_Data_Text_enUS"
+file = "Text_enUS.lua"
+budget_kb = 4096
+indexes = []
+
+[packs.text.schema]
+# quest texts live on the quest record as `text`; the text pack carries them separately (B3.5)
+questText = ["details", "objectives", "offer", "progress", "src"]
+
+# Overview textures for Bastians_Map_Art (map.md "Imagery pipeline", roadmap B8.5): one DXT1 texture per
+# span x span cell of ADT tiles with `pixels` pixels per ADT, levels 0-2 through the mip chain. Measured
+# 20.10.2026 on clientdump output: Forever at 64 px 8.2 MB; retail (39 continents) at 32 px 19 MB, at
+# 64 px 75 MB. both clients at full resolution (64 px); the 40 MB target of
+# map.md was ours, not a client limit. The in-game cost on retail (load time, memory, VRAM) is measured
+# in the retail checklist; `pixels_retail = 32` is the fallback if it fails.
+[mapart]
+addon = "Bastians_Map_Art"
+span = 8
+pixels = 64
+# partly filled cells: "dxt1" (1-bit alpha, half the bytes) or "dxt5" (8-bit alpha). The Forever client
+# rendered the DXT1 transparency black on 20.10.2026; the in-game alpha test decides (map.md B8.5 b)
+alpha = "dxt1"
+# the painted sea: every cell is opaque, the unrendered and the near-black
+# water get this flat tone, the same as the Map's clip background (Map.SEA_COLOR), so level 0 needs
+# no zone art under it. Remove the line for transparent water.
+sea = "b8a380"
+# native tiles whose share of open sea reaches this stay out of the Map's tile table, so at close
+# zoom the parchment cell shows instead of Blizzard's black water
+skip_sea = 0.98
+budget_kb = 81920
+
+# Market pack rules (data.md, roadmap B10.2). labels: what the player sees as the source of a market's
+# prices (default: the market id). fill: a market with no export rows takes another market's prices and
+# signals under its own id with the given label; EU has no AHledger data before launch, so EU players
+# see the US beta range with its date rather than nothing.
+# ship (23.10.2026): the markets the pack carries, with the sources their fills read; empty or
+# absent: every market of the export. The first real export had four US beta markets, 16,870
+# prices, 7.5 MB of Lua memory, for a player who reads one market. The owner plays RP in the EU.
+[market]
+ship = ["forever/rp/alliance/eu", "forever/rp/horde/eu", "retail/normal/neutral/eu"]
+labels = { "forever/normal/alliance/us" = "US beta", "forever/normal/horde/us" = "US beta", "forever/pvp/alliance/us" = "US beta", "forever/pvp/horde/us" = "US beta", "retail/normal/neutral/eu" = "retail EU" }
+
+[[market.fill]]
+to = "forever/normal/alliance/eu"
+from = "forever/normal/alliance/us"
+label = "US beta"
+
+[[market.fill]]
+to = "forever/normal/horde/eu"
+from = "forever/normal/horde/us"
+label = "US beta"
+
+[[market.fill]]
+to = "forever/pvp/alliance/eu"
+from = "forever/pvp/alliance/us"
+label = "US beta"
+
+[[market.fill]]
+to = "forever/pvp/horde/eu"
+from = "forever/pvp/horde/us"
+label = "US beta"
+
+[[market.fill]]
+to = "forever/rp/alliance/eu"
+from = "forever/normal/alliance/us"
+label = "US beta"
+
+[[market.fill]]
+to = "forever/rp/horde/eu"
+from = "forever/normal/horde/us"
+label = "US beta"

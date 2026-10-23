@@ -1,0 +1,127 @@
+# Transports of the Forever world (route.md, roadmap B9.1): boats, zeppelins, the tram and portals.
+# Authored by us from the Classic layout; every row stays `verified = false` until it was measured in
+# game on Forever (position of both ends, ride time, loop time). HandyNotes: TravelGuide is a
+# cross-check only (no licence, sources.md). Never bundle its data.
+#
+# Fields
+#   id        stable key, lowercase with dashes
+#   kind      "boat" | "zeppelin" | "tram" | "portal"
+#   name      shown to the player
+#   faction   "Alliance" | "Horde" | "both"
+#   stops     [[uiMapID, x, y, label], ...] as map fractions (Forever uiMapIDs); a shuttle has two stops
+#             and runs both ways
+#   ride      seconds on board one way (omit when unknown; never 0)
+#   cycle     seconds for one full loop, so the expected wait is cycle / 2 (omit when unknown)
+#   verified  true once measured in game on this client
+#   note      free text shown to the player, e.g. what is still an estimate
+#
+# Forever's TaxiNodes table (clientdump, build 1.60.1.70450) lists transport dummy nodes that name
+# the routes the client knows: "Transport, Menethil Ships", "Transport, Rut'theran - Auberdine",
+# "Transport, Booty Bay - Ratchet", "Transport, Orgrimmar Zepplins", "Transport, Grom'gol - Orgrimmar",
+# "Transport, Feathermoon - Feralas", "Southshore Ferry, Hillsbrad", "Fishing Village, Teldrassil",
+# "Powderfuse Port, Riverglades", "Tidegear Coast, Dun Morogh". The last five are new in Forever and
+# have no row yet: measure them in game (B9.1 owner check) and add them here.
+
+[[transport]]
+id = "boat-menethil-auberdine"
+kind = "boat"
+name = "Menethil Harbor - Auberdine"
+faction = "both"
+stops = [[1437, 0.048, 0.571, "Menethil Harbor, north dock"], [1439, 0.324, 0.436, "Auberdine dock"]]
+ride = 150
+cycle = 420
+verified = false
+note = "Classic layout; dock positions and times are estimates until measured on Forever."
+
+[[transport]]
+id = "boat-menethil-theramore"
+kind = "boat"
+name = "Menethil Harbor - Theramore"
+faction = "both"
+stops = [[1437, 0.052, 0.606, "Menethil Harbor, south dock"], [1445, 0.714, 0.564, "Theramore Isle dock"]]
+ride = 150
+cycle = 420
+verified = false
+note = "Classic layout; dock positions and times are estimates until measured on Forever."
+
+[[transport]]
+id = "boat-bootybay-ratchet"
+kind = "boat"
+name = "Booty Bay - Ratchet"
+faction = "both"
+stops = [[1434, 0.272, 0.774, "Booty Bay dock"], [1413, 0.639, 0.386, "Ratchet dock"]]
+ride = 180
+cycle = 480
+verified = false
+note = "Classic layout; dock positions and times are estimates until measured on Forever."
+
+[[transport]]
+id = "boat-auberdine-ruttheran"
+kind = "boat"
+name = "Auberdine - Rut'theran Village"
+faction = "Alliance"
+stops = [[1439, 0.330, 0.400, "Auberdine, north dock"], [1438, 0.553, 0.937, "Rut'theran Village dock"]]
+ride = 120
+cycle = 360
+verified = false
+note = "Classic layout; dock positions and times are estimates until measured on Forever."
+
+[[transport]]
+id = "portal-ruttheran-darnassus"
+kind = "portal"
+name = "Rut'theran Village - Darnassus portal"
+faction = "Alliance"
+stops = [[1438, 0.559, 0.904, "Rut'theran Village portal"], [1457, 0.306, 0.415, "Darnassus portal"]]
+ride = 3
+verified = false
+note = "Classic layout; positions are estimates until measured on Forever."
+
+[[transport]]
+id = "tram-stormwind-ironforge"
+kind = "tram"
+name = "Deeprun Tram"
+faction = "Alliance"
+# The entrances where the tram's exit triggers put a player (CMaNGOS areatrigger_teleport 2171
+# Stormwind (-8354.23, 524.07) and 2166 Ironforge (-4839.51, -1317.74), world yards) through the
+# Forever transforms of probe 70532 (23.10.2026). Forever keeps Classic's world positions (four
+# Stormwind NPCs measured on Forever lie within 3 yards of their CMaNGOS spawns), but Stormwind's
+# map is redrawn: the Classic fraction (0.637, 0.235) put the entrance 125 yards north, outside
+# the city wall.
+stops = [[1453, 0.690, 0.309, "Stormwind, Deeprun Tram"], [1455, 0.764, 0.512, "Ironforge, Deeprun Tram"]]
+ride = 59
+cycle = 120
+verified = false
+note = "Ride measured on Forever 21.10.2026: 59 s boarding to arrival. Entrances from the exit triggers (23.10.2026); the loop time is still the Classic estimate."
+
+[[transport]]
+id = "zeppelin-orgrimmar-undercity"
+kind = "zeppelin"
+name = "Orgrimmar - Undercity zeppelin"
+faction = "Horde"
+stops = [[1411, 0.514, 0.118, "Orgrimmar zeppelin tower"], [1420, 0.610, 0.590, "Undercity zeppelin tower"]]
+ride = 150
+cycle = 360
+verified = false
+note = "Classic layout; tower positions and times are estimates until measured on Forever."
+
+[[transport]]
+id = "zeppelin-orgrimmar-gromgol"
+kind = "zeppelin"
+name = "Orgrimmar - Grom'gol zeppelin"
+faction = "Horde"
+stops = [[1411, 0.510, 0.125, "Orgrimmar zeppelin tower"], [1434, 0.264, 0.728, "Grom'gol Base Camp tower"]]
+ride = 150
+cycle = 360
+verified = false
+note = "Classic layout; tower positions and times are estimates until measured on Forever."
+
+[[transport]]
+id = "zeppelin-undercity-gromgol"
+kind = "zeppelin"
+name = "Undercity - Grom'gol zeppelin"
+faction = "Horde"
+stops = [[1420, 0.608, 0.583, "Undercity zeppelin tower"], [1434, 0.269, 0.734, "Grom'gol Base Camp tower"]]
+ride = 150
+cycle = 360
+verified = false
+note = "Classic layout; tower positions and times are estimates until measured on Forever."

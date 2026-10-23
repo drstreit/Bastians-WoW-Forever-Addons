@@ -1,0 +1,346 @@
+# Fixture world: a tiny Elwynn Forest. Source of truth for the test packs; the pipeline compiles it into
+# tests/fixtures/addons/Bastians_Data_*/Generated/*.lua (golden, committed). Forever map fractions.
+# Field meanings follow pipeline/config/build.toml and data.md. Money is integer copper.
+
+[meta]
+client = "forever"
+build = "fixture"
+sources = ["hand-written fixture world-mini"]
+
+# AreaTable id -> uiMapID (QuestieDB groups spawns by AreaId): Elwynn Forest, Goldshire, Stormwind City
+[meta.area_to_map]
+12 = 1429
+87 = 1429
+1519 = 1453
+
+[[zone]]
+id = 1429
+name = "Elwynn Forest"
+parent = 1415
+continent = 0
+mapType = 3
+
+[[zone]]
+id = 1415
+name = "Eastern Kingdoms"
+parent = 947
+continent = 0
+mapType = 2
+
+# an instance with two floors: the Zones list merges them by name (R5)
+[[zone]]
+id = 1581
+name = "The Deadmines"
+parent = 1436
+continent = 0
+mapType = 4
+
+[[zone]]
+id = 1582
+name = "The Deadmines"
+parent = 1436
+continent = 0
+mapType = 4
+
+[[npc]]
+id = 448
+name = "Hogger"
+level = 11
+zone = 1429
+flags = "elite"
+spawns = [[1429, 0.27, 0.86, "eq"], [1429, 0.30, 0.80, "questie"]]
+loot = [[2589, 45.5], [1185, 3.2]]
+src = "classic"
+
+[[npc]]
+id = 240
+name = "Marshal Dughan"
+subname = "Marshal"
+level = 10
+zone = 1429
+flags = "questgiver"
+spawns = [[1429, 0.42, 0.65, "eq"]]
+src = "forever"
+
+[[npc]]
+id = 295
+name = "Innkeeper Farley"
+subname = "Innkeeper"
+level = 6
+zone = 1429
+flags = "innkeeper"
+spawns = [[1429, 0.43, 0.66, "eq"]]
+src = "forever"
+
+[[npc]]
+id = 327
+name = "Goldtooth"
+level = 8
+zone = 1429
+spawns = [[1429, 0.38, 0.82, "classic"]]
+src = "classic"
+
+[[npc]]
+id = 54
+name = "Corina Steele"
+subname = "Weaponsmith"
+level = 15
+zone = 1429
+flags = "vendor"
+faction = "A"
+spawns = [[1429, 0.416, 0.658, "fdb"]]
+# vendor rows: item, price for the vendor stack (copper), stack size (unknown = nil), limited, src
+vendor = [[2589, 260, 20, false, "classic"], [1185, 1000, 1, true, "classic"]]
+src = "forever"
+
+[[npc]]
+id = 198
+name = "Zaldimar Wefhellt"
+subname = "Mage Trainer"
+level = 30
+zone = 1429
+flags = "trainer"
+faction = "A"
+spawns = [[1429, 0.436, 0.659, "fdb"]]
+# trainer rows: learned spell, name, cost (copper), required skill value, required level, recipe item, src
+trainer = [[133, "Fireball (Rank 2)", 1200, 0, 6, 0, "classic"], [116, "Frostbolt (Rank 1)", 500, 0, 4, 0, "classic"]]
+src = "forever"
+
+[[object]]
+id = 1734
+name = "Wanted Poster"
+kind = "quest object"
+zone = 1429
+spawns = [[1429, 0.42, 0.66, "eq"]]
+src = "forever"
+
+[[quest]]
+id = 176
+name = 'Wanted: "Hogger"'
+level = 11
+minLevel = 5
+starts = ["object:1734"]
+ends = ["npc:240"]
+zone = 1429
+qtype = 1
+objectives = [["loot", "npc:448", 0]]
+spots = { 1429 = [[0.25, 0.93, "loot", 1], [0.40, 0.70, "loot", 1]] }
+requiredItems = [[1931, 1]]
+rewards = { money = 150, choices = [[1185, 1], [2318, 2]], src = "classic" }
+src = "forever"
+
+[[quest]]
+id = 62
+name = "The Fargodeep Mine"
+level = 7
+minLevel = 4
+starts = ["npc:240"]
+ends = ["npc:240"]
+zone = 1429
+src = "forever"
+
+[[quest]]
+id = 76
+name = "The Jasperlode Mine"
+level = 9
+minLevel = 7
+starts = ["npc:240"]
+ends = ["npc:240"]
+zone = 1429
+preAny = [62]
+src = "forever"
+
+[[item]]
+id = 2589
+name = "Linen Cloth"
+quality = 1
+level = 5
+class = 7
+subclass = 5
+sell = 13
+buy = 260
+stack = 20
+drops = [["npc:448", 45.5, false], ["npc:327", 12.0, false]]
+dropsSrc = "classic"
+src = "classic"
+
+[[item]]
+id = 1185
+name = "Blood Saber"
+quality = 2
+level = 7
+reqLevel = 2
+class = 2
+subclass = 7
+sell = 200
+buy = 1000
+stack = 1
+src = "classic"
+
+[[item]]
+id = 1931
+name = "Huge Gnoll Claw"
+quality = 1
+level = 1
+class = 12
+subclass = 0
+
+[[item]]
+id = 2318
+name = "Light Leather"
+quality = 1
+level = 5
+class = 7
+subclass = 6
+sell = 25
+stack = 20
+src = "classic"
+
+[[recipe]]
+id = 2152
+name = "Light Armor Kit"
+profession = "Leatherworking"
+skill = 1
+item = 2304
+count = 1
+reagents = [[2318, 1]]
+source = "trainer"
+src = "forever"
+
+[[attunement]]
+id = "fargodeep"
+name = "The Fargodeep Attunement"
+faction = "Alliance"
+verified = true
+note = "fixture: the mine chain"
+steps = [["quest", 62, "The Fargodeep Mine"], ["quest", 76, "The Jasperlode Mine"], ["quest", 11, "Riverpaw Gnoll Bounty"]]
+src = "config"
+
+[[attunement]]
+id = "gnoll-claw"
+name = "The Gnoll Claw"
+faction = "both"
+verified = false
+steps = [["item", 1931, "Huge Gnoll Claw"], ["rep", 529, "Argent Dawn", 6], ["quest", 176, 'Wanted: "Hogger"']]
+src = "config"
+
+# flight masters (route.md): world yards as the client's TaxiNodes table gives them; the mock maps
+# cover Elwynn (world -200..200) and Stormwind (100..300), so only Stormwind's node has a map place
+[[flightpath]]
+id = 2
+name = "Stormwind, Elwynn"
+faction = "A"
+continent = 0
+wx = 200.0
+wy = 200.0
+spawns = [[1453, 0.5, 0.5, "client"]]
+src = "client"
+
+[[flightpath]]
+id = 4
+name = "Sentinel Hill, Westfall"
+faction = "A"
+continent = 0
+wx = -700.0
+wy = 500.0
+src = "client"
+
+[[flightpath]]
+id = 6
+name = "Ironforge, Dun Morogh"
+faction = "A"
+continent = 0
+wx = 2500.0
+wy = -300.0
+src = "client"
+
+[[flightpath]]
+id = 23
+name = "Orgrimmar, Durotar"
+faction = "H"
+continent = 1
+wx = 1677.59
+wy = -4315.71
+src = "client"
+
+[[flightpath]]
+id = 80
+name = "Ratchet, The Barrens"
+faction = "both"
+continent = 1
+wx = -894.59
+wy = -3773.01
+src = "client"
+
+# transports (route.md): a tram inside the mock maps and a boat to Kalimdor whose far stop has no map
+# in the mock, so `world` carries the planner's coordinates
+[[transport]]
+id = "tram-goldshire-stormwind"
+name = "Goldshire - Stormwind tram"
+kind = "tram"
+faction = "Alliance"
+stops = [[1429, 0.5, 0.5, "Goldshire tram"], [1453, 0.5, 0.5, "Stormwind tram"]]
+world = [[0, 0.0, 0.0], [0, 200.0, 200.0]]
+ride = 10
+cycle = 60
+verified = true
+spawns = [[1429, 0.5, 0.5, "config"], [1453, 0.5, 0.5, "config"]]
+src = "measured"
+
+[[transport]]
+id = "boat-elwynn-ratchet"
+name = "Elwynn - Ratchet ferry"
+kind = "boat"
+faction = "both"
+stops = [[1429, 0.9, 0.9, "Elwynn dock"], [1413, 0.639, 0.386, "Ratchet dock"]]
+world = [[0, -160.0, -160.0], [1, -900.0, -3770.0]]
+ride = 120
+cycle = 480
+verified = false
+note = "fixture"
+spawns = [[1429, 0.9, 0.9, "config"], [1413, 0.639, 0.386, "config"]]
+src = "assumed"
+
+[[questText]]
+id = 176
+details = "Hogger has terrorised the farms of Elwynn long enough."
+objectives = "Bring Huge Gnoll Claw to Marshal Dughan in Goldshire."
+offer = "You have done Elwynn a great service."
+src = "classic"
+
+[[zone]]
+id = 1436
+name = "Westfall"
+parent = 1415
+continent = 0
+
+[[quest]]
+id = 11
+name = "Riverpaw Gnoll Bounty"
+level = 10
+minLevel = 9
+starts = ["npc:234"]
+ends = ["npc:234"]
+zone = 1436
+preAny = [76]
+src = "forever"
+
+[[npc]]
+id = 234
+name = "Gryan Stoutmantle"
+level = 20
+zone = 1436
+flags = "questgiver"
+spawns = [[1436, 0.56, 0.47, "eq"]]
+src = "forever"
+
+[[quest]]
+id = 1000
+name = "Horde Only Errand"
+level = 9
+minLevel = 8
+races = 178
+starts = ["npc:234"]
+ends = ["npc:234"]
+zone = 1436
+src = "forever"

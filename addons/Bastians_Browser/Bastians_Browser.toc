@@ -1,0 +1,13 @@
+## Interface: 16001, 120105
+## Title: Bastian's Browser
+## Notes: Searchable browser for quests, NPCs, items and zones.
+## Author: Bastian
+## Version: 1.0.0-beta.8
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## OptionalDeps: Bastians_Data, QuestieDB
+## SavedVariables: BastiansBrowserDB
+## SavedVariablesPerCharacter: BastiansBrowserCharDB
+
+Locales\deDE.lua
+Browser.lua

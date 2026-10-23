@@ -1,0 +1,8 @@
+<Bindings>
+  <Binding name="BASTIANS_OMNIBOX" header="BASTIANS" category="ADDONS">
+    Bastians.UI.Omnibox.Toggle()
+  </Binding>
+  <Binding name="BASTIANS_HUB" category="ADDONS">
+    Bastians.UI.Hub.Toggle()
+  </Binding>
+</Bindings>

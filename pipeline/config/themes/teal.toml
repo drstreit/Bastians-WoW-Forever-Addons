@@ -1,0 +1,58 @@
+# Dark teal: the suite's look since 19.10.2026, the reference theme (every theme names these tokens).
+# Colours #RRGGBB or #RRGGBBAA; compiled by `python -m bastians_build themes` (ST3, ADR 0017).
+id = "teal"
+name = "Dark teal"
+order = 1
+
+[colors]
+# surfaces
+bg = "#14110ff0"        # window ground
+panel = "#1a1816fa"     # buttons, fields, menus
+header = "#1f1d1b"      # title bars, the dossier's band
+line = "#ffffff1a"      # 1 px edges
+hover = "#ffffff29"     # a row under the mouse
+press = "#ffffff24"     # a pressed row
+faceHover = "#292624"   # a button's face under the mouse
+track = "#ffffff0a"     # scroll and slider tracks
+rule = "#ffffff2e"      # a rule row
+divider = "#ffffff14"   # between two-line rows
+# text
+text = "#ebebeb"
+dim = "#999999"         # secondary words, hints
+muted = "#808080"       # grey words after a name
+bright = "#ffffff"      # the strongest text (objectives, zone names)
+# accent and states
+accent = "#0cd29d"
+gold = "#ffd100"        # worth, money, available quests
+on = "#59e659"          # an icon that is switched on
+good = "#4de666"        # verified, ahead
+bad = "#e64d4d"         # refuted, behind, a loss
+warn = "#ff9933"
+neutral = "#b3b3b3"     # unverified
+rare = "#a335ee"        # rare creatures
+water = "#6fb6ff"       # fish, flight
+# outside our windows (Blizzard's dark chat and tooltips: keep these light in every theme)
+chat = "#66ccff"
+tipText = "#ffffff"
+tipDim = "#cccccc"
+tipGold = "#ffd100"
+# quest difficulty (the game's own scale)
+diffRed = "#ff2020"
+diffOrange = "#ff8040"
+diffYellow = "#ffff00"
+diffGreen = "#40c040"
+diffGrey = "#808080"
+# money letters
+coinGold = "#ffd700"
+coinSilver = "#c7c7cf"
+coinCopper = "#eda55f"
+# the map
+sea = "#b8a380"          # under the art where no cell lies
+path = "#4dccffe6"       # the route's line
+waypoint = "#ffffff99"   # a quiet waypoint pin
+waypointLoud = "#ffe633" # the waypoint just set
+grid = "#ffffff40"       # the debug grid of the imagery
+
+[shape]
+radius = 6       # windows, blocks, menus
+radiusSmall = 4  # buttons, pills, fields

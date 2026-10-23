@@ -1,0 +1,8 @@
+## Interface: 16001, 120105
+## Title: Bastian's Data: World (fixture)
+## Notes: Hand-written tiny world pack for tests and dev installs. Same shape as the generated pack.
+## Version: 0.1.0
+## Dependencies: Bastians_Data
+## LoadOnDemand: 1
+
+Generated\World.lua

@@ -1,0 +1,5 @@
+## Interface: 16001, 120105
+## Title: Spoken (test double)
+## Notes: Fixture: the public surface of Spoken 3.5 that the Quests bridge uses.
+
+Spoken.lua

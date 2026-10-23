@@ -1,0 +1,3 @@
+local _, ns = ...
+-- Vendors and trainers: [npc] = {name, title, map, x, y, side (A/H), seen in Forever}. Classic places unless seen.
+ns.npcs = {[54]={"Corina Steele","Weaponsmith",1429,41.6,65.8,"A",1},[66]={"Tharynn Bouden","Trade Supplies",1429,41.9,67.1,"A",1},[74]={"Kurran Steele","Cloth & Leather Armor Merchant",1429,41.4,65.7,"A",1},[167]={"Morhan Coppertongue","Metalsmith",1432,34.0,46.5,"A",0},[222]={"Nillen Andemar","Macecrafter",1432,42.9,9.9,"A",0},[233]={"Saldean le fermier","",1436,56.0,31.2,"A",1},[258]={"Joshua Maclure","Vintner",1429,42.4,89.3,"A",1},[295]={"Innkeeper Farley","Innkeeper",1429,43.7,65.9,"A",1},[777]={"Amy Davenport","Tradeswoman",1433,23.8,47.4,"A",1},[1669]={"Defias Profiteer","Free Wheeling Merchant",1436,43.5,66.8,"",0}}

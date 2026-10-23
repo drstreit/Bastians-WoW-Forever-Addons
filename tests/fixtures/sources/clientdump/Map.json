@@ -1,0 +1,63 @@
+{
+ "table": "Map",
+ "build": "1.60.1.70450",
+ "rowCount": 6,
+ "columns": [
+  "MapName_lang",
+  "ID",
+  "Directory",
+  "InstanceType",
+  "WdtFileDataID"
+ ],
+ "rows": [
+  {
+   "MapName_lang": "Eastern Kingdoms",
+   "ID": 0,
+   "Directory": "Azeroth",
+   "InstanceType": 0,
+   "WdtFileDataID": 775971
+  },
+  {
+   "MapName_lang": "Kalimdor",
+   "ID": 1,
+   "Directory": "Kalimdor",
+   "InstanceType": 0,
+   "WdtFileDataID": 782779
+  },
+  {
+   "MapName_lang": "Shadowfang Keep",
+   "ID": 33,
+   "Directory": "Shadowfang",
+   "InstanceType": 1,
+   "WdtFileDataID": 790851
+  },
+  {
+   "MapName_lang": "Deeprun Tram",
+   "ID": 369,
+   "Directory": "DeeprunTram",
+   "InstanceType": 0,
+   "WdtFileDataID": 780788
+  },
+  {
+   "MapName_lang": "Outland",
+   "ID": 530,
+   "Directory": "Expansion01",
+   "InstanceType": 0,
+   "WdtFileDataID": 828395
+  },
+  {
+   "MapName_lang": "Zephras Isle",
+   "ID": 2991,
+   "Directory": "2991",
+   "InstanceType": 0,
+   "WdtFileDataID": 7198644
+  },
+  {
+   "MapName_lang": "Dalaran Skycuter",
+   "ID": 3217,
+   "Directory": "3217",
+   "InstanceType": 0,
+   "WdtFileDataID": 0
+  }
+ ]
+}

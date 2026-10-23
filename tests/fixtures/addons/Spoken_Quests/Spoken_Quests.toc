@@ -1,0 +1,6 @@
+## Interface: 16001, 120105
+## Title: Spoken Quests (test double)
+## Notes: Fixture: the VoiceOver internals the Quests bridge reaches for.
+## Dependencies: Spoken
+
+VoiceOver.lua

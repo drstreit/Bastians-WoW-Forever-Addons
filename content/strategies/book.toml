@@ -1,0 +1,88 @@
+# Bastian's Gold Rumours (strategies-design.md sections 6 and 7): the chapters, What's new and the
+# tombstones of retired pages. The pages are the .md files in the chapter folders; the build
+# (python -m bastians_build data ... --export) checks every id against the world and every claim
+# against the AHSync export. Text is ASCII: straight quotes, no dashes.
+
+clients = ["forever"]
+
+# the front matter: shown before the contents, not listed in them
+[[chapter]]
+id = "front"
+name = "Before the first page"
+order = 0
+active = 3
+
+[[chapter]]
+id = "farming"
+name = "Farming and easy kills"
+order = 1
+opening = "Places where creatures carry cloth, leather and coin, and how to work them. I spend most of my evenings in this chapter."
+
+[[chapter]]
+id = "fishing"
+name = "Fishing"
+order = 2
+opening = "Where to fish, what bites there and what it sells for. Bring a chair."
+
+[[chapter]]
+id = "crafting"
+name = "Crafting for profit"
+order = 3
+opening = "Making one thing out of three and selling it for more than the three cost. The pages in this chapter are the ones where the sums still come out right after the auction house's cut."
+
+[[chapter]]
+id = "flips"
+name = "Vendors and flips"
+order = 4
+opening = "Buying from one person and selling to another for more. Merchants do it all day and nobody calls them clever."
+
+[[chapter]]
+id = "auction"
+name = "The auction house"
+order = 5
+opening = "How the auction house works on Forever: the deposit, the cut and when to sell."
+
+[[chapter]]
+id = "trades"
+name = "Trades"
+order = 6
+opening = "Which professions earn their keep, and at which level."
+
+[[news]]
+date = "2026-10-23"
+text = "The book opens with two strategies: the dig at Bael'dun and the bandage bargain."
+page = "baeldun-dig"
+
+[[news]]
+date = "2026-10-23"
+text = "Farming: four new pages, from the dust devils of Westfall to the harpy cave in Thousand Needles."
+page = "westfall-dust-devils"
+
+[[news]]
+date = "2026-10-23"
+text = "Fishing: a new chapter of five pages, from the Westfall coast to Lordamere Lake."
+page = "westfall-blackmouth"
+
+[[news]]
+date = "2026-10-23"
+text = "Crafting: four new pages, among them the Barbaric Bracers and the Gnomish Cloaking Device."
+page = "barbaric-bracers"
+
+[[news]]
+date = "2026-10-23"
+text = "Vendors and flips: three pages, starting with the first 36 hours after launch."
+page = "first-36-hours"
+
+[[news]]
+date = "2026-10-23"
+text = "The auction house: five pages on the deposit and the cut, commodities, how long to list, binding and holds."
+page = "deposit-and-cut"
+
+[[news]]
+date = "2026-10-23"
+text = "Trades: five pages on which professions to learn and what they pay up to the level cap."
+page = "what-to-learn-first"
+
+[[news]]
+date = "2026-10-23"
+text = "The rumour mill: after each chapter, what the travellers say and I have not tried yet."

@@ -1,0 +1,6 @@
+## Interface: 16001, 120105
+## Title: QuestieDB (fixture)
+## Notes: A tiny stand-in for LibQuestieDB contract 4, for the bridge tests. Never installed.
+## Version: fixture
+
+LibQuestieDB.lua

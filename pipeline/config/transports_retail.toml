@@ -1,0 +1,6 @@
+# Transports of the retail world (route.md, roadmap B9.1); the format is the one of
+# transports_forever.toml. Still empty on 20.10.2026: the retail data sources are decided (B4.1) but
+# none of them carries transport positions or times, and golden rule 1 forbids guessing them. The
+# candidates for the two old continents (the planner's frame until Outland and later are in it) are
+# listed in route.md "Transports"; each row is written after a measurement in game (`/way` at both
+# ends, a stopwatch for ride and cycle), `verified = true` from the start.

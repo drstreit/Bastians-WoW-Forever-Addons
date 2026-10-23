@@ -1,0 +1,365 @@
+<title>Bastian's Glyphs</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600&family=Archivo+Narrow:wght@400;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+  /* Layout: a WoW window's dark panel. Header, the themes, the glyphs in context, every glyph as a
+     card with its ballot, the decisions to copy. One dark look on purpose: the game's UI. */
+  :root {
+    --bg: #14110f;
+    --panel: #1c1916;
+    --raised: #24201c;
+    --line: rgba(255, 255, 255, 0.10);
+    --text: #ebe7e1;
+    --dim: #9d968c;
+    --accent: #0cd29d;
+    --gold: #ffd100;
+    --parchment: #e6d3a5;
+    --ink: #3b2a17;
+    --display: "Cinzel", "Trajan Pro", Georgia, serif;
+    --body: "Archivo Narrow", "Arial Narrow", Arial, sans-serif;
+    --mono: "JetBrains Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); font: 15px/1.45 var(--body);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 24px 48px;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 28px; }
+  h1 { font: 600 30px/1.1 var(--display); color: var(--gold); margin: 0; letter-spacing: 0.02em; text-wrap: balance; }
+  h2 { font: 600 17px/1.2 var(--display); color: var(--gold); margin: 0 0 12px; letter-spacing: 0.04em; }
+  p { margin: 0; max-width: 68ch; }
+  .lede { display: grid; gap: 8px; color: var(--dim); }
+  .lede b { color: var(--text); font-weight: 600; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .bar span { color: var(--dim); margin-right: 4px; }
+  .chip {
+    font: 600 13px var(--body); color: var(--dim); background: var(--panel);
+    border: 1px solid var(--line); border-radius: 999px; padding: 5px 12px; cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { color: var(--accent); border-color: var(--accent); }
+  .chip:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+  .ctx { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .ctx > div { min-width: 0; display: grid; gap: 8px; align-content: start; }
+  .ctx h3 { font: 600 13px var(--body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); margin: 0; }
+  /* the Browser row mock */
+  .rows { background: #100e0c; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 18px 1fr auto; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); align-items: center; }
+  .row:last-child { border-bottom: 0; }
+  .row .name { font-size: 13px; }
+  .row .meta { grid-column: 2 / 4; font-size: 11.5px; color: var(--dim); }
+  .row .meta em { color: var(--gold); font-style: normal; }
+  .row .acts { display: flex; gap: 3px; }
+  .row img { display: block; }
+  /* the map mock */
+  .map { position: relative; height: 190px; border-radius: 6px; background:
+      radial-gradient(circle at 30% 40%, rgba(120, 90, 40, 0.18), transparent 45%),
+      radial-gradient(circle at 75% 70%, rgba(60, 90, 50, 0.20), transparent 40%), var(--parchment); }
+  .map .pin { position: absolute; transform: translate(-50%, -50%); }
+  .map .badge { border-radius: 50%; background: rgba(20, 17, 15, 0.85); display: grid; place-items: center; box-shadow: 0 0 0 1px rgba(0,0,0,0.5); }
+  .map .split { position: absolute; top: 8px; bottom: 8px; left: 50%; border-left: 1px dashed rgba(59, 42, 23, 0.5); }
+  .map .lab { position: absolute; top: 6px; font: 600 11px var(--body); color: var(--ink); letter-spacing: 0.06em; text-transform: uppercase; }
+  /* the minimap mock */
+  .mini { position: relative; width: 190px; height: 190px; margin: 0 auto; }
+  .mini .disc { position: absolute; inset: 22px; border-radius: 50%; background:
+      radial-gradient(circle at 40% 35%, #4d6a3c, #2c3f24 70%); border: 3px solid #6b5a3a; }
+  .mini .btn { position: absolute; width: 34px; height: 34px; border-radius: 50%; background: #1b1714;
+      border: 2px solid #8a7448; display: grid; place-items: center; transform: translate(-50%, -50%); }
+  /* the glyph cards */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .card { background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+  .card.redraw { border-color: #e0703a; }
+  .card header { display: grid; gap: 2px; }
+  .card code { font: 13px var(--mono); color: var(--accent); }
+  .card .what { font-size: 13px; color: var(--dim); }
+  .sizes { display: flex; gap: 14px; align-items: end; }
+  .sizes figure { margin: 0; display: grid; justify-items: center; gap: 4px; }
+  .sizes figcaption { font: 10.5px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; border-radius: 6px; overflow: hidden; }
+  .tiles > div { display: grid; place-items: center; padding: 10px 0; }
+  .tiles .dark { background: #100e0c; }
+  .tiles .light { background: var(--parchment); }
+  .vote { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; font-size: 13px; }
+  .vote label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+  .vote input[type="text"] { flex: 1 1 140px; min-width: 0; background: #100e0c; color: var(--text);
+      border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: 13px var(--body); }
+  .q { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .q:last-of-type { border-bottom: 0; }
+  .q b { color: var(--gold); font: 600 13px var(--mono); }
+  .q small { display: block; color: var(--dim); }
+  .q .vote { grid-column: 2; }
+  .out { display: grid; gap: 8px; }
+  textarea { width: 100%; min-height: 160px; background: #100e0c; color: var(--text); border: 1px solid var(--line);
+      border-radius: 6px; padding: 10px; font: 12.5px/1.5 var(--mono); resize: vertical; }
+  .copy { justify-self: start; font: 600 14px var(--body); color: #0d1411; background: var(--accent); border: 0;
+      border-radius: 6px; padding: 8px 16px; cursor: pointer; }
+  @media (prefers-reduced-motion: no-preference) { .chip, .card { transition: border-color 0.15s, color 0.15s; } }
+</style>
+
+<div class="wrap">
+  <header class="lede">
+    <h1>Bastian's Glyphs</h1>
+    <p>The suite's own icon set, drawn by code (<code>tools/glyphs.py</code>): flat white shapes with a dark rim,
+      64&nbsp;px, tinted by the theme in game. <b>Nothing is swapped yet.</b> Vote <b>keep</b> or <b>redraw</b> per glyph,
+      add a note where something should change, answer the three questions at the end, then copy your decisions into the chat.</p>
+    <p>Item icons stay Blizzard's: they show the item itself.</p>
+  </header>
+
+  <div class="bar" role="group" aria-label="Theme">
+    <span>Tint as in the theme:</span>
+    <button class="chip" type="button" data-theme-id="teal" aria-pressed="true">Dark teal (today)</button>
+    <button class="chip" type="button" data-theme-id="parchment" aria-pressed="false">Parchment</button>
+    <button class="chip" type="button" data-theme-id="blizzard" aria-pressed="false">Blizzard gold</button>
+    <button class="chip" type="button" data-theme-id="contrast" aria-pressed="false">High contrast</button>
+  </div>
+
+  <section>
+    <h2>In the game</h2>
+    <div class="ctx">
+      <div>
+        <h3>Browser rows, 14 px</h3>
+        <div class="rows" id="rows"></div>
+      </div>
+      <div>
+        <h3>Map pins: A bare, B on a badge</h3>
+        <div class="map" id="map"><div class="split"></div><div class="lab" style="left:8px">A</div><div class="lab" style="left:calc(50% + 8px)">B</div></div>
+      </div>
+      <div>
+        <h3>Minimap buttons, one per app</h3>
+        <div class="mini" id="mini"><div class="disc"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Every glyph</h2>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section>
+    <h2>Three questions</h2>
+    <div id="questions"></div>
+  </section>
+
+  <section class="out">
+    <h2>Your decisions</h2>
+    <textarea id="outText" readonly aria-label="Your decisions as text"></textarea>
+    <button class="copy" id="btnCopy" type="button">Copy decisions</button>
+  </section>
+</div>
+
+<script>
+  const GLYPHS = __GLYPHS__;
+  // Tints per theme and glyph (the multiply the game does with SetVertexColor); "base" for the rest.
+  const THEMES = {
+    teal: { base: "#e8e8e8", accent: "#0cd29d", quest: "#ffd100", questActive: "#ffd100", done: "#4cd964",
+      never: "#ff5a4f", waiting: "#a8a8a8", mob: "#ff7a5c", rare: "#c9a0ff", herb: "#5fd35f", mine: "#e0a060",
+      fish: "#6fb6ff", treasure: "#e0c070", gold: "#ffd100", zone: "#0cd29d", route: "#0cd29d", spot: "#0cd29d",
+      hide: "#a8a8a8", flight: "#8fd0ff", settings: "#e8e8e8" },
+    parchment: { base: "#f0e2c0", accent: "#c8a060", quest: "#ffd75a", questActive: "#ffd75a", done: "#9bd36a",
+      never: "#e06a50", waiting: "#c8b898", mob: "#e08a6a", rare: "#d8b0ff", herb: "#a8d878", mine: "#e8b070",
+      fish: "#9ccaf0", treasure: "#f0d080", gold: "#ffd75a", zone: "#e8c88a", route: "#e8c88a", spot: "#e8c88a",
+      hide: "#c8b898", flight: "#b8dcf0", settings: "#f0e2c0" },
+    blizzard: { base: "#ffe9a8", accent: "#ffd100", quest: "#ffd100", questActive: "#ffd100", done: "#1eff00",
+      never: "#ff2020", waiting: "#bfbfbf", mob: "#ff4a3a", rare: "#a335ee", herb: "#1eff00", mine: "#ff8000",
+      fish: "#0070dd", treasure: "#ffd100", gold: "#ffd100", zone: "#ffd100", route: "#ffd100", spot: "#ffd100",
+      hide: "#bfbfbf", flight: "#69ccf0", settings: "#ffe9a8" },
+    contrast: { base: "#ffffff", accent: "#ffff00", quest: "#ffff00", questActive: "#ffff00", done: "#00ff66",
+      never: "#ff3333", waiting: "#ffffff", mob: "#ff6600", rare: "#ff66ff", herb: "#00ff66", mine: "#ffaa00",
+      fish: "#33ccff", treasure: "#ffff00", gold: "#ffff00", zone: "#ffff00", route: "#ffff00", spot: "#ffff00",
+      hide: "#ffffff", flight: "#33ccff", settings: "#ffffff" },
+  };
+  let theme = "teal";
+  const $ = (id) => document.getElementById(id);
+  const cache = new Map();
+  const images = {};
+
+  function hex(c) { return [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16)); }
+  function tintOf(kind) { const t = THEMES[theme]; return t[kind] || t.base; }
+
+  // The glyph multiplied by a colour, as a data URL (the game's SetVertexColor).
+  function tinted(kind, color) {
+    const key = kind + color;
+    if (cache.has(key)) return cache.get(key);
+    const img = images[kind];
+    const c = document.createElement("canvas");
+    c.width = c.height = 64;
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0);
+    const d = g.getImageData(0, 0, 64, 64);
+    const [r, gr, b] = hex(color);
+    for (let i = 0; i < d.data.length; i += 4) {
+      d.data[i] = d.data[i] * r / 255;
+      d.data[i + 1] = d.data[i + 1] * gr / 255;
+      d.data[i + 2] = d.data[i + 2] * b / 255;
+    }
+    g.putImageData(d, 0, 0);
+    const url = c.toDataURL();
+    cache.set(key, url);
+    return url;
+  }
+  function icon(kind, size, color) {
+    const im = new Image(size, size);
+    im.src = tinted(kind, color || tintOf(kind));
+    im.alt = kind;
+    im.width = size; im.height = size;
+    return im;
+  }
+
+  // ---- the context mocks ------------------------------------------------------------------------
+  const ROWS = [
+    { icon: "quest", name: 'Wanted: "Hogger"', lvl: "11", meta: "Elwynn Forest, 420 yd", worth: "reward 1g 20s, 550 XP", acts: ["zone", "route", "hide"] },
+    { icon: "questActive", name: "The Fargodeep Mine", lvl: "7", meta: "in the log, 2/3", worth: "75 XP", acts: ["zone", "route", "questActive", "voice"] },
+    { icon: "mob", name: "Mangy Wolf", lvl: "6", meta: "hostile, 12 places", worth: "~4s per kill", acts: ["zone", "route", "open"] },
+    { icon: "vendor", name: "Corina Steele", lvl: "15", meta: "Weaponsmith, Goldshire", worth: "", acts: ["zone", "route", "waypoint", "copy"] },
+    { icon: "herb", name: "Peacebloom", lvl: "", meta: "Herbalism 1, 14 places", worth: "12s", acts: ["zone", "route"] },
+  ];
+  function renderRows() {
+    const box = $("rows");
+    box.textContent = "";
+    for (const r of ROWS) {
+      const row = document.createElement("div");
+      row.className = "row";
+      row.append(icon(r.icon, 14));
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = r.name + (r.lvl ? "  " + r.lvl : "");
+      const acts = document.createElement("div");
+      acts.className = "acts";
+      for (const a of r.acts) acts.append(icon(a, 14, THEMES[theme].base));
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = r.meta;
+      if (r.worth) { const w = document.createElement("em"); w.textContent = "  " + r.worth; meta.append(w); }
+      row.append(name, acts, meta);
+      box.append(row);
+    }
+  }
+  const PINS = [["quest", 14, 30], ["questActive", 30, 62], ["herb", 22, 78], ["mine", 40, 40], ["flight", 9, 70], ["spot", 36, 18], ["vendor", 44, 76], ["treasure", 26, 46]];
+  function renderMap() {
+    const map = $("map");
+    map.querySelectorAll(".pin").forEach((p) => p.remove());
+    for (const half of [0, 50]) {
+      for (const [kind, x, y] of PINS) {
+        const pin = document.createElement("div");
+        pin.className = "pin";
+        pin.style.left = (half + x) + "%";
+        pin.style.top = y + "%";
+        if (half === 0) {
+          pin.append(icon(kind, 20));
+        } else {
+          pin.classList.add("badge");
+          pin.style.width = pin.style.height = "26px";
+          pin.append(icon(kind, 16));
+        }
+        map.append(pin);
+      }
+    }
+  }
+  const MINI = [["quest", "Quests"], ["zone", "Map"], ["open", "Browser"], ["gold", "Gold"], ["route", "Route"], ["settings", "Settings"]];
+  function renderMini() {
+    const mini = $("mini");
+    mini.querySelectorAll(".btn").forEach((b) => b.remove());
+    MINI.forEach(([kind, label], i) => {
+      const a = (-140 + i * 32) * Math.PI / 180;
+      const b = document.createElement("div");
+      b.className = "btn";
+      b.title = label;
+      b.style.left = (95 + 78 * Math.cos(a)) + "px";
+      b.style.top = (95 + 78 * Math.sin(a)) + "px";
+      b.append(icon(kind, 20));
+      mini.append(b);
+    });
+  }
+
+  // ---- the cards and the ballot -----------------------------------------------------------------
+  const QUESTIONS = [
+    ["G1", "Map pins: A, the bare glyph with its rim", "B puts the glyph on a small dark badge: calmer on busy map art, but every pin grows by a few pixels."],
+    ["G2", "Minimap buttons: our glyphs instead of Blizzard's icons", "One button per app (round, as today), the glyph tinted in the theme's accent."],
+    ["G3", "Quest pins: our ! and ? instead of Blizzard's yellow quest textures", "Players know Blizzard's; ours match the rest of the set and take the theme's colour."],
+  ];
+  function renderGrid() {
+    const grid = $("grid");
+    if (!grid.childElementCount) {
+      for (const [kind, g] of Object.entries(GLYPHS)) {
+        const card = document.createElement("article");
+        card.className = "card";
+        card.id = "card-" + kind;
+        card.innerHTML = `<header><code>${kind}</code><span class="what"></span></header>
+          <div class="tiles"><div class="dark"></div><div class="light"></div></div>
+          <div class="sizes"></div>
+          <div class="vote">
+            <label><input type="radio" name="v-${kind}" value="keep" checked>keep</label>
+            <label><input type="radio" name="v-${kind}" value="redraw">redraw</label>
+            <input type="text" id="n-${kind}" placeholder="what should change" aria-label="Note for ${kind}">
+          </div>`;
+        card.querySelector(".what").textContent = g.what;
+        grid.append(card);
+      }
+    }
+    for (const kind of Object.keys(GLYPHS)) {
+      const card = $("card-" + kind);
+      const dark = card.querySelector(".dark"), light = card.querySelector(".light"), sizes = card.querySelector(".sizes");
+      dark.textContent = ""; light.textContent = ""; sizes.textContent = "";
+      dark.append(icon(kind, 64)); light.append(icon(kind, 64));
+      for (const s of [24, 16, 14]) {
+        const f = document.createElement("figure");
+        const cap = document.createElement("figcaption");
+        cap.textContent = s + " px";
+        f.append(icon(kind, s), cap);
+        sizes.append(f);
+      }
+    }
+  }
+  function renderQuestions() {
+    $("questions").innerHTML = QUESTIONS.map(([k, t, d]) => `<div class="q"><b>${k}</b><div>${t}<small>${d}</small></div>
+      <div class="vote"><label><input type="radio" name="q-${k}" value="yes" checked>yes</label>
+      <label><input type="radio" name="q-${k}" value="no">no</label>
+      <label><input type="radio" name="q-${k}" value="later">later</label></div></div>`).join("");
+  }
+  function decisions() {
+    const lines = ["Glyph decisions (ST4, preview of 23.10.2026):"];
+    const redraw = [];
+    for (const kind of Object.keys(GLYPHS)) {
+      const v = document.querySelector(`input[name="v-${kind}"]:checked`).value;
+      const note = $("n-" + kind).value.trim();
+      $("card-" + kind).classList.toggle("redraw", v === "redraw");
+      if (v === "redraw" || note) redraw.push(`${kind}: ${v}${note ? " - " + note : ""}`);
+    }
+    lines.push(redraw.length ? redraw.join("\n") : "every glyph: keep");
+    for (const [k, t] of QUESTIONS) {
+      lines.push(`${k} ${t}: ${document.querySelector(`input[name="q-${k}"]:checked`).value}`);
+    }
+    lines.push("Theme shown: " + theme);
+    return lines.join("\n");
+  }
+  function update() { $("outText").value = decisions(); }
+  function renderAll() { renderRows(); renderMap(); renderMini(); renderGrid(); update(); }
+
+  document.querySelectorAll("[data-theme-id]").forEach((b) => b.addEventListener("click", () => {
+    theme = b.dataset.themeId;
+    document.querySelectorAll("[data-theme-id]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+    renderAll();
+  }));
+  document.addEventListener("change", update);
+  document.addEventListener("input", update);
+  $("btnCopy").addEventListener("click", () => {
+    const text = decisions();
+    navigator.clipboard.writeText(text).then(() => {
+      $("btnCopy").textContent = "Copied";
+      setTimeout(() => { $("btnCopy").textContent = "Copy decisions"; }, 1500);
+    }).catch(() => { $("outText").focus(); $("outText").select(); });
+  });
+
+  renderQuestions();
+  let pending = Object.keys(GLYPHS).length;
+  for (const [kind, g] of Object.entries(GLYPHS)) {
+    const im = new Image();
+    im.onload = () => { images[kind] = im; if (--pending === 0) renderAll(); };
+    im.src = g.src;
+  }
+</script>

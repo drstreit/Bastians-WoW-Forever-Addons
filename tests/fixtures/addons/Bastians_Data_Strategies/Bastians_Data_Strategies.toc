@@ -1,0 +1,7 @@
+## Interface: 16001, 120105
+## Title: Bastian's Data: Strategies (fixture)
+## Notes: Fixture book pack for the Lua tests, generated from tests/fixtures/book-mini with tests/fixtures/export-mini (strategies-design.md section 6).
+## Dependencies: Bastians_Data
+## LoadOnDemand: 1
+
+Generated\Book.lua

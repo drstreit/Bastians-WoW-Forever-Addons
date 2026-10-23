@@ -1,0 +1,79 @@
+# CurseForge projects, their files per client and their relations (ADR 0015 and ADR 0019, owner
+# 23.10.2026: two projects, the suite and its data).
+# tools/curseforge.py reads this file to upload the release zips of one client with that client's
+# game versions and relations; tests/tools/test_curseforge.py keeps it in step with the TOCs and
+# with Bastians.COMPANIONS in Core's Settings.lua.
+#
+# A "required" relation makes the CurseForge app install the other project with this one; an
+# "optional" one is only listed on the project page. Relations are per uploaded file, so each
+# client's file names only what exists for that client.
+#
+# `verified = false` marks a slug or id nobody has seen on CurseForge yet: the projects of the
+# suite do not exist until the owner creates them (roadmap B1.8); an upload with an unverified
+# slug or a project id of 0 is refused, because CurseForge rejects a file whose relation names an
+# unknown project.
+
+[game_versions]
+# Names as CurseForge lists them, resolved to ids at upload (an unknown name stops the upload).
+# WoW Forever (interface 16001): CurseForge lists the flavor "Forever" with game version 1.60.1
+# (seen 23.10.2026 on its project pages, e.g. curseforge.com/wow/addons/wow-forever-suite; that
+# the upload API knows it under this name is checked at the first upload).
+retail = ["12.1.5"]
+forever = ["1.60.1"]
+
+# ---- two projects: the apps in one file, the data in another that
+# the daily data edition (tools/data_update.py) updates. A project's version is its first folder's.
+
+[projects.Bastians_Suite]
+title = "Bastian's Suite"
+slug = "bastians-suite"
+id = 0
+verified = false
+folders = [
+  "Bastians_Core",
+  "Bastians_Quests",
+  "Bastians_Map",
+  "Bastians_Map_Art",
+  "Bastians_Browser",
+  "Bastians_Gold",
+  "Bastians_Route",
+  "Bastians_Strategies",
+]
+required = ["Bastians_Data"]
+optional = ["TomTom", "QuestieDB", "Spoken"]
+
+# the loader with every pack, the book included: the packs and their reader ship together
+[projects.Bastians_Data]
+title = "Bastian's Data"
+slug = "bastians-data"
+id = 0
+verified = false
+folders = [
+  "Bastians_Data",
+  "Bastians_Data_Quests",
+  "Bastians_Data_World",
+  "Bastians_Data_Items",
+  "Bastians_Data_Text_enUS",
+  "Bastians_Data_Market",
+  "Bastians_Data_Strategies",
+]
+# Data needs Core from the suite; a required relation back would be a cycle, so it is optional
+# (players install the suite, which requires Data)
+optional = ["Bastians_Suite", "QuestieDB"]
+
+# ---- the companions (Bastians.COMPANIONS): where they exist and their CurseForge project ----
+
+[external.TomTom]
+slug = "tomtom"
+verified = true # its TOC names X-Curse-Project-ID 18808, the hub links curseforge.com/wow/addons/tomtom
+clients = ["forever", "retail"]
+
+[external.QuestieDB]
+slug = "questie"
+verified = false # QuestieDB's TOC names no CurseForge project; the hub links Questie's page
+clients = ["forever"]
+
+[external.Spoken]
+slug = "spoken-quests"
+verified = false # Spoken's TOC names no CurseForge project; the slug is the hub's link
+clients = ["forever"]

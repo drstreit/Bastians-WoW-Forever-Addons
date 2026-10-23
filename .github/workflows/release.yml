@@ -1,0 +1,47 @@
+# Release (nfr.md "Release", roadmap B11.2): a tag `<Addon>-v<version>` packages that addon with the
+# BigWigs packager for the GitHub release. The TOC version must equal the tag's version.
+# CurseForge is not uploaded from here (ADR 0015, ADR 0019: two projects, the suite and its data;
+# 23.10.2026): the files differ per client (Data
+# and its packs, Map, Map Art carry generated files) and so do their relations, so
+# tools/curseforge.py uploads one file per project and client from the zips tools/release.py
+# built locally. CF_API_KEY is therefore not passed to the packager.
+# Data packs (Bastians_Data_*) are built locally per client with tools/release.py and attached to the
+# same GitHub release by hand (`gh release upload`), because their Generated/ folders need the client.
+name: Release
+
+on:
+  push:
+    tags:
+      - "Bastians_*-v*"
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Addon and version from the tag
+        id: tag
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ADDON="${TAG%-v*}"
+          VERSION="${TAG##*-v}"
+          test -d "addons/${ADDON}" || { echo "no addons/${ADDON} for tag ${TAG}"; exit 1; }
+          TOC_VERSION=$(sed -n 's/^## Version:[[:space:]]*//p' "addons/${ADDON}/${ADDON}.toc" | tr -d '\r')
+          test "${TOC_VERSION}" = "${VERSION}" || { echo "TOC version ${TOC_VERSION} differs from tag ${VERSION}"; exit 1; }
+          echo "addon=${ADDON}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - name: Refuse data packs
+        run: |
+          case "${{ steps.tag.outputs.addon }}" in
+            Bastians_Data_*) echo "data packs are built with tools/release.py per client"; exit 1 ;;
+            Bastians_Probe) echo "the probe is never released"; exit 1 ;;
+          esac
+      - name: Package and upload
+        uses: BigWigsMods/packager@v2
+        with:
+          # -t: the addon folder is the packager's top directory inside this monorepo
+          args: -t addons/${{ steps.tag.outputs.addon }} -n "{package-name}-v{project-version}"

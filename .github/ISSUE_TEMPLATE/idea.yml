@@ -1,0 +1,33 @@
+name: Idea or wish
+description: Something the addons could do, or do better.
+labels: ["idea"]
+body:
+  - type: dropdown
+    id: addon
+    attributes:
+      label: Which addon
+      options:
+        - Core (settings, launcher, search)
+        - Data
+        - Quests
+        - Map
+        - Map Art
+        - Browser
+        - Gold
+        - Route
+        - Strategies (the book)
+        - Something new
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What would you like to do in the game, and how would it help you?
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: An example
+      description: A quest, a place, an item or a screenshot that shows what you mean.

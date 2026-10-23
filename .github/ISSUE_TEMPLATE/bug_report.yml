@@ -1,0 +1,66 @@
+name: Bug report
+description: Something in one of Bastian's addons does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. One problem per report helps. If the game showed a Lua error,
+        paste it below: it says exactly where it happened.
+  - type: dropdown
+    id: client
+    attributes:
+      label: Game client
+      options:
+        - WoW Forever
+        - Retail
+    validations:
+      required: true
+  - type: dropdown
+    id: addon
+    attributes:
+      label: Which addon
+      options:
+        - Core (settings, launcher, search)
+        - Data
+        - Quests
+        - Map
+        - Map Art
+        - Browser
+        - Gold
+        - Route
+        - Strategies (the book)
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown in the game's addon list, or with /bastians addons.
+      placeholder: 1.0.0-beta.9
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      placeholder: |
+        1. Open the map with /bmap
+        2. Click a quest pin in Elwynn Forest
+        3. ...
+  - type: textarea
+    id: error
+    attributes:
+      label: Lua error (if any)
+      description: With BugSack or the game's own error frame, copy the whole message.
+      render: text
+  - type: textarea
+    id: addons
+    attributes:
+      label: Other addons that might matter
+      description: Questie, TomTom, other map or quest addons.

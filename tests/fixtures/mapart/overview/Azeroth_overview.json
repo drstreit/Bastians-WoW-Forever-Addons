@@ -1,0 +1,33 @@
+{
+  "map": "Azeroth",
+  "mapId": 0,
+  "span": 8,
+  "pixels": 4,
+  "format": "blp",
+  "mips": true,
+  "sourceTiles": 77,
+  "sourcePixels": 512,
+  "cells": [
+    {
+      "x": 3,
+      "y": 5,
+      "file": "Azeroth_3_5.blp",
+      "adts": 64,
+      "bytes": 1868
+    },
+    {
+      "x": 3,
+      "y": 6,
+      "file": "Azeroth_3_6.blp",
+      "adts": 10,
+      "bytes": 1868
+    },
+    {
+      "x": 4,
+      "y": 6,
+      "file": "Azeroth_4_6.blp",
+      "adts": 3,
+      "bytes": 1868
+    }
+  ]
+}

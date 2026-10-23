@@ -1,0 +1,4 @@
+spot_id,name,ui_map_id,x,y,radius,level_min,level_max,items,status,claim_id,src
+1,Hogger's camp,1429,0.27,0.86,120,8,12,"[[2589, 30], [1931, 1]]",verified,11,ahsync
+2,Fargodeep Mine,1429,0.40,0.80,80,6,10,"[[2589, 20], [1185, 0.5]]",unverified,12,ahsync
+3,Westfall farms,1436,0.50,0.50,150,10,15,"[[424242, 5]]",refuted,,ahsync

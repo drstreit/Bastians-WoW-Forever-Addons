@@ -1,0 +1,7 @@
+## Interface: 16001, 120105
+## Title: Bastian's Data: Market (fixture)
+## Notes: Fixture market pack for the Lua tests, generated from tests/fixtures/export-mini (data.md "Market pack").
+## Dependencies: Bastians_Data
+## LoadOnDemand: 1
+
+Generated\Market.lua

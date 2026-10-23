@@ -1,0 +1,5 @@
+local _, ns = ...
+-- [item] = facts for its tooltip, separated by |: n new / c changed in Forever; r<faction>~<rank>; m<profession>~<skill> made by; u<recipes>~<professions> used in; v<vendors>~<first vendor>~<zone>~<seen in Forever>; d<source>~<chance x10>~<classic>~<sources>; q<quest>; s<drops seen>~<players>
+ns.professions = {"Alchemy","Blacksmithing","Enchanting","Engineering","Leatherworking","Tailoring","Herbalism","Mining","Skinning","Cooking","First Aid","Fishing"}
+ns.repRanks = {"Hated","Hostile","Unfriendly","Neutral","Friendly","Honored","Revered","Exalted"}
+ns.items = {[38]="dTattered Chest~14~1~1",[60]="qBounty on Garrick Padfoot",[85]="v4~Archibald Kava~Tirisfal Glades~1",[117]="v50~Barkeep Morag~Orgrimmar~1|dBattered Chest~190~1~17|qBreak a Few Eggs|s35~5",[118]="m10~55|u1~5|dHigh Order Apprentice~91~0~13|qSparring Match|s20~6",[159]="u14~9,3,10|v182~Allyndia~Darkshore~1|dNPC 251448~385~0~35|qA Rogue's Deal|s126~9",[182]="dGarrick Padfoot~1000~1~1|s8~4",[724]="c|m9~50|qGoretusk Liver Pie",[763]="c",[787]="c|m9~1|v22~Brogus Thunderbrew~Alterac Valley~0|dFood Crate~200~1~1",[1164]="rArgent Dawn~5",[33154]="n"}

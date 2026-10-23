@@ -1,0 +1,18 @@
+## Interface: 16001, 120105
+## Title: Bastian's Route
+## Notes: Optional route planner over flight paths, boats, zeppelins, the tram, portals and the hearthstone.
+## Author: Bastian
+## Version: 1.0.0-beta.8
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## OptionalDeps: Bastians_Data, Bastians_Data_Nav, Bastians_Quests, Bastians_Map, TomTom
+## LoadOnDemand: 1
+## X-Bastians-LoD: 1
+## SavedVariables: BastiansRouteDB
+## SavedVariablesPerCharacter: BastiansRouteCharDB
+
+Locales\deDE.lua
+Graph.lua
+Window.lua
+Arrow.lua
+Route.lua

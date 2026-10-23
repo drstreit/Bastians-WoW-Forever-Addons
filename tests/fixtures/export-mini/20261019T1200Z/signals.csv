@@ -1,0 +1,9 @@
+signal_id,module,action,item_id,market,horizon,confidence,rationale,capital_required,expected_profit,time_cost_minutes,flags,valid_until,src
+1,m1,sell,2589,forever/normal/alliance/us,day,0.8,Linen sells 20 % above the 30-day median,0,800,5,,2025-10-10T09:53:20Z,ahsync
+2,m1,farm,2589,forever/normal/alliance/us,week,0.7,Hogger's gnolls drop linen and silver,0,3000,30,"[""spot:1""]",2025-10-10T09:53:20Z,ahsync
+3,m17,craft,2304,forever/normal/alliance/us,day,0.6,Light Armor Kit margin 40 %,5000,1200,10,"[""needs:Leatherworking""]",2025-10-10T09:53:20Z,ahsync
+4,m1,avoid,1185,forever/normal/alliance/us,day,0.9,Blood Sabers flood the market after the raid reset,0,0,0,,2025-10-10T09:53:20Z,ahsync
+5,m2,sell,2318,forever/normal/alliance/us,day,0.5,Light Leather at a monthly high,0,400,2,,2025-10-10T09:53:20Z,ahsync
+6,m2,craft,2304,forever/normal/alliance/us,week,0.6,"Flip kits: buy leather, sell kits",200000,9000,20,"[""needs:Leatherworking""]",2025-10-10T09:53:20Z,ahsync
+7,m3,sell,6948,forever/normal/alliance/us,day,0.4,Expired yesterday,0,100,1,,2025-09-27T19:06:40Z,ahsync
+8,m1,sell,2589,retail/normal/neutral/eu,day,0.6,Linen on retail EU,0,300,5,,2025-10-10T09:53:20Z,ahsync

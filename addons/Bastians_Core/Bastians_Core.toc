@@ -1,0 +1,44 @@
+## Interface: 16001, 120105
+## Title: Bastian's Core
+## Notes: Module system, message bus, registries, settings hub and UI kit for the Bastian's suite.
+## Author: Bastian
+## Version: 1.0.0-beta.8
+## X-License: GPL-3.0
+## SavedVariables: BastiansCoreDB
+## SavedVariablesPerCharacter: BastiansCoreCharDB
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
+
+Init.lua
+Locale.lua
+Locales\deDE.lua
+Log.lua
+Core.lua
+Jobs.lua
+DB.lua
+Compat\Contract.lua
+Compat\Shared.lua
+Compat\Modern.lua
+Compat\Forever.lua
+Compat\Retail.lua
+Registry.lua
+Coords.lua
+UI\Themes.lua
+UI\Style.lua
+UI\Money.lua
+UI\Icons.lua
+UI\Window.lua
+UI\FilterBar.lua
+UI\Tree.lua
+UI\Dossier.lua
+UI\EntityMenu.lua
+UI\Widgets.lua
+Tooltips.lua
+Settings.lua
+Perf.lua
+UI\About.lua
+UI\Hub.lua
+UI\Omnibox.lua
+UI\Launcher.lua

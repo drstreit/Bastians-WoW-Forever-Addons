@@ -1,0 +1,9 @@
+## Interface: 16001, 120105
+## Title: Bastian's Probe (developer)
+## Notes: Developer-only API probe for the Bastians suite. Never released. /bprobe help
+## Author: Bastian
+## Version: 0.1.0
+## X-License: GPL-3.0
+## SavedVariables: BastiansProbeDB
+
+Probe.lua

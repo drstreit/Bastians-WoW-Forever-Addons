@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="BASTIANS_QUESTS" category="ADDONS">
+    Bastians:GetModule("Quests").Window.Toggle()
+  </Binding>
+</Bindings>

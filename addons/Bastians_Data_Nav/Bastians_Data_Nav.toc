@@ -1,0 +1,10 @@
+## Interface: 16001, 120105
+## Title: Bastian's Data: Navigation
+## Notes: Generated routing graph for Bastian's Route (loads at startup).
+## Author: Bastian
+## Version: 1.0.0-beta.8
+## X-License: GPL-3.0
+## Dependencies: Bastians_Data
+
+# The nav pack (routing graph, roadmap L+) has no generator yet; the file list is added with it,
+# so the client does not log a missing Generated/Nav.lua on every login (BugSack, 21.10.2026).

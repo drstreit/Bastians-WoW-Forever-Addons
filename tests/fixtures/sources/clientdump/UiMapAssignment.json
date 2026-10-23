@@ -1,0 +1,384 @@
+{
+ "table": "UiMapAssignment",
+ "build": "1.60.1.70450",
+ "rowCount": 14,
+ "columns": [
+  "UiMin",
+  "UiMax",
+  "Region",
+  "ID",
+  "UiMapID",
+  "OrderIndex",
+  "MapID",
+  "AreaID",
+  "WMODoodadPlacementID",
+  "WMOGroupID",
+  "Field_11_2_5_62687_010"
+ ],
+ "rows": [
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -1716.6666,
+    -7249.9995,
+    -1000000,
+    1808.3333,
+    -1962.4999,
+    1000000
+   ],
+   "ID": 46721,
+   "UiMapID": 1411,
+   "OrderIndex": 0,
+   "MapID": 1,
+   "AreaID": 14,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -11733.3,
+    -19733.21,
+    -1000000,
+    12799.9,
+    17066.6,
+    1000000
+   ],
+   "ID": 46724,
+   "UiMapID": 1414,
+   "OrderIndex": 0,
+   "MapID": 1,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -16000,
+    -19199.9,
+    -1000000,
+    7466.6,
+    16000,
+    1000000
+   ],
+   "ID": 46725,
+   "UiMapID": 1415,
+   "OrderIndex": 0,
+   "MapID": 0,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -10254.166,
+    -1935.4166,
+    -1000000,
+    -7939.583,
+    1535.4166,
+    1000000
+   ],
+   "ID": 46739,
+   "UiMapID": 1429,
+   "OrderIndex": 0,
+   "MapID": 0,
+   "AreaID": 12,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -11733.333,
+    -483.3333,
+    -1000000,
+    -9400,
+    3016.6665,
+    1000000
+   ],
+   "ID": 46746,
+   "UiMapID": 1436,
+   "OrderIndex": 0,
+   "MapID": 0,
+   "AreaID": 40,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -9154.17,
+    -14.584,
+    -1000000,
+    -7995.83,
+    1722.92,
+    1000000
+   ],
+   "ID": 46763,
+   "UiMapID": 1453,
+   "OrderIndex": 0,
+   "MapID": 0,
+   "AreaID": 1519,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    1338.4606,
+    -5083.2056,
+    -1000000,
+    2273.8772,
+    -3680.601,
+    1000000
+   ],
+   "ID": 46764,
+   "UiMapID": 1454,
+   "OrderIndex": 0,
+   "MapID": 1,
+   "AreaID": 1637,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -5096.8457,
+    -1504.2164,
+    -1000000,
+    -4569.241,
+    -713.5914,
+    1000000
+   ],
+   "ID": 46765,
+   "UiMapID": 1455,
+   "OrderIndex": 0,
+   "MapID": 0,
+   "AreaID": 1537,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0.5505,
+    0.0994
+   ],
+   "UiMax": [
+    0.8966,
+    0.8691
+   ],
+   "Region": [
+    -16000,
+    -7466.7,
+    -1000000,
+    6933.3,
+    8000,
+    1000000
+   ],
+   "ID": 46784,
+   "UiMapID": 947,
+   "OrderIndex": 1,
+   "MapID": 0,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0.0399,
+    0.0855
+   ],
+   "UiMax": [
+    0.4083,
+    0.9234
+   ],
+   "Region": [
+    -12800,
+    -9600,
+    -1000000,
+    12266.7,
+    6933.3,
+    1000000
+   ],
+   "ID": 46785,
+   "UiMapID": 947,
+   "OrderIndex": 0,
+   "MapID": 1,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -6000.0,
+    -6000.0,
+    -1000000.0,
+    6000.0,
+    6000.0,
+    1000000.0
+   ],
+   "ID": 90001,
+   "UiMapID": 101,
+   "OrderIndex": 0,
+   "MapID": 530,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -1500.0,
+    1000.0,
+    -1000000.0,
+    1000.0,
+    4000.0,
+    1000000.0
+   ],
+   "ID": 90002,
+   "UiMapID": 100,
+   "OrderIndex": 0,
+   "MapID": 530,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -2000.0,
+    -2000.0,
+    -1000000.0,
+    2000.0,
+    2000.0,
+    1000000.0
+   ],
+   "ID": 90003,
+   "UiMapID": 2200,
+   "OrderIndex": 0,
+   "MapID": 2991,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  },
+  {
+   "UiMin": [
+    0,
+    0
+   ],
+   "UiMax": [
+    1,
+    1
+   ],
+   "Region": [
+    -100.0,
+    -100.0,
+    -1000000.0,
+    100.0,
+    100.0,
+    1000000.0
+   ],
+   "ID": 90004,
+   "UiMapID": 2201,
+   "OrderIndex": 0,
+   "MapID": 369,
+   "AreaID": 0,
+   "WMODoodadPlacementID": 0,
+   "WMOGroupID": 0,
+   "Field_11_2_5_62687_010": 0
+  }
+ ]
+}

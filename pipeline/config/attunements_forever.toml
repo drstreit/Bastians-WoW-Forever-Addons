@@ -1,0 +1,105 @@
+# Attunements for WoW Forever (quests.md "Attunements"): the Classic lists, quest IDs from memory of
+# the 1.12 data; `verified = false` until the chain was checked on the Forever client. The build
+# compares every quest step's label with the quest name in the data and notes mismatches in the
+# report (pipeline/bastians_build/attunements.py), so a wrong ID shows up at build time.
+# Step shapes: ["quest", id, label] ; ["rep", factionID, name, standing 1..8] ; ["item", id, name].
+# Forever-specific attunements: none known yet (add them here when the beta or launch shows one).
+
+[[attunement]]
+id = "onyxia-alliance"
+name = "Onyxia's Lair"
+faction = "Alliance"
+verified = false
+note = "Drakefire Amulet; starts with Helendis Riverhorn in Burning Steppes"
+steps = [
+  ["quest", 4182, "Dragonkin Menace"],
+  ["quest", 4183, "The True Masters"],
+  ["quest", 4184, "The True Masters"],
+  ["quest", 4185, "The True Masters"],
+  ["quest", 4186, "The True Masters"],
+  ["quest", 4224, "Marshal Windsor"],
+  ["quest", 4241, "Abandoned Hope"],
+  ["quest", 4264, "A Shred of Hope"],
+  ["quest", 4322, "Jail Break!"],
+  ["quest", 6402, "Stormwind Rendezvous"],
+  ["quest", 6403, "The Great Masquerade"],
+  ["quest", 6501, "The Dragon's Eye"],
+  ["quest", 6502, "Drakefire Amulet"],
+]
+
+[[attunement]]
+id = "onyxia-horde"
+name = "Onyxia's Lair"
+faction = "Horde"
+verified = false
+note = "Drakefire Amulet; starts with Warlord Goretooth in Kargath"
+steps = [
+  ["quest", 4903, "Warlord's Command"],
+  ["quest", 4941, "Eitrigg's Wisdom"],
+  ["quest", 4974, "For The Horde!"],
+  ["quest", 6566, "What the Wind Carries"],
+  ["quest", 6567, "The Champion of the Horde"],
+  ["quest", 6568, "The Testament of Rexxar"],
+  ["quest", 6569, "Oculus Illusions"],
+  ["quest", 6570, "Emberstrife"],
+  ["quest", 6582, "Ascension..."],
+  ["quest", 6601, "Blood of the Black Dragon Champion"],
+  ["quest", 6602, "Drakefire Amulet"],
+]
+
+[[attunement]]
+id = "molten-core"
+name = "Molten Core"
+faction = "both"
+verified = false
+note = "Lothos Riftwaker in Blackrock Mountain; the Core Fragment lies past the Lava Run"
+steps = [
+  ["quest", 7848, "Attunement to the Core"],
+]
+
+[[attunement]]
+id = "blackwing-lair"
+name = "Blackwing Lair"
+faction = "both"
+verified = false
+note = "Touch the orb behind General Drakkisath after his death in Upper Blackrock Spire"
+steps = [
+  ["quest", 7761, "Blackhand's Command"],
+]
+
+[[attunement]]
+id = "ubrs-key"
+name = "Upper Blackrock Spire (Seal of Ascension)"
+faction = "both"
+verified = false
+note = "Unforged Seal of Ascension from the Dark Keepers, three gemstones, Vaelastrasz's blessing"
+steps = [
+  ["quest", 4743, "Seal of Ascension"],
+  ["quest", 4742, "Doomrigger's Clasp"],
+  ["item", 12344, "Seal of Ascension"],
+]
+
+[[attunement]]
+id = "scholomance-key"
+name = "Scholomance (Skeleton Key)"
+faction = "both"
+verified = false
+note = "Eva and Lucien Sarkhoff at Caer Darrow"
+steps = [
+  ["quest", 5529, "Skeletal Fragments"],
+  ["quest", 5530, "Mold Rhymes With..."],
+  ["quest", 5531, "Fire Plume Forged"],
+  ["quest", 5532, "Araj's Scarab"],
+  ["quest", 5533, "The Key to Scholomance"],
+  ["item", 13704, "Skeleton Key"],
+]
+
+[[attunement]]
+id = "naxxramas"
+name = "Naxxramas"
+faction = "both"
+verified = false
+note = "Argent Dawn reputation at Light's Hope Chapel; the fee drops with Revered and Exalted"
+steps = [
+  ["rep", 529, "Argent Dawn", 6],
+]

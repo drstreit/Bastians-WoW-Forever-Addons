@@ -1,0 +1,19 @@
+{
+  "map": "Kalimdor",
+  "mapId": 1,
+  "span": 8,
+  "pixels": 4,
+  "format": "blp",
+  "mips": true,
+  "sourceTiles": 1,
+  "sourcePixels": 512,
+  "cells": [
+    {
+      "x": 3,
+      "y": 3,
+      "file": "Kalimdor_3_3.blp",
+      "adts": 1,
+      "bytes": 1868
+    }
+  ]
+}

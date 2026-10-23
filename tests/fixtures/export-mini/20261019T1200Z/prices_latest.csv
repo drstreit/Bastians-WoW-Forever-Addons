@@ -1,0 +1,4 @@
+market,item_id,median,min_buyout,quantity,median_7d,median_30d,low_30d,high_30d,sales_per_day,scan_ts
+forever/normal/alliance/us,1185,5000,4500,3,,,,,,2025-10-09T08:53:20Z
+forever/normal/alliance/us,2589,38,20,7955,42,75,5,120,21.9,2025-10-09T08:53:20Z
+retail/normal/neutral/eu,2589,40,25,1000,,,,,,2025-10-09T08:53:20Z

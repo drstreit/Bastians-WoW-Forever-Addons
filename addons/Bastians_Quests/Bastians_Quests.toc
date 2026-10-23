@@ -1,0 +1,24 @@
+## Interface: 16001, 120105
+## Title: Bastian's Quests
+## Notes: Quest log, recommendations and tracker.
+## Author: Bastian
+## Version: 1.0.0-beta.8
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## OptionalDeps: Bastians_Data, QuestieDB, Spoken, Spoken_Quests
+## SavedVariables: BastiansQuestsDB
+## SavedVariablesPerCharacter: BastiansQuestsCharDB
+
+Locales\deDE.lua
+Logic.lua
+State.lua
+Rows.lua
+Journey.lua
+Recommend.lua
+Worth.lua
+Views.lua
+Window.lua
+Tracker.lua
+Registrations.lua
+Quests.lua
+Spoken.lua

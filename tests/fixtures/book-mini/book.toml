@@ -1,0 +1,33 @@
+# The fixture Strategies book (strategies-design.md section 6) on the fixture world: two chapters,
+# an active page with a spot plate and a farm box, a back-shelf page with a flow plate, a table and
+# a flip box, a tombstone and What's new.
+
+[[chapter]]
+id = "farming"
+name = "Farming and easy kills"
+order = 1
+opening = "Where the money walks around on four legs, or two."
+active = 5
+
+[[chapter]]
+id = "crafting"
+name = "Crafting for profit"
+order = 3
+opening = "Making one thing out of three."
+
+[[news]]
+date = "2026-10-20"
+text = "The book opens."
+
+[[news]]
+date = "2026-10-23"
+text = "New page: Hogger's Camp."
+page = "hogger-camp"
+
+[[retired]]
+id = "old-gnolls"
+title = "The Old Gnoll Camp"
+chapter = "farming"
+date = "2026-10-22"
+reason = "The camp moved."
+successor = "hogger-camp"

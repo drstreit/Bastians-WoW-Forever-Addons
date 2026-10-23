@@ -1,0 +1,15 @@
+{
+  "table": "TaxiNodes",
+  "build": "1.60.1.70450",
+  "rowCount": 7,
+  "columns": ["Name_lang", "Pos", "MapOffset", "FlightMapOffset", "ID", "ContinentID", "ConditionID", "CharacterBitNumber", "Flags", "UiTextureKitID", "MinimapAtlasMemberID", "Facing", "SpecialIconConditionID", "VisibilityConditionID", "MountCreatureID"],
+  "rows": [
+    {"Name_lang": "Northshire Abbey", "Pos": [-8888.98, -0.54, 94.39], "ID": 1, "ContinentID": 0, "Flags": 1024, "MountCreatureID": [308, 0]},
+    {"Name_lang": "Stormwind, Elwynn", "Pos": [-8832.77, 478.623, 109.616], "ID": 2, "ContinentID": 0, "Flags": 1025, "MountCreatureID": [0, 541]},
+    {"Name_lang": "Programmer Isle", "Pos": [16391.81, 16341.21, 69.44], "ID": 3, "ContinentID": 0, "Flags": 1024, "MountCreatureID": [308, 0]},
+    {"Name_lang": "Sentinel Hill, Westfall", "Pos": [-10628.89, 1036.68, 33.4], "ID": 4, "ContinentID": 0, "Flags": 1025, "MountCreatureID": [0, 541]},
+    {"Name_lang": "Orgrimmar, Durotar", "Pos": [1677.59, -4315.71, 61.2], "ID": 23, "ContinentID": 1, "Flags": 1026, "MountCreatureID": [2224, 0]},
+    {"Name_lang": "Ratchet, The Barrens", "Pos": [-894.59, -3773.01, 12.0], "ID": 80, "ContinentID": 1, "Flags": 1027, "MountCreatureID": [2224, 541]},
+    {"Name_lang": "Alterac Valley, Alliance", "Pos": [500.0, -300.0, 50.0], "ID": 300, "ContinentID": 30, "Flags": 1025, "MountCreatureID": [0, 541]}
+  ]
+}

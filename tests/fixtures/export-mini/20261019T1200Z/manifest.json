@@ -1,0 +1,43 @@
+{
+  "schema": "bastians-export",
+  "schema_version": "1.2",
+  "created_at": "2026-10-19T12:00:00Z",
+  "ahsync_commit": "fixture",
+  "client_build": "1.60.1.70450",
+  "sources": [
+    {
+      "name": "ahledger",
+      "terms": "attribution: Prices from AHledger"
+    },
+    {
+      "name": "fixture",
+      "terms": "hand-written export-mini"
+    }
+  ],
+  "tables": [
+    {
+      "name": "prices_latest",
+      "file": "prices_latest.csv",
+      "rows": 3,
+      "sha256": "fa2689ae05e2430edab2d511d86a209aee72389e2bca60ed49b48fc92c86cf14"
+    },
+    {
+      "name": "claims",
+      "file": "claims.csv",
+      "rows": 3,
+      "sha256": "9789498377d5ce9ef8fc96867f726bdb61b4cb75eb03e27fa3fe2e1acee4ec54"
+    },
+    {
+      "name": "farm_spots",
+      "file": "farm_spots.csv",
+      "rows": 3,
+      "sha256": "ee3378273eb04017a0b147d8d6535ca95b889ae9552adbb40cd154ab077ba071"
+    },
+    {
+      "name": "signals",
+      "file": "signals.csv",
+      "rows": 8,
+      "sha256": "e15e9d75cab2eaba9434adb11f7a1f55bf28f57a3ee04015f215755cc6cd32a1"
+    }
+  ]
+}
