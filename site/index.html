@@ -5,7 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bastian's Suite</title>
 <meta name="description" content="Bastian's Suite: addons for WoW Forever and retail. Quests, map, browser, gold, routes and a book of gold strategies, each working alone and together.">
+<link rel="icon" type="image/svg+xml" href="media/bastians-suite.svg">
 <link rel="icon" type="image/png" href="media/bastians-suite.png">
+<link rel="apple-touch-icon" href="media/bastians-suite-black.png">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Bastian's Suite">
+<meta property="og:description" content="Addons for WoW Forever and retail: quests, map, browser, gold, routes and a book of gold strategies.">
+<meta property="og:url" content="https://drstreit.github.io/Bastians-WoW-Forever-Addons/">
+<meta property="og:image" content="https://drstreit.github.io/Bastians-WoW-Forever-Addons/media/bastians-suite-black.png">
+<meta name="twitter:card" content="summary">
 <style>
 /* Layout: one column; a hero with the suite's symbol, the apps as a grid of cards in their own
    colours, then install, data, credits. System fonts only: nothing is loaded from other hosts. */
@@ -73,7 +81,7 @@ code, .cmd { font-family: var(--mono); font-size: 0.86em; }
 
 /* hero */
 .hero { padding-block: 56px 40px; display: grid; grid-template-columns: auto 1fr; gap: 28px 40px; align-items: center; }
-.hero img { width: clamp(120px, 20vw, 200px); height: auto; border-radius: 18%; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35); }
+.hero img { width: clamp(140px, 22vw, 220px); height: auto; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.35)); }
 .hero .lead { font-size: 20px; color: var(--dim); margin-top: 14px; }
 .hero .clients { margin-top: 10px; font-size: 15px; color: var(--dim); }
 .links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
@@ -130,7 +138,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
 <body>
 <div class="wrap">
   <header class="hero">
-    <img src="media/bastians-suite.png" alt="Bastian's Suite: a B in a ring of the eight app icons" width="512" height="512">
+    <img src="media/bastians-suite.svg" alt="Bastian's Suite: a B in a ring of the eight app icons" width="512" height="512">
     <div>
       <h1>Bastian's Suite</h1>
       <p class="lead">Quests, map, browser, gold, routes and a book of gold strategies. Every app works on its own, and together they work as one system.</p>
@@ -151,7 +159,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
     </div>
     <div class="apps">
       <article class="app" style="--app:#0cd29d">
-        <img src="media/bastians-core.png" alt="" width="512" height="512">
+        <img src="media/bastians-core.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Core</h3>
           <p>The base every app needs: the settings hub, the launcher at the minimap, one search over quests, NPCs, items and places, and four colour themes.</p>
@@ -159,7 +167,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </div>
       </article>
       <article class="app" style="--app:#ffd100">
-        <img src="media/bastians-quests.png" alt="" width="512" height="512">
+        <img src="media/bastians-quests.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Quests</h3>
           <p>Your quest log with what to do next: quests that suit your level and zone, chains and attunements, and a tracker. Quest texts voiced with Spoken Quests on WoW Forever.</p>
@@ -167,7 +175,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </div>
       </article>
       <article class="app" style="--app:#4de666">
-        <img src="media/bastians-map.png" alt="" width="512" height="512">
+        <img src="media/bastians-map.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Map</h3>
           <p>Pins on the world map and the minimap for quests, NPCs, vendors, trainers and gathering spots, with a layer from every other app.</p>
@@ -175,14 +183,14 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </div>
       </article>
       <article class="app" style="--app:#b8a380">
-        <img src="media/bastians-map-art.png" alt="" width="512" height="512">
+        <img src="media/bastians-map-art.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Map Art</h3>
           <p>The painted overview map for Bastian's Map: whole continents at a glance. Optional, and the largest download of the suite.</p>
         </div>
       </article>
       <article class="app" style="--app:#a335ee">
-        <img src="media/bastians-browser.png" alt="" width="512" height="512">
+        <img src="media/bastians-browser.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Browser</h3>
           <p>Look up any quest, NPC, item or zone. Everything links: a quest's giver, an item's drops, an NPC's place on the map.</p>
@@ -190,7 +198,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </div>
       </article>
       <article class="app" style="--app:#eda55f">
-        <img src="media/bastians-gold.png" alt="" width="512" height="512">
+        <img src="media/bastians-gold.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Gold</h3>
           <p>Prices from your own auction scans and vendor visits, farm spots, and your gold over time.</p>
@@ -198,7 +206,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </div>
       </article>
       <article class="app" style="--app:#4dccff">
-        <img src="media/bastians-route.png" alt="" width="512" height="512">
+        <img src="media/bastians-route.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Route</h3>
           <p>The way there, step by step: flight paths, boats, zeppelins, the tram, portals and your hearthstone, with a dotted line on the map.</p>
@@ -206,7 +214,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </div>
       </article>
       <article class="app" style="--app:#e64d4d">
-        <img src="media/bastians-strategies.png" alt="" width="512" height="512">
+        <img src="media/bastians-strategies.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Strategies</h3>
           <p>Bastian's Gold Rumours: a book of gold strategies to read in game, with today's prices, the places on the map and the travellers who found them. WoW Forever.</p>
@@ -214,7 +222,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </div>
       </article>
       <article class="app data" style="--app:#c7c7cf">
-        <img src="media/bastians-data.png" alt="" width="512" height="512">
+        <img src="media/bastians-data.svg" alt="" width="512" height="512">
         <div class="body">
           <h3>Data, updated daily</h3>
           <p>The game data behind every app, built for each client: quests with their givers and chains, NPCs, vendors, trainers, flight paths, items, gathering places, recent auction prices and the book's pages. It installs with the suite and gets a new version every day, so prices and the book stay current while the apps change only when their code does.</p>
