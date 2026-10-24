@@ -39,6 +39,11 @@ def labels(wow: WowRuntime) -> list[str]:
     return out
 
 
+def items_needed_by(wow: WowRuntime) -> str:
+    """Who needs the items pack, in the hub's order; no Gold on retail."""
+    return "Quests, Gold, Browser" if wow.made_for(GOLD) else "Quests, Browser"
+
+
 def test_the_optional_addons_differ_per_client(wow: WowRuntime):
     boot(wow, CORE)
     names = [c.addon for c in wow.eval(f"{SETTINGS}.Companions()").values()]
@@ -70,7 +75,8 @@ def test_the_parts_follow_what_the_apps_declare(wow: WowRuntime):
     wow.execute("Mock.addons['Bastians_Map_Art'] = nil")  # optional: no missing part without it
     assert wow.eval(f"{SETTINGS}.Parts()[6].installed") is False
     assert sorted(parts["Bastians_Data_World"].neededBy.values()) == ["Browser", "Map", "Quests"]
-    assert sorted(parts["Bastians_Data_Items"].neededBy.values()) == ["Browser", "Gold", "Quests"]
+    items_by = sorted(parts["Bastians_Data_Items"].neededBy.values())
+    assert items_by == ["Browser", *(["Gold"] if wow.made_for(GOLD) else []), "Quests"]
     assert wow.eval(f"{SETTINGS}.MissingParts()") is None
     before = len(wow.chat)
     assert wow.eval(f"{SETTINGS}.NoteParts()") is False and len(wow.chat) == before
@@ -89,14 +95,14 @@ def test_the_parts_follow_what_the_apps_declare(wow: WowRuntime):
     wow.execute("Mock.disabledAddons = { Bastians_Data_Items = true }")
     missing = list(wow.eval(f"{SETTINGS}.MissingParts()").values())
     assert missing == [
-        "Bastians_Data_Items (switched off in the AddOns list, needed by Quests, Gold, Browser)"
+        f"Bastians_Data_Items (switched off in the AddOns list, needed by {items_needed_by(wow)})"
     ]
     assert wow.eval("Bastians.Compat.IsAddOnEnabled('Bastians_Data_Items')") is False
     assert wow.eval("Bastians.Compat.IsAddOnEnabled('Bastians_Data_Quests')") is True
     assert wow.eval("Bastians.Compat.IsAddOnEnabled('Nope')") is False
     wow.execute("Bastians.UI.Hub.Open('Core')")
     assert (
-        "Bastians_Data_Items: Needed by Quests, Gold, Browser. "
+        f"Bastians_Data_Items: Needed by {items_needed_by(wow)}. "
         "Switched off in the AddOns list at character select." in labels(wow)
     )
     assert wow.errors == []
@@ -159,7 +165,7 @@ def test_the_general_page_and_the_app_pages_tell_this_clients_story(wow: WowRunt
     # a required part missing: the page says MISSING with the client's files
     wow.execute("Mock.addons['Bastians_Data_Items'] = nil; Bastians.UI.Hub.Open('Core')")
     assert (
-        f"Bastians_Data_Items: Needed by Quests, Gold, Browser. MISSING: install the {name} files."
+        f"Bastians_Data_Items: Needed by {items_needed_by(wow)}. MISSING: install the {name} files."
         in labels(wow)
     )
     assert wow.errors == []
@@ -219,6 +225,8 @@ def test_the_curseforge_relations_match_the_game(wow: WowRuntime):
         "Browser": "Bastians_Browser",
         "Route": "Bastians_Route",
     }
+    if not wow.made_for(GOLD):  # no Gold on retail
+        del folder["Gold"]
     needing = list(parts["Bastians_Data"].neededBy.values())
     assert sorted(needing) == sorted(folder)  # every app declares data
     owner = {f: name for name, p in cfg["projects"].items() for f in p["folders"]}

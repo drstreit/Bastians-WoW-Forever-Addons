@@ -191,14 +191,19 @@ def test_the_books_lines_reach_the_suite_and_open_the_book(wow: WowRuntime):
         ("2026-10-20", "The book opens."),
     ]
     wow.execute("Bastians:GetModule('Core').db.global.news.seen = {}")
-    assert wow.eval("Bastians:NewsUnseen()") == 2
+    unseen = (  # the book's lines only: the app's own release notes ship in its News.lua
+        "(function() local out = {} for _, e in ipairs(Bastians:NewsEntries()) do "
+        "if e.source == 'The book' then out[#out + 1] = e end end "
+        "return Bastians:NewsUnseen(out) end)()"
+    )
+    assert wow.eval(unseen) == 2
     book[0].open()  # one entry with a page: that page
     assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
-    assert wow.eval("Bastians:NewsUnseen()") == 2  # a page is not the book's What's new
+    assert wow.eval(unseen) == 2  # a page is not the book's What's new
     book[1].open()  # no page: the book's What's new
     assert wow.eval(f"{WIN}.Current().kind") == "title"
     # the title page was shown: the book's lines count as read in the suite too
-    assert wow.eval("Bastians:NewsUnseen()") == 0
+    assert wow.eval(unseen) == 0
     assert wow.errors == []
 
 

@@ -124,8 +124,10 @@ def test_layers_panel_lists_every_layer_by_owner_and_toggles(wow: WowRuntime):
     rows = [(r.kind, r.label.GetText(r.label)) for r in panel.rows.values() if r.IsShown(r)]
     headers = [t for k, t in rows if k == "header"]
     toggles = [t for k, t in rows if k == "toggle"]
-    assert headers == ["Gold", "Map", "Quests"]
-    assert "Farm spots" in toggles and "Quests to take" in toggles and "Waypoint" in toggles
+    gold = wow.made_for(GOLD)  # the farm spots layer is Gold's; no Gold on retail
+    assert headers == [*(["Gold"] if gold else []), "Map", "Quests"]
+    assert ("Farm spots" in toggles) is gold
+    assert "Quests to take" in toggles and "Waypoint" in toggles
     soon = next(
         r
         for r in panel.rows.values()

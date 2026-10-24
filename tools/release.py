@@ -47,6 +47,9 @@ DEV_ONLY = {"Bastians_Probe"}
 DATA_PREFIX = "Bastians_Data_"
 GENERATED = "Generated"
 BUNDLE = "Bastians"  # the suite's bundle zip is listed under this name
+# the interface each client loads (ADR 0010): an addon whose TOC does not name it is not made for
+# that client and is not released for it
+INTERFACES = {"forever": "16001", "retail": "120105"}
 SKIP_SUFFIXES = {".tmp", ".pyc"}
 SKIP_NAMES = {".luacheckrc", ".styluaignore", "__pycache__", ".DS_Store", "Thumbs.db"}
 DEFAULT_STAMP = (1980, 1, 1, 0, 0, 0)  # the earliest time zip files can hold
@@ -116,6 +119,18 @@ def generated_client(path: Path) -> str | None:
         if found:
             return found.group(1)
     return None
+
+
+def meta_interface(folder: Path) -> str:
+    meta, _ = parse_toc((folder / f"{folder.name}.toc").read_text(encoding="utf-8"))
+    return meta.get("Interface", "none")
+
+
+def made_for(folder: Path, client: str) -> bool:
+    """Whether the addon's TOC names the client's interface (`## Interface: 16001, 120105`)."""
+    toc = folder / f"{folder.name}.toc"
+    meta, _ = parse_toc(toc.read_text(encoding="utf-8"))
+    return INTERFACES[client] in {v.strip() for v in meta.get("Interface", "").split(",")}
 
 
 def addon_version(folder: Path) -> str:
@@ -224,6 +239,11 @@ def release(
         if name in DEV_ONLY or not (folder / f"{name}.toc").is_file():
             continue
         if only and name not in only:
+            continue
+        if not made_for(folder, client):
+            notes.append(
+                f"{name}: not for {client} (its TOC names interface {meta_interface(folder)})"
+            )
             continue
         if not toc_files(folder):
             notes.append(f"{name}: skipped, the TOC lists no file")

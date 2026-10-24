@@ -37,7 +37,8 @@ def updating_frames(wow: WowRuntime) -> list:
 def test_idle_suite_has_no_onupdate_on_hidden_frames_and_no_repeating_timers(wow: WowRuntime):
     boot(wow)
     # open and close every window once: closing must leave nothing ticking
-    for cmd in ("/bq", "/bgold", "/bb", "/bmap", "/broute"):
+    gold = ["/bgold"] if wow.made_for("Bastians_Gold") else []  # no Gold on retail
+    for cmd in ("/bq", *gold, "/bb", "/bmap", "/broute"):
         wow.slash(cmd)
         wow.run_frames(2)
         wow.slash(cmd)

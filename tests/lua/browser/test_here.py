@@ -69,7 +69,9 @@ def test_here_fills_the_list_pane_beside_the_page(wow: WowRuntime):
     assert wow.eval(f"{HD}.buttonCount") == 0  # no action buttons in the column
     titles = block_titles(wow, HD)
     assert titles[:2] == ["DO HERE  2", "MY QUESTS HERE  2"]
-    assert titles[2:] == ["NEAR  3", "BEST SPOT HERE  2"]  # every Here block carries its count
+    # every Here block carries its count; Best spot is Gold's, none on retail
+    gold = wow.made_for(GOLD)
+    assert titles[2:] == ["NEAR  3", *(["BEST SPOT HERE  2"] if gold else [])]
     # Do here: the ranking, best first, the worth in the value column instead of "/min"
     todo = block_rows(wow, HD, "Do here  2")
     assert todo[0].startswith("[7] The Fargodeep Mine II") and " xp, " in todo[0]
@@ -81,7 +83,7 @@ def test_here_fills_the_list_pane_beside_the_page(wow: WowRuntime):
     assert sorted(t[:4] for t in log) == ["[11]", "[7] "]  # the objective and the hand-in
     # Near: the places by distance, the kind and the distance after the name
     near = block_rows(wow, HD, "Near")
-    assert len(near) == 3 and len(block_rows(wow, HD, "Best spot here")) == 2
+    assert len(near) == 3 and (not gold or len(block_rows(wow, HD, "Best spot here")) == 2)
     assert near[0].startswith("Marshal Dughan") or "yd" in near[0]
     assert all(", " in t and t.endswith("yd") for t in near)
     assert all(wow.eval(f"{HD}.blockPool[{i + 1}].block.wide") for i in range(len(titles)))

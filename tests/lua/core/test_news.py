@@ -38,6 +38,14 @@ def page(wow: WowRuntime) -> list[str]:
     return [strip(w.text) for w in canvas.widgets.values() if w.IsShown(w)]
 
 
+def start_empty(wow: WowRuntime) -> WowRuntime:
+    """Core logged in with its shipped News.lua emptied (the releases fill it)."""
+    wow.load_addon(CORE)
+    wow.execute(f"for k in pairs({CORE_NEWS}) do {CORE_NEWS}[k] = nil end")
+    wow.login()
+    return wow
+
+
 def first_start(wow: WowRuntime) -> WowRuntime:
     """Core with two entries already there at the first start on this account."""
     wow.load_addon(CORE)
@@ -48,7 +56,7 @@ def first_start(wow: WowRuntime) -> WowRuntime:
 
 
 def test_only_core_shows_that_nothing_is_new(wow: WowRuntime):
-    wow.start(CORE)
+    start_empty(wow)
     wow.advance(4)
     assert wow.eval("Bastians:NewsUnseen()") == 0 and not dot(wow) and updated_lines(wow) == []
     assert any(t.startswith("Nothing new yet") for t in page(wow))
@@ -131,7 +139,7 @@ def test_nothing_shows_in_combat(wow: WowRuntime):
 
 
 def test_entries_open_their_target_or_their_app_and_an_app_marks_its_own(wow: WowRuntime):
-    wow.start(CORE)
+    start_empty(wow)
     wow.execute(
         "Bastians:NewModule('Demo', { addon = 'Bastians_Core', title = 'Demo', "
         "open = function() Mock.demoOpened = 'app' end, news = { "

@@ -13,6 +13,8 @@ machine-specific build inputs from its optional [build] section:
     forever = "data/ground-truth/npc_places_forever_beta_2026-10-18.csv"
     [build.probe]                                       # Bastians_Probe dump (transforms, checks)
     forever = "data/probe/2026-10-20-forever-70450.lua"
+    [build.sources]                                     # the source addons, if not the client's
+    forever = ".local/sources/forever"                  #   Interface/AddOns (Forever: the beta's)
     [build.dump_prefix]
     forever = "beta"                                    # clientdump JSON prefix in .local/out
     retail = "retail"
@@ -67,9 +69,9 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
     if client not in clients:
         raise BuildClientError(f"no client folder for {client} in {config_path}")
     addons = Path(clients[client]) / "Interface" / "AddOns"
-    if not addons.is_dir():
-        raise BuildClientError(f"{addons} does not exist")
     build = raw.get("build", {})
+    if not addons.is_dir() and not (build.get("sources") or {}).get(client):
+        raise BuildClientError(f"{addons} does not exist")
     prefix = str(build.get("dump_prefix", {}).get(client, DEFAULT_PREFIX[client]))
 
     def optional(key: str) -> Path | None:
@@ -82,6 +84,13 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         path = Path(str(value))
         return path if path.is_absolute() else ROOT / path
 
+    # the source addons can live outside the client (24.10.2026: the Forever beta was uninstalled,
+    # its EverythingQuests, ForeverDB and QuestieDB are kept in .local/sources/forever)
+    sources = optional("sources")
+    if sources is not None:
+        if not sources.is_dir():
+            raise BuildClientError(f"[build.sources] {client}: {sources} does not exist")
+        addons = sources
     return BuildInputs(
         client=client,
         addons=addons,

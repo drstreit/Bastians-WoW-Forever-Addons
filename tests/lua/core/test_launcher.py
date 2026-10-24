@@ -19,7 +19,9 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
     wow.start(*APPS)
     wow.run_frames(5)
     assert wow.eval("BastiansMinimapButton ~= nil") is True  # the suite's own stays
-    for name in ("Browser", "Gold", "Map", "Quests"):
+    gold = wow.made_for("Bastians_Gold")  # no Gold on retail
+    names = ("Browser", *(["Gold"] if gold else []), "Map", "Quests")
+    for name in names:
         assert (
             wow.eval(
                 f"BastiansMinimapButton{name} ~= nil and BastiansMinimapButton{name}:IsShown()"
@@ -27,14 +29,11 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
             is True
         ), name
     # each at its own place around the minimap
-    angles = {
-        wow.eval(f"{LAUNCHER}.AppSettings('{n}').angle")
-        for n in ("Browser", "Gold", "Map", "Quests")
-    }
-    assert len(angles) == 4
-    # a click opens the app's window
-    wow.execute("BastiansMinimapButtonGold:Click('LeftButton')")
-    assert wow.eval("BastiansGoldFrame and BastiansGoldFrame:IsShown()") is True
+    angles = {wow.eval(f"{LAUNCHER}.AppSettings('{n}').angle") for n in names}
+    assert len(angles) == len(names)
+    if gold:  # a click opens the app's window
+        wow.execute("BastiansMinimapButtonGold:Click('LeftButton')")
+        assert wow.eval("BastiansGoldFrame and BastiansGoldFrame:IsShown()") is True
     # the right-click menu of the suite's button lists the apps
     wow.execute(f"{LAUNCHER}.ShowMenu(BastiansMinimapButton)")
     labels = [
@@ -42,7 +41,7 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
         for b in wow.eval("BastiansLauncherMenu.items").values()
         if b.IsShown(b)
     ]
-    assert "Map" in labels and "Gold" in labels and labels[-1] == "Settings"
+    assert "Map" in labels and ("Gold" in labels) is gold and labels[-1] == "Settings"
     # the switch on the app's settings page hides it, and the choice is kept
     wow.execute(f"{LAUNCHER}.SetAppButton('Map', false)")
     assert wow.eval("BastiansMinimapButtonMap:IsShown()") is False
@@ -50,8 +49,9 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
     wow.execute(f"{LAUNCHER}.SetAppButton('Map', true)")
     assert wow.eval("BastiansMinimapButtonMap:IsShown()") is True
     # an app switched off hides its button
-    wow.execute("Bastians:GetModule('Gold'):Disable()")
-    assert wow.eval("BastiansMinimapButtonGold:IsShown()") is False
+    if gold:
+        wow.execute("Bastians:GetModule('Gold'):Disable()")
+        assert wow.eval("BastiansMinimapButtonGold:IsShown()") is False
     wow.execute("Bastians.UI.Hub.Open('Map')")
     texts = [
         w.label.GetText(w.label)

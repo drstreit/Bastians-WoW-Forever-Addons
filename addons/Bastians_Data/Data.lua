@@ -1345,6 +1345,21 @@ mod = B:NewModule("Data", {
     registerTypes(self)
     registerSections(self)
     registerSearch(self)
+    -- an item's vendor price as its worth, below Gold's (priority 50): retail has no Gold since
+    -- 24.10.2026 (owner: "Gold out, vendor prices only"), so its items still say what they fetch
+    B:RegisterWorth(self, {
+      types = { "item" },
+      priority = 10,
+      invalidateOn = { "BASTIANS_DATA_LOADED" },
+      worth = function(ref)
+        local _, id = B.Entity.Parse(ref)
+        local r = service:Get("item", id)
+        if not (r and r.sell) then
+          return nil -- unknown: no worth line, never 0
+        end
+        return { text = L["vendor"] .. " " .. B.UI.Money(r.sell), copper = r.sell }
+      end,
+    })
     if Data.Names then
       Data.Names.Attach(self)
     end

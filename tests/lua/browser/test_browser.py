@@ -266,6 +266,7 @@ def test_tooltip_hint_line_only_with_the_browser(wow: WowRuntime):
 
 
 def test_gold_sections_and_actions_appear_on_the_right_pages(wow: WowRuntime):
+    wow.needs(GOLD)  # no Gold on retail
     wow.execute('function GetRealmName() return "Classic Beta PvE" end')
     boot(wow, CORE, DATA, GOLD, BROWSER)
     wow.slash("/bb item:2589")

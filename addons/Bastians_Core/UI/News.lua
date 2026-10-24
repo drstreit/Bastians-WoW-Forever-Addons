@@ -90,8 +90,8 @@ end
 
 function News.Unseen(entries)
   local st = state()
-  if not st then
-    return 0
+  if not st or not News.checked then
+    return 0 -- until the login check knows whether this is a first start, nothing is new
   end
   local n = 0
   for _, e in ipairs(entries or News.Entries()) do
@@ -102,8 +102,8 @@ function News.Unseen(entries)
   return n
 end
 
-function B:NewsUnseen()
-  return News.Unseen()
+function B:NewsUnseen(entries)
+  return News.Unseen(entries)
 end
 
 -- What an entry opens: its own function, else the app's window (both the owner's, ADR 0021).
@@ -279,6 +279,7 @@ function News.Check()
     return
   end
   local versions = B.UI.Settings.Fingerprint(true)
+  News.checked = true
   if st.versions == nil and not News.ranBefore then
     News.MarkSeen() -- a first start: everything there is counts as seen
     st.versions = versions

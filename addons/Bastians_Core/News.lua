@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.0.0-beta.12:1",
+    date = "2026-10-24",
+    version = "1.0.0-beta.12",
+    text = "The minimap button's tooltip no longer counts news before the login has checked them.",
+  },
+  {
+    id = "1.0.0-beta.12:2",
+    date = "2026-10-24",
+    version = "1.0.0-beta.12",
+    text = "On retail the suite is the map, the quests, the browser and the route: Gold and the gold book stay on WoW Forever, and an item shows what a vendor pays.",
+  },
+  {
     id = "1.0.0-beta.11:1",
     date = "2026-10-24",
     version = "1.0.0-beta.11",

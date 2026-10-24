@@ -138,6 +138,8 @@ def test_a_german_client_sees_german_load_time_labels_and_runtime_texts(wow: Wow
         "Gold": "Verfügbare Spielzeit (Minuten)",
         "Route": "Zu nutzende Flugrouten",
     }
+    if not wow.made_for("Bastians_Gold"):  # no Gold on retail
+        del expected["Gold"]
     for name, text in expected.items():
         wow.execute(f"Bastians.UI.Hub.Open('{name}')")
         assert text in labels(wow), name
@@ -172,8 +174,9 @@ def test_an_english_client_is_unchanged(wow: WowRuntime):
     assert wow.eval("Bastians.L['Close']") == "Close"
     wow.execute("Bastians.UI.Hub.Open('Quests')")
     assert "The tracker (My quests)" in labels(wow)
-    wow.execute("Bastians.UI.Hub.Open('Gold')")
-    assert "Play time available (minutes)" in labels(wow)
+    if wow.made_for("Bastians_Gold"):  # no Gold on retail
+        wow.execute("Bastians.UI.Hub.Open('Gold')")
+        assert "Play time available (minutes)" in labels(wow)
     d = "Bastians:GetService('data')"
     assert list(wow.eval(f"{{ {d}:Kind('object', 'mailbox') }}").values()) == [
         "Mailbox",

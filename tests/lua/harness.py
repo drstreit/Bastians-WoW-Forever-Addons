@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ADDONS = ROOT / "addons"
 MOCK = Path(__file__).with_name("mock")
 CLIENTS = ("forever", "retail")
+INTERFACES = {"forever": "16001", "retail": "120105"}  # as tools/release.py
 SAVED_VARIABLE_KEYS = ("SavedVariables", "SavedVariablesPerCharacter")
 
 
@@ -35,6 +36,7 @@ class WowRuntime:
             addons_dir,
         )  # a fixture addon replaces a real one of the same name
         self.loaded: list[str] = []
+        self.skipped: list[str] = []  # addons not made for this client (their TOC interface)
         self.lua = lua51.LuaRuntime(unpack_returned_tuples=True)
         g = self.lua.globals()
         g.BASTIANS_TEST_CLIENT = client
@@ -86,11 +88,31 @@ class WowRuntime:
         toc = self.addon_dir(name) / f"{name}.toc"
         return parse_toc(toc.read_text(encoding="utf-8"))
 
+    def made_for(self, name: str) -> bool:
+        """Whether the addon's TOC names this client's interface (Gold and the book: Forever)."""
+        interfaces = {v.strip() for v in self.toc(name)[0].get("Interface", "").split(",")}
+        return interfaces in ({""}, set()) or INTERFACES[self.client] in interfaces
+
+    def needs(self, *names: str) -> None:
+        """Skips the test on a client the addons are not made for (no Gold
+        and no book on retail)."""
+        import pytest
+
+        for name in names:
+            if not self.made_for(name):
+                pytest.skip(f"{name} is not made for {self.client}")
+
     def load_addon(self, name: str) -> None:
         """Load one addon's files in TOC order and fire ADDON_LOADED, as the client does (in Lua)."""
         if name in self.loaded:
             return
         self.addon_dir(name)  # a clear error for an unknown addon
+        # the client loads only what names its interface (the Strategies book is Forever's only)
+        interfaces = {v.strip() for v in self.toc(name)[0].get("Interface", "").split(",")}
+        wanted = INTERFACES[self.client]
+        if interfaces and interfaces != {""} and wanted not in interfaces:
+            self.skipped.append(name)  # the game lists it as incompatible and loads nothing
+            return
         try:
             self.mock.LoadAddOnFiles(name)
         except lua51.LuaError as exc:

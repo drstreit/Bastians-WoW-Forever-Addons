@@ -730,7 +730,8 @@ def test_every_toolbar_button_of_the_apps_has_a_tip(wow: WowRuntime):
     wow.run_frames(10)
     wow.slash("/bb")
     wow.slash("/bmap")
-    wow.slash("/bgold")
+    if wow.made_for("Bastians_Gold"):  # no Gold on retail
+        wow.slash("/bgold")
     wow.run_frames(5)
     untipped = wow.eval(
         """(function()

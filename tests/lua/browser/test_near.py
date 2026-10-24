@@ -89,9 +89,10 @@ def test_lists_without_places_open_with_everything(wow: WowRuntime):
     wow.execute("Mock.playerMap = 1436")
     wow.fire("ZONE_CHANGED_NEW_AREA")
     wow.advance(0.5)
-    open_list(wow, "spot")
-    assert wow.eval(f"{BR}.Current().near") in ("here", "continent", None)
-    assert not flat(wow)[0].startswith("No entries")
+    if wow.made_for(GOLD):  # the spots list is Gold's; no Gold on retail
+        open_list(wow, "spot")
+        assert wow.eval(f"{BR}.Current().near") in ("here", "continent", None)
+        assert not flat(wow)[0].startswith("No entries")
     assert wow.errors == []
 
 
@@ -109,7 +110,9 @@ def test_search_results_carry_the_worth_and_open_their_page(wow: WowRuntime):
     # the type and summary in grey, the worth in the value column (C3)
     assert linen.twoLine is False and "item" in strip(linen.text.GetText(linen.text))
     assert linen.icon.IsShown(linen.icon) is True
-    assert strip(linen.value.GetText(linen.value)).startswith("AH ")
+    # the worth: Gold's auction price; without Gold Data's vendor price
+    worth = "AH " if wow.made_for(GOLD) else "vendor "
+    assert strip(linen.value.GetText(linen.value)).startswith(worth)
     linen.Click(linen, "LeftButton")
     assert wow.eval(f"{BR}.Current().ref") == "item:2589"
     assert any(r.startswith("Linen Cloth") for r in flat(wow))  # the results stay beside the page
@@ -167,7 +170,10 @@ def test_nearest_first_sorts_rows_with_a_place_by_distance(wow: WowRuntime):
     wow.run_frames(3)
     assert wow.eval(f"{BR}.Current().sort") is None and not flat(wow)[0].endswith("yd")
     open_list(wow, "item")
-    assert "Nearest" not in menu(wow, TREE, "sort")
+    if wow.made_for(GOLD):
+        assert "Nearest" not in menu(wow, TREE, "sort")
+    else:  # no Gold on retail: an item list has no sort group at all
+        assert not any(c.startswith("Sort") for c in chips(wow))
     assert wow.errors == []
 
 

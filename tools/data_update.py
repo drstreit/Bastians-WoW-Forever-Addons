@@ -73,6 +73,19 @@ class DataUpdateError(Exception):
     pass
 
 
+# what Forever's packs are built from: the build skips a missing source without a word, so the
+# daily edition refuses instead of shipping packs without their quests and NPCs (24.10.2026)
+SOURCES = (
+    "EverythingQuests",
+    "ForeverDB/Data",
+    "QuestieDB/support/Forever/Zones/areaIdToUiMapId.lua",
+)
+
+
+def missing_sources(addons: Path) -> list[str]:
+    return [s for s in SOURCES if not (addons / s).exists()]
+
+
 def project_folders(config: dict, project: str) -> list[str]:
     """The project's folders and those of every project it requires, recursively: what a player
     installs with it, so the boot on the mock tests the real install."""
@@ -277,6 +290,13 @@ def update(
     """Steps 1 to 3 of the module docstring. -> (the edition, the planned uploads, or None when
     the data is unchanged and that edition was sent)."""
     today = today or datetime.now(UTC).strftime("%Y-%m-%d")
+    if build is run_build:
+        missing = missing_sources(inputs.addons)
+        if missing:
+            raise DataUpdateError(
+                f"the Forever source addons are missing in {inputs.addons}: {', '.join(missing)} "
+                "(set [build.sources] forever in .local/install.toml)"
+            )
     config = config or curseforge.load_config()
     ledger = read_ledger(ledger_path)
     sent = last_sent(ledger)

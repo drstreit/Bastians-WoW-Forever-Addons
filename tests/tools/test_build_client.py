@@ -52,6 +52,22 @@ def test_inputs_come_from_the_install_config(tmp_path):
         build_client.read_inputs("retail", config)
 
 
+def test_the_source_addons_can_live_outside_a_client_that_is_gone(tmp_path):
+    # 24.10.2026: the Forever beta was uninstalled; its source addons are kept apart
+    kept = tmp_path / "sources" / "forever"
+    kept.mkdir(parents=True)
+    config = make_config(tmp_path, f'[build.sources]\nforever = "{kept.as_posix()}"\n')
+    (tmp_path / "wow" / "_classic_beta_" / "Interface" / "AddOns").rmdir()
+    assert build_client.read_inputs("forever", config).addons == kept
+    assert build_client.read_inputs("retail", config).addons.name == "AddOns"  # unchanged
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(kept.as_posix(), (tmp_path / "x").as_posix()),
+        encoding="utf-8",
+    )
+    with pytest.raises(build_client.BuildClientError, match=r"\[build.sources\] forever"):
+        build_client.read_inputs("forever", config)
+
+
 def test_commands_run_data_then_mapart_when_the_extracts_exist(tmp_path, monkeypatch):
     dumps = tmp_path / "out"
     dumps.mkdir()

@@ -106,6 +106,34 @@ def test_zips_are_deterministic_and_skip_dev_files(tmp_path):
     assert [p.addon for p in packages] == ["Bastians_Core"]
 
 
+def test_an_addon_not_made_for_a_client_is_not_released_for_it(tmp_path):
+    addons = make_addons(tmp_path)
+    book = addons / "Bastians_Strategies"
+    book.mkdir()
+    (book / "Bastians_Strategies.toc").write_text(
+        "## Interface: 16001\n## Version: 0.2.0\nBastians_Strategies.lua\n", encoding="utf-8"
+    )
+    (book / "Bastians_Strategies.lua").write_text("-- the book\n", encoding="utf-8")
+    forever, _ = release.release("forever", addons, tmp_path / "f")
+    retail, notes = release.release("retail", addons, tmp_path / "r")
+    assert "Bastians_Strategies" in {p.addon for p in forever}
+    assert "Bastians_Strategies" not in {p.addon for p in retail}
+    assert "Bastians_Strategies: not for retail (its TOC names interface 16001)" in notes
+    with zipfile.ZipFile(retail[-1].path) as zf:  # nor in the bundle
+        assert not any(n.startswith("Bastians_Strategies/") for n in zf.namelist())
+    # the real TOCs: the book, Gold and the prices they read are Forever's only
+    for name in (
+        "Bastians_Strategies",
+        "Bastians_Data_Strategies",
+        "Bastians_Gold",
+        "Bastians_Data_Market",
+    ):
+        assert release.made_for(release.ADDONS_DIR / name, "forever")
+        assert not release.made_for(release.ADDONS_DIR / name, "retail")
+    for name in ("Bastians_Quests", "Bastians_Map", "Bastians_Browser", "Bastians_Route"):
+        assert release.made_for(release.ADDONS_DIR / name, "retail")
+
+
 def test_data_packs_carry_the_client_and_need_generated_files(tmp_path):
     addons = make_addons(tmp_path)
     generated = addons / "Bastians_Data_Quests" / "Generated"

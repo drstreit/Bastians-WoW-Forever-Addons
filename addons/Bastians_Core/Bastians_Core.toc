@@ -2,7 +2,7 @@
 ## Title: Bastian's Core
 ## Notes: Module system, message bus, registries, settings hub and UI kit for the Bastian's suite.
 ## Author: Bastian
-## Version: 1.0.0-beta.11
+## Version: 1.0.0-beta.12
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB

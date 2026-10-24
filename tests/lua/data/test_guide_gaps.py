@@ -46,12 +46,12 @@ def test_a_monster_tooltip_says_target_of_and_its_best_drops(wow: WowRuntime):
     target = [line for line in got if line.startswith("Target of:")]
     assert target == ["Target of: The Fargodeep Mine  =  0/1"]  # the log's title and progress
     drops = [line for line in got if "%" in line]
-    if wow.client == "forever":
+    if wow.made_for(GOLD):
         # chance x price: Blood Saber (3.2 % of 50s) before Linen Cloth (45.5 % of 38c)
         assert drops[0].startswith("Blood Saber  3.2 %  =  50s")
         assert drops[1].startswith("Linen Cloth  45.5 %")
-    else:  # the retail market prices Linen only: a drop without a price follows (unknown is not 0)
-        assert drops[0].startswith("Linen Cloth  45.5 %") and drops[1] == "Blood Saber  3.2 %"
+    else:  # the drops are Gold's; no Gold on retail
+        assert drops == []
     assert wow.errors == []
 
 

@@ -158,6 +158,17 @@ def data_version() -> str:
     return release.addon_version(ROOT / "addons" / "Bastians_Data")
 
 
+def test_a_build_without_its_forever_sources_is_refused(tmp_path: Path):
+    # the build skips a missing source silently: the edition must not ship hollow packs
+    with pytest.raises(data_update.DataUpdateError, match="EverythingQuests, ForeverDB/Data"):
+        data_update.update(inputs(tmp_path), tmp_path / "out", ledger_path=tmp_path / "e.json")
+    for path in data_update.SOURCES:
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.mkdir() if "." not in target.name else target.write_text("", encoding="utf-8")
+    assert data_update.missing_sources(tmp_path) == []
+
+
 def test_the_hash_follows_packs_and_code_but_not_the_version_line(tmp_path: Path):
     packs = tmp_path / "packs"
     fake_build()(inputs(tmp_path), packs)
