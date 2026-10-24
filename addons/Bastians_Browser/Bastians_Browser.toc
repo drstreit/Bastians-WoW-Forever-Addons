@@ -2,7 +2,7 @@
 ## Title: Bastian's Browser
 ## Notes: Searchable browser for quests, NPCs, items and zones.
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, QuestieDB
@@ -10,4 +10,5 @@
 ## SavedVariablesPerCharacter: BastiansBrowserCharDB
 
 Locales\deDE.lua
+News.lua
 Browser.lua

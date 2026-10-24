@@ -681,6 +681,7 @@ local NETWORKS = {
 }
 
 mod = B:NewModule("Route", {
+  news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
   open = function()
     W.Toggle()

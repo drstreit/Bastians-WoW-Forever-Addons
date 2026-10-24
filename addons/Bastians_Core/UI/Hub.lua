@@ -33,6 +33,9 @@ local function entries()
     end
     return a.title < b.title
   end)
+  local unseen = B.UI.News and B.UI.News.Unseen() or 0
+  local news = L["What's new"] .. (unseen > 0 and (" (" .. unseen .. ")") or "")
+  list[#list + 1] = { news = true, title = news } -- before About (ADR 0021)
   list[#list + 1] = { about = true, title = L["About"] } -- always last (core.md "About page")
   return list
 end
@@ -72,6 +75,7 @@ local function select(entry)
         (entry.mod and b.entry.mod == entry.mod)
         or (entry.lod and b.entry.lod == entry.lod)
         or (entry.about and b.entry.about)
+        or (entry.news and b.entry.news)
       )
     local c = on and S.C.accent or S.C.text
     b.label:SetTextColor(c[1], c[2], c[3])
@@ -85,6 +89,8 @@ local function select(entry)
     Settings_.Render(canvas, entry.mod)
   elseif entry.about then
     B.UI.About.Render(canvas)
+  elseif entry.news then
+    B.UI.News.Render(canvas)
   else
     renderLod(entry)
   end
@@ -180,6 +186,8 @@ function Hub.Open(moduleName)
   end
   if moduleName == "about" then
     Hub.current = { about = true, title = L["About"] }
+  elseif moduleName == "news" then
+    Hub.current = { news = true, title = L["What's new"] }
   elseif moduleName then
     local mod = ns.modules[moduleName]
     if mod then
@@ -198,7 +206,7 @@ function Hub.Toggle()
   end
 end
 
--- /bastians [about | log [n] | debug | profile <name> | perf]
+-- /bastians [about | news | addons | log [n] | debug | profile <name> | perf]
 SLASH_BASTIANS1 = "/bastians"
 SlashCmdList.BASTIANS = function(msg)
   local cmd, arg = string.match(msg or "", "^%s*(%S*)%s*(.-)%s*$")
@@ -207,6 +215,8 @@ SlashCmdList.BASTIANS = function(msg)
     Hub.Toggle()
   elseif cmd == "about" then
     Hub.Open("about")
+  elseif cmd == "news" then
+    Hub.Open("news") -- What's new (ADR 0021)
   elseif cmd == "log" then
     B:PrintLog(tonumber(arg) or 20)
   elseif cmd == "debug" then
@@ -225,6 +235,6 @@ SlashCmdList.BASTIANS = function(msg)
   elseif cmd == "addons" then
     B.UI.Settings.PrintAddons() -- what this client needs and the optional addons (ADR 0015)
   else
-    B:Say(L["/bastians: hub | about | addons | log [n] | debug | profile [name] | perf"])
+    B:Say(L["/bastians: hub | news | about | addons | log [n] | debug | profile [name] | perf"])
   end
 end

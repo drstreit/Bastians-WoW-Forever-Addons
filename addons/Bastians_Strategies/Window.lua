@@ -814,6 +814,11 @@ local function renderTitle()
       addRow(right, line, function()
         Window.Show({ kind = "page", id = n.page })
       end, { size = 12 })
+    elseif n.mill and get("chapter", n.mill) then
+      -- an entry the build wrote about a chapter's Rumour mill opens that mill
+      addRow(right, line, function()
+        Window.Show({ kind = "mill", id = n.mill })
+      end, { size = 12 })
     else
       addText(right, line, 12, S.C.text, 0, 3)
     end
@@ -827,6 +832,9 @@ local function renderTitle()
       end
     end
     db().global.seen, db().global.seenToday = news[1].date, today
+    if B.MarkNewsSeen then
+      B:MarkNewsSeen(ns.mod) -- the suite's What's new: the book's lines were read here (ADR 0021)
+    end
   end
   return L["Bastian's Gold Rumours"]
 end

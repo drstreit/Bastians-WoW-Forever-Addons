@@ -8,6 +8,7 @@ ns.L = ns.L or B.NewLocale()
 local L = ns.L
 
 local mod = B:NewModule("Gold", {
+  news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
   open = function()
     ns.Window.Toggle()

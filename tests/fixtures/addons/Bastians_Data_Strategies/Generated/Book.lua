@@ -56,7 +56,7 @@ B.deferred[#B.deferred + 1] = {
     schema = {
       chapter = { "name", "order", "opening", "active" },
       mill = { "chapter", "rank", "zone", "where", "channels", "claims" },
-      news = { "date", "text", "page" },
+      news = { "date", "text", "page", "mill", "kind", "n" },
       page = {
         "name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate",
         "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor",

@@ -2,7 +2,7 @@
 ## Title: Bastian's Data: World
 ## Notes: Generated world data pack: NPCs, objects, zones (loads at startup).
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

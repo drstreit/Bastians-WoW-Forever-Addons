@@ -27,8 +27,10 @@ forever = ["1.60.1"]
 [projects.Bastians_Suite]
 title = "Bastian's Suite"
 slug = "bastians-suite"
-id = 0
-verified = false
+id = 1762055 # created by (unlisted until the launch)
+verified = true
+# approved by CurseForge 24.10.2026: relations to it work (`approved = false` leaves them out
+# while a project is in review, error 1018)
 folders = [
   "Bastians_Core",
   "Bastians_Quests",
@@ -46,8 +48,8 @@ optional = ["TomTom", "QuestieDB", "Spoken"]
 [projects.Bastians_Data]
 title = "Bastian's Data"
 slug = "bastians-data"
-id = 0
-verified = false
+id = 1762046 # created by (unlisted until the launch)
+verified = true # approved 24.10.2026
 folders = [
   "Bastians_Data",
   "Bastians_Data_Quests",
@@ -65,15 +67,21 @@ optional = ["Bastians_Suite", "QuestieDB"]
 
 [external.TomTom]
 slug = "tomtom"
+id = 18808
 verified = true # its TOC names X-Curse-Project-ID 18808, the hub links curseforge.com/wow/addons/tomtom
 clients = ["forever", "retail"]
 
 [external.QuestieDB]
 slug = "questie"
-verified = false # QuestieDB's TOC names no CurseForge project; the hub links Questie's page
+id = 334372
+verified = true # Questie, project 334372, lists WoW Forever 1.60.1 (its page, 23.10.2026)
 clients = ["forever"]
 
 [external.Spoken]
-slug = "spoken-quests"
-verified = false # Spoken's TOC names no CurseForge project; the slug is the hub's link
+slug = "spoken" # ~~spoken-player~~ only redirects there on the website; the API knows "spoken"
+id = 1700375
+# ~~spoken-quests~~ is retired: Spoken (project 1700375, WoW Forever 1.60.1) merges Spoken Quests,
+# Zones and Books; its download holds the Spoken and Spoken_Quests folders the bridge needs
+# (3.5.1 on the beta client, 23.10.2026)
+verified = true
 clients = ["forever"]

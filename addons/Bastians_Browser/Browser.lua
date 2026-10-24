@@ -2603,6 +2603,7 @@ Browser.Show = show
 -- ---------------------------------------------------------------------------------------------
 
 mod = B:NewModule("Browser", {
+  news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
   open = function()
     Browser.OpenWindow()

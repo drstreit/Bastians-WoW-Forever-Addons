@@ -1325,6 +1325,7 @@ end
 -- ---------------------------------------------------------------------------------------------
 
 mod = B:NewModule("Data", {
+  news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
   title = L["Data"],
   apiVersion = 1,

@@ -2,7 +2,7 @@
 ## Title: Bastian's Data: Items
 ## Notes: Generated item data pack (loads at startup).
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

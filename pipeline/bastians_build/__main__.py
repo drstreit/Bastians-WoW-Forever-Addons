@@ -12,7 +12,12 @@ data   --client forever --fixture <dir>      the same from the hand-written fixt
        [--book <dir>]                        plus the Strategies book (Bastians_Data_Strategies),
                                              the claims from the export; default content/strategies
                                              (not for --fixture builds)
-       [--ground-truth <csv>]                measured NPC places checked, report section (B3.8)
+       [--book-previous <json>] [--book-state <json>]
+                                             the book's state of the last sent edition: What's
+                                             new entries for what changed since (book_news.py);
+                                             this build's state goes to --book-state (default
+                                             <report-dir>/book-state.json)
+       [--ground-truth <csv>]              measured NPC places checked, report section (B3.8)
 check  ...                                   validate only, no output
 mapart --client forever|retail --tiles <dir> [--overview <dir>] [--maps <Map.json>] [--out addons]
        Bastians_Map/Generated/MinimapTiles.lua from the clientdump tile lists (<Map>_tiles.txt);
@@ -30,6 +35,7 @@ from pathlib import Path
 from bastians_build import __version__
 from bastians_build.attunements import AttunementError, add_attunements
 from bastians_build.book import CONTENT_DIR, BookError, add_book
+from bastians_build.book_news import BookNewsError, add_generated_news, read_state, write_state
 from bastians_build.build import build
 from bastians_build.candidates import candidates, write_report
 from bastians_build.canon import build_world
@@ -97,6 +103,17 @@ def build_parser() -> argparse.ArgumentParser:
             type=Path,
             help="Strategies book content (default: content/strategies when it exists and the "
             "build is not a fixture; needs --export)",
+        )
+        p.add_argument(
+            "--book-previous",
+            type=Path,
+            help="the book state of the last sent edition: the build writes What's new entries "
+            "for what changed since (tools/data_update.py passes it)",
+        )
+        p.add_argument(
+            "--book-state",
+            type=Path,
+            help="where this build's book state goes (default: <report-dir>/book-state.json)",
         )
         p.add_argument(
             "--transports",
@@ -275,6 +292,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"candidates: {report}")
             # the Rumour mill: the strongest strategies no page tells yet, rebuilt every export
             add_mill(world, found)
+            if world.records.get("chapter"):
+                # What's new written by the build: the book's changes since the last sent edition
+                previous = read_state(args.book_previous) if args.book_previous else None
+                date = (export.created_at or "")[:10] or None
+                state, _ = add_generated_news(world, found, previous, date)
+                if args.command != "check":
+                    state_path = args.book_state or args.report_dir / "book-state.json"
+                    write_state(state_path, state)
+                    print(f"book state: {state_path}")
         elif args.book:
             print("error: --book needs --export (the claims come from it)", file=sys.stderr)
             return 2
@@ -293,6 +319,7 @@ def main(argv: list[str] | None = None) -> int:
     except (
         AttunementError,
         BookError,
+        BookNewsError,
         ClientDumpError,
         ConfigError,
         ExportError,

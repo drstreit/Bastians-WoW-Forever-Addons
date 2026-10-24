@@ -2,7 +2,7 @@
 ## Title: Bastian's Data
 ## Notes: Loader and query API over the generated game data packs.
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data_Quests, Bastians_Data_World, Bastians_Data_Items, Bastians_Data_Market, Bastians_Data_Text_enUS, Bastians_Data_Nav
@@ -10,6 +10,7 @@
 ## SavedVariablesPerCharacter: BastiansDataCharDB
 
 Locales\deDE.lua
+News.lua
 Data.lua
 Names.lua
 QuestieDB.lua

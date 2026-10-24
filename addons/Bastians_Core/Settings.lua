@@ -96,7 +96,7 @@ B.COMPANIONS = {
   {
     addon = "Spoken",
     what = L["voiced quest texts: Quests hands it the quest you look at"],
-    url = "https://www.curseforge.com/wow/addons/spoken-quests",
+    url = "https://www.curseforge.com/wow/addons/spoken", -- Spoken; Spoken Quests is retired
     clients = { "forever" },
   },
 }
@@ -270,12 +270,18 @@ function Settings_.NoteParts()
 end
 
 -- The installed suite as one string: the client and every folder's version. It changes with any
--- update of any of Bastian's addons, not only Core's.
-function Settings_.Fingerprint()
+-- update of any of Bastian's addons, not only Core's. Without `full` a Data edition's
+-- "+data.<date>.<n>" is left out (the optional addons are not listed again every day); What's new
+-- compares the full one (ADR 0021).
+function Settings_.Fingerprint(full)
   local parts = { B.Client }
   for _, addon in ipairs(B.SUITE_ADDONS) do
     if exists(addon) then
-      parts[#parts + 1] = addon .. "=" .. tostring(C_AddOns.GetAddOnMetadata(addon, "Version") or "?")
+      local version = tostring(C_AddOns.GetAddOnMetadata(addon, "Version") or "?")
+      if not full then
+        version = string.gsub(version, "%+.*$", "")
+      end
+      parts[#parts + 1] = addon .. "=" .. version
     end
   end
   return table.concat(parts, ";")
@@ -346,6 +352,7 @@ local function profileValues()
 end
 
 ns.core = B:NewModule("Core", {
+  news = ns.NEWS, -- What's new (ADR 0021)
   addon = ns.ADDON,
   title = L["General"],
   apiVersion = 1,
@@ -366,7 +373,7 @@ ns.core = B:NewModule("Core", {
       omnibox = {},
       omniboxTree = {},
     },
-    global = { debug = false, perf = {} },
+    global = { debug = false, perf = {}, newsMode = "always" },
   },
   options = {
     { type = "header", label = L["Profiles"] },
@@ -420,6 +427,18 @@ ns.core = B:NewModule("Core", {
       end,
     },
     { type = "range", key = "tooltipLines", label = L["Extra tooltip lines"], min = 0, max = 10, step = 1 },
+    {
+      type = "select",
+      key = "newsMode",
+      scope = "global",
+      label = L["Tell me about updates"],
+      values = function()
+        return { always = L["Always"], weekly = L["Weekly"], never = L["Never"] }
+      end,
+      set = function()
+        B.UI.News.UpdateDot() -- What's new (ADR 0021): the dot follows the choice at once
+      end,
+    },
     { type = "toggle", key = "tips", label = L["Explain buttons when the mouse rests on them"] },
     {
       type = "range",

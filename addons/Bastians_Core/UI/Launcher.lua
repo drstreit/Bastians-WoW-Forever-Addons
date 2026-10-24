@@ -155,7 +155,10 @@ local function tooltip(tt)
       apps = apps + 1
     end
   end
-  tt:AddLine(string.format("%d %s", apps, L["apps enabled"]), 1, 1, 1)
+  S.TipLine(tt, string.format("%d %s", apps, L["apps enabled"]), "tipText")
+  if B.UI.News then
+    B.UI.News.TipLine(tt) -- "3 new things: /bastians news" (ADR 0021)
+  end
   S.TipLine(tt, L["Click: search. Right click: menu. Drag: move the button."], "tipDim")
 end
 
@@ -216,6 +219,14 @@ function Launcher.MinimapButton()
   button =
     makeButton("BastiansMinimapButton", "Interface\\Icons\\INV_Misc_Map_01", onClick, tooltip, settings)
   Launcher.UpdateVisibility()
+  if B.UI.News then
+    B.UI.News.UpdateDot() -- the dot of What's new (ADR 0021)
+  end
+  return button
+end
+
+-- The suite's button once it exists, never created by asking (What's new's dot).
+function Launcher.Current()
   return button
 end
 

@@ -80,20 +80,34 @@ def test_two_projects_the_suite_requires_its_data():
 
 def test_each_clients_file_relates_only_to_what_exists_there():
     cfg = config()
-    forever, _ = curseforge.relations(cfg, "Bastians_Suite", "forever")
-    retail, _ = curseforge.relations(cfg, "Bastians_Suite", "retail")
-    slug = {
-        n: (cfg["projects"].get(n) or cfg["external"][n])["slug"] for n in ("QuestieDB", "Spoken")
-    }
-    assert {"slug": slug["QuestieDB"], "type": "optionalDependency"} in forever
-    assert {"slug": slug["Spoken"], "type": "optionalDependency"} in forever
-    assert all(r["slug"] not in slug.values() for r in retail)
+    for p in cfg["projects"].values():
+        p["approved"] = True  # as it will be once CurseForge has reviewed both projects
+
+    def pairs(project: str, client: str) -> set[tuple[str, str]]:
+        return {(r["slug"], r["type"]) for r in curseforge.relations(cfg, project, client)[0]}
+
+    forever, retail = pairs("Bastians_Suite", "forever"), pairs("Bastians_Suite", "retail")
+    slug = {n: cfg["external"][n]["slug"] for n in ("QuestieDB", "Spoken")}
+    assert (slug["QuestieDB"], "optionalDependency") in forever
+    assert (slug["Spoken"], "optionalDependency") in forever
+    assert all(s not in slug.values() for s, _ in retail)
     data = cfg["projects"]["Bastians_Data"]["slug"]
-    assert {"slug": data, "type": "requiredDependency"} in retail
-    assert {"slug": "tomtom", "type": "optionalDependency"} in retail
+    assert (data, "requiredDependency") in retail and ("tomtom", "optionalDependency") in retail
     suite = cfg["projects"]["Bastians_Suite"]["slug"]
-    data_retail, _ = curseforge.relations(cfg, "Bastians_Data", "retail")
-    assert data_retail == [{"slug": suite, "type": "optionalDependency"}]
+    assert pairs("Bastians_Data", "retail") == {(suite, "optionalDependency")}
+    # every relation names its project id too, for an exact match
+    assert all("projectID" in r for r in curseforge.relations(cfg, "Bastians_Suite", "forever")[0])
+
+
+def test_a_project_in_review_is_left_out_of_the_relations_and_noted():
+    """CurseForge refuses a relation to a project it has not approved (error 1018, 23.10.2026)."""
+    cfg = config()
+    cfg["projects"]["Bastians_Data"]["approved"] = False
+    rels, _ = curseforge.relations(cfg, "Bastians_Suite", "retail")
+    assert all(r["slug"] != "bastians-data" for r in rels)
+    assert curseforge.pending(cfg, "Bastians_Suite") == ["requires Bastians_Data"]
+    cfg["projects"]["Bastians_Data"]["approved"] = True
+    assert curseforge.pending(cfg, "Bastians_Suite") == []
 
 
 def test_release_type_follows_the_version():
@@ -149,8 +163,14 @@ def test_the_plan_merges_datas_packs_and_names_what_blocks_an_upload(tmp_path: P
     empty["game_versions"]["forever"] = []
     (blocked,) = curseforge.plan(empty, "forever", rel, {"Bastians_Data"}, "")
     assert "no CurseForge game version known for WoW Forever" in blocked.problems
-    assert "no CurseForge project id (roadmap B1.8)" in data.problems
-    assert any("relation QuestieDB" in p for p in uploads["Bastians_Suite"].problems)
+    # the projects exist since 23.10.2026: the real config is ready to send
+    assert data.problems == [] and uploads["Bastians_Suite"].problems == []
+    unready = config()
+    unready["projects"]["Bastians_Data"]["id"] = 0
+    unready["external"]["QuestieDB"]["verified"] = False
+    blocked = {u.project: u for u in curseforge.plan(unready, "forever", rel, None, "")}
+    assert "no CurseForge project id (roadmap B1.8)" in blocked["Bastians_Data"].problems
+    assert any("relation QuestieDB" in p for p in blocked["Bastians_Suite"].problems)
     # the zip is the same for the same input
     first = data.zip_path.read_bytes()
     curseforge.plan(config(), "forever", rel, {"Bastians_Data"}, "")
@@ -165,12 +185,15 @@ def test_a_dry_run_sends_nothing_and_send_refuses_while_not_ready(tmp_path: Path
         calls.append(request)
         return b"[]"
 
-    assert curseforge.main(["--client", "retail", "--release-dir", str(rel)], transport) == 0
+    cfg = config()
+    cfg["projects"]["Bastians_Suite"]["verified"] = False  # a slug nobody has seen yet
+    path = tmp_path / "cf.toml"
+    path.write_text(_toml(cfg), encoding="utf-8")
+    args = ["--client", "retail", "--release-dir", str(rel), "--config", str(path)]
+    assert curseforge.main(args, transport) == 0
     out = capsys.readouterr().out
     assert "dry run: nothing sent" in out and "not ready:" in out
-    assert (
-        curseforge.main(["--client", "retail", "--release-dir", str(rel), "--send"], transport) == 1
-    )
+    assert curseforge.main([*args, "--send"], transport) == 1
     assert "not ready, nothing sent" in capsys.readouterr().err
     assert calls == []
     # a manifest of the other client is refused
@@ -208,6 +231,12 @@ def test_send_resolves_the_game_versions_and_posts_each_file(tmp_path: Path, mon
     assert meta["releaseType"] == "beta"
     assert b'filename="Bastians_Data-v1.0.0-beta.5-retail.zip"' in body or b"Bastians_Suite" in body
     assert "sent Bastians_Data: file id" in capsys.readouterr().out
+    # each sent file is kept as what players have (in the test's temp folder, conftest.py)
+    suite = curseforge.kept("Bastians_Suite", "retail")
+    assert suite is not None and tmp_path in suite.parents
+    meta = json.loads(suite.with_suffix(".json").read_text(encoding="utf-8"))
+    assert meta["project"] == "Bastians_Suite" and meta["file_id"] in (1, 2)
+    assert curseforge.kept("Bastians_Suite", "forever") is None
 
 
 def _toml(cfg: dict) -> str:
@@ -235,3 +264,23 @@ def test_the_real_config_loads_for_both_clients(client):
     cfg = config()
     for name in cfg["projects"]:
         curseforge.relations(cfg, name, client)
+
+
+def test_the_token_comes_from_the_environment_or_the_owners_secrets_file(tmp_path: Path):
+    secrets = tmp_path / ".secrets"
+    assert curseforge.api_token({}, secrets) is None
+    secrets.write_text("API-TOKEN=abc-123\n", encoding="utf-8")
+    assert curseforge.api_token({}, secrets) == "abc-123"
+    assert curseforge.api_token({"CF_API_KEY": "from-env"}, secrets) == "from-env"
+
+
+def test_a_file_without_relations_sends_no_relations_field(tmp_path: Path):
+    """CurseForge refuses an empty relations list (error 1002, 23.10.2026)."""
+    rel = fake_release(tmp_path, "retail")
+    cfg = config()
+    for p in cfg["projects"].values():
+        p["approved"] = False  # both in review: Data's retail file relates to nothing
+    (data,) = curseforge.plan(cfg, "retail", rel, {"Bastians_Data"}, "")
+    assert "relations" not in data.metadata
+    (suite,) = curseforge.plan(cfg, "retail", rel, {"Bastians_Suite"}, "")
+    assert suite.metadata["relations"]["projects"][0]["slug"] == "tomtom"

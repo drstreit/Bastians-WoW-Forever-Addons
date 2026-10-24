@@ -68,6 +68,7 @@ local function scheduleRefresh(self)
 end
 
 local mod = B:NewModule("Quests", {
+  news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
   open = function()
     ns.Window.Toggle()

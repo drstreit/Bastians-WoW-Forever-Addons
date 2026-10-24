@@ -2,7 +2,7 @@
 ## Title: Bastian's Core
 ## Notes: Module system, message bus, registries, settings hub and UI kit for the Bastian's suite.
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB
@@ -14,6 +14,7 @@ Libs\LibDataBroker-1.1\LibDataBroker-1.1.lua
 Init.lua
 Locale.lua
 Locales\deDE.lua
+News.lua
 Log.lua
 Core.lua
 Jobs.lua
@@ -39,6 +40,7 @@ Tooltips.lua
 Settings.lua
 Perf.lua
 UI\About.lua
+UI\News.lua
 UI\Hub.lua
 UI\Omnibox.lua
 UI\Launcher.lua

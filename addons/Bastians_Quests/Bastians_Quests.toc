@@ -2,7 +2,7 @@
 ## Title: Bastian's Quests
 ## Notes: Quest log, recommendations and tracker.
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, QuestieDB, Spoken, Spoken_Quests
@@ -10,6 +10,7 @@
 ## SavedVariablesPerCharacter: BastiansQuestsCharDB
 
 Locales\deDE.lua
+News.lua
 Logic.lua
 State.lua
 Rows.lua

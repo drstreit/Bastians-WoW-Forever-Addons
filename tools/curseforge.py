@@ -8,9 +8,10 @@ Usage: python tools/curseforge.py --client forever|retail [--release-dir build/r
 Reads `tools/curseforge.toml` and the release manifest that `tools/release.py` wrote for the
 client. For every project it writes the upload zip (the project's folders from the release zips;
 Data's file carries its packs) to `<release-dir>/curseforge/` and prints the metadata. Without
-`--send` nothing leaves the machine. `--send` needs the environment variable CF_API_KEY (a
-CurseForge API token; never stored in the repo), a project id and a verified slug for every
-project and relation it touches, and at least one game version name for the client; it resolves
+`--send` nothing leaves the machine. `--send` needs the upload token (CF_API_KEY, else the
+API-TOKEN line of ~/.curseforge/.secrets; never stored in the repo), a project id and a verified
+slug for every project and relation it touches, and at least one game version name for the
+client; it resolves
 the names to ids (`GET /api/game/versions`) and posts each file (`POST /api/projects/<id>/
 upload-file`). The release type follows the version: `beta` or `alpha` in it, else `release`.
 """
@@ -20,8 +21,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tomllib
+import urllib.error
 import urllib.request
 import uuid
 import zipfile
@@ -34,11 +37,30 @@ CONFIG = ROOT / "tools" / "curseforge.toml"
 CLIENTS = ("forever", "retail")
 CLIENT_NAMES = {"forever": "WoW Forever", "retail": "retail"}
 API = "https://wow.curseforge.com"
+# the owner's upload token, outside the repo: a line API-TOKEN=<token> (the environment wins)
+SECRETS = Path.home() / ".curseforge" / ".secrets"
 STAMP = (1980, 1, 1, 0, 0, 0)
+# a copy of the last file sent per project and client: what players have (the daily Data edition
+# boots its packs with the Suite kept here, tools/data_update.py)
+RELEASED = ROOT / ".local" / "released"
 
 
 class UploadError(Exception):
     pass
+
+
+def api_token(env: dict | None = None, secrets: Path = SECRETS) -> str | None:
+    """The upload token: CF_API_KEY from the environment, else the API-TOKEN line of the owner's
+    secrets file (generated at authors.curseforge.com, settings, API tokens; never in the repo)."""
+    env = os.environ if env is None else env
+    if env.get("CF_API_KEY"):
+        return env["CF_API_KEY"]
+    if secrets.is_file():
+        for line in secrets.read_text(encoding="utf-8").splitlines():
+            m = re.match(r"\s*API-TOKEN\s*[=:]\s*(\S+)", line)
+            if m:
+                return m.group(1).strip("\"'")
+    return None
 
 
 @dataclass
@@ -49,6 +71,7 @@ class Upload:
     zip_path: Path
     metadata: dict
     problems: list[str] = field(default_factory=list)
+    later: list[str] = field(default_factory=list)  # relations that wait for an approval
 
 
 def load_config(path: Path = CONFIG) -> dict:
@@ -72,6 +95,8 @@ def release_type(version: str) -> str:
 def relations(config: dict, project: str, client: str) -> tuple[list[dict], list[str]]:
     """The relations of one project's file for one client, and the unverified names among them.
     A companion that does not exist for the client is left out: retail never relates to QuestieDB.
+    A project of ours that CurseForge has not approved yet (`approved = false`) is left out too:
+    CurseForge refuses a relation to it ("does not exist, is not accessible"); `pending` names it.
     """
     p = config["projects"][project]
     out: list[dict] = []
@@ -89,10 +114,29 @@ def relations(config: dict, project: str, client: str) -> tuple[list[dict], list
                     continue
             else:
                 raise UploadError(f"{project}: relation {name} is neither a project nor external")
-            out.append({"slug": target["slug"], "type": kind})
+            if target.get("approved", True) is False:
+                continue  # pending(): added once CurseForge approves the project
+            entry: dict = {"slug": target["slug"], "type": kind}
+            if target.get("id"):
+                entry["projectID"] = target["id"]  # an exact match, as the upload API allows
+            out.append(entry)
             if not target.get("verified", False):
                 unverified.append(f"{name} ({target['slug']})")
     return out, unverified
+
+
+def pending(config: dict, project: str) -> list[str]:
+    """The relations left out while their project waits for CurseForge's approval."""
+    p = config["projects"][project]
+    return [
+        f"{kind} {name}"
+        for kind, names in (
+            ("requires", p.get("required", [])),
+            ("optional", p.get("optional", [])),
+        )
+        for name in names
+        if config["projects"].get(name, {}).get("approved", True) is False
+    ]
 
 
 def read_manifest(release_dir: Path, client: str) -> dict[str, dict]:
@@ -105,9 +149,26 @@ def read_manifest(release_dir: Path, client: str) -> dict[str, dict]:
     return {p["addon"]: p for p in manifest["packages"]}
 
 
-def project_zip(release_dir: Path, packages: dict[str, dict], folders: list[str], out: Path) -> int:
+def with_suffix(toc: bytes, suffix: str) -> bytes:
+    """A TOC whose `## Version:` line carries the suffix (a Data edition's "+data.<date>.<n>")."""
+    lines = toc.split(b"\n")
+    for i, line in enumerate(lines):
+        if line.startswith(b"## Version:"):
+            end = b"\r" if line.endswith(b"\r") else b""
+            lines[i] = line.rstrip(b"\r").rstrip() + suffix.encode() + end
+    return b"\n".join(lines)
+
+
+def project_zip(
+    release_dir: Path,
+    packages: dict[str, dict],
+    folders: list[str],
+    out: Path,
+    version_suffix: str = "",
+) -> int:
     """The project's upload zip: every folder's release zip merged, entries sorted, fixed times.
-    A folder the release has no zip for (an optional pack without data) is left out."""
+    A folder the release has no zip for (an optional pack without data) is left out. A version
+    suffix goes into every folder's TOC too, so the game shows the edition (ADR 0021)."""
     entries: dict[str, bytes] = {}
     for folder in folders:
         pkg = packages.get(folder)
@@ -115,7 +176,10 @@ def project_zip(release_dir: Path, packages: dict[str, dict], folders: list[str]
             continue
         with zipfile.ZipFile(release_dir / pkg["file"]) as zf:
             for name in zf.namelist():
-                entries[name] = zf.read(name)
+                data = zf.read(name)
+                if version_suffix and name == f"{folder}/{folder}.toc":
+                    data = with_suffix(data, version_suffix)
+                entries[name] = data
     if not entries:
         return 0
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -151,7 +215,7 @@ def plan(
             continue  # not in this release
         version = main["version"] + version_suffix
         target = release_dir / "curseforge" / f"{project}-v{version}-{client}.zip"
-        if not project_zip(release_dir, packages, p["folders"], target):
+        if not project_zip(release_dir, packages, p["folders"], target, version_suffix):
             continue
         rels, unverified = relations(config, project, client)
         problems = [f"relation {u} is not verified" for u in unverified]
@@ -168,9 +232,20 @@ def plan(
             "displayName": f"{title} {version} ({CLIENT_NAMES[client]})",
             "gameVersionNames": list(config["game_versions"].get(client, [])),
             "releaseType": release_type(version),
-            "relations": {"projects": rels},
         }
-        uploads.append(Upload(project, int(p.get("id") or 0), version, target, metadata, problems))
+        if rels:  # CurseForge refuses an empty list (error 1002, 23.10.2026): no field then
+            metadata["relations"] = {"projects": rels}
+        uploads.append(
+            Upload(
+                project,
+                int(p.get("id") or 0),
+                version,
+                target,
+                metadata,
+                problems,
+                pending(config, project),
+            )
+        )
     return uploads
 
 
@@ -221,6 +296,28 @@ def send(upload: Upload, version_ids: list[int], token: str, transport: Transpor
     return json.loads(transport(request) or b"{}")
 
 
+def keep_sent(upload: Upload, file_id: object, client: str, root: Path | None = None) -> Path:
+    """Keeps the sent file as `<root>/<client>/<project>.zip` (default root: RELEASED) with its
+    version and file id beside it (`<project>.json`), replacing the one before."""
+    folder = (root or RELEASED) / client
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"{upload.project}.zip"
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_bytes(upload.zip_path.read_bytes())
+    tmp.replace(target)
+    meta = {"project": upload.project, "version": upload.version, "file_id": file_id}
+    (folder / f"{upload.project}.json").write_text(
+        json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
+    return target
+
+
+def kept(project: str, client: str, root: Path | None = None) -> Path | None:
+    """The last sent file of a project for a client, or None when none was kept."""
+    path = (root or RELEASED) / client / f"{project}.zip"
+    return path if path.is_file() else None
+
+
 def main(argv: list[str] | None = None, transport: Transport = _urlopen) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--client", choices=CLIENTS, required=True)
@@ -241,9 +338,11 @@ def main(argv: list[str] | None = None, transport: Transport = _urlopen) -> int:
         return 2
     for u in uploads:
         print(f"{u.project} {u.version} -> {u.zip_path.name}")
-        print("  " + json.dumps(u.metadata["relations"]["projects"]))
+        print("  " + json.dumps(u.metadata.get("relations", {}).get("projects", [])))
         for problem in u.problems:
             print(f"  not ready: {problem}")
+        for later in u.later:
+            print(f"  later: {later}, once CurseForge approves it")
     if not args.send:
         print("dry run: nothing sent (--send uploads)")
         return 0
@@ -254,15 +353,26 @@ def main(argv: list[str] | None = None, transport: Transport = _urlopen) -> int:
             file=sys.stderr,
         )
         return 1
-    token = os.environ.get("CF_API_KEY")
+    token = api_token()
     if not token:
-        print("error: CF_API_KEY is not set", file=sys.stderr)
+        print(
+            f"error: no upload token: set CF_API_KEY or write API-TOKEN=<token> to {SECRETS}",
+            file=sys.stderr,
+        )
         return 1
     try:
         ids = game_version_ids(config["game_versions"][args.client], token, transport)
         for u in uploads:
             answer = send(u, ids, token, transport)
             print(f"sent {u.project}: file id {answer.get('id')}")
+            keep_sent(u, answer.get("id"), args.client)
+    except urllib.error.HTTPError as err:
+        # CurseForge says why in the body ({"errorCode": .., "errorMessage": ..})
+        print(
+            f"error: HTTP {err.code}: {err.read().decode('utf-8', 'replace')[:500]}",
+            file=sys.stderr,
+        )
+        return 1
     except (UploadError, OSError) as err:
         print(f"error: {err}", file=sys.stderr)
         return 1

@@ -245,6 +245,74 @@ function Book.Unread(news, seen, seenToday)
   return n
 end
 
+-- The book in the suite's What's new (ADR 0021): one line a day at most, newest first, the last
+-- `days` days that have entries. A day with a hand-written entry leads with it ("... And 3
+-- more."); a day of the build's entries only counts them ("2 new rumours, 1 updated page."). ->
+-- { { id, date, text, target } }, `target` = { kind = "page" | "mill", id } when the day names one
+-- place only, else nil (the book's own What's new lists the day with its links). `L` translates
+-- the counting words; the entries' own texts are the book's English.
+function Book.Fold(news, L, days)
+  local byDate, dates = {}, {}
+  for _, e in ipairs(news or {}) do
+    if not byDate[e.date] then
+      byDate[e.date] = {}
+      dates[#dates + 1] = e.date
+    end
+    table.insert(byDate[e.date], e)
+  end
+  table.sort(dates, function(a, b)
+    return a > b
+  end)
+  local out = {}
+  for i = 1, math.min(days or 10, #dates) do
+    local day = byDate[dates[i]]
+    local authored, pages, rumours, more = nil, {}, 0, 0
+    local npages = 0
+    for _, e in ipairs(day) do
+      if e.kind == nil and not authored then
+        authored = e
+      elseif e.kind == "travellers" or e.kind == "stamp" then
+        if e.page and not pages[e.page] then
+          pages[e.page] = true
+          npages = npages + 1
+        end
+      elseif e.kind == "mill" then
+        rumours = rumours + (e.n or 1)
+      elseif e.kind == "more" then
+        more = more + (e.n or 1)
+      end
+    end
+    local text
+    if authored then
+      text = authored.text
+      if #day > 1 then
+        text = text .. " " .. string.format(L["And %d more."], #day - 1)
+      end
+    else
+      local parts = {}
+      if rumours > 0 then
+        parts[#parts + 1] = rumours == 1 and L["1 new rumour"] or string.format(L["%d new rumours"], rumours)
+      end
+      if npages > 0 then
+        parts[#parts + 1] = npages == 1 and L["1 updated page"]
+          or string.format(L["%d updated pages"], npages)
+      end
+      if more > 0 then
+        parts[#parts + 1] = string.format(L["%d more changes"], more)
+      end
+      text = table.concat(parts, ", ") .. "."
+    end
+    local target
+    if #day == 1 and day[1].page then
+      target = { kind = "page", id = day[1].page }
+    elseif #day == 1 and day[1].mill then
+      target = { kind = "mill", id = day[1].mill }
+    end
+    out[#out + 1] = { id = dates[i] .. ":" .. text, date = dates[i], text = text, target = target }
+  end
+  return out
+end
+
 -- "1:25" from a link's t= parameter (the moment in the video), nil without one.
 function Book.Moment(link)
   local t = tonumber(string.match(link or "", "[?&]t=(%d+)"))

@@ -525,6 +525,9 @@ lifecycle:SetScript("OnEvent", function(_, event, addonName)
         ns.autoEnable(mod)
       end
     end
+    if B.UI.News then
+      B.UI.News.Login() -- before the companions note: did the suite run here before (ADR 0021)
+    end
     if B.UI.Settings and B.UI.Settings.NoteCompanions then
       B.UI.Settings.NoteParts() -- every login while a required part is missing (ADR 0015)
       B.UI.Settings.NoteCompanions() -- once at the first start and after every update

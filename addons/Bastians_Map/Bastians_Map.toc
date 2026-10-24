@@ -2,7 +2,7 @@
 ## Title: Bastian's Map
 ## Notes: World map and minimap pins for quests, NPCs and resources.
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Map_Art, TomTom
@@ -10,6 +10,7 @@
 ## SavedVariablesPerCharacter: BastiansMapCharDB
 
 Locales\deDE.lua
+News.lua
 Camera.lua
 Map.lua
 Search.lua

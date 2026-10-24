@@ -135,6 +135,9 @@ def test_the_store_is_capped_and_survives_a_reload_and_a_login_attributes_nothin
 
 
 def test_the_journey_block_on_the_zone_page_and_the_here_column_and_the_chat(wow: WowRuntime):
+    # the mock's time() is the wall clock: a second passing in this test made the rate 3899/h
+    # (seen 24.10.2026, about one run in ten); frozen here, the session lasts no time at all
+    wow.execute("local t0 = os.time(); function time(t) return t and os.time(t) or t0 end")
     boot(wow, CORE, DATA, QUESTS, BROWSER)
     wow.execute('function GetRealmName() return "Classic Beta PvE" end')
     wow.slash("/bq journey")

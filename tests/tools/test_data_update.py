@@ -3,6 +3,7 @@ project with its own version, an unchanged one that was sent is left alone, the 
 loader and every pack, the whole install boots, and the changelog is What's new since the last
 sent edition."""
 
+import json
 import shutil
 import zipfile
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 import build_client
 import curseforge
 import data_update
+import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_ADDONS = ROOT / "tests" / "fixtures" / "addons"
@@ -98,7 +100,12 @@ def test_a_daily_run_ships_changed_data_once(tmp_path: Path):
     ledger = tmp_path / "editions.json"
     book_toml = tmp_path / "book.toml"
     book_toml.write_text(BOOK, encoding="utf-8")
-    common = {"ledger_path": ledger, "book_toml": book_toml, "today": "2026-10-25"}
+    common = {
+        "ledger_path": ledger,
+        "book_toml": book_toml,
+        "today": "2026-10-25",
+        "book_states": tmp_path / "states",
+    }
     out = tmp_path / "out"
 
     edition, uploads = data_update.update(inputs(tmp_path), out, build=fake_build(), **common)
@@ -115,7 +122,11 @@ def test_a_daily_run_ships_changed_data_once(tmp_path: Path):
     assert "Bastians_Data_Strategies/Generated/Book.lua" in names
     assert "Bastians_Data/Generated/MapTransforms.lua" in names
     assert all(t.startswith("Bastians_Data") for t in tops)  # the apps stay out of the daily file
-    assert upload.problems  # no project id yet: nothing can be sent
+    # the game shows the edition: every TOC of the file carries it (ADR 0021)
+    with zipfile.ZipFile(upload.zip_path) as zf:
+        tocs = [zf.read(n).decode() for n in zf.namelist() if n.endswith(".toc")]
+    assert tocs and all(f"## Version: {toc}+data.20261025.1" in t for t in tocs)
+    assert upload.problems == []  # the projects exist (23.10.2026): ready to send
     assert "Four new farming pages." in upload.metadata["changelog"]
 
     # the same data again: the same edition, planned again because it was not sent
@@ -145,3 +156,145 @@ def data_version() -> str:
     import release
 
     return release.addon_version(ROOT / "addons" / "Bastians_Data")
+
+
+def test_the_hash_follows_packs_and_code_but_not_the_version_line(tmp_path: Path):
+    packs = tmp_path / "packs"
+    fake_build()(inputs(tmp_path), packs)
+    addons = tmp_path / "addons"
+    loader = addons / "Bastians_Data"
+    loader.mkdir(parents=True)
+    toc = loader / "Bastians_Data.toc"
+    toc.write_text("## Interface: 16001\n## Version: 1.0.0-beta.9\nData.lua\n", encoding="utf-8")
+    (loader / "Data.lua").write_text("-- the loader\n", encoding="utf-8")
+    folders = ["Bastians_Data", "Bastians_Data_World"]
+    first = data_update.data_hash(packs, folders, addons)
+    toc.write_text("## Interface: 16001\n## Version: 1.0.0-beta.10\nData.lua\n", encoding="utf-8")
+    assert data_update.data_hash(packs, folders, addons) == first  # a version bump alone
+    (loader / "Data.lua").write_text("-- the loader, fixed\n", encoding="utf-8")
+    assert data_update.data_hash(packs, folders, addons) != first  # a loader fix ships
+
+
+def state_build(news: list[dict], seen_previous: list):
+    """The fixture packs plus a book state the way the pipeline writes it (--book-state); records
+    the --book-previous the build was given."""
+    base = fake_build()
+
+    def build(inp: build_client.BuildInputs, packs: Path) -> None:
+        base(inp, packs)
+        extra = inp.extra
+        state = Path(extra[extra.index("--book-state") + 1])
+        state.write_text(json.dumps({"schema": 1, "pages": {}, "mill": {}, "news": news}))
+        seen_previous.append(
+            extra[extra.index("--book-previous") + 1] if "--book-previous" in extra else None
+        )
+
+    return build
+
+
+def test_the_book_state_of_the_last_sent_edition_feeds_the_next_build(tmp_path: Path):
+    ledger, states = tmp_path / "editions.json", tmp_path / "states"
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    common = {"ledger_path": ledger, "book_toml": book_toml, "book_states": states, "boot": False}
+    generated = [{"date": "2026-10-25", "text": "Farming: 2 new rumours in the mill.", "n": 2}]
+    previous: list = []
+    out = tmp_path / "out"
+    edition, uploads = data_update.update(
+        inputs(tmp_path),
+        out,
+        build=state_build(generated, previous),
+        today="2026-10-25",
+        commit="abc123",
+        notes=lambda since, cfg: [f"notes since {since}"],
+        **common,
+    )
+    assert previous == [None]  # nothing sent yet: nothing to compare with
+    assert edition["book_state"] == "2026-10-25.1.json" and (states / "2026-10-25.1.json").is_file()
+    assert edition["commit"] == "abc123" and edition["export"] == "20261025T0600Z"
+    assert "Farming: 2 new rumours in the mill." in edition["news"]
+    log = uploads[0].metadata["changelog"]
+    assert "Farming: 2 new rumours in the mill." in log and "Four new farming pages." in log
+    assert "notes since None" in log
+    data_update.mark_sent(ledger, edition, 1)
+    # the next run compares with the sent edition's state and lists the notes since its commit
+    more = fake_build({"Bastians_Data_Market": ["new prices"]})
+
+    def build(inp, packs):
+        state_build([], previous)(inp, packs)
+        more(inp, packs)
+
+    _second, uploads = data_update.update(
+        inputs(tmp_path),
+        out,
+        build=build,
+        today="2026-10-26",
+        notes=lambda since, cfg: [f"notes since {since}"],
+        **common,
+    )
+    assert previous[-1] == str(states / "2026-10-25.1.json")
+    assert "notes since abc123" in uploads[0].metadata["changelog"]
+    assert "Farming: 2 new rumours" not in uploads[0].metadata["changelog"]  # already sent
+
+
+def test_the_edition_boots_with_the_suite_players_have(tmp_path: Path):
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    common = {"ledger_path": tmp_path / "e.json", "book_toml": book_toml, "today": "2026-10-25"}
+    out = tmp_path / "out"
+    data_update.update(inputs(tmp_path), out, build=fake_build(), boot=False, **common)
+    # the Suite's file as curseforge.py would have sent it, built from this release
+    cfg = curseforge.load_config()
+    rel = out / "release"
+    packages = curseforge.read_manifest(rel, "forever")
+    suite = tmp_path / "Bastians_Suite.zip"
+    folders = cfg["projects"]["Bastians_Suite"]["folders"]
+    assert curseforge.project_zip(rel, packages, folders, suite)
+    edition, uploads = data_update.update(
+        inputs(tmp_path), out, build=fake_build(), suite_zip=suite, **common
+    )
+    assert uploads and edition["n"] == 1  # booted clean: the same edition, planned again
+
+
+def test_send_marks_the_edition_keeps_the_file_and_says_why_curseforge_refused(
+    tmp_path: Path, monkeypatch
+):
+    import io
+    import urllib.error
+
+    ledger = tmp_path / "editions.json"
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    edition, uploads = data_update.update(
+        inputs(tmp_path),
+        tmp_path / "out",
+        build=fake_build(),
+        boot=False,
+        ledger_path=ledger,
+        book_toml=book_toml,
+        today="2026-10-25",
+    )
+
+    def transport(request):
+        if request.full_url.endswith("/api/game/versions"):
+            return json.dumps([{"id": 17053, "name": "1.60.1"}]).encode()
+        return json.dumps({"id": 9400001}).encode()
+
+    sent = data_update.send(edition, uploads, transport, ledger, token="t")
+    assert sent == [("Bastians_Data", 9400001)]
+    (e,) = data_update.read_ledger(ledger)["editions"]
+    assert e["sent"] and e["file_id"] == 9400001 and e["sent_at"].endswith("Z")
+    assert curseforge.kept("Bastians_Data", "forever") is not None
+
+    def refuse(request):
+        if request.full_url.endswith("/api/game/versions"):
+            return json.dumps([{"id": 17053, "name": "1.60.1"}]).encode()
+        raise urllib.error.HTTPError(
+            request.full_url, 400, "Bad", {}, io.BytesIO(b'{"errorMessage": "nope"}')
+        )
+
+    with pytest.raises(data_update.DataUpdateError, match=r"HTTP 400.*nope"):
+        data_update.send(edition, uploads, refuse, ledger, token="t")
+    monkeypatch.setattr(curseforge, "api_token", lambda: None)  # never the owner's real token
+    with pytest.raises(data_update.DataUpdateError, match="no upload token"):
+        data_update.send(edition, uploads, transport, ledger)

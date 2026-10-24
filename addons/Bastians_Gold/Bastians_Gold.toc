@@ -2,7 +2,7 @@
 ## Title: Bastian's Gold
 ## Notes: Prices, auction capture and gold tracking.
 ## Author: Bastian
-## Version: 1.0.0-beta.8
+## Version: 1.0.0-beta.11
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data
@@ -10,6 +10,7 @@
 ## SavedVariablesPerCharacter: BastiansGoldCharDB
 
 Locales\deDE.lua
+News.lua
 Capture.lua
 Prices.lua
 Sections.lua

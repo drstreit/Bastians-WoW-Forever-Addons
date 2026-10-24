@@ -163,6 +163,26 @@ local mod = B:NewModule("Strategies", {
   end,
   title = L["Strategies"],
   icon = B.UI.IconTexture("ledger"),
+  -- What's new (ADR 0021): the app's release notes, and the book's entries folded to a line a day;
+  -- a line opens its page or mill, or the book's own What's new where each entry links on
+  news = function()
+    local out = {}
+    for _, e in ipairs(ns.NEWS) do
+      out[#out + 1] = e
+    end
+    for _, day in ipairs(Book.Fold(Window.News(), L)) do
+      out[#out + 1] = {
+        id = "book:" .. day.id,
+        date = day.date,
+        source = L["The book"],
+        text = day.text,
+        open = function()
+          Window.Show(day.target or { kind = "title" })
+        end,
+      }
+    end
+    return out
+  end,
   apiVersion = 1,
   data = { "book", "world", "items" }, -- the pages; the loot tables and items for the live boxes
   defaults = {

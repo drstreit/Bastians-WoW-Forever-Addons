@@ -567,6 +567,7 @@ end
 -- ---------------------------------------------------------------------------------------------
 
 mod = B:NewModule("Map", {
+  news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
   open = function()
     Map.Toggle()

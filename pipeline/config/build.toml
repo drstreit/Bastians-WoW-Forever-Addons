@@ -93,8 +93,11 @@ chapter = ["name", "order", "opening", "active"]
 page = ["name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate", "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor"]
 # the claims the pages rest on, by claim id: AHSync's own sentence and the sources (channel, date, link)
 rumour = ["claim", "kind", "status", "subject", "sources"]
-# What's new, newest first
-news = ["date", "text", "page"]
+# What's new, newest first: book.toml's entries and the ones the build writes (book_news.py);
+# an entry links its page or its chapter's Rumour mill (`mill` = the chapter id); the build's own
+# carry `kind` (travellers, stamp, mill, more) and `n` (how many), so the suite's What's new can
+# fold a day into one line (ADR 0021); book.toml's have neither
+news = ["date", "text", "page", "mill", "kind", "n"]
 # the Rumour mill (design section 7), by claim id: per chapter the strongest strategies no page
 # tells yet, by rank; the zone, or the claim's own place without one; how many channels and claims
 mill = ["chapter", "rank", "zone", "where", "channels", "claims"]

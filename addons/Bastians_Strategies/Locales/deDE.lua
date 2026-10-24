@@ -114,4 +114,12 @@ ns.L:Register("deDE", {
   ["Half right"] = "Halb wahr",
   ["Did not hold"] = "Hielt nicht",
   ["Heard, not checked"] = "Gehört, nicht geprüft",
+  -- the book's line in the suite's What's new (ADR 0021)
+  ["The book"] = "Das Buch",
+  ["And %d more."] = "Und %d weitere.",
+  ["1 new rumour"] = "1 neues Gerücht",
+  ["%d new rumours"] = "%d neue Gerüchte",
+  ["1 updated page"] = "1 aktualisierte Seite",
+  ["%d updated pages"] = "%d aktualisierte Seiten",
+  ["%d more changes"] = "%d weitere Änderungen",
 })

@@ -101,7 +101,7 @@ ns.L:Register("deDE", {
   ["Verbose logging off."] = "Ausführliches Protokoll aus.",
   ["Profile: %s. Profiles: %s"] = "Profil: %s. Profile: %s",
   ["Profile: %s"] = "Profil: %s",
-  ["/bastians: hub | about | addons | log [n] | debug | profile [name] | perf"] = "/bastians: hub | about | addons | log [n] | debug | profile [Name] | perf",
+  ["/bastians: hub | news | about | addons | log [n] | debug | profile [name] | perf"] = "/bastians: hub | news | about | addons | log [n] | debug | profile [Name] | perf",
 
   -- Launcher.lua
   ["Settings"] = "Einstellungen",
@@ -143,4 +143,15 @@ ns.L:Register("deDE", {
   -- the dossier (ADR 0018)
   ["No data for this entity. Is Bastian's Data installed and loaded?"] = "Keine Daten für diesen Eintrag. Ist Bastian's Data installiert und geladen?",
   ["preview: click the row to keep it"] = "Vorschau: Zeile anklicken, um sie zu behalten",
+  -- What's new (ADR 0021)
+  ["What's new"] = "Neuigkeiten",
+  ["new"] = "neu",
+  ["Nothing new yet: updates of the suite and the daily data say here what changed."] = "Noch nichts Neues: Hier steht nach jedem Update der Suite und der täglichen Daten, was sich geändert hat.",
+  ["%d new things: /bastians news"] = "%d Neuigkeiten: /bastians news",
+  ["Bastian's Suite updated: 1 new thing, /bastians news"] = "Bastian's Suite aktualisiert: 1 Neuigkeit, /bastians news",
+  ["Bastian's Suite updated: %d new things, /bastians news"] = "Bastian's Suite aktualisiert: %d Neuigkeiten, /bastians news",
+  ["Tell me about updates"] = "Über Updates informieren",
+  ["Always"] = "Immer",
+  ["Weekly"] = "Wöchentlich",
+  ["Never"] = "Nie",
 })

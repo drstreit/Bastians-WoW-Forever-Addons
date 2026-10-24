@@ -135,6 +135,73 @@ def test_the_title_page_shows_whats_new_and_marks_it_read(wow: WowRuntime):
     assert wow.errors == []
 
 
+def test_an_entry_the_build_wrote_about_the_mill_opens_that_mill(wow: WowRuntime):
+    boot(wow)
+    # the build's entries (book_news.py) link a page or a chapter's mill; one that names a gone
+    # chapter stays plain text
+    wow.execute(
+        f"local W = {WIN}; local news = W.News; W.News = function() local t = news(); "
+        "table.insert(t, 1, { date = '2026-10-24', text = 'Farming: 2 new rumours in the mill.', "
+        "mill = 'farming' }); table.insert(t, 2, { date = '2026-10-24', text = 'Gone: a rumour.', "
+        "mill = 'gone' }); return t end"
+    )
+    wow.slash("/bbook news")
+    assert "new  2026-10-24  Gone: a rumour." in texts(wow, "right")
+    click_row(wow, "right", "Farming: 2 new")
+    assert (wow.eval(f"{WIN}.Current().kind"), wow.eval(f"{WIN}.Current().id")) == (
+        "mill",
+        "farming",
+    )
+    wow.execute(f"{WIN}.Show({{ kind = 'title' }})")
+    try:
+        click_row(wow, "right", "Gone:")
+        raise AssertionError("a plain entry has no row")
+    except Exception as exc:  # lupa raises its own error class
+        assert "no such row" in str(exc)
+    assert wow.errors == []
+
+
+def test_the_book_folds_into_one_line_a_day_in_the_suites_whats_new(core: WowRuntime):
+    core.load_addon(STRAT)
+    L = "setmetatable({}, { __index = function(_, k) return k end })"
+    news = (
+        "{ { date = '2026-10-26', text = 'x', kind = 'mill', n = 2, mill = 'farming' }, "
+        "{ date = '2026-10-26', text = 'y', kind = 'travellers', n = 1, page = 'p1' }, "
+        "{ date = '2026-10-26', text = 'z', kind = 'stamp', n = 1, page = 'p1' }, "
+        "{ date = '2026-10-25', text = 'New page: P2.', page = 'p2' }, "
+        "{ date = '2026-10-25', text = 'w', kind = 'mill', n = 1, mill = 'farming' }, "
+        "{ date = '2026-10-24', text = 'v', kind = 'mill', n = 1, mill = 'fishing' } }"
+    )
+    days = core.eval(f"{BOOK}.Fold({news}, {L})")
+    got = [(d.date, d.text, d.target and (d.target.kind, d.target.id)) for d in days.values()]
+    assert got == [
+        ("2026-10-26", "2 new rumours, 1 updated page.", None),  # the book's What's new
+        ("2026-10-25", "New page: P2. And 1 more.", None),  # the hand-written entry leads
+        ("2026-10-24", "1 new rumour.", ("mill", "fishing")),  # one place: opened directly
+    ]
+    assert core.eval(f"#{BOOK}.Fold({news}, {L}, 1)") == 1
+
+
+def test_the_books_lines_reach_the_suite_and_open_the_book(wow: WowRuntime):
+    boot(wow)
+    wow.advance(4)
+    book = [e for e in wow.eval("Bastians:NewsEntries()").values() if e.source == "The book"]
+    assert [(e.date, e.text) for e in book] == [
+        ("2026-10-23", "New page: Hogger's Camp."),
+        ("2026-10-20", "The book opens."),
+    ]
+    wow.execute("Bastians:GetModule('Core').db.global.news.seen = {}")
+    assert wow.eval("Bastians:NewsUnseen()") == 2
+    book[0].open()  # one entry with a page: that page
+    assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
+    assert wow.eval("Bastians:NewsUnseen()") == 2  # a page is not the book's What's new
+    book[1].open()  # no page: the book's What's new
+    assert wow.eval(f"{WIN}.Current().kind") == "title"
+    # the title page was shown: the book's lines count as read in the suite too
+    assert wow.eval("Bastians:NewsUnseen()") == 0
+    assert wow.errors == []
+
+
 def test_contents_lists_the_chapters_and_seals_pages_by_level_and_zone(wow: WowRuntime):
     wow.execute("Mock.playerMap = 1436")  # Westfall: Elwynn not set foot in yet
     boot(wow, level=3)

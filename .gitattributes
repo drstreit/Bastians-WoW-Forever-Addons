@@ -3,3 +3,4 @@
 *.blp binary
 *.tga binary
 *.gz binary
+*.cmd text eol=crlf
