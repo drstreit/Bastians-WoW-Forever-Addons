@@ -116,6 +116,12 @@ def build_parser() -> argparse.ArgumentParser:
             help="where this build's book state goes (default: <report-dir>/book-state.json)",
         )
         p.add_argument(
+            "--art",
+            type=Path,
+            help="the book's pictures, <page id>.jpg (default: the export's art/ folder; "
+            "tools/data_update.py passes the folder it installs the textures from)",
+        )
+        p.add_argument(
             "--transports",
             type=Path,
             help="transports TOML (default: pipeline/config/transports_<client>.toml; "
@@ -284,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
         book_dir = args.book or (None if args.fixture or not CONTENT_DIR.is_dir() else CONTENT_DIR)
         if book_dir and export:
             # the Strategies book (strategies-design.md section 6), the claims from the export
-            add_book(world, export, book_dir, transforms)
+            add_book(world, export, book_dir, transforms, args.art or export.folder / "art")
         if export and world.client == "forever":
             # the daily run's selection: the export's strategies scored (design section 7)
             found = candidates(export, world)

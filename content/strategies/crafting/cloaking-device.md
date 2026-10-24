@@ -1,5 +1,6 @@
 +++
 title = "The Gnomish Cloaking Device"
+scene = "Landscape from behind Bastian on his tired horse: we look over his shoulder up a misty mountain road in the hills of Alterac towards a grand dark manor house on a crag; cool grey evening light, pine trees, wet rocks."
 order = 50
 levels = [25, 30]
 zones = [1416, 1424]

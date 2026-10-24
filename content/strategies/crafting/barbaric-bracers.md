@@ -1,5 +1,6 @@
 +++
 title = "Barbaric Bracers"
+scene = "Wide view of a leatherworking stall among the giant glowing trees of Darnassus at dusk: Bastian and three other adventurers pretend not to wait, Bastian leaning on a post, bored, eyelids heavy, a small sack of salt in his hand; soft violet light."
 order = 30
 levels = [10, 30]
 zones = [1457, 1458]

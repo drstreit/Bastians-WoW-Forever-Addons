@@ -1,5 +1,6 @@
 +++
 title = "Trout and trunks at Lordamere Lake"
+scene = "Medium close-up on the frozen shore of Lordamere Lake below the violet towers of Dalaran: Bastian shivers in a coat far too thin, frost in his beard, teeth chattering, miserable but stubbornly holding his rod; snowy peaks; cold blue evening."
 order = 50
 levels = [25, 30]
 zones = [1416, 1424]

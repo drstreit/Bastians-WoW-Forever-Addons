@@ -60,6 +60,7 @@ B.deferred[#B.deferred + 1] = {
       page = {
         "name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate",
         "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor",
+        "art",
       },
       rumour = { "claim", "kind", "status", "subject", "sources" },
     },

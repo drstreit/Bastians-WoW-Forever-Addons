@@ -30,6 +30,8 @@ STEP = re.compile(r"^(\d+)\.\s+(.*)$")
 STAMPS = ("true", "half", "lies", "open")
 STATUS_STAMP = {"verified": "true", "refuted": "lies", "unverified": "open"}
 SHELVES = ("active", "back")
+NOT_CHAPTERS = {"art"}  # content/strategies/art: the pictures' art direction, no pages
+ART_FILES = (".jpg", ".png")  # a page's picture in the export's art/ folder (art/README.md)
 PLATE_ASPECT = 1.62  # the plate's width over its height (340 x 210 px in the book)
 PAD = 0.08  # air around the dots, as a share of the plate
 LOOP_SHRINK = 0.72  # the loop runs a quarter inside the farm's outline
@@ -518,13 +520,21 @@ def read_page(path: Path, root: Path) -> tuple[str, str, dict, str]:
     return slug, chapter, header, body
 
 
+def has_art(art: Path | None, slug: str) -> bool:
+    """Whether the export brings the page's picture (AHSync, art/README.md). Nothing is decoded
+    here: tools/book_art.py turns the pictures into the game's textures after the build."""
+    return art is not None and any((art / f"{slug}{ext}").is_file() for ext in ART_FILES)
+
+
 def add_book(
     world: World,
     export: Export | None,
     content: Path,
     transforms: Mapping[int, Transform] | None = None,
+    art: Path | None = None,
 ) -> list[str]:
-    """Reads `content` (book.toml and <chapter>/<slug>.md) into the world's book records."""
+    """Reads `content` (book.toml and <chapter>/<slug>.md) into the world's book records; `art`
+    is the export's folder of the pages' pictures (a page with one gets `art = true`)."""
     book_file = content / "book.toml"
     if not book_file.is_file():
         raise BookError(f"{book_file}: missing")
@@ -553,6 +563,8 @@ def add_book(
     pages: dict[str, dict] = {}
     rumours: dict[int, dict] = {}
     for path in sorted(content.glob("*/*.md")):
+        if path.parent.name in NOT_CHAPTERS:
+            continue
         slug, chapter, header, body = read_page(path, content)
         where = f"{chapter}/{slug}.md"
         if chapter not in chapters:
@@ -563,6 +575,9 @@ def add_book(
             if key not in header:
                 raise BookError(f"{where}: missing `{key}`")
         check_text(header["title"], where)
+        if header.get("scene") is not None:
+            # what the page's picture shows (art/README.md); for the image model, not the pack
+            check_text(str(header["scene"]), f"{where}: scene")
         for item in header.get("meta") or []:
             check_text(item, f"{where}: meta")
         levels = header["levels"]
@@ -622,6 +637,7 @@ def add_book(
             "live": live,
             "table": table,
             "refs": refs or None,
+            "art": has_art(art, slug) or None,
             "shelf": shelf,
             "pinned": bool(header.get("pinned", False)) or None,
             "added": header["added"],

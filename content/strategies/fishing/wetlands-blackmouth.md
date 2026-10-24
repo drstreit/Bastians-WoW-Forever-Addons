@@ -1,5 +1,6 @@
 +++
 title = "Blackmouth and trunks in the Wetlands"
+scene = "Medium shot in pouring rain in the Wetlands: Bastian, under a soaked blanket on a wet rock, hauls a dripping wooden trunk out of the dark water on his line, mouth wide open in astonishment; grey green light."
 order = 30
 levels = [20, 30]
 zones = [1437]

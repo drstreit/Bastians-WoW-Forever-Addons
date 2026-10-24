@@ -1,5 +1,6 @@
 +++
 title = "Cooking, always"
+scene = "Close-up at a campfire at the edge of the forest near Goldshire: Bastian coughs and waves his hand through a cloud of black smoke, eyes watering, holding up a boar leg burnt to charcoal; the village inn glows behind him; evening."
 order = 50
 levels = [5, 30]
 meta = ["any cooking trainer", "level 5 to 30", "food that levels you", "alone"]

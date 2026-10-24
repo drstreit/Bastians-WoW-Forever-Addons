@@ -145,6 +145,12 @@ def test_the_toc_lists_active_pages_by_chapter_in_order():
         (lambda t: t.replace("{live}\n", ""), "[live] and the {live} line go together"),
         (lambda t: t.replace('stamp = "half"', 'stamp = "maybe"'), "stamp must be one of"),
         (lambda t: t.replace("zones = [1429]", "zones = [4242]"), "zone 4242"),
+        (
+            lambda t: t.replace(
+                'title = "Hogger\'s Camp"\n', 'title = "Hogger\'s Camp"\nscene = "a -- b"\n'
+            ),
+            "scene: a dash",
+        ),
     ],
 )
 def test_refusals_name_the_page_and_the_reason(tmp_path, edit, message):
@@ -154,6 +160,22 @@ def test_refusals_name_the_page_and_the_reason(tmp_path, edit, message):
     with pytest.raises(BookError) as err:
         world_with_book(content)
     assert message in str(err.value) and "farming/hogger-camp.md" in str(err.value)
+
+
+def test_a_picture_in_the_export_marks_its_page_and_the_art_folder_is_no_chapter(tmp_path):
+    content = copy_book(tmp_path)
+    (content / "art").mkdir()
+    (content / "art" / "README.md").write_text("# The art direction\n", encoding="utf-8")
+    art = tmp_path / "export-art"
+    art.mkdir()
+    (art / "hogger-camp.jpg").write_bytes(b"\xff\xd8 not decoded by the pipeline")
+    (art / "no-such-page.jpg").write_bytes(b"")
+    world = read_fixture(WORLD, "forever")
+    add_book(world, read_export(EXPORT), content, None, art)
+    assert world.get("page", "hogger-camp")["art"] is True
+    assert world.get("page", "leather-trick")["art"] is None
+    assert world.get("page", "README") is None
+    assert world_with_book(content).get("page", "hogger-camp")["art"] is None  # no export art
 
 
 def test_page_ids_are_file_names_and_unique(tmp_path):

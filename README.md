@@ -3,7 +3,7 @@
 Addons for **WoW Forever** and **retail**: quests, map, browser, gold, routes and a book of gold
 strategies. Every app works on its own, and together they work as one system.
 
-**Website:** [drstreit.github.io/Bastians-WoW-Forever-Addons](https://drstreit.github.io/Bastians-WoW-Forever-Addons/)
+**Website:** [bastians.dev/wow](https://bastians.dev/wow/)
 · **Bugs and ideas:** [Issues](https://github.com/drstreit/Bastians-WoW-Forever-Addons/issues/new/choose)
 
 | App | What it does | Command |

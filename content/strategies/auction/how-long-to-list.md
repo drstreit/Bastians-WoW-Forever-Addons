@@ -1,5 +1,6 @@
 +++
 title = "How long to list"
+scene = "Medium shot at dawn outside an inn: Bastian in a nightshirt and boots jumps back, eyes wide and mouth open in shock, as a pile of rolled cloth bundles bursts out of the mailbox onto him; pale morning light."
 order = 30
 levels = [1, 30]
 meta = ["any auctioneer", "any level", "two hours or 24", "alone"]

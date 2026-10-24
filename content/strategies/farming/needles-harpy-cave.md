@@ -1,5 +1,6 @@
 +++
 title = "The Harpy Cave in Thousand Needles"
+scene = "A moonlit landscape of the tall stone pillars of Thousand Needles at night, harpies circling a cave high in a cliff; in the lower corner of the picture, small, Bastian lies wrapped in a thin blanket in a rocky hollow, wide awake, glaring up at the noise."
 order = 40
 levels = [27, 30]
 zones = [1441]

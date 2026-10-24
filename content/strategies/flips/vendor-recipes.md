@@ -1,5 +1,6 @@
 +++
 title = "Vendor Recipes That Sell"
+scene = "Wide view of a dry Barrens hillside above a cave mouth on a hot afternoon: Bastian sleeps against a rock with his mouth open, snoring, while beside him a druid pays a night elf leather supplier for a whole stack of patterns."
 order = 20
 levels = [15, 30]
 zones = [1413, 1440]

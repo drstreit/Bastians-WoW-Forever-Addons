@@ -1,5 +1,6 @@
 +++
 title = "Gathering first, with no money"
+scene = "A wide sunny meadow in Elwynn Forest in the morning, seen from a distance: small among the flowers, Bastian kneels and picks blossoms into a sack, humming happily, a borrowed sword far too big for him lying in the grass."
 order = 20
 levels = [1, 25]
 meta = ["outside the starter zones", "level 1 to 25", "the scarce materials", "alone"]

@@ -1,5 +1,6 @@
 +++
 title = "Bind on equip, bind when made"
+scene = "Medium shot beside a forge in Ironforge: Bastian wears a glowing blue belt over his armour and looks crestfallen and sheepish, shoulders dropped, while a stern auctioneer pushes his hand back across the counter; sparks and warm firelight."
 order = 40
 levels = [1, 30]
 meta = ["any crafting profession", "skill 5 to 225", "what the house will take", "alone"]

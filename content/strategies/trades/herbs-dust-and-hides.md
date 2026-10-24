@@ -1,5 +1,6 @@
 +++
 title = "Herbs, dust and hides"
+scene = "Medium shot knee-deep in the mud of the rainy Wetlands: Bastian scowls at the sky with rain dripping from his nose, a soaked bundle of herbs under one arm; grey green light."
 order = 30
 levels = [15, 30]
 zones = [1437, 1424, 1440, 1442]

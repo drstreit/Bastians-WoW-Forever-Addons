@@ -1,12 +1,13 @@
-# The website (GitHub Pages): site/ with the project icons in site/media, published on every push to
-# main that touches it. The address is the CurseForge projects' website link.
-name: Website
+# The old website address (GitHub Pages): since 24.10.2026 the site lives on bastians.dev
+# (Cloudflare Pages, tools/site_deploy.py), and this address only forwards to it: .github/pages
+# holds the forward and a 404 page that sends every old link (the icons in media/ too) along.
+name: Website forward
 
 on:
   push:
     branches: [main]
     paths:
-      - "site/**"
+      - ".github/pages/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -27,8 +28,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Assemble the site
-        run: mkdir -p _site && cp -r site/. _site/
+      - name: Assemble the forward
+        run: mkdir -p _site && cp -r .github/pages/. _site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -338,6 +338,7 @@ SlashCmdList.BASTIANSSTRATEGIES = function(msg)
   elseif page(cmd) then
     Window.Show({ kind = "page", id = cmd })
   else
-    B:Say(L["No page %s in the book. /bbook index lists them."], cmd)
+    -- /bbook <words>: the full-text search
+    Window.Search(strtrim(msg))
   end
 end

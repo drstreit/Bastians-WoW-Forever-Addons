@@ -1,5 +1,6 @@
 +++
 title = "Holds, access and bidding"
+scene = "Low angle from the height of a small, well-dressed gnome who holds up a heavy purse in the forge-lit stone bank hall of Ironforge; Bastian towers above him, hugging his battered old shovel to his chest, eyes narrowed in deep suspicion, lips pressed together."
 order = 50
 levels = [1, 30]
 zones = [2548]

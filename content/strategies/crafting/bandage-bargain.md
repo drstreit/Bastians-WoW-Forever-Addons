@@ -1,10 +1,11 @@
 +++
 title = "The Bandage Bargain"
+scene = "Over Nixie's shoulder at her corner table in the Salty Sailor Tavern in Booty Bay: across the table Bastian proudly presents a huge armful of bandages (soft, frayed rolls of white linen cloth, not paper scrolls), chin up, expecting praise, while Nixie's quill hovers over her ledger beside the abacus and teapot; candlelight."
 order = 10
 levels = [1, 60]
 meta = ["First Aid", "any level", "best in launch week", "no fighting at all"]
 added = "2026-10-23"
-updated = "2026-10-23"
+updated = "2026-10-24"
 
 [[rumours]]
 claim = 214701097011033
@@ -45,7 +46,7 @@ buy = 4306
 sell = 6450
 +++
 
-Nixie Brassbottom sold me this one in Booty Bay for two silver. She runs the rumour trade from a table at the back of the Salty Sailor and she's better at gold than anyone I know. She said cloth makes more money as bandages than as cloth. I spent an evening at the inn in Ironforge turning a bank slot of Linen into bandages, sold them to a vendor and made less than the Linen would have made on its own. When I complained, Nixie charged me another silver to explain what I'd done wrong.
+Nixie Brassbottom sold me this one in Booty Bay for two silver. She runs the rumour trade from a table at the back of the Salty Sailor and she's better at gold than anyone I know. She said cloth makes more money as bandages than as cloth. I spent an evening at the inn in Ironforge turning a bank slot of Linen into bandages, sold them to a vendor and made less than the Linen would have made on its own. When I complained, Nixie charged me another silver to explain what I'd done wrong, and wrote it under the other ten. She has promised me a good place at the unveiling of my statue, so I think of the eleven silver as a ticket.
 
 ## Why it pays, and when it doesn't
 A vendor pays a fixed price for each item and doesn't care how many you bring. For Linen and Wool the bandage sells for less than the cloth you made it from, so each one loses a few copper. From Silk upwards it goes the other way.

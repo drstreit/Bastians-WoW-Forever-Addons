@@ -49,6 +49,11 @@ order = 6
 opening = "Which professions earn their keep, and at which level."
 
 [[news]]
+date = "2026-10-24"
+text = "Bastian tells you more about himself, and about the statue, in the preface."
+page = "preface"
+
+[[news]]
 date = "2026-10-23"
 text = "The book opens with two strategies: the dig at Bael'dun and the bandage bargain."
 page = "baeldun-dig"

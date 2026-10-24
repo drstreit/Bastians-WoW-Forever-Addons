@@ -562,6 +562,12 @@ end
 
 -- Texture
 function Region:SetTexture(tex)
+  -- a file the client has not seen since it started (a new file in a known addon) is taken
+  -- without an error, but GetTexture stays nil until a full restart (Forever, 22.10.2026)
+  if Mock.unseen and tex and Mock.unseen[tex] then
+    self.texture = nil
+    return true
+  end
   self.texture = tex
   return true
 end

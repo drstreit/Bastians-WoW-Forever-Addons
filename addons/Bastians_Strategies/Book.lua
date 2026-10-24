@@ -60,7 +60,7 @@ end
 -- The farm box: what one kill of `npcs` brings in loot after the auction house's cut.
 -- loot(id) -> { {item, chance}, ... } or nil; price(item) -> copper or nil (unknown, never 0).
 -- -> { perKill (copper, nil when no item has a price), items = { {item, chance, price, value} } the
--- most valuable first, unknown = items without a price }, or nil without loot.
+-- most valuable first, then the likeliest, unknown = items without a price }, or nil without loot.
 function Book.Farm(npcs, loot, price)
   local chances, n = {}, 0
   for _, id in ipairs(npcs or {}) do
@@ -93,6 +93,9 @@ function Book.Farm(npcs, loot, price)
     local va, vb = a.value or -1, b.value or -1
     if va ~= vb then
       return va > vb
+    end
+    if a.chance ~= b.chance then
+      return a.chance > b.chance -- without prices the likeliest drops lead, not the lowest ids
     end
     return a.item < b.item
   end)
@@ -183,6 +186,76 @@ function Book.Index(pages, nameOf)
     return (a.page or a.ref) < (b.page or b.ref)
   end)
   return out
+end
+
+-- The full-text search (the website has the same, tools/diary_site.js): every word of `query`
+-- (two letters or more, any case) must appear in a page's name or its text; a word in the name
+-- counts ten, each time in the text one. pages = { [id] = record }; textOf(id, page) -> the
+-- page's text as the reader sees it. -> { { page = id, name, score } } best first, then A-Z;
+-- retired pages hold no text and are not searched.
+function Book.Search(pages, query, textOf)
+  local words = {}
+  for word in string.gmatch(string.lower(query or ""), "%S+") do
+    if #word >= 2 then
+      words[#words + 1] = word
+    end
+  end
+  local out = {}
+  if #words == 0 then
+    return out
+  end
+  for id, p in pairs(pages) do
+    if p.shelf ~= "retired" then
+      local name = string.lower(p.name or id)
+      local text = string.lower(textOf(id, p) or "")
+      local score = 0
+      for _, word in ipairs(words) do
+        local count, at = 0, 1
+        while true do
+          local s, e = string.find(text, word, at, true)
+          if not s then
+            break
+          end
+          count, at = count + 1, e + 1
+        end
+        local inName = string.find(name, word, 1, true) ~= nil
+        if not inName and count == 0 then
+          score = nil
+          break
+        end
+        score = score + (inName and 10 or 0) + count
+      end
+      if score then
+        out[#out + 1] = { page = id, name = p.name or id, score = score }
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.score ~= b.score then
+      return a.score > b.score
+    end
+    return string.lower(a.name) < string.lower(b.name)
+  end)
+  return out
+end
+
+-- A piece of `text` about `width` characters long around the first place of `query`'s first
+-- word, cut at whole words, with "..." where it was cut.
+function Book.Snippet(text, query, width)
+  text, width = text or "", width or 120
+  local word = string.match(string.lower(query or ""), "%S%S+")
+  local s = word and string.find(string.lower(text), word, 1, true)
+  local from = 1
+  if s and s > width / 2 then
+    from = s - math.floor(width / 2)
+    local space = string.find(text, " ", from, true)
+    from = space and space + 1 or from
+  end
+  local piece = string.sub(text, from, from + width - 1)
+  if from + width - 1 < #text then
+    piece = (string.match(piece, "^(.*%S) ") or piece) .. "..."
+  end
+  return (from > 1 and "..." or "") .. piece
 end
 
 -- The pages that name an entity (the "In Bastian's book" block on Browser pages): refs -> ids.

@@ -1,5 +1,6 @@
 +++
 title = "The First 36 Hours"
+scene = "Low angle in the busy auction hall of Ironforge: Bastian staggers towards the bank under six huge stacks of wool cloth piled up past his chin, red in the face with effort but triumphant; warm forge light, a crowd making way."
 order = 10
 levels = [1, 30]
 meta = ["any auction house", "launch week, any level", "Wool and Medium Leather", "alone"]

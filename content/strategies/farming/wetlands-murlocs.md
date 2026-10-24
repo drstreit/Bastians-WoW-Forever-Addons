@@ -1,5 +1,6 @@
 +++
 title = "Murloc Pearls in the Wetlands"
+scene = "Close-up on the quay at Menethil Harbor at dusk: a shimmering pearl in Bastian's open palm lights his face from below, his mouth slightly open in quiet awe; an old fisherman leans in from the side; empty clam shells and rain clouds."
 order = 15
 levels = [20, 26]
 zones = [1437]

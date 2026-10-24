@@ -1,5 +1,6 @@
 +++
 title = "Silk Headbands and the Bandit Mask"
+scene = "Close-up in a tavern corner: Bastian concentrates hard, tongue poking out of the corner of his mouth, squinting at a tiny needle in his big fingers as he sews a silk headband; a pile of silk cloth on the table; warm lamplight."
 order = 40
 levels = [22, 30]
 meta = ["Stormwind or the Undercity", "Tailoring 160", "headbands for level 27", "alone"]

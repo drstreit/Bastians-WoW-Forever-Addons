@@ -1,5 +1,6 @@
 +++
 title = "The fishing rack and the bottles"
+scene = "Wide view of a sandy beach below Booty Bay at sunset, seen from behind Bastian: he sits on a log by a campfire next to a wooden drying rack hung with ordinary fish and looks out over the sea, rod across his knees; ships in the bay. We do not see his face."
 order = 40
 levels = [20, 30]
 meta = ["any water, by a campfire", "Fishing 140", "a buff, bloated fish, racks to sell", "alone"]

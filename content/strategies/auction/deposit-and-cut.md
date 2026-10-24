@@ -1,5 +1,6 @@
 +++
 title = "The deposit, the cut and the post"
+scene = "Close-up over the auction house counter: a stern auctioneer's open palm waits while Bastian's big fingers fish a single silver coin out of a nearly empty purse; behind them Bastian's face winces with reluctance; warm lamplight."
 order = 10
 levels = [1, 30]
 meta = ["any auctioneer", "any level", "what selling costs", "alone"]

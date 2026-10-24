@@ -1,11 +1,12 @@
 +++
 title = "Bael'dun: The Dig That Never Ends"
+scene = "From behind the shoulders of three grumpy, stocky dwarf excavators who raise their shovels: facing them, Bastian in a slightly too small clean linen shirt over his armour holds out his hand with an earnest, nervous smile and raised eyebrows; a dusty dig with scaffolding in front of a half-ruined stone keep in a dry yellow savanna; late afternoon sun, dust in the air."
 order = 20
 levels = [21, 26]
 zones = [1413]
 meta = ["The Barrens, Bael'dun Keep", "level 21 to 26", "cloth and coin", "alone"]
 added = "2026-10-23"
-updated = "2026-10-23"
+updated = "2026-10-24"
 
 [[rumours]]
 claim = 69024715530008
@@ -34,7 +35,7 @@ kind = "farm"
 npcs = [3374, 3375]
 +++
 
-The dwarves at Bael'dun are digging again. They were digging the last time I passed through and they'll still be digging when I'm gone. Nobody at Camp Taurajo knows what they're looking for. I asked the innkeeper, but she only wanted to talk about my bill.
+The dwarves at Bael'dun have been digging for years, and as far as I can tell they're digging for treasure, which makes us colleagues. I put on my good shirt and walked over to offer them a partnership. They answered with shovels. I've been back many times since, for their cloth, and I'm still sure the partnership will come once they get to know me.
 
 ## Why it pays
 The {npc:3374} and the {npc:3375} are humanoids, so they carry money and cloth. The loot tables give a {item:2592} in one kill out of four, {item:2589} in one out of eight and {item:4306} in one out of twenty. They belong to a quest, and on Forever a quest's mobs come back as fast as people kill them, so the dig fills up again while you work. They don't fear you, they don't net you and they don't fetch their friends from the next camp. I've worked harder for less.
@@ -60,4 +61,4 @@ Southern Barrens, the dig in front of Bael'dun Keep. The Horde flies to Camp Tau
 Silk drops in one kill out of twenty, so plan around Wool. Five people can share the dig as long as all five kill quickly, because the respawn follows the killing. The keep is the other problem. I walked up there once to see what the riflemen were guarding and spent the next ten minutes as a ghost.
 
 ## Verdict
-Steady money for a lazy man. I've made more here than anywhere else in the Barrens, though the Barrens never paid me much.
+Steady money for a lazy man. I've made more here than anywhere else in the Barrens, and two silver of it went into the statue fund.

@@ -1,5 +1,6 @@
 +++
 title = "The Dust Devils of Westfall"
+scene = "Low angle action shot in golden Westfall wheat fields: Bastian lunges forward in mid-stride after a man-sized swirling dust devil, squinting hard against the flying sand, teeth gritted in determination; a red windmill behind; bright dry afternoon."
 order = 10
 levels = [17, 22]
 zones = [1436]

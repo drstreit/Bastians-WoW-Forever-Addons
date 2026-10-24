@@ -1,5 +1,6 @@
 +++
 title = "Raptor Teeth in the Wetlands"
+scene = "From behind a trader's counter in Menethil Harbor: the bald trader's finger counts a heap of raptor teeth, and across the counter Bastian leans in eagerly, counting along on his own fingers, lips moving; a speckled raptor egg peeks out of his pack; lamplight, rain on the window."
 order = 30
 levels = [23, 28]
 zones = [1437]

@@ -1,5 +1,6 @@
 +++
 title = "What to learn first"
+scene = "High angle, looking down on the stone steps outside the bank of Ironforge: Bastian sits among a mining pick, an herb satchel and a skinning knife, scratching his head, utterly puzzled; warm forge light, passers-by."
 order = 10
 levels = [1, 30]
 meta = ["any profession trainer", "level 1 to 30", "the two that fit your goal", "alone"]

@@ -1,5 +1,6 @@
 +++
 title = "The Black Market at Powderfuse Port"
+scene = "Over Bastian's shoulder at Nixie's table in the Salty Sailor Tavern: Nixie talks with her hands over a plate of fried fish, eyes gleaming as she describes a smoky goblin port, and we see only the back of Bastian's head and his hand counting coins for the waiter; candlelight."
 order = 30
 levels = [25, 30]
 zones = [2548]

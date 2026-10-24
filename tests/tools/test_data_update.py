@@ -309,3 +309,19 @@ def test_send_marks_the_edition_keeps_the_file_and_says_why_curseforge_refused(
     monkeypatch.setattr(curseforge, "api_token", lambda: None)  # never the owner's real token
     with pytest.raises(data_update.DataUpdateError, match="no upload token"):
         data_update.send(edition, uploads, transport, ledger)
+
+
+def test_the_pictures_come_from_the_export_else_from_the_approved_local_set(tmp_path: Path):
+    export = tmp_path / "export"
+    folder = export / "20261025T0600Z"
+    (folder / "art").mkdir(parents=True)
+    (export / "LATEST").write_text("20261025T0600Z", encoding="utf-8")
+    local = tmp_path / "local-art"
+    local.mkdir()
+    (local / "baeldun-dig.jpg").write_bytes(b"")
+    # an export without pictures (AHSync's generator not yet running): the approved local set
+    assert data_update.art_folder(export, local) == local
+    (folder / "art" / "baeldun-dig.jpg").write_bytes(b"")
+    assert data_update.art_folder(export, local) == folder / "art"  # the export wins
+    assert data_update.art_folder(None, tmp_path / "none") is None
+    assert data_update.art_folder(None) is None  # the tests' .local points at an empty folder

@@ -74,6 +74,12 @@ def test_the_logic_farm_flip_pairs_index_and_seals(core: WowRuntime):
     # Wool at 1s, 40 % of the kills on average (50 and 30), after the 5 % cut: 38c a kill; the
     # item without a price is counted as unknown, never as 0 (golden rule 2)
     assert farm.perKill == 38 and farm.unknown == 1 and farm["items"][1]["item"] == 10
+    # without any price the likeliest drop leads (before launch: Wool, not the lowest item id)
+    blind = core.eval(
+        f"{BOOK}.Farm({{ 1 }}, function() return {{ {{ 5, 0.1 }}, {{ 9, 24 }}, {{ 7, 12 }} }} end, "
+        "function() return nil end)"
+    )
+    assert [blind["items"][i]["item"] for i in (1, 2, 3)] == [9, 7, 5] and blind.perKill is None
     flip = core.eval(f"{BOOK}.Flip(150, 200, 1)")
     assert (flip.margin, flip.open, flip.ownAH) == (50, True, 143)
     assert core.eval(f"{BOOK}.Flip(nil, 200).margin") is None  # no auction price: no verdict
@@ -393,3 +399,57 @@ def test_pages_are_entities_on_the_map_in_the_search_and_on_browser_pages(wow: W
     assert wow.eval(f"{WIN}.OpenRef('npc:448')") == "browser"
     assert wow.eval("Bastians:GetModule('Browser').Browser.ShownPage()") == "npc:448"
     assert wow.errors == []
+
+
+def test_the_full_text_search_finds_words_in_the_text_and_the_names(core: WowRuntime):
+    core.load_addon(STRAT)
+    found = core.eval(
+        f"{BOOK}.Search({{ a = {{ name = 'Gnoll Camp' }}, b = {{ name = 'Leather' }}, "
+        "c = { name = 'Gnolls of old', shelf = 'retired' } }, 'GNOLL linen', "
+        "function(id) return ({ a = 'linen and more linen', b = 'gnoll linen' })[id] end)"
+    )
+    # every word must be there; a word in the name counts ten; a tombstone is never found
+    assert [found[i]["page"] for i in (1, 2)] == ["a", "b"] and found[3] is None
+    assert (found[1].score, found[2].score) == (12, 2)
+    assert core.eval(f"#{BOOK}.Search({{ a = {{ name = 'x' }} }}, ' a ', function() end)") == 0
+    snip = core.eval(f"{BOOK}.Snippet(string.rep('word ', 40) .. 'silk at the end', 'Silk', 40)")
+    assert snip.startswith("...") and "silk" in snip and not snip.startswith("...wor ")
+
+
+def test_the_book_window_searches_its_pages(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"{WIN}.Open() {WIN}.Search('gnoll camp')")
+    shown = both(wow)
+    assert wow.eval(f"{WIN}.Current().kind") == "search"
+    assert any(t.startswith("Hogger's Camp") for t in shown)
+    assert any("gnoll camp" in t for t in shown)  # the snippet around the first word
+    wow.execute(f"{WIN}.Search('linen cloth')")  # the item's name, from its token
+    assert any(t.startswith("Hogger's Camp") for t in both(wow))
+    wow.execute("SlashCmdList.BASTIANSSTRATEGIES('nixie')")  # /bbook <words> searches
+    assert any(t.startswith("The Leather Trick") and "back shelf" in t for t in both(wow))
+    wow.execute(f"{WIN}.Search('dragons')")
+    assert "Nothing in the book about that." in both(wow)
+    click = f"{WIN}.Search('gnoll')"
+    wow.execute(click)
+    click_row(wow, "left", "Hogger's Camp")
+    assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
+    wow.execute(f"{WIN}.Search('  ')")
+    assert wow.eval(f"{WIN}.Current().kind") == "contents"
+
+
+def test_a_page_shows_its_picture_and_none_before_a_restart(wow: WowRuntime):
+    boot(wow)
+    page = "Bastians:GetService('data'):Get('page', 'hogger-camp')"
+    wow.execute(f"{page}.art = true")
+    assert wow.eval(f"{page}.art") is True, "the data service hands out its cached record"
+    path = wow.eval(f"{WIN}.ART") + "hogger-camp"
+    assert path == r"Interface\AddOns\Bastians_Data_Strategies\Generated\Art\hogger-camp"
+    wow.execute(f"{WIN}.Open() {WIN}.Show({{ kind = 'page', id = 'hogger-camp' }})")
+    pic = wow.eval(f"{WIN}.left.pics[1]")
+    assert pic.IsShown(pic) and pic.GetTexture(pic) == path
+    width, height = pic.GetSize(pic)
+    assert height == width // 2  # 2:1 at the page's width
+    # a picture from today's Data edition: the client takes it, shows it after a full restart
+    wow.execute(f"Mock.unseen = {{ [{path!r}] = true }} {WIN}.Render()")
+    assert not pic.IsShown(pic)
+    assert any("gnoll camp" in t for t in both(wow))  # the page itself reads as before

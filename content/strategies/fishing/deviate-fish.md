@@ -1,5 +1,6 @@
 +++
 title = "Deviate Fish from the oases"
+scene = "Medium shot at a small green oasis in the dry Barrens: a strange, colourful, spiky fish flaps on Bastian's line right in front of his face and he leans back, startled, eyebrows shot up, unsure whether to be pleased; flat-topped trees; hot midday sun."
 order = 20
 levels = [14, 20]
 zones = [1413]

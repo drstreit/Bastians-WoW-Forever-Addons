@@ -1,5 +1,6 @@
 +++
 title = "Wands and Bronze for Launch Week"
+scene = "High angle over a long, crowded queue of adventurers of every race in front of a profession trainer in Stormwind on a bright morning; in the queue Bastian rolls his eyes, arms crossed, behind an excited gnome who carries the tools of every profession at once."
 order = 20
 levels = [1, 20]
 meta = ["any capital", "level 1 to 20", "wands and bronze bars", "alone"]

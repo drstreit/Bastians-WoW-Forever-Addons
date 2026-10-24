@@ -1,5 +1,6 @@
 +++
 title = "Skinning, Leatherworking and Mining"
+scene = "Close-up at Nixie's table in the Salty Sailor Tavern: Bastian stares at the few silver coins in his palm, frowning as he slowly works something out, while behind him Nixie smiles smugly over her ledger and a stack of fine leather hides; candlelight."
 order = 40
 levels = [10, 30]
 meta = ["any zone with beasts and veins", "level 10 to 30", "leather, bars and stone", "alone"]

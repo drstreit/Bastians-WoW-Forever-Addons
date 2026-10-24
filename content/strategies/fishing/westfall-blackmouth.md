@@ -1,5 +1,6 @@
 +++
 title = "Oily Blackmouth off Westfall"
+scene = "A wide coastal landscape of Westfall's south shore in warm late light: small on the sand, Bastian lies back barefoot with his eyes closed and a content smile, his fishing pole propped on a stick and his boots drying beside him; calm sea."
 order = 10
 levels = [10, 20]
 zones = [1436]

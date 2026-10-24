@@ -89,8 +89,9 @@ indexes = ["book.toc", "book.mill"]
 [packs.book.schema]
 chapter = ["name", "order", "opening", "active"]
 # pages keyed by their permanent id (the file name); shelf = active | back | retired (a tombstone:
-# no text, the date, the reason, the successor); blocks = the text, plate and live precomputed
-page = ["name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate", "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor"]
+# no text, the date, the reason, the successor); blocks = the text, plate and live precomputed;
+# art = true when the page's picture ships (Generated/Art/<id>.blp, tools/book_art.py)
+page = ["name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate", "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor", "art"]
 # the claims the pages rest on, by claim id: AHSync's own sentence and the sources (channel, date, link)
 rumour = ["claim", "kind", "status", "subject", "sources"]
 # What's new, newest first: book.toml's entries and the ones the build writes (book_news.py);

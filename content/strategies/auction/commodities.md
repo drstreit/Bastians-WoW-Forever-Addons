@@ -1,5 +1,6 @@
 +++
 title = "Commodities and their delay"
+scene = "Wide view across a rainy Stormwind street at dusk: small in the middle distance, Bastian stands slumped beside a mailbox, soaked and bored, water dripping from his hair, people with umbrellas hurrying past, lamps glowing in the windows."
 order = 20
 levels = [1, 30]
 meta = ["any auctioneer", "any level", "stacks, the queue and the payout", "alone"]

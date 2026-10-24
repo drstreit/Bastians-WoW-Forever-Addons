@@ -45,6 +45,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+import book_art
 import build_client
 import curseforge
 import release
@@ -52,6 +53,7 @@ import release_notes
 
 ROOT = Path(__file__).resolve().parent.parent
 LEDGER = ROOT / ".local" / "data-editions.json"
+LOCAL_ART = ROOT / ".local" / "book-art" / "current"  # the approved pictures until AHSync's
 BOOK_STATES = ROOT / ".local" / "book-states"
 BOOK_TOML = ROOT / "content" / "strategies" / "book.toml"
 PROJECT = "Bastians_Data"  # what is uploaded daily
@@ -115,9 +117,12 @@ def data_hash(packs: Path, folders: list[str], addons_dir: Path = release.ADDONS
     pack or a loader fix makes a new edition, a version bump alone none."""
     digest = hashlib.sha256()
     generated = sorted(
-        p for folder in folders for p in (packs / folder / release.GENERATED).glob("*.lua")
+        p
+        for folder in folders
+        for p in (packs / folder / release.GENERATED).rglob("*")
+        if p.is_file()  # the packs and the book's pictures (Generated/Art)
     )
-    if not generated:
+    if not any(p.suffix == ".lua" for p in generated):
         raise DataUpdateError(f"the build wrote no generated files under {packs}")
     files: list[tuple[str, bytes]] = [
         (p.relative_to(packs).as_posix(), p.read_bytes()) for p in generated
@@ -211,6 +216,22 @@ def export_folder(export: Path) -> Path:
     if latest.is_file():
         return export / latest.read_text(encoding="utf-8").strip()
     return export
+
+
+def art_folder(export: Path | None, local: Path | None = None) -> Path | None:
+    """Where the book's pictures come from: the export's art/ when it brings pictures (AHSync,
+    content/strategies/art), else the owner's approved set in `.local/book-art/current` (until
+    AHSync's generator runs, 24.10.2026), else none."""
+    local = LOCAL_ART if local is None else local  # looked up now: the tests point it elsewhere
+    for folder in (export_folder(export) / "art" if export else None, local):
+        pictures = (
+            folder is not None
+            and folder.is_dir()
+            and any(p.suffix.lower() in book_art.SOURCES for p in folder.iterdir())
+        )
+        if pictures:
+            return folder
+    return None
 
 
 def export_id(export: Path | None) -> str | None:
@@ -307,7 +328,14 @@ def update(
     previous = book_states / sent["book_state"] if sent and sent.get("book_state") else None
     if previous is not None and previous.is_file():
         extra += ["--book-previous", str(previous)]
+    art = art_folder(inputs.export)
+    if art is not None:
+        extra += ["--art", str(art)]
     build(dataclasses.replace(inputs, extra=[*inputs.extra, *extra]), packs)
+    # the pages' pictures (content/strategies/art): the game's textures by the packs
+    pictures = book_art.install(art, packs) if art is not None else []
+    if pictures:
+        print(f"book art: {len(pictures)} pictures from {art}")
     data = config["projects"][PROJECT]["folders"]
     sha = data_hash(packs, data, addons_dir)
     with book_toml.open("rb") as fh:

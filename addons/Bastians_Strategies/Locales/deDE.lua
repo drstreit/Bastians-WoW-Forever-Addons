@@ -17,7 +17,6 @@ ns.L:Register("deDE", {
   ["the book"] = "das Buch",
   ["Rumours (Bastian's book)"] = "Gerüchte (Bastians Buch)",
   ["Strategies is disabled"] = "Strategien ist deaktiviert",
-  ["No page %s in the book. /bbook index lists them."] = "Keine Seite %s im Buch. /bbook index listet sie auf.",
 
   -- Plate.lua
   ["%s, %d yd"] = "%s, %d Yd.",
@@ -26,6 +25,9 @@ ns.L:Register("deDE", {
   ["stay clear"] = "meiden",
 
   -- Window.lua
+  ["Search the book"] = "Im Buch suchen",
+  ["Nothing in the book about that."] = "Dazu steht nichts im Buch.",
+  ['%d pages with "%s"'] = '%d Seiten mit "%s"',
   ["price unknown"] = "Preis unbekannt",
   ["No auction prices here: Bastian's Gold brings them."] = "Keine Auktionspreise: Bastian's Gold bringt sie mit.",
   ["No loot known for these creatures."] = "Für diese Kreaturen ist keine Beute bekannt.",

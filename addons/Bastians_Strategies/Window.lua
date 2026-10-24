@@ -124,13 +124,13 @@ local function newPage(parent)
   scroll:SetScrollChild(content)
   p.scroll, p.content = scroll, content
   p.bar = S.scrollbar(scroll, p, nil)
-  p.fs, p.rows, p.plates, p.boxes, p.edits = {}, {}, {}, {}, {}
+  p.fs, p.rows, p.plates, p.boxes, p.edits, p.pics = {}, {}, {}, {}, {}, {}
   return p
 end
 
 local function begin(page)
   page.y = 0
-  page.nfs, page.nrows, page.nplates, page.nboxes, page.nedits = 0, 0, 0, 0, 0
+  page.nfs, page.nrows, page.nplates, page.nboxes, page.nedits, page.npics = 0, 0, 0, 0, 0, 0
   page.width = math.max(120, (page.scroll:GetWidth() or 0) > 0 and page.scroll:GetWidth() or 360)
   page.scroll:SetVerticalScroll(0)
 end
@@ -150,6 +150,9 @@ local function finish(page)
   end
   for i = page.nedits + 1, #page.edits do
     page.edits[i]:Hide()
+  end
+  for i = page.npics + 1, #page.pics do
+    page.pics[i]:Hide()
   end
   page.content:SetSize(page.width, math.max(1, page.y))
   page.bar.SetTotal(page.y)
@@ -629,6 +632,32 @@ local function sealedText(p)
   )
 end
 
+-- The page's picture (content/strategies/art), the page's width at 2:1. A picture that came with a
+-- new Data edition is a new file: the client takes it without an error but shows it only after
+-- a full restart (GetTexture stays nil, Forever 22.10.2026), so until then the page has none.
+local ART = "Interface\\AddOns\\Bastians_Data_Strategies\\Generated\\Art\\"
+local function addPicture(page, id)
+  local tex = page.pics[page.npics + 1]
+  if not tex then
+    tex = page.content:CreateTexture(nil, "ARTWORK")
+    page.pics[page.npics + 1] = tex
+  end
+  tex:SetTexture(ART .. id)
+  if not tex:GetTexture() then
+    tex:Hide()
+    return nil
+  end
+  page.npics = page.npics + 1
+  local h = math.floor(page.width / 2)
+  tex:SetSize(page.width, h)
+  tex:ClearAllPoints()
+  tex:SetPoint("TOPLEFT", page.content, "TOPLEFT", 0, -page.y)
+  tex:Show()
+  page.y = page.y + h + GAP
+  return tex
+end
+Window.ART = ART
+
 local function header(page, p)
   addText(left, caps(shelfWord(p)), 10, S.C.dim, 0, 2)
   addText(left, p.name or page, 18, S.C.bright, 0, 4)
@@ -726,6 +755,9 @@ local function renderPage(id)
   if not Book.IsOpen(p, level, db().char.entered) and p.chapter ~= FRONT then
     addText(left, sealedText(p), 13, S.C.text)
     return p.name
+  end
+  if p.art then
+    addPicture(left, id)
   end
   local last = flowBlocks(p, p.blocks)
   rumourLines(last, p)
@@ -951,6 +983,76 @@ local function renderIndex()
   return L["Index"]
 end
 
+-- A page's text as the reader sees it, for the search: the meta line, the blocks with names for
+-- the tokens (no prices: they change), the rumours. Kept per page id: a Data edition needs a
+-- restart anyway.
+local searchText = {}
+local PLAIN = {
+  name = nameOf,
+  price = function()
+    return ""
+  end,
+  vendor = function()
+    return ""
+  end,
+}
+local function textOf(id, p)
+  if searchText[id] then
+    return searchText[id]
+  end
+  local parts = { table.concat(p.meta or {}, " ") }
+  for _, b in ipairs(p.blocks or {}) do
+    if b[1] == "steps" then
+      for _, step in ipairs(b[2]) do
+        parts[#parts + 1] = Book.Expand(step, PLAIN)
+      end
+    elseif type(b[2]) == "string" then
+      parts[#parts + 1] = Book.Expand(b[2], PLAIN)
+    end
+  end
+  for _, r in ipairs(p.rumours or {}) do
+    local rumour = get("rumour", r[1])
+    parts[#parts + 1] = rumour and (rumour.claim or rumour.subject) or nil
+  end
+  searchText[id] = table.concat(parts, " ")
+  return searchText[id]
+end
+Window.TextOf = textOf
+
+local function renderSearch(query)
+  addText(left, caps(L["Search the book"]), 11, S.C.accent, 0, 6)
+  local pages = Window.Pages()
+  local hits = Book.Search(pages, query, textOf)
+  if #hits == 0 then
+    addText(left, L["Nothing in the book about that."], 12, S.C.dim)
+    return L["Search the book"]
+  end
+  addText(left, string.format(L['%d pages with "%s"'], #hits, query), 12, S.C.dim, 0, 6)
+  local leftMax = (left.scroll:GetHeight() or 0) > 0 and left.scroll:GetHeight() or 480
+  local target = left
+  for _, hit in ipairs(hits) do
+    if target == left and left.y + 60 > leftMax then
+      target = right
+    end
+    local p = pages[hit.page]
+    local note = p.shelf == "back" and ("  " .. S.H.muted .. L["back shelf"] .. "|r") or ""
+    addRow(target, hit.name .. note, function()
+      Window.Show({ kind = "page", id = hit.page })
+    end, { icon = B.UI.IconTexture("ledger") })
+    addText(target, Book.Snippet(textOf(hit.page, p), query, 140), 11, S.C.dim, 18, 6)
+  end
+  return L["Search the book"]
+end
+
+-- Searches the book's text and shows the hits; an empty query goes back to the contents.
+function Window.Search(query)
+  query = strtrim(query or "")
+  if query == "" then
+    return Window.Show({ kind = "contents" })
+  end
+  return Window.Show({ kind = "search", id = query })
+end
+
 local function renderBookmarks()
   addText(left, caps(L["Bookmarks"]), 11, S.C.accent, 0, 6)
   local marks = db().char.bookmarks
@@ -1037,6 +1139,8 @@ function Window.Render()
     title = renderBookmarks()
   elseif current.kind == "mill" then
     title = renderMill(current.id)
+  elseif current.kind == "search" then
+    title = renderSearch(current.id)
   else
     title = renderPage(current.id)
   end
@@ -1055,8 +1159,8 @@ function Window.Schedule()
   end
 end
 
--- Shows an entry ({ kind = "title" | "contents" | "index" | "bookmarks" | "page" | "mill", id };
--- a mill's id is its chapter) and keeps
+-- Shows an entry ({ kind = "title" | "contents" | "index" | "bookmarks" | "page" | "mill" |
+-- "search", id }; a mill's id is its chapter, a search's its query) and keeps
 -- it as the character's last place (strategies-design.md section 7: by the page's permanent id).
 function Window.Show(entry)
   if not win then
@@ -1205,6 +1309,29 @@ function Window.Build()
   bar.mark:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
   bar.mark:SetScript("OnClick", function()
     Window.ToggleBookmark()
+  end)
+  -- the full-text search: between the tabs and the bookmark button, as wide as the window allows
+  bar.search = S.search(bar, L["Search the book"])
+  bar.search:SetPoint("LEFT", bar, "LEFT", x + 8, 0)
+  bar.search:SetPoint("RIGHT", bar.mark, "LEFT", -8, 0)
+  bar.search:SetScript("OnTextChanged", function(self, userInput)
+    local text = self:GetText() or ""
+    if text == "" then
+      self.hint:Show()
+      self.clear:Hide()
+    else
+      self.hint:Hide()
+      self.clear:Show()
+    end
+    if userInput then
+      ns.mod:Coalesce("search", 0.3, function()
+        Window.Search(self:GetText())
+      end)
+    end
+  end)
+  bar.search:SetScript("OnEnterPressed", function(self)
+    self:ClearFocus()
+    Window.Search(self:GetText())
   end)
   left = newPage(content)
   right = newPage(content)
