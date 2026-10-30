@@ -363,3 +363,21 @@ def test_dungeons_join_the_world_with_their_bosses_loot_and_quests():
     assert world.get("dungeon", 34).get("zone") is None
     assert any("Nowhere Known" in note for note in world.notes)
     assert world.get("dungeon", 249)["kind"] == "raid" and world.get("dungeon", 249)["size"] == 40
+
+
+def test_a_client_without_foreverdb_takes_the_dungeons_file_given(tmp_path):
+    """data.md "Dungeons": the retail test client shows Forever's dungeons
+    from ForeverDB's file handed over by path; a client that has ForeverDB keeps its own."""
+    addons = tmp_path / "AddOns"
+    shutil.copytree(FIXTURES / "everything_quests", addons / "EverythingQuests")
+    paths = SourcePaths(
+        addons=addons,
+        cmangos=FIXTURES / "cmangos" / "classicdb_mini.sql.gz",
+        probe=FIXTURES / "probe" / "2026-10-19-forever-fixture.lua",
+        dungeons=FIXTURES / "foreverdb" / "Dungeons.lua",
+    )
+    s = load_sources("forever", paths)
+    assert [d.id for d in s.fdb_dungeons] == [34, 36, 249]
+    assert any(name.startswith("ForeverDB Dungeons.lua") for name in s.source_names)
+    world = build_world(s)
+    assert world.get("dungeon", 36)["name"] == "The Deadmines"

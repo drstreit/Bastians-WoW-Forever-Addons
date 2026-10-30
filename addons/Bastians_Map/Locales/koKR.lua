@@ -181,6 +181,7 @@ ns.L:Register("koKR", {
   ["Square"] = "사각형",
   ["Recentre on you"] = "내 위치로 다시 맞추기",
   ["Search ..."] = "검색 ...",
+  ["Filter the buttons by name"] = "이름으로 버튼 거르기",
   ["The addons' minimap buttons"] = "애드온 미니맵 버튼",
   ["Minimap buttons"] = "미니맵 버튼",
   ["Bastian's minimap in place of the game's (search, styles, layers, the button box)"] = "게임 미니맵 대신 Bastian's 미니맵 사용 (검색, 스타일, 레이어, 버튼 상자)",

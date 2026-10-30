@@ -943,9 +943,14 @@ local function renderContents()
     end
   end
   if back > 0 then
-    addRow(left, string.format(L["The back shelf: %d older pages, in the index"], back), function()
-      Window.Show({ kind = "index" })
-    end, { color = S.C.dim })
+    addRow(
+      left,
+      string.format(L["The back shelf: %d older pages; search the book to find them"], back),
+      function()
+        Window.Show({ kind = "search", id = "" })
+      end,
+      { color = S.C.dim }
+    )
   end
   -- the legend of the stamps, the right page
   addText(right, caps(L["The stamps"]), 11, S.C.accent, 0, 4)
@@ -967,43 +972,6 @@ local function renderContents()
     S.C.text
   )
   return L["Contents"]
-end
-
-local function renderIndex()
-  addPicture(left, "index")
-  addText(left, caps(L["Index"]), 11, S.C.accent, 0, 6)
-  local pages = Window.Pages()
-  local entries = Book.Index(pages, function(ref)
-    return B:Entity(ref):Name()
-  end)
-  local leftMax = (left.scroll:GetHeight() or 0) > 0 and left.scroll:GetHeight() or 480
-  local target = left
-  for _, e in ipairs(entries) do
-    if target == left and left.y + 20 > leftMax then
-      target = right
-    end
-    if e.kind == "page" then
-      local p = pages[e.page]
-      local note = p.shelf == "back" and ("  " .. S.H.muted .. L["back shelf"] .. "|r")
-        or p.shelf == "retired" and ("  " .. S.H.muted .. L["retired"] .. "|r")
-        or ""
-      addRow(target, e.text .. note, function()
-        Window.Show({ kind = "page", id = e.page })
-      end, { icon = B.UI.IconTexture("ledger") })
-    else
-      local titles = {}
-      for _, id in ipairs(e.pages) do
-        titles[#titles + 1] = pages[id] and pages[id].name or id
-      end
-      addRow(target, e.text .. "  " .. S.H.muted .. table.concat(titles, ", ") .. "|r", function()
-        Window.Show({ kind = "page", id = e.pages[1] })
-      end, { icon = B:Entity(e.ref):Icon(), ref = e.ref })
-    end
-  end
-  if #entries == 0 then
-    addText(left, L["The index is empty: the book's pages are not installed."], 12, S.C.dim)
-  end
-  return L["Index"]
 end
 
 -- A page's text as the reader sees it, for the search: the meta line, the blocks with names for
@@ -1043,7 +1011,12 @@ end
 Window.TextOf = textOf
 
 local function renderSearch(query)
+  addPicture(left, "search") -- Bastian after a penny in a haystack
   addText(left, caps(L["Search the book"]), 11, S.C.accent, 0, 6)
+  if query == "" then
+    addText(left, L["Type a word above: every page, place, item and creature of the book."], 12, S.C.dim)
+    return L["Search the book"]
+  end
   local pages = Window.Pages()
   local hits = Book.Search(pages, query, textOf)
   if #hits == 0 then
@@ -1067,13 +1040,9 @@ local function renderSearch(query)
   return L["Search the book"]
 end
 
--- Searches the book's text and shows the hits; an empty query goes back to the contents.
+-- Searches the book's text and shows the hits; an empty query shows the search page itself.
 function Window.Search(query)
-  query = strtrim(query or "")
-  if query == "" then
-    return Window.Show({ kind = "contents" })
-  end
-  return Window.Show({ kind = "search", id = query })
+  return Window.Show({ kind = "search", id = strtrim(query or "") })
 end
 
 local function renderBookmarks()
@@ -1157,8 +1126,6 @@ function Window.Render()
     title = renderTitle()
   elseif current.kind == "contents" then
     title = renderContents()
-  elseif current.kind == "index" then
-    title = renderIndex()
   elseif current.kind == "bookmarks" then
     title = renderBookmarks()
   elseif current.kind == "mill" then
@@ -1191,6 +1158,9 @@ function Window.Show(entry)
     Window.Build()
   end
   current = entry or { kind = "title" }
+  if current.kind == "index" then
+    current = { kind = "search", id = "" } -- the index page is gone (30.10.2026); an old last place
+  end
   db().char.last = { kind = current.kind, id = current.id }
   if win:IsShown() then
     Window.Render()
@@ -1253,8 +1223,17 @@ function Window.ToggleBookmark()
   end
 end
 
+-- The book's base size: a larger window scales the whole spread up (
+-- the grip "enlarges the window, no scaling possible"), never below 1.
+local BASE_W, BASE_H = 940, 640
+
 local function layoutPages()
   local content = win.content
+  local fw, fh = win.frame:GetWidth() or BASE_W, win.frame:GetHeight() or BASE_H
+  local k = math.max(1, math.min(fw / BASE_W, fh / BASE_H))
+  if math.abs((content:GetScale() or 1) - k) > 0.001 then
+    content:SetScale(k)
+  end
   local top = -(30 + 6)
   left:ClearAllPoints()
   right:ClearAllPoints()
@@ -1318,8 +1297,10 @@ function Window.Build()
     end,
     80
   )
-  bar.index = tab(L["Index"], L["Every page, place, item and creature in the book, A to Z."], function()
-    Window.Show({ kind = "index" })
+  -- the search page in the index's place ("drop the index page, its
+  -- confusing; add a search page instead, full text search of all articles")
+  bar.find = tab(L["Search"], L["Every page of the book by its words."], function()
+    Window.Show({ kind = "search", id = "" })
   end, 64)
   bar.marks = tab(
     L["Bookmarks"],

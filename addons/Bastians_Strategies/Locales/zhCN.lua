@@ -25,6 +25,10 @@ ns.L:Register("zhCN", {
 
   -- Window.lua
   ["Search the book"] = "搜索本书",
+  ["Search"] = "搜索",
+  ["Every page of the book by its words."] = "按文字查找书中的每一页。",
+  ["Type a word above: every page, place, item and creature of the book."] = "在上方输入一个词：书中的每一页、地点、物品和生物。",
+  ["The back shelf: %d older pages; search the book to find them"] = "后架：%d 页旧内容；用书内搜索可以找到",
   ["Nothing in the book about that."] = "书中没有关于此事的内容。",
   ['%d pages with "%s"'] = '%d pages avec "%s"',
   ["price unknown"] = "价格未知",

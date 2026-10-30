@@ -60,6 +60,9 @@ class BuildInputs:
     # the game data in other languages (ADR 0033): QuestieDB's l10n lookups, [build.l10n] or
     # .local/sources/<client>/questie-l10n (tools/fetch_questie_l10n.py) when it exists
     l10n: Path | None = None
+    # retail: ForeverDB's Dungeons.lua from the Forever sources, so the test client shows the
+    # dungeon pages too
+    dungeons: Path | None = None
     extra: list[str] = field(default_factory=list)
 
 
@@ -105,6 +108,14 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         if not sources.is_dir():
             raise BuildClientError(f"[build.sources] {client}: {sources} does not exist")
         addons = sources
+    dungeons = None
+    if client == "retail":
+        forever_sources = (build.get("sources") or {}).get("forever")
+        if forever_sources:
+            candidate = Path(str(forever_sources))
+            candidate = candidate if candidate.is_absolute() else ROOT / candidate
+            candidate = candidate / "ForeverDB" / "Data" / "Dungeons.lua"
+            dungeons = candidate if candidate.is_file() else None
     return BuildInputs(
         client=client,
         addons=addons,
@@ -115,6 +126,7 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         probe=optional("probe"),
         tdb=optional("tdb") if client == "retail" else None,
         l10n=optional("l10n") or _default_l10n(client),
+        dungeons=dungeons,
     )
 
 
@@ -149,6 +161,8 @@ def commands(inputs: BuildInputs, out: Path, *, skip_mapart: bool = False) -> li
         data += ["--tdb", str(inputs.tdb)]
     if inputs.l10n:
         data += ["--l10n", str(inputs.l10n)]
+    if inputs.dungeons:
+        data += ["--dungeons", str(inputs.dungeons)]
     data += inputs.extra
     cmds = [data]
     tiles = DUMPS / f"mm_{inputs.prefix}"

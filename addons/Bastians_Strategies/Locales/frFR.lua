@@ -25,6 +25,10 @@ ns.L:Register("frFR", {
 
   -- Window.lua
   ["Search the book"] = "Chercher dans le livre",
+  ["Search"] = "Recherche",
+  ["Every page of the book by its words."] = "Chaque page du livre par ses mots.",
+  ["Type a word above: every page, place, item and creature of the book."] = "Tapez un mot ci-dessus : chaque page, lieu, objet et créature du livre.",
+  ["The back shelf: %d older pages; search the book to find them"] = "L'étagère du fond : %d pages plus anciennes ; la recherche dans le livre les trouve",
   ["Nothing in the book about that."] = "Le livre n'en dit rien.",
   ['%d pages with "%s"'] = '%d pages avec "%s"',
   ["price unknown"] = "prix inconnu",

@@ -221,7 +221,7 @@ def test_contents_lists_the_chapters_and_seals_pages_by_level_and_zone(wow: WowR
     assert left[0] == "CONTENTS" and "Farming and easy kills" in left
     hogger = next(t for t in left if t.startswith("Hogger's Camp"))
     assert hogger.endswith("sealed")
-    assert "The back shelf: 1 older pages, in the index" in left
+    assert "The back shelf: 1 older pages; search the book to find them" in left
     wow.slash("/bbook hogger-camp")
     assert any(
         t.startswith("This page is sealed. It opens at level 7") and "Elwynn Forest" in t
@@ -308,14 +308,15 @@ def test_bookmarks_the_last_page_and_notes_survive_a_reload(wow: WowRuntime):
     assert fresh.errors == []
 
 
-def test_the_back_shelf_is_in_the_index_with_its_flow_plate_table_and_flip(wow: WowRuntime):
+def test_the_back_shelf_is_found_by_the_search_with_its_flow_plate_table_and_flip(wow: WowRuntime):
+    """The search page took the index's place."""
     boot(wow, CORE, DATA, GOLD, STRAT)
-    wow.slash("/bbook index")
+    wow.slash("/bbook search")
+    shown = both(wow)
+    assert shown[0] == "SEARCH THE BOOK" and any(t.startswith("Type a word above") for t in shown)
+    wow.execute(f"{WIN}.Search('leather')")
     shown = both(wow)
     assert "The Leather Trick  back shelf" in shown
-    assert any(
-        t.startswith("Linen Cloth  ") and "Hogger's Camp" in t for t in shown
-    )  # a place or item
     click_row(wow, "left", "The Leather Trick")
     shown = both(wow)
     assert shown[0] == "FROM THE BACK SHELF"
@@ -464,8 +465,8 @@ def test_the_book_window_searches_its_pages(wow: WowRuntime):
     wow.execute(click)
     click_row(wow, "left", "Hogger's Camp")
     assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
-    wow.execute(f"{WIN}.Search('  ')")
-    assert wow.eval(f"{WIN}.Current().kind") == "contents"
+    wow.execute(f"{WIN}.Search('  ')")  # an empty query: the search page itself (30.10.2026)
+    assert wow.eval(f"{WIN}.Current().kind") == "search" and wow.eval(f"{WIN}.Current().id") == ""
 
 
 def test_a_page_shows_its_picture_and_none_before_a_restart(wow: WowRuntime):
@@ -544,8 +545,23 @@ def test_the_books_own_pages_open_with_their_pictures(wow: WowRuntime):
 
     wow.execute(f"{WIN}.Show({{ kind = 'title' }})")
     assert pictures("left") == ["title"] and pictures("right") == ["news"]
-    wow.execute(f"{WIN}.Show({{ kind = 'index' }})")
-    assert pictures("left") == ["index"]
+    wow.execute(f"{WIN}.Show({{ kind = 'search', id = '' }})")
+    assert pictures("left") == ["search"]  # the search page replaced the index (30.10.2026)
     wow.execute(f"{WIN}.Show({{ kind = 'bookmarks' }})")
     assert pictures("left") == ["bookmarks"]
+    assert wow.errors == []
+
+
+def test_a_larger_window_scales_the_whole_spread(wow: WowRuntime):
+    """the grip "enlarges the window, no scaling possible": the spread
+    scales with the window from its base size up, never below one."""
+    boot(wow)
+    wow.slash("/bbook")
+    assert wow.eval(f"{WIN}.win.content:GetScale()") == 1
+    wow.execute(f"{WIN}.win.frame:SetSize(1880, 1280); {WIN}.win.opts.onResize(nil, false)")
+    assert wow.eval(f"{WIN}.win.content:GetScale()") == 2
+    wow.execute(f"{WIN}.win.frame:SetSize(1880, 640); {WIN}.win.opts.onResize(nil, false)")
+    assert wow.eval(f"{WIN}.win.content:GetScale()") == 1  # the smaller side decides
+    wow.execute(f"{WIN}.win.frame:SetSize(700, 500); {WIN}.win.opts.onResize(nil, false)")
+    assert wow.eval(f"{WIN}.win.content:GetScale()") == 1  # never below one
     assert wow.errors == []

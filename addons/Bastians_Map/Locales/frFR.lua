@@ -181,6 +181,7 @@ ns.L:Register("frFR", {
   ["Square"] = "Carrée",
   ["Recentre on you"] = "Me recentrer",
   ["Search ..."] = "Rechercher ...",
+  ["Filter the buttons by name"] = "Filtrer les boutons par nom",
   ["The addons' minimap buttons"] = "Les boutons de mini-carte des addons",
   ["Minimap buttons"] = "Boutons de mini-carte",
   ["Bastian's minimap in place of the game's (search, styles, layers, the button box)"] = "La mini-carte de Bastian à la place de celle du jeu (recherche, styles, couches, la boîte à boutons)",

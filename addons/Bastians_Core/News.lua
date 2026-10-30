@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.1.1:1",
+    date = "2026-10-30",
+    version = "1.1.1",
+    text = "The book has a search page instead of the index and scales with its window; minimap buttons on the rim keep the place you drag them to; the button box has a filter.",
+  },
+  {
     id = "1.1.0:1",
     date = "2026-10-30",
     version = "1.1.0",
@@ -177,11 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "Where you walk and the map knew no way, the route planner learns the way and uses it at once.",
-  },
-  {
-    id = "1.0.0-beta.13:25",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "Flight times measured by other players shorten the route's estimates once they are in the data.",
   },
 }

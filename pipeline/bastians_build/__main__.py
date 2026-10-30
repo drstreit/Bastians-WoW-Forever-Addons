@@ -115,6 +115,11 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--cmangos", type=Path, help="CMaNGOS classic-db checkout or Full_DB dump")
         p.add_argument("--probe", type=Path, help="Bastians_Probe dump (data/probe/*.lua)")
         p.add_argument(
+            "--dungeons",
+            type=Path,
+            help="ForeverDB's Dungeons.lua for a client whose AddOns lack it (retail tests)",
+        )
+        p.add_argument(
             "--taxi", type=Path, help="clientdump TaxiNodes JSON (flight masters, route.md)"
         )
         p.add_argument(
@@ -481,6 +486,7 @@ def main(argv: list[str] | None = None) -> int:
                 addons=args.addons,
                 cmangos=args.cmangos,
                 probe=args.probe,
+                dungeons=args.dungeons,
                 taxi=args.taxi,
                 dumps=args.dumps,
                 dump_prefix=args.dump_prefix,

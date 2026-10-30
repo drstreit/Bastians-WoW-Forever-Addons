@@ -1224,8 +1224,18 @@ frame:SetScript("OnEvent", function(self)
   self:UnregisterEvent("PLAYER_LOGIN")
   scanLodApps()
   loadLodApps()
-  panelFor(ns.core)
+  -- the game's options list keeps the order of registration: by title (
+  -- "sorted alphabetically"), General among the apps
+  local mods = { ns.core }
   for _, mod in B:IterateModules() do
+    if mod ~= ns.core then
+      mods[#mods + 1] = mod
+    end
+  end
+  table.sort(mods, function(a, b)
+    return string.lower(tostring(a.title)) < string.lower(tostring(b.title))
+  end)
+  for _, mod in ipairs(mods) do
     panelFor(mod)
   end
 end)

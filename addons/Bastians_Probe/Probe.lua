@@ -942,8 +942,53 @@ local HELP = {
   "/bprobe maskvariants - which of four test mask files the client loads",
   "P7, trainer and merchant record by themselves: open a flight map, take a flight,"
     .. " open a trainer or a vendor",
+  "/bprobe buttons [n] - n fake minimap buttons (default 50) for the button box; 0 removes them",
   "/bprobe status | hide | reset",
 }
+
+-- Fake minimap buttons in LibDBIcon's shape ("simulate up to 50 icons" in the
+-- box of Bastian's minimap): named LibDBIcon10_BastiansTest<n>, 31 px, a tinted icon, a tooltip.
+local fakeButtons = {}
+local function makeFakeButtons(n)
+  for _, b in ipairs(fakeButtons) do
+    b:Hide()
+  end
+  for i = 1, n do
+    local b = fakeButtons[i]
+    if not b then
+      b = CreateFrame("Button", "LibDBIcon10_BastiansTest" .. i, Minimap)
+      b:SetSize(31, 31)
+      b:SetFrameStrata("MEDIUM")
+      b:SetFrameLevel(8)
+      local icon = b:CreateTexture(nil, "ARTWORK")
+      icon:SetSize(20, 20)
+      icon:SetPoint("CENTER")
+      icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+      icon:SetVertexColor(0.4 + 0.6 * ((i * 7) % 10) / 10, 0.4 + 0.6 * ((i * 3) % 10) / 10, 0.5)
+      local ring = b:CreateTexture(nil, "OVERLAY")
+      ring:SetSize(53, 53)
+      ring:SetPoint("TOPLEFT")
+      ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+      b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine("Test button " .. i)
+        GameTooltip:Show()
+      end)
+      b:SetScript("OnLeave", function()
+        GameTooltip:Hide()
+      end)
+      b:SetScript("OnClick", function()
+        say("test button %d clicked", i)
+      end)
+      fakeButtons[i] = b
+    end
+    local angle = math.rad(i * 360 / math.max(1, n))
+    b:ClearAllPoints()
+    b:SetPoint("CENTER", Minimap, "CENTER", 80 * math.cos(angle), 80 * math.sin(angle))
+    b:Show()
+  end
+  say("%d fake minimap buttons; hover the box's opener on Bastian's minimap", n)
+end
 
 local function command(msg)
   local cmd, arg = string.match(msg or "", "^%s*(%S*)%s*(.-)%s*$")
@@ -967,6 +1012,8 @@ local function command(msg)
     return
   elseif cmd == "all" then
     return runAll()
+  elseif cmd == "buttons" then
+    return makeFakeButtons(tonumber(arg) or 50)
   end
   recordMeta()
   local probes = {

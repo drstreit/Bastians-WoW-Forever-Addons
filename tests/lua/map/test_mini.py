@@ -586,14 +586,86 @@ def test_the_button_box_scales_with_its_width_and_scrolls_past_six_rows(wow: Wow
     assert wow.eval(f"{MB}.cols") == 9 and wow.eval(f"{MB}.rows") == 6
     cell = wow.eval(f"{MB}.SIZE + {MB}.GAP")
     assert wow.eval(f"{win}.grid:GetHeight()") == 4 + 6 * cell
-    # the window holds six rows: the header, the frame's inset, the grid, the hint
+    # the window holds six rows: the header, the frame's inset, the filter, the grid, the hint
     inset = 9 if wow.eval(f"{win}.framed") else 1
-    assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 4 + 6 * cell + 16 + 4
+    assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 26 + 4 + 6 * cell + 16 + 4
     # narrower: fewer columns, more rows, the window stays at six rows and the rest scrolls
     wow.execute(f"{win}.frame:SetWidth(150); {MB}.Layout()")
     assert wow.eval(f"{MB}.cols") == 4 and wow.eval(f"{MB}.rows") == 13
     assert wow.eval(f"{win}.grid:GetHeight()") == 4 + 13 * cell
-    assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 4 + 6 * cell + 16 + 4
+    assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 26 + 4 + 6 * cell + 16 + 4
     assert wow.eval(f"{win}.bar ~= nil") is True
     assert wow.eval(f"{win}.title.wordWrap") is False
+    assert wow.errors == []
+
+
+def test_a_rim_button_keeps_the_angle_it_was_dragged_to(wow: WowRuntime):
+    """ "you can drag them, but they lasso back to the original point":
+    a button on the rim takes our drag, its angle is kept per button and survives a reload."""
+    boot(wow)
+    wow.execute(
+        """B1 = CreateFrame("Button", "AlphaAddonMinimapButton", MinimapCluster)
+        B1:SetSize(31, 31); B1:SetPoint("TOPLEFT", MinimapCluster, "TOPLEFT", 10, -10)
+        B1.ownDrags = 0
+        B1:SetScript("OnDragStart", function(self) self.ownDrags = self.ownDrags + 1 end)"""
+    )
+    opener = "BastiansMiniMap.boxButton"
+    wow.execute(f"{opener}:GetScript('OnEnter')({opener})")
+    wow.execute("Mock.ctrl = true; B1:Click(); Mock.ctrl = false")
+    assert wow.eval("B1:GetParent() == BastiansMiniMap") is True
+    r = wow.eval(f"{MB}.RimRadius()")
+    k = 28 / 31
+    # a drag to the right of the view's centre: angle 0, on the rim's right
+    wow.execute(
+        f"""local view = {MINI}.View()
+        local vx, vy = view:GetCenter()
+        local s = view:GetEffectiveScale()
+        Mock.cursorX, Mock.cursorY = (vx + 100) * s, vy * s
+        B1:GetScript("OnDragStart")(B1)
+        B1:GetScript("OnUpdate")(B1, 0.05)
+        B1:GetScript("OnDragStop")(B1)"""
+    )
+    assert wow.eval("B1.ownDrags") == 0  # the button's own drag stays out while on the rim
+    assert round(wow.eval(f"{MOD}.db.profile.buttonAngles.AlphaAddonMinimapButton")) == 0
+    assert rim_point(wow, "B1")[2:] == (round(r / k), 0)
+    # an addon putting it back is undone to the dragged place, not the default slot
+    wow.execute('B1:SetPoint("CENTER", Minimap, "CENTER", 0, 0)')
+    wow.run_frames(2)
+    assert rim_point(wow, "B1")[2:] == (round(r / k), 0)
+    # the angle survives a reload; into the box, the button's own drag is back
+    fresh = wow.reload()
+    fresh.execute(f"{opener}:GetScript('OnEnter')({opener})")
+    assert fresh.eval(f"{MOD}.db.profile.buttonAngles.AlphaAddonMinimapButton") == 0
+    fresh.execute(f"{MB}.AllIntoBox()")
+    assert fresh.eval(f"{MOD}.db.profile.buttonAngles") is None
+    assert fresh.errors == []
+
+
+def test_the_button_box_filters_by_name_as_you_type(wow: WowRuntime):
+    """ "a real time text filter on top of the minimap button window"."""
+    boot(wow)
+    wow.execute(
+        """for i = 1, 30 do
+          local b = CreateFrame("Button", "LibDBIcon10_Addon" .. i, Minimap)
+          b:SetSize(31, 31)
+        end
+        local b = CreateFrame("Button", "LibDBIcon10_BugSack", Minimap)
+        b:SetSize(31, 31)"""
+    )
+    opener = "BastiansMiniMap.boxButton"
+    wow.execute(f"{opener}:GetScript('OnEnter')({opener})")
+    win = f"{MB}.Window()"
+    assert wow.eval(f"{MB}.rows") == 4  # 31 buttons in 9 columns
+    wow.execute(
+        f"{win}.filter:SetText('bug'); {win}.filter:GetScript('OnTextChanged')({win}.filter)"
+    )
+    assert wow.eval(f"{MB}.rows") == 1
+    assert wow.eval("LibDBIcon10_BugSack:IsShown()") is True
+    assert wow.eval("LibDBIcon10_Addon7:IsShown()") is False
+    wow.execute(
+        f"{win}.filter:SetText('addon1'); {win}.filter:GetScript('OnTextChanged')({win}.filter)"
+    )
+    assert wow.eval(f"{MB}.rows") == 2  # Addon1 and Addon10 to Addon19
+    wow.execute(f"{win}.filter:SetText(''); {win}.filter:GetScript('OnTextChanged')({win}.filter)")
+    assert wow.eval(f"{MB}.rows") == 4 and wow.eval("LibDBIcon10_Addon7:IsShown()") is True
     assert wow.errors == []

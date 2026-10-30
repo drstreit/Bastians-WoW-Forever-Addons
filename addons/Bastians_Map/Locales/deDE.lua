@@ -182,6 +182,7 @@ ns.L:Register("deDE", {
   ["Square"] = "Eckig",
   ["Recentre on you"] = "Wieder auf dich zentrieren",
   ["Search ..."] = "Suchen ...",
+  ["Filter the buttons by name"] = "Buttons nach Namen filtern",
   ["The addons' minimap buttons"] = "Die Minikarten-Knöpfe der Addons",
   ["Minimap buttons"] = "Minikarten-Knöpfe",
   ["Bastian's minimap in place of the game's (search, styles, layers, the button box)"] = "Bastians Minikarte statt der des Spiels (Suche, Stile, Ebenen, die Knopfbox)",

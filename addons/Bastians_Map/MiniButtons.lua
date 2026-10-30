@@ -142,6 +142,7 @@ end
 
 MB.HOVER_GRACE = 0.4 -- seconds the box stays after the mouse left it and its button
 MB.HINT_H = 16
+MB.FILTER_H = 26 -- the filter box above the grid
 
 local function build()
   win = B.UI.Window("BastiansMiniButtons", {
@@ -164,9 +165,24 @@ local function build()
   win.hint:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", -MB.GAP, 3)
   win.hint:SetJustifyH("LEFT")
   win.hint:SetText(L["Ctrl+click: put a button on the map, or back into the box."])
+  -- a live filter by name on top
+  win.filter = S.search(win.content, L["Filter the buttons by name"])
+  win.filter:SetPoint("TOPLEFT", win.content, "TOPLEFT", MB.GAP, -2)
+  win.filter:SetPoint("TOPRIGHT", win.content, "TOPRIGHT", -MB.GAP, -2)
+  win.filter:SetScript("OnTextChanged", function(self)
+    local text = self:GetText() or ""
+    if text == "" then
+      self.hint:Show()
+      self.clear:Hide()
+    else
+      self.hint:Hide()
+      self.clear:Show()
+    end
+    MB.Layout()
+  end)
   -- the grid in a scroll frame: the window grows to MAX_ROWS, more rows scroll
   win.scroll = CreateFrame("ScrollFrame", nil, win.content)
-  win.scroll:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, 0)
+  win.scroll:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, -MB.FILTER_H)
   win.scroll:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", -16, MB.HINT_H + 4)
   win.grid = CreateFrame("Frame", nil, win.scroll)
   win.grid:SetSize(100, 1)
@@ -273,8 +289,88 @@ local function setLayer(f, strata, level, fixedStrata, fixedLevel)
   end
 end
 
+-- A button on the rim keeps the angle the player dragged it to ("you
+-- can drag them, but they lasso back"): `profile.buttonAngles[key]`, degrees around the view.
+local function angles(create)
+  local p = db()
+  if type(p.buttonAngles) ~= "table" then
+    if not create then
+      return {}
+    end
+    p.buttonAngles = {}
+  end
+  return p.buttonAngles
+end
+
+-- The point on the rim at `degrees`: on the circle, or on the square's edge.
+local function rimPoint(degrees, r)
+  local a = math.rad(degrees)
+  local c, s = math.cos(a), math.sin(a)
+  if ns.Mini.Shape() ~= "ROUND" then
+    local m = math.max(math.abs(c), math.abs(s))
+    c, s = c / m, s / m
+  end
+  return r * c, r * s
+end
+
+local function rimAngle(entry, i)
+  local a = angles()[entry.key]
+  return type(a) == "number" and a or MB.RIM_ANGLES[(i - 1) % #MB.RIM_ANGLES + 1]
+end
+
+-- Our drag replaces the button's own while it is on the rim (LibDBIcon's and the launcher's move
+-- it around the game's minimap, which the rim then undid: the lasso).
+local function wrapDrag(entry)
+  local f = entry.frame
+  if f.bastiansRimDrag or not f.GetScript then
+    return
+  end
+  f.bastiansRimDrag = { start = f:GetScript("OnDragStart"), stop = f:GetScript("OnDragStop") }
+  f:SetScript("OnDragStart", function(self)
+    self:SetScript("OnUpdate", function(me)
+      local _, view = hostOf("map")
+      local vx, vy, s
+      if view then
+        vx, vy = view:GetCenter()
+        s = view:GetEffectiveScale()
+      end
+      if not (vx and vy and s and s > 0) then
+        return
+      end
+      local cx, cy = GetCursorPosition()
+      local degrees = math.deg(math.atan2(cy / s - vy, cx / s - vx))
+      angles(true)[entry.key] = degrees
+      local x, y = rimPoint(degrees, MB.RimRadius())
+      local scale = me.GetScale and me:GetScale() or 1
+      me:ClearAllPoints()
+      me:SetPoint("CENTER", view, "CENTER", x / scale, y / scale)
+    end)
+  end)
+  f:SetScript("OnDragStop", function(self)
+    self:SetScript("OnUpdate", nil)
+    MB.Layout()
+  end)
+  if f.RegisterForDrag then
+    f:RegisterForDrag("LeftButton")
+  end
+end
+
+local function unwrapDrag(entry)
+  local f = entry.frame
+  local own = f.bastiansRimDrag
+  if own then
+    f:SetScript("OnDragStart", own.start)
+    f:SetScript("OnDragStop", own.stop)
+    f.bastiansRimDrag = nil
+    if f.RegisterForDrag then
+      f:RegisterForDrag()
+    end
+  end
+end
+
 local function restore(entry)
   local f, st = entry.frame, entry.state
+  unwrapDrag(entry)
   f:SetParent(st.parent)
   local layer = st.layer or {}
   setLayer(f, layer.strata, layer.level, layer.fixedStrata, layer.fixedLevel)
@@ -329,14 +425,10 @@ local function layRim()
   local r = MB.RimRadius()
   for i, entry in ipairs(homed("map")) do
     if host and view then
-      local a = math.rad(MB.RIM_ANGLES[(i - 1) % #MB.RIM_ANGLES + 1])
-      local c, s = math.cos(a), math.sin(a)
-      if ns.Mini.Shape() ~= "ROUND" then
-        local m = math.max(math.abs(c), math.abs(s))
-        c, s = c / m, s / m
-      end
+      local x, y = rimPoint(rimAngle(entry, i), r)
       local level = (view:GetFrameLevel() or 1) + MB.RIM_LEVEL
-      lay(entry, host, host:GetFrameStrata(), level, view, r * c, r * s, "CENTER")
+      lay(entry, host, host:GetFrameStrata(), level, view, x, y, "CENTER")
+      wrapDrag(entry)
     else
       restore(entry)
     end
@@ -350,7 +442,17 @@ function MB.Layout()
   if not win then
     return
   end
-  local list = homed("box")
+  -- the live filter by name: the others stay hidden until it clears
+  local needle = string.lower(win.filter and win.filter:GetText() or "")
+  local list = {}
+  for _, entry in ipairs(homed("box")) do
+    unwrapDrag(entry)
+    if needle == "" or string.find(string.lower(entry.name or ""), needle, 1, true) then
+      list[#list + 1] = entry
+    else
+      entry.frame:Hide()
+    end
+  end
   local cols = MB.Columns()
   laying = true
   for i, entry in ipairs(list) do
@@ -367,7 +469,7 @@ function MB.Layout()
   win.grid:SetSize(math.max(1, win.scroll:GetWidth() or 100), gridHeight)
   -- the chrome: the header and the frame's inset top and bottom (the game's frames, ADR 0034)
   local inset = win.framed and win.FRAME_INSET or 1
-  win.frame:SetHeight(30 + 2 * inset + shown + MB.HINT_H + 4)
+  win.frame:SetHeight(30 + 2 * inset + MB.FILTER_H + shown + MB.HINT_H + 4)
   win.bar.SetTotal(gridHeight)
   MB.cols, MB.rows = cols, rows
 end
@@ -421,6 +523,7 @@ function MB.AllIntoBox()
     return false
   end
   db().buttonHomes = nil
+  db().buttonAngles = nil
   MB.Layout()
   return true
 end
@@ -516,7 +619,8 @@ function MB.Open(anchor)
   watcher = watcher or CreateFrame("Frame", nil, win.frame)
   local away = 0
   watcher:SetScript("OnUpdate", function(me, elapsed)
-    if win.frame:IsMouseOver() or (anchor and anchor:IsMouseOver()) then
+    local typing = win.filter and win.filter.HasFocus and win.filter:HasFocus()
+    if win.frame:IsMouseOver() or (anchor and anchor:IsMouseOver()) or typing then
       away = 0
       return
     end

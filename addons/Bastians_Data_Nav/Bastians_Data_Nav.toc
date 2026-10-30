@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\Bastians_Data_Nav\Icon
 ## Notes: Generated routing graph for Bastian's Route (loads at startup).
 ## Author: Bastian
-## Version: 1.1.0
+## Version: 1.1.1
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

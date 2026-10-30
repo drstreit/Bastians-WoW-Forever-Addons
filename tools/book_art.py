@@ -28,7 +28,9 @@ ADDON = "Bastians_Data_Strategies"
 # the book's own pages (the title page, What's new, the index, the bookmarks): fixed pictures,
 # approved by , not drawn from a page's scene by AHSync
 FRONT = CONTENT / "art" / "front"
-FRONT_IDS = frozenset({"title", "news", "index", "bookmarks"})
+FRONT_IDS = frozenset(
+    {"title", "news", "search", "bookmarks"}
+)  # search replaced index (30.10.2026)
 ART_DIR = Path("Generated") / "Art"
 SOURCES = (".jpg", ".png")
 GAME_SIZE = (512, 256)
@@ -205,7 +207,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("art", type=Path, help="the folder of the pictures (the export's art/)")
     ap.add_argument("--packs", type=Path, default=PACKS)
     args = ap.parse_args(argv)
-    done = install(args.art, args.packs)
+    done = install(args.art, args.packs, front=FRONT)  # the book's own pages too, as the daily run
     print(f"book art: {len(done)} pictures in {args.packs / ADDON / ART_DIR}")
     return 0
 

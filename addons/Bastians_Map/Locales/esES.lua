@@ -181,6 +181,7 @@ local strings = {
   ["Square"] = "Cuadrado",
   ["Recentre on you"] = "Volver a centrar en ti",
   ["Search ..."] = "Buscar ...",
+  ["Filter the buttons by name"] = "Filtrar los botones por nombre",
   ["The addons' minimap buttons"] = "Los botones de minimapa de los addons",
   ["Minimap buttons"] = "Botones del minimapa",
   ["Bastian's minimap in place of the game's (search, styles, layers, the button box)"] = "El minimapa de Bastian en lugar del del juego (búsqueda, estilos, capas, la caja de botones)",

@@ -181,6 +181,7 @@ ns.L:Register("zhTW", {
   ["Square"] = "方形",
   ["Recentre on you"] = "重新置中於你",
   ["Search ..."] = "搜尋...",
+  ["Filter the buttons by name"] = "按名稱篩選按鈕",
   ["The addons' minimap buttons"] = "插件的小地圖按鈕",
   ["Minimap buttons"] = "小地圖按鈕",
   ["Bastian's minimap in place of the game's (search, styles, layers, the button box)"] = "以 Bastian's 小地圖取代遊戲小地圖（搜尋、樣式、圖層、按鈕盒）",

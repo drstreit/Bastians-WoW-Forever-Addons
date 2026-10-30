@@ -321,8 +321,10 @@ SlashCmdList.BASTIANSSTRATEGIES = function(msg)
   local cmd = string.lower(strtrim(msg or ""))
   if cmd == "" then
     Window.Toggle()
-  elseif cmd == "contents" or cmd == "index" or cmd == "bookmarks" or cmd == "title" then
+  elseif cmd == "contents" or cmd == "bookmarks" or cmd == "title" then
     Window.Show({ kind = cmd })
+  elseif cmd == "search" or cmd == "index" then
+    Window.Show({ kind = "search", id = "" }) -- the search page took the index's place (30.10.2026)
   elseif cmd == "news" then
     Window.Show({ kind = "title" })
   elseif cmd == "web" then

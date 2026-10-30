@@ -25,6 +25,10 @@ local strings = {
 
   -- Window.lua
   ["Search the book"] = "Buscar en el libro",
+  ["Search"] = "Buscar",
+  ["Every page of the book by its words."] = "Cada página del libro por sus palabras.",
+  ["Type a word above: every page, place, item and creature of the book."] = "Escribe una palabra arriba: cada página, lugar, objeto y criatura del libro.",
+  ["The back shelf: %d older pages; search the book to find them"] = "La estantería del fondo: %d páginas más antiguas; la búsqueda en el libro las encuentra",
   ["Nothing in the book about that."] = "El libro no dice nada de eso.",
   ['%d pages with "%s"'] = '%d páginas con "%s"',
   ["price unknown"] = "precio desconocido",

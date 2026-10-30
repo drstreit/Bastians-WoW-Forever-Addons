@@ -25,6 +25,10 @@ ns.L:Register("koKR", {
 
   -- Window.lua
   ["Search the book"] = "책 검색",
+  ["Search"] = "검색",
+  ["Every page of the book by its words."] = "책의 모든 페이지를 낱말로 찾습니다.",
+  ["Type a word above: every page, place, item and creature of the book."] = "위에 낱말을 입력하세요: 책의 모든 페이지, 장소, 아이템과 생물.",
+  ["The back shelf: %d older pages; search the book to find them"] = "뒤쪽 책장: 오래된 페이지 %d개; 책 검색으로 찾을 수 있습니다",
   ["Nothing in the book about that."] = "책에 그에 대한 내용이 없습니다.",
   ['%d pages with "%s"'] = '페이지 %d개: "%s"',
   ["price unknown"] = "가격 알 수 없음",

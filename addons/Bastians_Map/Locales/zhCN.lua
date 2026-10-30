@@ -181,6 +181,7 @@ ns.L:Register("zhCN", {
   ["Square"] = "方形",
   ["Recentre on you"] = "重新以你为中心",
   ["Search ..."] = "搜索 ...",
+  ["Filter the buttons by name"] = "按名称筛选按钮",
   ["The addons' minimap buttons"] = "插件的小地图按钮",
   ["Minimap buttons"] = "小地图按钮",
   ["Bastian's minimap in place of the game's (search, styles, layers, the button box)"] = "用 Bastian's 小地图取代游戏的(搜索、样式、图层、按钮盒)",

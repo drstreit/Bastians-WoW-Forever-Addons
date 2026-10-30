@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\Bastians_Core\Icon
 ## Notes: Module system, message bus, registries, settings hub and UI kit for the Bastian's suite.
 ## Author: Bastian
-## Version: 1.1.0
+## Version: 1.1.1
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB

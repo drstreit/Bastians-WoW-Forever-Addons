@@ -31,6 +31,9 @@ class SourcePaths:
     addons: Path | None = None  # WoW Interface/AddOns folder with the source addons
     cmangos: Path | None = None  # CMaNGOS classic-db checkout or its Full_DB/*.sql.gz
     probe: Path | None = None  # a Bastians_Probe dump (data/probe/*.lua)
+    # ForeverDB's Dungeons.lua for a client whose AddOns lack it: the retail test client shows
+    # Forever's dungeons
+    dungeons: Path | None = None
     taxi: Path | None = None  # a clientdump TaxiNodes JSON (client-extraction.md)
     dumps: Path | None = (
         None  # folder with <prefix>_UiMap.json, _UiMapAssignment.json, _TaxiNodes.json
@@ -194,6 +197,11 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.source_names.append(f"ItemDB {s.idb.version or '?'} ({s.idb.flavor})")
             if s.build == "unknown" and s.idb.build:
                 s.build = s.idb.build
+    if not s.fdb_dungeons and paths.dungeons and paths.dungeons.is_file():
+        s.fdb_dungeons = foreverdb.read_dungeons(paths.dungeons)
+        s.source_names.append(
+            "ForeverDB Dungeons.lua (Forever's dungeons, for tests on this client)"
+        )
     if paths.cmangos:
         dump_path = find_dump(paths.cmangos)
         tables = cmangos.read_tables(dump_path)
