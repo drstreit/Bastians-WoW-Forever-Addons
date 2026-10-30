@@ -14,8 +14,10 @@ Usage: python tools/site_deploy.py [--overlay <dir>] [--list] [--setup] [--previ
   --preview  deploy to the preview branch: a private-looking address, not bastians.dev
 
 The account id and the API token come from CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, else
-from ~/.cloudflare/.cloudflare-secret (ACCOUNT_ID=..., API_TOKEN=...). Never from the repo. The
-upload runs wrangler through npx, pinned below.
+from ~/.cloudflare/.cloudflare-secret: ACCOUNT_ID_BASTIAN=... (the owner's Bastian account, where
+the Pages project and the zone live; the owner's 1vo5 account in the same file is never used here)
+and API_TOKEN=... (a token of that account). Never from the repo. Before wrangler runs, the token
+is checked against the account (check_account). The upload runs wrangler through npx, pinned below.
 """
 
 from __future__ import annotations
@@ -75,7 +77,13 @@ def read_secrets(path: Path = SECRETS, environ: dict | None = None) -> tuple[str
             key, sep, value = line.partition("=")
             if sep and not key.strip().startswith("#"):
                 values[key.strip()] = value.strip().strip('"').strip("'")
-    account = environ.get("CLOUDFLARE_ACCOUNT_ID") or values.get("ACCOUNT_ID")
+    # the owner has two Cloudflare accounts, Bastian's and 1vo5's, never to be mixed (30.10.2026):
+    # the site reads the Bastian line; the plain ACCOUNT_ID stays for an older file
+    account = (
+        environ.get("CLOUDFLARE_ACCOUNT_ID")
+        or values.get("ACCOUNT_ID_BASTIAN")
+        or values.get("ACCOUNT_ID")
+    )
     token = environ.get("CLOUDFLARE_API_TOKEN") or values.get("API_TOKEN")
     if not account or not token:
         raise SiteError(f"no Cloudflare account id or token (environment or {path})")
@@ -219,10 +227,28 @@ def deploy(folder: Path, branch: str, account: str, token: str) -> int:
     return subprocess.run(cmd, env=env, check=False).returncode
 
 
+def check_account(account: str, token: str, call=None) -> None:
+    """The token must reach the account that owns the Pages project (30.10.2026: a token of the
+    owner's other Cloudflare account made wrangler fail with "Authentication error [10000]" and
+    nothing said which side was wrong)."""
+    call = call or api
+    resp = call(token, "GET", f"/accounts/{account}")
+    if resp.get("success"):
+        return
+    if denied(resp):
+        raise SiteError(
+            f"the API token cannot reach the Cloudflare account {account}: it belongs to another "
+            f"account or lacks Account Settings: Read. ACCOUNT_ID and API_TOKEN in {SECRETS} must "
+            f"come from the one account that owns the Pages project {PROJECT!r}"
+        )
+    raise SiteError(f"reading the Cloudflare account failed: {resp.get('errors')}")
+
+
 def publish(overlay: Path | None = None, preview: bool = False) -> int:
     """Deploys site/ with the overlay (production, or the preview branch). -> wrangler's exit."""
     files = site_files(overlay)
     account, token = read_secrets()
+    check_account(account, token)
     with tempfile.TemporaryDirectory(prefix="bastians-site-") as tmp:
         stage(files, Path(tmp))
         return deploy(Path(tmp), "preview" if preview else "main", account, token)

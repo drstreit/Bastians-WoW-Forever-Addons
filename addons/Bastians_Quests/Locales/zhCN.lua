@@ -106,6 +106,7 @@ ns.L:Register("zhCN", {
   ["Target of"] = "目标于",
   ["Starts quests"] = "开始任务",
   ["Ends quests"] = "结束任务",
+  ["Dungeon quests"] = "地下城任务",
   ["Needed for quests"] = "任务所需",
   ["Status"] = "状态",
   ["Given by"] = "发布者",

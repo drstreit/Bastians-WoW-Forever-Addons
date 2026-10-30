@@ -106,7 +106,7 @@ def test_the_parts_follow_what_the_apps_declare(wow: WowRuntime):
     assert wow.eval("Bastians.Compat.IsAddOnEnabled('Bastians_Data_Items')") is False
     assert wow.eval("Bastians.Compat.IsAddOnEnabled('Bastians_Data_Quests')") is True
     assert wow.eval("Bastians.Compat.IsAddOnEnabled('Nope')") is False
-    wow.execute("Bastians.UI.Hub.Open('Core')")
+    wow.execute("Bastians.UI.Hub.Open('suite')")
     assert (
         f"Bastians_Data_Items: Needed by {items_needed_by(wow)}. "
         "Switched off in the AddOns list at character select." in labels(wow)
@@ -148,7 +148,7 @@ def test_the_login_says_missing_parts_and_the_optional_addons_once_per_update(wo
 def test_the_general_page_and_the_app_pages_tell_this_clients_story(wow: WowRuntime):
     boot(wow)
     wow.execute("Mock.addons['QuestieDB'] = nil; Mock.addons['Bastians_Map_Art'] = nil")
-    wow.execute("Bastians.UI.Hub.Open('Core')")
+    wow.execute("Bastians.UI.Hub.Open('suite')")  # the Suite page holds the lists (30.10.2026)
     texts = labels(wow)
     name = CLIENT_NAME[wow.client]
     parts = texts.index(f"Bastian's addons for {name}")
@@ -169,7 +169,7 @@ def test_the_general_page_and_the_app_pages_tell_this_clients_story(wow: WowRunt
     says = any(t.startswith("QuestieDB is not installed") for t in quests)
     assert says is (wow.client == "forever")
     # a required part missing: the page says MISSING with the client's files
-    wow.execute("Mock.addons['Bastians_Data_Items'] = nil; Bastians.UI.Hub.Open('Core')")
+    wow.execute("Mock.addons['Bastians_Data_Items'] = nil; Bastians.UI.Hub.Open('suite')")
     assert (
         f"Bastians_Data_Items: Needed by {items_needed_by(wow)}. MISSING: install the {name} files."
         in labels(wow)

@@ -1257,6 +1257,26 @@ local function registerSections(mod)
       return questRows("quest.byEnder", ref, true)
     end,
   })
+  -- a dungeon's quests (data.md "Dungeons"): the ones ForeverDB confirmed in Forever, under
+  -- the status headers, so the page says which to pick up before the run
+  B:RegisterDetailSection(mod, {
+    id = "quests.dungeon",
+    title = L["Dungeon quests"],
+    types = { "dungeon" },
+    order = 25,
+    invalidateOn = INVALIDATE,
+    build = function(ref)
+      local _, id = B.Entity.Parse(ref)
+      return questRows("quest.byDungeon", id, true)
+    end,
+    tooltip = {
+      max = 3,
+      build = function(ref)
+        local _, id = B.Entity.Parse(ref)
+        return questRows("quest.byDungeon", id)
+      end,
+    },
+  })
   B:RegisterDetailSection(mod, {
     id = "quests.needed",
     title = L["Needed for quests"],

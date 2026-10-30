@@ -157,6 +157,83 @@ B.SUITE_ADDONS = {
   "Bastians_Notes",
 }
 
+-- The apps of the suite in the Suite page's order ("a first page where you can
+-- toggle all addons", "a short explanation page for each"): the folder, the module name, the
+-- slash command, the clients it ships for and what it does in one sentence a newcomer
+-- understands. Core holds the words, so the page can describe an app that is not installed.
+B.APPS = {
+  {
+    addon = "Bastians_Quests",
+    module = "Quests",
+    slash = "/bq",
+    about = L["Every quest: what to do next here and at your level, chains and attunements, your log as a tracker, the quest text read aloud with Spoken."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    addon = "Bastians_Map",
+    module = "Map",
+    slash = "/bmap",
+    about = L["One seamless map of the world with every app's layers: quests, NPCs, nodes, notes and routes; the minimap in a frame of its own."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    addon = "Bastians_Browser",
+    module = "Browser",
+    slash = "/bb",
+    about = L["Every NPC, item, quest, object, zone and dungeon on a page of its own, and a search that finds anything by name."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    addon = "Bastians_Gold",
+    module = "Gold",
+    slash = "/bgold",
+    clients = { forever = true },
+    about = L["Auction house prices, your income, what things are worth, and how to earn gold with the time you have."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    addon = "Bastians_Route",
+    module = "Route",
+    slash = "/broute",
+    about = L["A route to any place: a step list with times, a dotted line on the map and the minimap, flights and boats included."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    addon = "Bastians_Strategies",
+    module = "Strategies",
+    slash = "/bbook",
+    clients = { forever = true },
+    about = L["Bastian's book of gold rumours: strategies from the travellers, checked against live prices, read in game."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    addon = "Bastians_Notes",
+    module = "Notes",
+    slash = "/bnotes",
+    about = L["Your own notes and lists with places on the map, reminders, and sharing with your party."],
+  },
+  {
+    addon = "Bastians_Data",
+    module = "Data",
+    about = L["The game data behind every app: quests, NPCs, items, places and prices, updated daily. Required."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+}
+
+-- The apps of this client (an app that ships for another client only is not listed here).
+function Settings_.Apps()
+  local out = {}
+  for _, app in ipairs(B.APPS) do
+    if not app.clients or app.clients[B.Client] then
+      out[#out + 1] = app
+    end
+  end
+  return out
+end
+
+-- The suite's words about an app, by its folder; nil for a module that is no app of the suite.
+function Settings_.AppOf(addon)
+  for _, app in ipairs(B.APPS) do
+    if app.addon == addon then
+      return app
+    end
+  end
+  return nil
+end
+
 local function exists(addon)
   return C_AddOns.DoesAddOnExist(addon) and true or false
 end
@@ -367,6 +444,32 @@ end
 -- Core's module: profiles, tooltip lines, font, debug, load-on-demand switches
 -- ---------------------------------------------------------------------------------------------
 
+-- The skin choice: the frames follow the skin, then stay free;
+-- Blizzard also takes the gold scheme and the game's own type (not on a CJK client, which keeps
+-- its font), both free to change after. `fromSelect` when the select wrote the value already.
+function Settings_.ChooseSkin(mod, id, fromSelect)
+  local p = mod.db.profile
+  if not fromSelect then
+    p.skin = id
+  end
+  p.skinFrames = id ~= "modern"
+  if id == "blizzard" then
+    p.theme = "blizzard"
+    S.ApplyTheme("blizzard")
+    if not S.CJK then
+      p.font = S.BLIZZARD_FONT
+      S.applyFont()
+    end
+  end
+  S.ApplySkin()
+  if not fromSelect then
+    B:Fire("BASTIANS_SETTING_CHANGED", mod.name, "skin", id)
+    if B.UI.Hub then
+      B.UI.Hub.Refresh() -- the select and the switches show the new choice
+    end
+  end
+end
+
 local function profileValues()
   local values = {}
   for _, name in ipairs(B:GetProfiles()) do
@@ -394,7 +497,7 @@ ns.core = B:NewModule("Core", {
       windowAlpha = 100, -- the windows' opacity in percent (R27.2); windowColor nil: the theme's
       -- the skin (ADR 0034): Modern or Azeroth, the game's window frames, the content switches
       skin = "modern",
-      skinFrames = false,
+      skinFrames = true, -- the game's frames are the standard
       rowPortraits = true,
       placeCuts = true,
       diorama = true,
@@ -403,6 +506,7 @@ ns.core = B:NewModule("Core", {
       lod = {},
       minimap = { hide = false, angle = 200 },
       hub = {},
+      welcome = {}, -- the welcome window
       omnibox = {},
       omniboxTree = {},
     },
@@ -433,18 +537,38 @@ ns.core = B:NewModule("Core", {
       end,
     },
     -- every look setting of the suite in one section; every addon
-    -- follows it
+    -- follows it. Two buttons on top ("a wow theme button, full wow theme with
+    -- font and background everywhere"): the full WoW look, and the Modern look back.
     { type = "header", label = L["Skin (every Bastian's addon)"] },
+    {
+      type = "execute",
+      label = L["Use the full WoW look"],
+      desc = L["The game's frames and background, the gold scheme and its type on every window."],
+      func = function(mod)
+        Settings_.ChooseSkin(mod, "blizzard")
+      end,
+    },
+    {
+      type = "execute",
+      label = L["Use the Modern look"],
+      desc = L["The flat look: the frames off, the scheme and the type stay as chosen."],
+      func = function(mod)
+        Settings_.ChooseSkin(mod, "modern")
+      end,
+    },
     {
       type = "select",
       key = "skin",
       label = L["Skin"],
       values = function()
-        return { modern = L["Modern (flat)"], azeroth = L["Azeroth (the game's look)"] }
+        return {
+          modern = L["Modern (flat)"],
+          azeroth = L["Azeroth (the game's look)"],
+          blizzard = L["Blizzard (the game's frames, gold and type)"],
+        }
       end,
       set = function(id, mod)
-        mod.db.profile.skinFrames = id == "azeroth" -- the frames follow the skin, then stay free
-        S.ApplySkin()
+        Settings_.ChooseSkin(mod, id, true)
       end,
     },
     { type = "toggle", key = "skinFrames", label = L["The game's window frames"], set = S.ApplySkin },
@@ -507,6 +631,18 @@ ns.core = B:NewModule("Core", {
       end,
       set = function(on, mod)
         mod.db.profile.minimap.hide = on and true or false
+      end,
+    },
+    {
+      -- the options window as a minimap button of its own, on by default
+      type = "toggle",
+      key = "minimapHub",
+      label = L["Its own minimap button for the options"],
+      get = function()
+        return not B.UI.Launcher.AppSettings("Options").hide
+      end,
+      set = function(on)
+        B.UI.Launcher.SetAppButton("Options", on)
       end,
     },
     { type = "range", key = "tooltipLines", label = L["Extra tooltip lines"], min = 0, max = 10, step = 1 },
@@ -729,8 +865,75 @@ local function widgetFor(canvas, option, mod)
   return Wd.Note(canvas, ("unknown option type %s"):format(tostring(kind)), S.C.warn)
 end
 
+-- "Open <app>": the app's window from the hub, so nobody needs its slash command
+local function openRow(canvas, mod)
+  local row = CreateFrame("Frame", nil, canvas)
+  row:SetHeight(24)
+  row.button = S.button(row, L["Open %s"]:format(mod.title), 160, 22)
+  row.button.tip = L["Opens the window of this app."]
+  row.button:SetPoint("LEFT", 0, 0)
+  row.button:SetScript("OnClick", function()
+    if mod:IsEnabled() then
+      mod.def.open()
+    else
+      B:Say(L["%s is switched off."], mod.title)
+    end
+  end)
+  return row
+end
+
+-- "Its own minimap button", on by default
+local function minimapRow(canvas, mod)
+  local mm = Wd.Checkbox(canvas, L["Its own minimap button"], function(on)
+    B.UI.Launcher.SetAppButton(mod.name, on)
+  end)
+  mm:SetChecked(not B.UI.Launcher.AppSettings(mod.name).hide)
+  return mm
+end
+
+-- The app's switch: on or off at runtime, the others keep working (CLAUDE.md golden rule 4)
+local function switchRow(canvas, mod, label, rerender)
+  local switch = Wd.Checkbox(canvas, label, function(on)
+    if on then
+      mod:Enable()
+    else
+      mod:Disable()
+    end
+    rerender()
+  end)
+  switch:SetChecked(mod:IsSwitchOn())
+  return switch
+end
+
+-- An app's own window colour and opacity ("an option to colour/transparency
+-- each window"): written to the app's profile, nil means the General setting for every window.
+local function windowLookRows(canvas, mod)
+  local p = mod.db and mod.db.profile
+  if not p then
+    return {}
+  end
+  local color = Wd.Color(canvas, L["Window background"], function()
+    return p.windowColor
+  end, function(value)
+    p.windowColor = value
+    B.UI.ApplyWindowLook()
+  end, S.C.bg)
+  local core = ns.core.db.profile
+  local alpha = Wd.Slider(canvas, L["Window opacity (%)"], 20, 100, 5, function(v)
+    p.windowAlpha = v
+    B.UI.ApplyWindowLook()
+  end)
+  alpha:SetValue(tonumber(p.windowAlpha) or tonumber(core.windowAlpha) or 100, true)
+  return { color, alpha }
+end
+
 local function moduleRows(canvas, mod, depth)
   local widgets = {}
+  local app = depth == 0 and Settings_.AppOf(mod.def.addon)
+  if app then
+    -- what the app does, in one sentence
+    widgets[#widgets + 1] = Wd.Note(canvas, app.about .. (app.slash and ("  " .. app.slash) or ""), S.C.text)
+  end
   if not mod.def.noSwitch then
     local switch = Wd.Checkbox(
       canvas,
@@ -752,26 +955,11 @@ local function moduleRows(canvas, mod, depth)
     end
   end
   if depth == 0 and type(mod.def.open) == "function" then
-    -- the app's window from the hub, so nobody needs its slash command
-    local row = CreateFrame("Frame", nil, canvas)
-    row:SetHeight(24)
-    row.button = S.button(row, L["Open %s"]:format(mod.title), 160, 22)
-    row.button.tip = L["Opens the window of this app."]
-    row.button:SetPoint("LEFT", 0, 0)
-    row.button:SetScript("OnClick", function()
-      if mod:IsEnabled() then
-        mod.def.open()
-      else
-        B:Say(L["%s is switched off."], mod.title)
-      end
-    end)
-    widgets[#widgets + 1] = row
-    -- its own minimap button, on by default
-    local mm = Wd.Checkbox(canvas, L["Its own minimap button"], function(on)
-      B.UI.Launcher.SetAppButton(mod.name, on)
-    end)
-    mm:SetChecked(not B.UI.Launcher.AppSettings(mod.name).hide)
-    widgets[#widgets + 1] = mm
+    widgets[#widgets + 1] = openRow(canvas, mod)
+    widgets[#widgets + 1] = minimapRow(canvas, mod)
+    for _, w in ipairs(windowLookRows(canvas, mod)) do
+      widgets[#widgets + 1] = w
+    end
   end
   for _, addon in ipairs(missingOptional(mod)) do
     local what = companionWhat(addon)
@@ -790,9 +978,16 @@ local function moduleRows(canvas, mod, depth)
       widgets[#widgets + 1] = w
     end
   end
-  if mod == ns.core and depth == 0 then
-    -- what this client needs: every part
-    -- the installed apps need, installed or missing, and who needs it
+  return widgets
+end
+
+-- What this client needs: every part
+-- the installed apps need, installed or missing, and who needs it; then the companions of this
+-- client with their state. On the Suite page since
+-- 30.10.2026 (before: the General page).
+local function partsRows(canvas)
+  local widgets = {}
+  do
     widgets[#widgets + 1] =
       Wd.Header(canvas, string.format(L["Bastian's addons for %s"], Settings_.ClientName()))
     for _, p in ipairs(Settings_.Parts()) do
@@ -811,8 +1006,7 @@ local function moduleRows(canvas, mod, depth)
       widgets[#widgets + 1] =
         Wd.Note(canvas, ("%s:%s %s"):format(p.addon, who, state), p.installed and S.C.text or nil)
     end
-    -- the companions of this client with their state;
-    -- retail has none since TomTom left the list (29.10.2026)
+    -- retail has no companions since TomTom left the list (29.10.2026)
     local companions = Settings_.Companions()
     if #companions > 0 then
       widgets[#widgets + 1] =
@@ -829,6 +1023,73 @@ local function moduleRows(canvas, mod, depth)
         c.installed and S.C.text or nil
       )
     end
+  end
+  return widgets
+end
+
+-- The Suite page, the first page of the hub and the Blizzard panel's root:
+-- what the suite is, the welcome window, every app of this client with its words, its switch,
+-- its minimap button and its Open button (or why it is not there), then the parts and companions.
+function Settings_.SuiteRows(canvas)
+  local widgets = {}
+  local function rerender()
+    if B.UI.Hub and B.UI.Hub.win and canvas == B.UI.Hub.canvas then
+      B.UI.Hub.Refresh() -- the navigation says (off) too
+    else
+      Settings_.RenderSuite(canvas)
+    end
+  end
+  widgets[#widgets + 1] = Wd.Note(
+    canvas,
+    L["Bastian's Suite puts everything you look up while you play into one window and one map. Every app works on its own; together they link: a name on any page opens its page, its place on the map and the way there."], -- luacheck: ignore 631 (a locale key stays one literal)
+    S.C.text
+  )
+  local welcome = S.button(canvas, L["Show the welcome window"], 200, 20)
+  welcome.tip = L["The first-start window with the apps and the guidelines, any time."]
+  welcome:SetScript("OnClick", function()
+    if B.UI.Welcome then
+      B.UI.Welcome.Show()
+    end
+  end)
+  widgets[#widgets + 1] = welcome
+  for _, app in ipairs(Settings_.Apps()) do
+    local mod = ns.modules[app.module]
+    local installed = exists(app.addon)
+    local lodTitle = Settings_.LodApps()[app.addon]
+    widgets[#widgets + 1] = Wd.Header(canvas, mod and mod.title or app.module)
+    widgets[#widgets + 1] = Wd.Note(canvas, app.about .. (app.slash and ("  " .. app.slash) or ""))
+    if mod then
+      if not mod.def.noSwitch then
+        widgets[#widgets + 1] = switchRow(canvas, mod, L["Enabled"], rerender)
+      end
+      if type(mod.def.open) == "function" then
+        widgets[#widgets + 1] = openRow(canvas, mod)
+        widgets[#widgets + 1] = minimapRow(canvas, mod)
+      end
+      if mod.disabledByErrors then
+        widgets[#widgets + 1] =
+          Wd.Note(canvas, L["Disabled for this session after repeated errors. See /bastians log."], S.C.warn)
+      end
+    elseif installed and lodTitle then
+      -- a load-on-demand app that is not loaded: its load switch (core-contracts §2)
+      local switch = Wd.Checkbox(canvas, L["Load this addon"], function(on)
+        Settings_.SetLod(app.addon, on)
+        rerender()
+      end)
+      switch:SetChecked(Settings_.IsLodOn(app.addon))
+      widgets[#widgets + 1] = switch
+    elseif installed then
+      widgets[#widgets + 1] =
+        Wd.Note(canvas, L["Switched off in the AddOns list at character select."], S.C.warn)
+    else
+      widgets[#widgets + 1] = Wd.Note(
+        canvas,
+        string.format(L["Not installed. Install the %s files to add it."], Settings_.ClientName())
+      )
+    end
+  end
+  for _, w in ipairs(partsRows(canvas)) do
+    widgets[#widgets + 1] = w
   end
   return widgets
 end
@@ -855,13 +1116,7 @@ end
 
 -- Bastians.UI.Settings.Render(canvas, mod[, page]): (re)draws the module's page, or one of its own
 -- pages, into canvas.
-function Settings_.Render(canvas, mod, page)
-  for _, w in ipairs(canvas.widgets or {}) do
-    w:Hide()
-  end
-  canvas.mod = mod
-  canvas.page = page
-  local widgets = page and pageRows(canvas, mod, page) or moduleRows(canvas, mod, 0)
+local function layout(canvas, widgets)
   canvas.widgets = widgets
   local width = (canvas:GetWidth() or 0) - 24
   if width <= 100 then
@@ -882,32 +1137,61 @@ function Settings_.Render(canvas, mod, page)
   return y
 end
 
+function Settings_.Render(canvas, mod, page)
+  for _, w in ipairs(canvas.widgets or {}) do
+    w:Hide()
+  end
+  canvas.mod = mod
+  canvas.page = page
+  canvas.suite = nil
+  return layout(canvas, page and pageRows(canvas, mod, page) or moduleRows(canvas, mod, 0))
+end
+
+-- Bastians.UI.Settings.RenderSuite(canvas): the Suite page.
+function Settings_.RenderSuite(canvas)
+  for _, w in ipairs(canvas.widgets or {}) do
+    w:Hide()
+  end
+  canvas.mod = nil
+  canvas.page = nil
+  canvas.suite = true
+  return layout(canvas, Settings_.SuiteRows(canvas))
+end
+
 -- ---------------------------------------------------------------------------------------------
--- Blizzard panel: one parent "Bastians", one child per top-level module (sub-modules as sections)
--- and one per page a module declares (`pages`), right after the module's own
+-- Blizzard panel: the parent "Bastians" shows the Suite page; one child per top-level module
+-- (General for Core, sub-modules as sections) and one per page a module declares (`pages`)
 -- ---------------------------------------------------------------------------------------------
 
-local panels = {} -- module name, or "name:page" for a page -> { canvas, category }
+local panels = {} -- "Suite", a module name, or "name:page" for a page -> { canvas, category }
 local parentCategory
 
-local function panelFor(mod)
-  if panels[mod.name] or mod.parent then
+local function suitePanel()
+  if parentCategory then
     return
   end
   local canvas = CreateFrame("Frame", nil, UIParent)
   canvas:SetSize(600, 500)
   canvas:Hide()
   canvas:SetScript("OnShow", function(self)
+    Settings_.RenderSuite(self)
+  end)
+  parentCategory = B.Compat.RegisterSettingsCategory(canvas, "Bastians")
+  panels.Suite = { canvas = canvas, category = parentCategory }
+end
+
+local function panelFor(mod)
+  if panels[mod.name] or mod.parent then
+    return
+  end
+  suitePanel()
+  local canvas = CreateFrame("Frame", nil, UIParent)
+  canvas:SetSize(600, 500)
+  canvas:Hide()
+  canvas:SetScript("OnShow", function(self)
     Settings_.Render(self, mod)
   end)
-  local category
-  if not parentCategory then
-    parentCategory = B.Compat.RegisterSettingsCategory(canvas, "Bastians")
-    category = parentCategory
-    mod.isRootPanel = true
-  else
-    category = B.Compat.RegisterSettingsCategory(canvas, mod.title, parentCategory)
-  end
+  local category = B.Compat.RegisterSettingsCategory(canvas, mod.title, parentCategory)
   panels[mod.name] = { canvas = canvas, category = category }
   for _, page in ipairs(mod.def.pages or {}) do
     local pageCanvas = CreateFrame("Frame", nil, UIParent)
@@ -928,7 +1212,7 @@ function Settings_.Panels()
 end
 
 function Settings_.Open(mod, pageID)
-  local p = mod and (pageID and panels[mod.name .. ":" .. pageID] or panels[mod.name]) or panels["Core"]
+  local p = mod and (pageID and panels[mod.name .. ":" .. pageID] or panels[mod.name]) or panels.Suite
   if p then
     B.Compat.OpenSettings(p.category)
   end

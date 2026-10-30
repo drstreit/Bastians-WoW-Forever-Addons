@@ -74,7 +74,7 @@ def test_hub_shows_about_last_and_the_slash_command_opens_it(app: WowRuntime):
         for b in app.eval("Bastians.UI.Hub.nav:GetChildren()")
         if b.IsShown(b) and b.label is not None
     ]
-    assert labels[-1] == "About" and labels[0] == "General"
+    assert labels[-1] == "About" and labels[0] == "Bastian's Suite"
     widgets = list(app.eval("Bastians.UI.Hub.canvas.widgets").values())
     assert widgets[0].text.startswith("Bastian's WoW Forever addons")
     assert len(widgets) == len(lines(app))

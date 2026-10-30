@@ -1187,6 +1187,10 @@ B.SEARCH_TYPES = {
   recipes = "recipe",
   transport = "transport",
   transports = "transport",
+  dungeon = "dungeon",
+  dungeons = "dungeon",
+  raid = "dungeon",
+  raids = "dungeon",
   spot = "spot",
   spots = "spot",
 }

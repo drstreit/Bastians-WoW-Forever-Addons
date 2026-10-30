@@ -823,6 +823,9 @@ end
 function Region:SetPushedTexture(t)
   self.pushedTexture = t
 end
+function Region:GetPushedTexture()
+  return self.pushedTexture
+end
 function Region:SetHighlightTexture(t)
   self.highlightTexture = t
 end

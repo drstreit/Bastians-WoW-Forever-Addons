@@ -34,6 +34,15 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
     if gold:  # a click opens the app's window
         wow.execute("BastiansMinimapButtonGold:Click('LeftButton')")
         assert wow.eval("BastiansGoldFrame and BastiansGoldFrame:IsShown()") is True
+    # the options window has a button of its own, toggled on the General page
+    assert wow.eval("BastiansMinimapButtonOptions:IsShown()") is True
+    wow.execute("BastiansMinimapButtonOptions:Click('LeftButton')")
+    assert wow.eval("BastiansHubFrame:IsShown()") is True
+    wow.execute("BastiansMinimapButtonOptions:Click('LeftButton')")
+    assert wow.eval("BastiansHubFrame:IsShown()") is False
+    wow.execute(f"{LAUNCHER}.SetAppButton('Options', false)")
+    assert wow.eval("BastiansMinimapButtonOptions:IsShown()") is False
+    wow.execute(f"{LAUNCHER}.SetAppButton('Options', true)")
     # the right-click menu of the suite's button lists the apps
     wow.execute(f"{LAUNCHER}.ShowMenu(BastiansMinimapButton)")
     labels = [

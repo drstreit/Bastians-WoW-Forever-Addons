@@ -85,6 +85,8 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
     end = next(i for i in range(start + 1, len(labels)) if labels[i][0] == "header")
     keys = [x[2] for x in labels[start + 1 : end]]
     assert keys == [
+        None,  # Use the full WoW look (30.10.2026)
+        None,  # Use the Modern look
         "skin",
         "skinFrames",
         "theme",
@@ -100,7 +102,7 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
     ]
     assert "Windows" not in [x[1] for x in labels]  # folded into the section
     profile = core.eval(PROFILE)
-    assert profile.skin == "modern" and profile.skinFrames is False
+    assert profile.skin == "modern" and profile.skinFrames is True  # the frames are standard
     for key in ("rowPortraits", "placeCuts", "diorama", "modelMotion", "pageSounds"):
         assert profile[key] is True, key
     assert core.errors == []
@@ -129,17 +131,18 @@ def test_the_azeroth_skin_sets_the_headings_in_morpheus_and_gold(core: WowRuntim
 
 def test_the_games_window_frames_are_a_switch_of_their_own(core: WowRuntime):
     core.execute("W = Bastians.UI.Window('FrameTestFrame', { title = 'T' }); W:Show()")
-    assert core.eval("W.border") is None
-    assert core.eval("(select(4, W.head:GetPoint(1)))") == 1
-    set_option(core, "skinFrames", "true")
+    # the frames are the standard: on from the first window
     assert core.eval("W.border:IsShown()") is True
     assert core.eval("(select(4, W.head:GetPoint(1)))") == 9  # moved in by the frame's width
     assert core.eval("W.frame.edges:IsShown()") is False  # the round outline goes
-    assert core.eval(f"{S}.Azeroth()") is False  # the skin did not change
+    assert core.eval("W.frame.bg:IsShown()") is True  # Modern keeps its flat ground inside
     set_option(core, "skinFrames", "false")
     assert core.eval("W.border:IsShown()") is False
     assert core.eval("(select(4, W.head:GetPoint(1)))") == 1
     assert core.eval("W.frame.edges:IsShown()") is True
+    assert core.eval(f"{S}.Azeroth()") is False  # the skin did not change
+    set_option(core, "skinFrames", "true")
+    assert core.eval("W.border:IsShown()") is True
     assert core.errors == []
 
 
@@ -388,3 +391,40 @@ def test_a_page_sounds_as_it_opens(wow: WowRuntime):
 
 
 QUEST = 62  # The Fargodeep Mine, from Marshal Dughan
+
+
+def test_the_blizzard_skin_takes_the_frames_the_gold_scheme_and_the_games_type(core: WowRuntime):
+    """ "a style that closely reflects Blizzard style across the whole suite": the
+    third skin sets the frames, the Blizzard gold scheme and Friz Quadrata (all free to change
+    after), headings in the kit's type in gold, and dresses every kit button in the game's own
+    button textures; Modern takes the textures off again."""
+    core.execute(
+        "W = Bastians.UI.Window('BlizzTestFrame', { title = 'T' }); W:Show() "
+        "Btn = Bastians.UI.Style.button(W.content, 'Go', 80, 20)"
+    )
+    assert core.eval("Btn:GetNormalTexture()") in (None, "")
+    set_option(core, "skin", "'blizzard'")
+    profile = core.eval(PROFILE)
+    assert profile.skin == "blizzard" and profile.skinFrames is True
+    assert profile.theme == "blizzard" and profile.font == "Fonts\\FRIZQT__.TTF"
+    assert core.eval(f"{S}.ThemeId()") == "blizzard"
+    assert core.eval("(W.title:GetFont())") == "Fonts\\FRIZQT__.TTF"  # the kit's type, not Morpheus
+    assert core.eval("{ W.title:GetTextColor() }")[1] == core.eval(f"{S}.C.gold[1]")
+    assert core.eval("W.border:IsShown()") is True
+    assert core.eval("W.frame.bg:IsShown()") is False  # the game's dialog ground under the border
+    assert core.eval("Btn:GetNormalTexture()") == "Interface\\Buttons\\UI-Panel-Button-Up"
+    assert core.eval("Btn.face:IsShown()") is False
+    # a button made under the skin is dressed at once
+    core.execute("Btn2 = Bastians.UI.Style.button(W.content, 'Go', 80, 20)")
+    assert core.eval("Btn2:GetNormalTexture()") == "Interface\\Buttons\\UI-Panel-Button-Up"
+    set_option(core, "skin", "'modern'")
+    assert core.eval("Btn:GetNormalTexture()") == "" and core.eval("Btn.face:IsShown()") is True
+    assert core.eval(f"{PROFILE}.skinFrames") is False
+    assert core.eval(f"{PROFILE}.theme") == "blizzard"  # the scheme stays the player's choice
+    # the two buttons do the same as the select: the one-click WoW look is the full set
+    core.execute("Bastians.UI.Settings.ChooseSkin(Bastians:GetModule('Core'), 'blizzard')")
+    assert core.eval(f"{PROFILE}.skin") == "blizzard" and core.eval(f"{PROFILE}.skinFrames") is True
+    assert core.eval("W.frame.bg:IsShown()") is False
+    core.execute("Bastians.UI.Settings.ChooseSkin(Bastians:GetModule('Core'), 'modern')")
+    assert core.eval(f"{PROFILE}.skin") == "modern" and core.eval("W.frame.bg:IsShown()") is True
+    assert core.errors == []

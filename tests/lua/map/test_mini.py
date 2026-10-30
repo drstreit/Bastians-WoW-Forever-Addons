@@ -229,8 +229,9 @@ def test_the_button_box_takes_the_buttons_and_names_the_hovered_one(wow: WowRunt
     assert wow.eval(f"{win}:IsShown()") is True
     names = [e.name for e in wow.eval(f"{MB}.collected").values()]
     # the others and our apps' buttons; the suite's own is the badge, the game's zoom stays out
-    assert names == ["Bastian's Map", "Bug Sack", "Weak Auras"]
-    assert wow.eval(f"B1:GetParent() == {win}.content") is True
+    # since 30.10.2026 the options window has a button too
+    assert names == ["Bastian's Map", "Bastian's Options", "Bug Sack", "Weak Auras"]
+    assert wow.eval(f"B1:GetParent() == {win}.grid") is True  # the grid scrolls (30.10.2026)
     # in the box on the window's layer, not under it
     assert wow.eval("B1:GetFrameStrata()") == wow.eval(f"{win}.frame:GetFrameStrata()")
     assert wow.eval(f"B1:GetFrameLevel() > {win}.content:GetFrameLevel()") is True
@@ -415,7 +416,7 @@ def test_ctrl_click_moves_a_button_between_the_box_and_the_map(wow: WowRuntime):
     opener = "BastiansMiniMap.boxButton"
     wow.execute(f"{opener}:GetScript('OnEnter')({opener})")
     win = f"{MB}.Window()"
-    assert wow.eval(f"B1:GetParent() == {win}.content") is True
+    assert wow.eval(f"B1:GetParent() == {win}.grid") is True
     wow.execute("B1:Click()")
     assert wow.eval("OWN") == 1  # its own click
     wow.execute("Mock.ctrl = true; B1:Click(); Mock.ctrl = false")
@@ -423,7 +424,7 @@ def test_ctrl_click_moves_a_button_between_the_box_and_the_map(wow: WowRuntime):
     assert wow.eval("B1:GetParent() == BastiansMiniMap") is True  # on the rim of ours
     assert wow.eval(f"{MOD}.db.profile.buttonHomes.LibDBIcon10_BugSack") == "map"
     wow.execute("Mock.ctrl = true; B1:Click(); Mock.ctrl = false")
-    assert wow.eval(f"B1:GetParent() == {win}.content") is True
+    assert wow.eval(f"B1:GetParent() == {win}.grid") is True
     assert wow.eval(f"{MOD}.db.profile.buttonHomes.LibDBIcon10_BugSack") is None
     # the mouse away from the box and its button: the box goes after a moment
     wow.execute(f"{win}.frame.IsMouseOver = function() return false end")
@@ -489,7 +490,7 @@ def test_a_button_put_on_the_map_sits_on_the_rim_of_ours_also_after_a_reload(wow
     # the settings page puts every button back into the box
     wow.execute(f"{MB}.AllIntoBox()")
     win = f"{MB}.Window()"
-    assert wow.eval(f"B1:GetParent() == {win}.content and B2:GetParent() == {win}.content") is True
+    assert wow.eval(f"B1:GetParent() == {win}.grid and B2:GetParent() == {win}.grid") is True
     assert wow.eval(f"{MOD}.db.profile.buttonHomes") is None
     assert wow.errors == []
 
@@ -508,11 +509,11 @@ def test_a_boxed_button_its_addon_moves_back_returns_to_the_box(wow: WowRuntime)
     opener = "BastiansMiniMap.boxButton"
     wow.execute(f"{opener}:GetScript('OnEnter')({opener})")
     win = f"{MB}.Window()"
-    assert wow.eval(f"B2:GetParent() == {win}.content") is True
+    assert wow.eval(f"B2:GetParent() == {win}.grid") is True
     # LibDBIcon's updatePosition: the button back around the minimap
     wow.execute("B1:ClearAllPoints(); B1:SetPoint('CENTER', Minimap, 'CENTER', 80, 0)")
     wow.advance(0.05)
-    assert wow.eval(f"select(2, B1:GetPoint(1)) == {win}.content") is True
+    assert wow.eval(f"select(2, B1:GetPoint(1)) == {win}.grid") is True
     assert wow.errors == []
 
 
@@ -563,4 +564,36 @@ def test_walking_recentres_and_the_arrow_sits_above_the_pins(wow: WowRuntime):
         wow.eval(f"{MINI}.arrowLayer:GetFrameLevel() > BastiansMinimapOverlay:GetFrameLevel() + 1")
         is True
     )
+    assert wow.errors == []
+
+
+def test_the_button_box_scales_with_its_width_and_scrolls_past_six_rows(wow: WowRuntime):
+    """ "there are people with 50 addons, make sure that scales": the columns
+    follow the window's width, the window grows to six rows, more rows scroll; the title never
+    wraps."""
+    boot(wow)
+    wow.execute(
+        """for i = 1, 50 do
+          local b = CreateFrame("Button", "LibDBIcon10_Addon" .. i, Minimap)
+          b:SetSize(31, 31)
+        end"""
+    )
+    opener = "BastiansMiniMap.boxButton"
+    wow.execute(f"{opener}:GetScript('OnEnter')({opener})")
+    win = f"{MB}.Window()"
+    assert wow.eval(f"{win}:IsShown()") is True
+    assert len(list(wow.eval(f"{MB}.collected").values())) >= 50
+    assert wow.eval(f"{MB}.cols") == 9 and wow.eval(f"{MB}.rows") == 6
+    cell = wow.eval(f"{MB}.SIZE + {MB}.GAP")
+    assert wow.eval(f"{win}.grid:GetHeight()") == 4 + 6 * cell
+    # the window holds six rows: the header, the frame's inset, the grid, the hint
+    inset = 9 if wow.eval(f"{win}.framed") else 1
+    assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 4 + 6 * cell + 16 + 4
+    # narrower: fewer columns, more rows, the window stays at six rows and the rest scrolls
+    wow.execute(f"{win}.frame:SetWidth(150); {MB}.Layout()")
+    assert wow.eval(f"{MB}.cols") == 4 and wow.eval(f"{MB}.rows") == 13
+    assert wow.eval(f"{win}.grid:GetHeight()") == 4 + 13 * cell
+    assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 4 + 6 * cell + 16 + 4
+    assert wow.eval(f"{win}.bar ~= nil") is True
+    assert wow.eval(f"{win}.title.wordWrap") is False
     assert wow.errors == []

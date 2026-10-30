@@ -79,6 +79,9 @@ ns.L:Register("frFR", {
   ["Zones"] = "Zones",
   ["Recipes"] = "Recettes",
   ["Quests"] = "Quêtes",
+  ["Dungeons"] = "Donjons",
+  ["Dungeon"] = "Donjon",
+  ["Raid"] = "Raid",
   ["Farm spots"] = "Lieux de farm",
   ["Quest chains"] = "Chaînes de quêtes",
 
@@ -218,6 +221,7 @@ ns.L:Register("frFR", {
   ["recipe"] = "recette",
   ["flightpath"] = "trajet aérien",
   ["transport"] = "transport",
+  ["dungeon"] = "donjon",
   ["chain"] = "chaîne",
 
   -- the three panes (ADR 0018)

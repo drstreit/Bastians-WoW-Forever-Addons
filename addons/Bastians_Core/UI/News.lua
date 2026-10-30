@@ -280,6 +280,11 @@ function News.Check()
   end
   local versions = B.UI.Settings.Fingerprint(true)
   News.checked = true
+  if B.UI.Welcome then
+    -- the welcome window with the guidelines: once per account, at the first
+    -- login that is not in combat (an install from before the window sees it once too)
+    B.UI.Welcome.FirstStart()
+  end
   if st.versions == nil and not News.ranBefore then
     News.MarkSeen() -- a first start: everything there is counts as seen
     st.versions = versions

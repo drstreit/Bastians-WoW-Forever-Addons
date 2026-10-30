@@ -21,7 +21,7 @@ GOLDEN = ROOT / "tests" / "fixtures" / "addons" / "Bastians_Data_World" / "Gener
 def test_fixture_reader_builds_the_world():
     world = read_fixture(FIXTURE, "forever")
     assert world.build == "fixture" and world.sources == ["hand-written fixture world-mini"]
-    assert world.count("npc") == 8 and world.count("quest") == 5 and world.count("zone") == 5
+    assert world.count("npc") == 10 and world.count("quest") == 5 and world.count("zone") == 5
     assert world.get("npc", 448)["name"] == "Hogger"
     assert world.get("npc", 327).get("flags") is None  # unknown stays None
     with pytest.raises(FixtureError, match="is for forever"):
@@ -68,10 +68,11 @@ def test_pack_content_follows_the_schema():
     by_name = {p.pack.name: p for p in result.packs}
     assert by_name["world"].counts == {
         "area": 1,
+        "dungeon": 1,
         "entrance": 1,
         "flightpath": 5,
         "node": 0,
-        "npc": 8,
+        "npc": 10,  # the fixture bosses Rhahk'Zor and VanCleef count (data.md "Dungeons")
         "object": 1,
         "teleport": 3,
         "transport": 2,
@@ -85,7 +86,9 @@ def test_pack_content_follows_the_schema():
     config = load_config()
     world = pack_table(result.world, config.packs["world"])
     fields = config.packs["world"].schema["npc"]
-    hogger = dict(zip(fields, world["npc"][448], strict=True))
+    row = list(world["npc"][448])
+    row += [None] * (len(fields) - len(row))  # the packer drops trailing nils (`dungeon` here)
+    hogger = dict(zip(fields, row, strict=True))
     assert (hogger["name"], hogger["level"], hogger["zone"], hogger["flags"]) == (
         "Hogger",
         11,
@@ -118,7 +121,7 @@ def test_report_lists_sizes_budgets_and_dropped_rows(tmp_path):
     build(world, load_config(), tmp_path)
     text = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "| world | Bastians_Data_World |" in text and "12288 KB" in text
-    assert "npc 8" in text and "quest.byGiver 3" in text
+    assert "npc 10" in text and "quest.byGiver 3" in text
     assert "- no spawn fits a Forever map: 1 rows: npc 999" in text
     assert "20" not in text.split("Client")[0]  # no date in the header
 

@@ -56,7 +56,7 @@ def test_the_npc_list_opens_on_the_players_zone_then_widens(wow: WowRuntime):
     current = wow.eval(f"{BR}.Current()")
     assert current.near == "here"
     assert chips(wow)[0] == "Where: Here"
-    assert menu(wow, TREE, "where") == ["All  8", "Here  7", "Continent  8"]
+    assert menu(wow, TREE, "where") == ["All  10", "Here  7", "Continent  8"]
     rows = flat(wow)
     assert len(rows) == 7 and not any("Gryan" in r for r in rows)  # Westfall's NPC is not here
     assert "Corina Steele  15" in rows
@@ -66,7 +66,8 @@ def test_the_npc_list_opens_on_the_players_zone_then_widens(wow: WowRuntime):
     assert wow.eval(f"{BR}.Current().near") == "continent"
     assert len(flat(wow)) == 8 and any("Gryan" in r for r in flat(wow))
     clear(wow, TREE, "where")  # the x: All
-    assert wow.eval(f"{BR}.Current().near") is None and len(flat(wow)) == 8
+    # All: the continent's eight and the two Deadmines bosses, who stand on no map (data.md "Dungeons")
+    assert wow.eval(f"{BR}.Current().near") is None and len(flat(wow)) == 10
     assert chips(wow)[0] == "Where: All"
     # the choice sticks on a re-render
     wow.execute(f"{BR}.Render()")

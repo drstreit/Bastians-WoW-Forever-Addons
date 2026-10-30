@@ -18,6 +18,9 @@ B.deferred[#B.deferred + 1] = {
         Alliance = { "fargodeep", "gnoll-claw" },
         Horde = { "gnoll-claw" },
       },
+      ["quest.byDungeon"] = {
+        [36] = { 62 },
+      },
       ["quest.byEnder"] = {
         ["npc:234"] = { 11, 1000 },
         ["npc:240"] = { 62, 76, 176 },
@@ -63,7 +66,7 @@ B.deferred[#B.deferred + 1] = {
     },
     quest = {
       [11] = [=[{ "Riverpaw Gnoll Bounty", 10, 9, nil, nil, nil, { "npc:234" }, nil, { "npc:234" }, nil, nil, { 76 }, nil, nil, nil, nil, nil, nil, nil, nil, 1436, nil, nil, nil, nil, nil, "forever" }]=],
-      [62] = [=[{ "The Fargodeep Mine", 7, 4, nil, nil, nil, { "npc:240" }, nil, { "npc:240" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1429, nil, nil, nil, nil, nil, "forever" }]=],
+      [62] = [=[{ "The Fargodeep Mine", 7, 4, nil, nil, nil, { "npc:240" }, nil, { "npc:240" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1429, nil, nil, nil, nil, nil, "forever", 36 }]=],
       [76] = [=[{ "The Jasperlode Mine", 9, 7, nil, nil, nil, { "npc:240" }, nil, { "npc:240" }, nil, nil, { 62 }, nil, nil, nil, nil, nil, nil, nil, nil, 1429, nil, nil, nil, nil, nil, "forever" }]=],
       [176] = [=[{ "Wanted: \"Hogger\"", 11, 5, 1, nil, nil, { "object:1734" }, nil, { "npc:240" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1429, { { "loot", "npc:448", 0 } }, { [1429] = { { 0.25, 0.93, "loot", 1 }, { 0.4, 0.7, "loot", 1 } } }, { choices = { { 1185, 1 }, { 2318, 2 } }, money = 150, src = "classic" }, { { 1931, 1 } }, nil, "forever" }]=],
       [1000] = [=[{ "Horde Only Errand", 9, 8, nil, 178, nil, { "npc:234" }, nil, { "npc:234" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1436, nil, nil, nil, nil, nil, "forever" }]=],
@@ -73,7 +76,7 @@ B.deferred[#B.deferred + 1] = {
       quest = {
         "name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends",
         "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday",
-        "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src",
+        "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon",
       },
     },
     sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },

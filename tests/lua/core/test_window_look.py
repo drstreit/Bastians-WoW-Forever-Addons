@@ -92,3 +92,28 @@ def test_the_colour_row_uses_the_games_picker_and_goes_back_to_the_theme(app: Wo
     # the General page carries the window look
     app.execute("Bastians.UI.Hub.Open('Core')")
     assert app.errors == []
+
+
+def test_an_app_can_colour_and_fade_its_own_window(app: WowRuntime):
+    """a colour and an opacity per window, in the app's profile; nil means the
+    General setting for every window."""
+    window(app, "W", "TestApp")
+    window(app, "V", None)
+    core = "Bastians:GetModule('Core').db.profile"
+    own = "Bastians:GetModule('TestApp').db.profile"
+    app.execute(f"{core}.windowAlpha = 80; {own}.windowAlpha = 40; Bastians.UI.ApplyWindowLook()")
+    assert app.eval(f"{PAINTED}[W.frame.bg][2]") == 0.4  # the app's own
+    assert app.eval(f"{PAINTED}[V.frame.bg][2]") == 0.8  # the General setting
+    app.execute(f"{own}.windowColor = {{ 0.5, 0.6, 0.7 }}; Bastians.UI.ApplyWindowLook()")
+    assert list(app.eval(f"{PAINTED}[W.frame.bg][1]").values()) == [0.5, 0.6, 0.7]
+    assert app.eval(f"{PAINTED}[V.frame.bg][1] == Bastians.UI.Style.C.bg") is True
+    app.execute(f"{own}.windowColor = nil; {own}.windowAlpha = nil; Bastians.UI.ApplyWindowLook()")
+    assert app.eval(f"{PAINTED}[W.frame.bg][2]") == 0.8
+    # the app's page carries the two rows after Open and the minimap button
+    app.execute("Bastians.UI.Hub.Open('TestApp')")
+    texts = [
+        w.label.GetText(w.label) if w.label is not None else ""
+        for w in app.eval("Bastians.UI.Hub.canvas.widgets").values()
+    ]
+    assert "Window background" in texts and "Window opacity (%)" in texts
+    assert app.errors == []

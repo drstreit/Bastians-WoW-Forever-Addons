@@ -79,6 +79,9 @@ local strings = {
   ["Zones"] = "Zonas",
   ["Recipes"] = "Recetas",
   ["Quests"] = "Misiones",
+  ["Dungeons"] = "Calabozos",
+  ["Dungeon"] = "Calabozo",
+  ["Raid"] = "Banda",
   ["Farm spots"] = "Lugares de farmeo",
   ["Quest chains"] = "Cadenas de misiones",
 
@@ -218,6 +221,7 @@ local strings = {
   ["recipe"] = "receta",
   ["flightpath"] = "ruta de vuelo",
   ["transport"] = "transporte",
+  ["dungeon"] = "calabozo",
   ["chain"] = "cadena",
 
   -- the three panes (ADR 0018)

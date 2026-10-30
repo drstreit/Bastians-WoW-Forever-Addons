@@ -79,6 +79,9 @@ ns.L:Register("zhTW", {
   ["Zones"] = "區域",
   ["Recipes"] = "配方",
   ["Quests"] = "任務",
+  ["Dungeons"] = "地城",
+  ["Dungeon"] = "地城",
+  ["Raid"] = "團隊副本",
   ["Farm spots"] = "打怪點",
   ["Quest chains"] = "任務鏈",
 
@@ -218,6 +221,7 @@ ns.L:Register("zhTW", {
   ["recipe"] = "配方",
   ["flightpath"] = "飛行路線",
   ["transport"] = "交通工具",
+  ["dungeon"] = "地城",
   ["chain"] = "任務鏈",
 
   -- the three panes (ADR 0018)

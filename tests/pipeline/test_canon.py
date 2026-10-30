@@ -36,6 +36,7 @@ def fixture_sources(*, with_probe: bool = True) -> Sources:
     s.fdb_quests = foreverdb.read_quests(fdb / "QuestForever.lua")
     s.fdb_items = foreverdb.read_items(fdb / "Items.lua")
     s.fdb_names = foreverdb.read_search_names(fdb / "SearchNames.lua")
+    s.fdb_dungeons = foreverdb.read_dungeons(fdb / "Dungeons.lua")
     tables = cmangos.read_tables(FIXTURES / "cmangos" / "classicdb_mini.sql.gz")
     s.cm_quests = cmangos.quest_rows(tables)
     s.cm_creatures = tables["creature_template"]
@@ -335,3 +336,30 @@ def test_zones_the_client_lacks_are_named_from_the_retail_map_table():
     assert world.get("zone", 37)["name"] == "Elwynn Forest"  # the client's own name wins
     assert world.get("zone", 999).get("name") is None
     assert any("retail map table" in n for n in world.notes)
+
+
+def test_dungeons_join_the_world_with_their_bosses_loot_and_quests():
+    """data.md "Dungeons": ForeverDB's dungeons become records, their bosses npcs, the loot players
+    saw joins the boss (chance unknown), the quests point back, the zone is found by name."""
+    world = build_world(fixture_sources())
+    deadmines = world.get("dungeon", 36)
+    assert deadmines["name"] == "The Deadmines" and deadmines["kind"] == "dungeon"
+    assert (deadmines["levelLo"], deadmines["levelHi"], deadmines["levelReq"]) == (15, 25, 10)
+    assert deadmines["zone"] == 1429  # "Elwynn Forest" by name
+    assert deadmines["bosses"][0] == [1, 644, "Rhahk'Zor"]
+    assert [872, 1, "s"] in deadmines["loot"] and deadmines["quests"] == [6, 166]
+    assert deadmines["src"] == "forever"
+    # a boss no other source knows is an npc now: named, flagged, in its dungeon
+    boss = world.get("npc", 644)
+    assert boss["name"] == "Rhahk'Zor" and "boss" in boss["flags"] and boss["dungeon"] == 36
+    # the loot players saw drops from him, its chance unknown and never zero; the client-tied
+    # item (label c) and the instance's unassigned loot stay on the dungeon record only
+    assert [872, None] in boss["loot"] and [1185, None] in boss["loot"]
+    assert all(row[0] != 2169 for row in boss["loot"]) and boss["lootSrc"] == "forever"
+    assert all(row[0] != 5187 for row in world.get("npc", 639).get("loot") or [])
+    # the dungeon quests know their dungeon; an unknown quest id is no error
+    assert world.get("quest", 6)["dungeon"] == 36
+    # a zone name we do not know is a note, not a failure; the raid keeps its kind and size
+    assert world.get("dungeon", 34).get("zone") is None
+    assert any("Nowhere Known" in note for note in world.notes)
+    assert world.get("dungeon", 249)["kind"] == "raid" and world.get("dungeon", 249)["size"] == 40

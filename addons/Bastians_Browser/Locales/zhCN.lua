@@ -79,6 +79,9 @@ ns.L:Register("zhCN", {
   ["Zones"] = "区域",
   ["Recipes"] = "配方",
   ["Quests"] = "任务",
+  ["Dungeons"] = "地下城",
+  ["Dungeon"] = "地下城",
+  ["Raid"] = "团队副本",
   ["Farm spots"] = "刷怪点",
   ["Quest chains"] = "任务链",
 
@@ -218,6 +221,7 @@ ns.L:Register("zhCN", {
   ["recipe"] = "配方",
   ["flightpath"] = "飞行路线",
   ["transport"] = "交通工具",
+  ["dungeon"] = "地下城",
   ["chain"] = "任务链",
 
   -- the three panes (ADR 0018)

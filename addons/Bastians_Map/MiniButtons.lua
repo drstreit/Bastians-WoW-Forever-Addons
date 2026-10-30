@@ -13,7 +13,8 @@ ns.MiniButtons = MB
 
 MB.SIZE = 28 -- one cell of the grid
 MB.GAP = 4
-MB.COLS = 6
+MB.COLS = 9 -- the columns of a new box; the window's width decides from then on (30.10.2026)
+MB.MAX_ROWS = 6 -- rows the window grows to; more scroll
 -- Named frames on the minimap that are the game's own (they stay where Mini.lua puts them).
 MB.SKIP = {
   "^Minimap",
@@ -128,12 +129,12 @@ local function hook(entry)
   f.bastiansBoxHooked = true
   f.bastiansBoxName = entry.name
   f:HookScript("OnEnter", function(self)
-    if win and self:GetParent() == win.content then
+    if win and self:GetParent() == win.grid then
       win:SetTitle(self.bastiansBoxName or "?")
     end
   end)
   f:HookScript("OnLeave", function(self)
-    if win and self:GetParent() == win.content then
+    if win and self:GetParent() == win.grid then
       win:SetTitle(L["Minimap buttons"])
     end
   end)
@@ -147,11 +148,14 @@ local function build()
     module = "Map",
     page = "minimap", -- the box's options live on the minimap's page
     title = L["Minimap buttons"],
-    width = MB.COLS * (MB.SIZE + MB.GAP) + MB.GAP + 2,
+    width = MB.COLS * (MB.SIZE + MB.GAP) + MB.GAP + 16 + 2,
     height = 120,
-    minWidth = 160,
+    minWidth = 3 * (MB.SIZE + MB.GAP) + MB.GAP + 16 + 2,
     minHeight = 80,
     db = db().buttonBox,
+    onResize = function()
+      MB.Layout() -- the columns follow the width
+    end,
   })
   -- how a button moves between the box and the map ("how to move them
   -- back in?")
@@ -160,7 +164,24 @@ local function build()
   win.hint:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", -MB.GAP, 3)
   win.hint:SetJustifyH("LEFT")
   win.hint:SetText(L["Ctrl+click: put a button on the map, or back into the box."])
+  -- the grid in a scroll frame: the window grows to MAX_ROWS, more rows scroll
+  win.scroll = CreateFrame("ScrollFrame", nil, win.content)
+  win.scroll:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, 0)
+  win.scroll:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", -16, MB.HINT_H + 4)
+  win.grid = CreateFrame("Frame", nil, win.scroll)
+  win.grid:SetSize(100, 1)
+  win.scroll:SetScrollChild(win.grid)
+  win.bar = S.scrollbar(win.scroll, win.content)
   MB.win = win
+end
+
+-- The columns the box's width holds, two at least.
+function MB.Columns()
+  local width = (win and win.scroll and win.scroll:GetWidth() or 0)
+  if width <= 0 then
+    width = (win and win.frame:GetWidth() or 0) - 16 - 2
+  end
+  return math.max(2, math.floor((width - MB.GAP) / (MB.SIZE + MB.GAP)))
 end
 
 -- Where a button lives: "box" (the default) or "map" (on the rim of Bastian's minimap), kept by
@@ -189,7 +210,7 @@ MB.RIM_ANGLES = { 135, 160, 110, 185, 85, 250, 275, 300, 325, 350, 15, 205 }
 -- The frame a button sits on and the frame its point is relative to, for its home.
 local function hostOf(home)
   if home == "box" then
-    return win and win.content, win and win.content
+    return win and win.grid, win and win.grid
   end
   return ns.Mini.Frame(), ns.Mini.View()
 end
@@ -322,24 +343,33 @@ local function layRim()
   end
 end
 
--- The grid: the boxed buttons in rows of COLS, the window as large as they need; the others on the
--- rim of Bastian's minimap.
+-- The grid: the boxed buttons in as many columns as the width holds (MB.Columns), the window as
+-- tall as the rows need up to MAX_ROWS, more rows scroll; the others on the rim of Bastian's
+-- minimap. Called again when the player resizes the window.
 function MB.Layout()
   if not win then
     return
   end
   local list = homed("box")
+  local cols = MB.Columns()
   laying = true
   for i, entry in ipairs(list) do
-    local col, row = (i - 1) % MB.COLS, math.floor((i - 1) / MB.COLS)
+    local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
     local x, y = MB.GAP + col * (MB.SIZE + MB.GAP), -(MB.GAP + row * (MB.SIZE + MB.GAP))
-    local level = (win.content:GetFrameLevel() or 1) + 2
-    lay(entry, win.content, win.frame:GetFrameStrata(), level, win.content, x, y, "TOPLEFT")
+    local level = (win.grid:GetFrameLevel() or 1) + 2
+    lay(entry, win.grid, win.frame:GetFrameStrata(), level, win.grid, x, y, "TOPLEFT")
   end
   layRim()
   laying = false
-  local rows = math.max(1, math.ceil(#list / MB.COLS))
-  win.frame:SetHeight(30 + MB.GAP + rows * (MB.SIZE + MB.GAP) + MB.HINT_H + 4)
+  local rows = math.max(1, math.ceil(#list / cols))
+  local gridHeight = MB.GAP + rows * (MB.SIZE + MB.GAP)
+  local shown = MB.GAP + math.min(rows, MB.MAX_ROWS) * (MB.SIZE + MB.GAP)
+  win.grid:SetSize(math.max(1, win.scroll:GetWidth() or 100), gridHeight)
+  -- the chrome: the header and the frame's inset top and bottom (the game's frames, ADR 0034)
+  local inset = win.framed and win.FRAME_INSET or 1
+  win.frame:SetHeight(30 + 2 * inset + shown + MB.HINT_H + 4)
+  win.bar.SetTotal(gridHeight)
+  MB.cols, MB.rows = cols, rows
 end
 
 -- Ctrl+click moves a button between the box and the map; any other click is the button's own.

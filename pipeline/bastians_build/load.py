@@ -174,6 +174,8 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.fdb_quests = foreverdb.read_quests(fdb / "QuestForever.lua")
             s.fdb_items = foreverdb.read_items(fdb / "Items.lua")
             s.fdb_names = foreverdb.read_search_names(fdb / "SearchNames.lua")
+            if (fdb / "Dungeons.lua").is_file():  # since ForeverDB 0.44 (data.md "Dungeons")
+                s.fdb_dungeons = foreverdb.read_dungeons(fdb / "Dungeons.lua")
             s.source_names.append(f"ForeverDB {meta.addon if meta and meta.addon else '?'}")
             if s.build == "unknown" and meta and meta.build:
                 s.build = str(meta.build)  # the client build ForeverDB read its data from

@@ -162,6 +162,7 @@ starts = ["npc:240"]
 ends = ["npc:240"]
 zone = 1429
 src = "forever"
+dungeon = 36
 
 [[quest]]
 id = 76
@@ -424,3 +425,35 @@ wy = -4658.1
 wz = 724.8
 cast = 10
 src = "places"
+
+# a dungeon (data.md "Dungeons", ForeverDB's Dungeons.lua): the Deadmines behind entrance 36-1, one
+# boss the Classic sources do not know, loot seen in Forever (no chance) and a quest of the dungeon
+[[dungeon]]
+id = 36
+name = "The Deadmines"
+kind = "dungeon"
+size = 5
+levelLo = 15
+levelHi = 25
+levelReq = 10
+zone = 1436
+bosses = [[1, 644, "Rhahk'Zor"], [2, 639, "Edwin VanCleef"]]
+loot = [[1185, 1, "s"], [2589, 0, "c"]]
+quests = [62]
+src = "forever"
+
+[[npc]]
+id = 644
+name = "Rhahk'Zor"
+flags = ["boss"]
+dungeon = 36
+loot = [[1185]]
+lootSrc = "forever"
+src = "forever"
+
+[[npc]]
+id = 639
+name = "Edwin VanCleef"
+flags = ["boss"]
+dungeon = 36
+src = "forever"

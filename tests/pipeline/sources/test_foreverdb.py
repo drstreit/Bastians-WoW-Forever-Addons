@@ -190,3 +190,29 @@ def test_search_names():
     assert fdb.is_old(names[41]) and fdb.is_old(names[42])
     assert not fdb.is_old(names[43])
     assert names.get(26) is None
+
+
+def test_dungeons():
+    rows = {r.id: r for r in fdb.parse_dungeons(text("Dungeons.lua"))}
+    assert sorted(rows) == [34, 36, 249]
+    deadmines = rows[36]
+    assert (deadmines.name, deadmines.kind, deadmines.size) == ("The Deadmines", "dungeon", 5)
+    assert (deadmines.level_lo, deadmines.level_hi, deadmines.level_req) == (15, 25, 10)
+    assert deadmines.zone_name == "Elwynn Forest"
+    assert deadmines.bosses[0] == fdb.DungeonBoss(1, 644, "Rhahk'Zor")
+    assert [b.npc_id for b in deadmines.bosses] == [644, 646, 639]
+    assert deadmines.loot[0] == fdb.DungeonLoot(872, 1, "s")
+    assert deadmines.loot[-1] == fdb.DungeonLoot(5187, 0, "c")  # the instance's unassigned loot
+    assert deadmines.quests == (6, 166)
+    onyxia = rows[249]
+    assert onyxia.kind == "raid" and onyxia.size == 40 and onyxia.quests == ()
+    assert onyxia.loot == (fdb.DungeonLoot(16914, 1, "c"),)
+    assert rows[34].loot == () and rows[34].quests == ()
+
+
+def test_dungeons_file_helper(tmp_path):
+    path = tmp_path / "Dungeons.lua"
+    path.write_text('local _, ns = ...\nns.dungeons = {[1]={n="A",kind="dungeon"}}', "utf-8")
+    rows = fdb.read_dungeons(path)
+    assert rows[0].id == 1 and rows[0].size is None and rows[0].level_lo is None
+    assert rows[0].bosses == () and rows[0].loot == () and rows[0].zone_name is None

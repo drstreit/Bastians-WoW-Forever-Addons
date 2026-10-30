@@ -106,6 +106,7 @@ ns.L:Register("zhTW", {
   ["Target of"] = "目標任務：",
   ["Starts quests"] = "開始任務",
   ["Ends quests"] = "結束任務",
+  ["Dungeon quests"] = "地城任務",
   ["Needed for quests"] = "任務所需",
   ["Status"] = "狀態",
   ["Given by"] = "提供者",

@@ -38,7 +38,8 @@ included (on Lua 5.1 against a WoW API mock).
 
 Game data first from the Blizzard client files read from the installed client (items, recipes,
 quest chains and areas, names in every language, map imagery and tables); what only the servers
-hold from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), ForeverDB (GPL-3.0),
+hold from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), Data from ForeverDB.net (https://foreverdb.net; GPL-3.0 with an
+attribution term),
 CMaNGOS classic-db (GPL-3.0), TrinityCore TDB (GPL-2.0 or later, retail), NauticusClassic (MIT,
 ferry departures), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger, voice lines
 through Spoken (MIT). Build tools: TACTSharp, DBCD and BLPSharp (MIT), WoWDBDefs (CC BY-SA 4.0).

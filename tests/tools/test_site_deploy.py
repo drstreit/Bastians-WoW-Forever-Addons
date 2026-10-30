@@ -18,6 +18,12 @@ def test_the_secrets_file_is_read_and_the_environment_wins(tmp_path: Path):
     assert site_deploy.read_secrets(secret, {}) == ("acc", "tok")
     env = {"CLOUDFLARE_API_TOKEN": "env-tok"}
     assert site_deploy.read_secrets(secret, env) == ("acc", "env-tok")
+    # two accounts in one file, never mixed: the site reads the Bastian line
+    secret.write_text(
+        "ACCOUNT_ID_BASTIAN=bastian\nACCOUNT_ID_1vo5=other\nAPI_TOKEN=tok\nAPI_TOKEN_ACCOUNT=tok2\n",
+        encoding="utf-8",
+    )
+    assert site_deploy.read_secrets(secret, {}) == ("bastian", "tok")
 
 
 def test_missing_secrets_stop_the_tool(tmp_path: Path):
@@ -141,3 +147,22 @@ def test_a_missing_permission_is_named_and_nothing_is_written():
     with pytest.raises(site_deploy.SiteError, match="DNS / Edit"):
         site_deploy.www(ZONE, "tok", reads)
     assert reads.writes() == []
+
+
+def test_a_token_of_another_account_is_named_before_wrangler_runs():
+    """30.10.2026: wrangler failed with 'Authentication error [10000]' because the stored token came
+    from the owner's other Cloudflare account; the check names both sides and stops first."""
+    no = {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]}
+    calls = []
+
+    def fake(token, method, path, body=None):
+        calls.append((method, path))
+        return no if path == "/accounts/946b" else {"success": True}
+
+    with pytest.raises(site_deploy.SiteError, match="belongs to another account"):
+        site_deploy.check_account("946b", "tok", fake)
+    assert calls == [("GET", "/accounts/946b")]
+    site_deploy.check_account("d536", "tok", fake)  # the token's own account passes
+    other = {"success": False, "errors": [{"code": 7003, "message": "Could not route"}]}
+    with pytest.raises(site_deploy.SiteError, match="reading the Cloudflare account failed"):
+        site_deploy.check_account("x", "tok", lambda *a, **k: other)

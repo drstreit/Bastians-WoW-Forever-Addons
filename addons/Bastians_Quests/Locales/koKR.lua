@@ -106,6 +106,7 @@ ns.L:Register("koKR", {
   ["Target of"] = "목표 대상인 퀘스트",
   ["Starts quests"] = "시작하는 퀘스트",
   ["Ends quests"] = "완료하는 퀘스트",
+  ["Dungeon quests"] = "던전 퀘스트",
   ["Needed for quests"] = "필요한 퀘스트",
   ["Status"] = "상태",
   ["Given by"] = "제공자",

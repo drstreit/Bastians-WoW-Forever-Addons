@@ -14,7 +14,8 @@ local win, nav, canvas, scroll, bar
 local navButtons = {}
 
 local function entries()
-  local list = { { mod = ns.core, title = ns.core.title } }
+  -- the Suite page first: every app with its switch, then General
+  local list = { { suite = true, title = L["Bastian's Suite"] }, { mod = ns.core, title = ns.core.title } }
   for _, mod in B:IterateModules() do
     if not mod.parent and mod ~= ns.core then
       list[#list + 1] = { mod = mod, title = mod.title }
@@ -31,11 +32,12 @@ local function entries()
       list[#list + 1] = { lod = addon, title = title }
     end
   end
+  local function rank(e)
+    return e.suite and 0 or (e.mod == ns.core and e.page == nil) and 1 or 2
+  end
   table.sort(list, function(a, b)
-    if a.mod == ns.core then
-      return true
-    elseif b.mod == ns.core then
-      return false
+    if rank(a) ~= rank(b) then
+      return rank(a) < rank(b)
     end
     return a.title < b.title
   end)
@@ -82,6 +84,7 @@ local function select(entry)
         or (entry.lod and b.entry.lod == entry.lod)
         or (entry.about and b.entry.about)
         or (entry.news and b.entry.news)
+        or (entry.suite and b.entry.suite)
       )
     local c = on and S.C.accent or S.C.text
     b.label:SetTextColor(c[1], c[2], c[3])
@@ -93,6 +96,8 @@ local function select(entry)
   end
   if entry.mod then
     Settings_.Render(canvas, entry.mod, entry.page)
+  elseif entry.suite then
+    Settings_.RenderSuite(canvas)
   elseif entry.about then
     B.UI.About.Render(canvas)
   elseif entry.news then
@@ -193,6 +198,8 @@ function Hub.Open(moduleName, pageID)
   end
   if moduleName == "about" then
     Hub.current = { about = true, title = L["About"] }
+  elseif moduleName == "suite" then
+    Hub.current = { suite = true, title = L["Bastian's Suite"] }
   elseif moduleName == "news" then
     Hub.current = { news = true, title = L["What's new"] }
   elseif moduleName then
@@ -225,6 +232,12 @@ SlashCmdList.BASTIANS = function(msg)
     Hub.Toggle()
   elseif cmd == "about" then
     Hub.Open("about")
+  elseif cmd == "suite" then
+    Hub.Open("suite") -- the Suite page
+  elseif cmd == "welcome" then
+    if B.UI.Welcome then
+      B.UI.Welcome.Show() -- the first-start window, any time
+    end
   elseif cmd == "news" then
     Hub.Open("news") -- What's new (ADR 0021)
   elseif cmd == "log" then

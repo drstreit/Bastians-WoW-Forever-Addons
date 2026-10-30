@@ -12,6 +12,9 @@ B.deferred[#B.deferred + 1] = {
     },
     build = "fixture",
     client = "forever",
+    dungeon = {
+      [36] = [=[{ "The Deadmines", "dungeon", 5, 15, 25, 10, 1436, { { 1, 644, "Rhahk'Zor" }, { 2, 639, "Edwin VanCleef" } }, { { 1185, 1, "s" }, { 2589, 0, "c" } }, { 62 }, "forever" }]=],
+    },
     entrance = {
       ["36-1"] = [=[{ "Deadmines", nil, 36, 10, 1436, 0, -11208.7, 1675.9, 24.6, { { 1436, 0.42, 0.72, "places", 24.6 } }, nil, nil, "places" }]=],
     },
@@ -31,6 +34,9 @@ B.deferred[#B.deferred + 1] = {
         [87] = 1429,
         [1519] = 1453,
       },
+      ["entrance.byInstance"] = {
+        [36] = { "36-1" },
+      },
       ["entrance.byZone"] = {
         [1436] = { "36-1" },
       },
@@ -46,6 +52,9 @@ B.deferred[#B.deferred + 1] = {
     names = {
       area = {
         [18] = "Crystal Lake",
+      },
+      dungeon = {
+        [36] = "The Deadmines",
       },
       entrance = {
         ["36-1"] = "Deadmines",
@@ -65,6 +74,8 @@ B.deferred[#B.deferred + 1] = {
         [295] = "Innkeeper Farley",
         [327] = "Goldtooth",
         [448] = "Hogger",
+        [639] = "Edwin VanCleef",
+        [644] = "Rhahk'Zor",
         [8719] = "Auctioneer Fitch",
       },
       object = {
@@ -96,6 +107,8 @@ B.deferred[#B.deferred + 1] = {
       [295] = [=[{ "Innkeeper Farley", "Innkeeper", 6, nil, 1429, "innkeeper", nil, { { 1429, 0.43, 0.66, "eq" } }, nil, nil, nil, nil, "forever" }]=],
       [327] = [=[{ "Goldtooth", nil, 8, nil, 1429, nil, nil, { { 1429, 0.38, 0.82, "classic", 41.3 } }, nil, nil, nil, nil, "classic" }]=],
       [448] = [=[{ "Hogger", nil, 11, nil, 1429, "elite", nil, { { 1429, 0.27, 0.86, "eq" }, { 1429, 0.3, 0.8, "questie" } }, nil, nil, { { 2589, 45.5 }, { 1185, 3.2 } }, nil, "classic" }]=],
+      [639] = [=[{ "Edwin VanCleef", nil, nil, nil, nil, { "boss" }, nil, nil, nil, nil, nil, nil, "forever", 36 }]=],
+      [644] = [=[{ "Rhahk'Zor", nil, nil, nil, nil, { "boss" }, nil, nil, nil, nil, { { 1185 } }, "forever", "forever", 36 }]=],
       [8719] = [=[{ "Auctioneer Fitch", "Auctioneer", 30, nil, 1429, "auctioneer", nil, { { 1429, 0.425, 0.645, "eq" } }, nil, nil, nil, nil, "forever" }]=],
     },
     object = {
@@ -103,6 +116,7 @@ B.deferred[#B.deferred + 1] = {
     },
     schema = {
       area = { "name", "zone", "continent", "wx", "wy", "r", "chunks", "spawns", "src" },
+      dungeon = { "name", "kind", "size", "levelLo", "levelHi", "levelReq", "zone", "bosses", "loot", "quests", "src" },
       entrance = {
         "name", "label", "instance", "level", "zone", "continent", "wx", "wy", "wz", "spawns", "verified",
         "note", "src",
@@ -111,7 +125,7 @@ B.deferred[#B.deferred + 1] = {
       node = { "name", "kind", "profession", "skill", "item", "icon", "spawns", "src" },
       npc = {
         "name", "subname", "level", "levelMax", "zone", "flags", "faction", "spawns", "vendor", "trainer",
-        "loot", "lootSrc", "src",
+        "loot", "lootSrc", "src", "dungeon",
       },
       object = { "name", "kind", "zone", "spawns", "loot", "lootSrc", "src" },
       teleport = {

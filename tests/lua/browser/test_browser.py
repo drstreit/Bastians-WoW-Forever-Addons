@@ -155,6 +155,7 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     # the list types are the navigation's Lists (ADR 0018; before, the type bar), the shown one
     # accented
     types = [
+        "Dungeons",  # data.md "Dungeons" (30.10.2026)
         "Farm spots",
         "Items",
         "NPCs",
@@ -170,7 +171,7 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     # one filter bar (ADR 0016): a pill per dimension, the counts inside the dropdowns, given the
     # other filters (Here: Westfall's quest giver is not counted)
     assert chips(wow) == ["Where: Here", "Service: All", "Rank: All", "Level: All", "Sort: Name"]
-    assert menu(wow, TREE, "where") == ["All  8", "Here  7", "Continent  8"]
+    assert menu(wow, TREE, "where") == ["All  10", "Here  7", "Continent  8"]
     assert menu(wow, TREE, "service") == [
         "All  7",
         "Auctioneer  1",

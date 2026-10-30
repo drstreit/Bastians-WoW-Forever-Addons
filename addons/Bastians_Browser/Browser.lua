@@ -213,6 +213,28 @@ Browser.LISTS = {
     label = "Quests",
     dims = { LEVEL_DIM },
   },
+  -- dungeons and raids (data.md "Dungeons"): by kind and by the band their level range starts in
+  {
+    type = "dungeon",
+    label = "Dungeons",
+    dims = {
+      {
+        id = "kind",
+        title = "Kind",
+        value = function(r)
+          return r.kind == "raid" and "Raid" or "Dungeon"
+        end,
+      },
+      {
+        id = "level",
+        title = "Level",
+        value = function(r)
+          return band(r.levelLo)
+        end,
+        sortKey = bandOrder,
+      },
+    },
+  },
   {
     type = "spot",
     label = "Farm spots",

@@ -200,6 +200,7 @@ function B.UI.Window(name, opts)
   win.title = S.heading(head, 15, 17, S.C.text, S.C.gold) -- Morpheus under the Azeroth skin
   win.title:SetPoint("LEFT", 10, 0)
   win.title:SetPoint("RIGHT", -34, 0)
+  win.title:SetWordWrap(false) -- a title never breaks into two lines
   win.title:SetText(opts.title or name)
 
   win.close = S.button(head, "x", 22, 20)
@@ -559,16 +560,20 @@ function Window:PlaceStrata()
   self.frame:Raise()
 end
 
--- The background colour and opacity of Core's settings (R27.2), the same for every window; the
--- header stays opaque, a title over the world reads badly.
+-- The background colour and opacity of Core's settings (R27.2), the same for every window, unless
+-- the window's app set its own (`windowColor` and `windowAlpha` in the app's
+-- profile, nil means the General setting); the header stays opaque, a title over the world reads
+-- badly.
 function Window:ApplyLook()
   local core = ns.core and ns.core.db and ns.core.db.profile
-  local c = core and core.windowColor
+  local app = self.opts.module and ns.modules[self.opts.module]
+  local own = app and app.db and app.db.profile or nil
+  local c = own and own.windowColor or (core and core.windowColor)
   local color = S.C.bg
   if type(c) == "table" and tonumber(c[1]) and tonumber(c[2]) and tonumber(c[3]) then
     color = c
   end
-  local alpha = core and tonumber(core.windowAlpha) or 100
+  local alpha = own and tonumber(own.windowAlpha) or (core and tonumber(core.windowAlpha)) or 100
   if self.frame.bg then
     S.tint(self.frame.bg, color, math.max(0.2, math.min(1, alpha / 100)))
   end
@@ -587,13 +592,32 @@ function Window:ApplyFrame()
     if border then
       border:SetAllPoints(self.frame)
       border:SetFrameLevel((self.frame:GetFrameLevel() or 1) + 40) -- over the content's edge
-      border:SetBackdrop({ edgeFile = S.FRAME_BORDER, edgeSize = 32 })
       self.border = border
     end
   end
   on = on and border ~= nil
   if border then
+    -- the Blizzard skin paints the
+    -- game's dialog background under the border and hides the flat ground; the other skins keep
+    -- the flat ground (and its colour and opacity) inside the border
+    local blizzard = S.Blizzard()
+    if border.blizzard ~= blizzard then
+      border.blizzard = blizzard
+      border:SetBackdrop(blizzard and {
+        bgFile = S.FRAME_BG,
+        edgeFile = S.FRAME_BORDER,
+        edgeSize = 32,
+        insets = S.FRAME_INSETS,
+      } or { edgeFile = S.FRAME_BORDER, edgeSize = 32 })
+    end
     border:SetShown(on)
+    if self.frame.bg then
+      if on and blizzard then
+        self.frame.bg:Hide()
+      else
+        self.frame.bg:Show()
+      end
+    end
   end
   if self.framed == on then
     return

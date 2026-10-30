@@ -39,6 +39,7 @@ def test_the_navigation_is_there_on_every_entry(wow: WowRuntime):
     boot(wow)
     wow.execute(f"{BR}.Open('npc:240')")  # a page: the navigation is there, Here accented
     assert nav_lists(wow) == [  # by name
+        "Dungeons",
         "Farm spots",
         "Items",
         "NPCs",

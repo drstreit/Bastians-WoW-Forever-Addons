@@ -41,8 +41,9 @@ About.SOURCES = {
   },
   {
     "ForeverDB",
-    "GPL-3.0",
-    "vendors, trainers, gather nodes and the skill a recipe is taught at (Forever)",
+    "GPL-3.0, credit: Data from ForeverDB.net (https://foreverdb.net)",
+    "vendors, trainers, gather nodes, the skill a recipe is taught at, the dungeons and raids with "
+      .. "their bosses, loot and quests (Forever)",
   },
   {
     "CMaNGOS classic-db",

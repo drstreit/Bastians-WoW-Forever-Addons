@@ -289,6 +289,75 @@ def parse_quests(text: str) -> list[QuestRow]:
     return out
 
 
+# ---------------------------------------------------------------- Dungeons
+
+
+@dataclass(frozen=True)
+class DungeonBoss:
+    order: int  # the client's order inside the instance, from 1
+    npc_id: int
+    name: str
+
+
+@dataclass(frozen=True)
+class DungeonLoot:
+    item_id: int
+    boss_order: int  # 0: the instance's loot without a boss named
+    label: str  # "s" seen by ForeverDB players in Forever, "c" the client ties it to the instance
+
+
+@dataclass(frozen=True)
+class DungeonRow:
+    id: int  # the instance's Map.db2 id (33 Shadowfang Keep, 3065 The Hall of Thanes)
+    name: str
+    kind: str  # "dungeon" | "raid"
+    size: int | None  # group size
+    level_lo: int | None
+    level_hi: int | None
+    level_req: int | None  # assumed (30.10.2026): the third number of `lv` is the entrance's level
+    zone_name: str | None  # the zone's name as ForeverDB writes it
+    bosses: tuple[DungeonBoss, ...]
+    loot: tuple[DungeonLoot, ...]
+    quests: tuple[int, ...]
+
+
+def parse_dungeons(text: str) -> list[DungeonRow]:
+    """``ns.dungeons = {[map] = {n, kind, size, lv = "lo:hi:req", ent, zone, boss =
+    "order:npc:name|...", loot = "item:order:label ...", q = "id id", guide}}`` (the header of
+    ForeverDB's Dungeons.lua, 0.44.0). `ent` and `guide` are ForeverDB's own, not read."""
+    out = []
+    for map_id, raw in sorted_items(run_text(text, "Dungeons.lua").dungeons):
+        rec = to_python(raw)
+        levels = [_opt_int(x) for x in str(rec.get("lv") or "").split(":")] + [None] * 3
+        bosses = []
+        for part in str(rec.get("boss") or "").split("|"):
+            if not part.strip():
+                continue
+            order, npc, name = part.split(":", 2)
+            bosses.append(DungeonBoss(int(order), int(npc), name))
+        loot = []
+        for part in str(rec.get("loot") or "").split():
+            item, order, label = part.split(":")
+            loot.append(DungeonLoot(int(item), int(order), label))
+        size = rec.get("size")
+        out.append(
+            DungeonRow(
+                id=int(map_id),
+                name=rec["n"],
+                kind=rec.get("kind") or "dungeon",
+                size=int(size) if size else None,
+                level_lo=levels[0],
+                level_hi=levels[1],
+                level_req=levels[2],
+                zone_name=rec.get("zone") or None,
+                bosses=tuple(bosses),
+                loot=tuple(loot),
+                quests=tuple(int(q) for q in str(rec.get("q") or "").split()),
+            )
+        )
+    return out
+
+
 # ---------------------------------------------------------------- Items
 
 
@@ -435,6 +504,10 @@ def read_gather(path: Path) -> tuple[list[GatherKind], list[GatherPoint], list[G
 
 def read_quests(path: Path) -> list[QuestRow]:
     return parse_quests(_read(path))
+
+
+def read_dungeons(path: Path) -> list[DungeonRow]:
+    return parse_dungeons(_read(path))
 
 
 def read_items(path: Path) -> list[ItemFacts]:

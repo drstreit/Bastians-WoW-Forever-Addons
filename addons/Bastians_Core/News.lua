@@ -5,6 +5,30 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.1.0:1",
+    date = "2026-10-30",
+    version = "1.1.0",
+    text = "Dungeons and raids have their own pages: the bosses in order, the loot, the dungeon quests and the door on the map.",
+  },
+  {
+    id = "1.1.0:2",
+    date = "2026-10-30",
+    version = "1.1.0",
+    text = "A Suite page lists every app with a switch, a welcome window explains the suite at the first start, each window can have its own colour and opacity, and a Blizzard skin dresses the suite in the game's frames and gold.",
+  },
+  {
+    id = "1.1.0:3",
+    date = "2026-10-30",
+    version = "1.1.0",
+    text = "The game's window frames are the standard look, one button switches the whole suite to the full WoW look, and the options window has its own minimap button.",
+  },
+  {
+    id = "1.1.0:4",
+    date = "2026-10-30",
+    version = "1.1.0",
+    text = "The minimap button box grows with its width, holds any number of buttons and scrolls; window titles stay on one line.",
+  },
+  {
     id = "1.0.0:1",
     date = "2026-10-30",
     version = "1.0.0",
@@ -159,29 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "Flight times measured by other players shorten the route's estimates once they are in the data.",
-  },
-  {
-    id = "1.0.0-beta.13:26",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "Notes no longer fails on a bookmark list saved by an earlier version.",
-  },
-  {
-    id = "1.0.0-beta.13:27",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "The map shows a new style at once, and the player menu closes with the map.",
-  },
-  {
-    id = "1.0.0-beta.13:28",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "Every window has a button to its options, and the windows' background colour and opacity can be set in the General settings.",
-  },
-  {
-    id = "1.0.0-beta.13:29",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "Place names on the map are a layer of their own: they grow as you zoom in and can be switched off.",
   },
 }

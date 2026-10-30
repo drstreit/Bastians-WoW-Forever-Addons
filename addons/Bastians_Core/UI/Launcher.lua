@@ -193,7 +193,7 @@ local function makeButton(name, iconPath, click, tip, cfg)
       local mx, my = Minimap:GetCenter()
       local cx, cy = GetCursorPosition()
       local s = Minimap:GetEffectiveScale()
-      cfg().angle = math.deg(math.atan2(cy / s - my, cx / s - mx))
+      cfg(true).angle = math.deg(math.atan2(cy / s - my, cx / s - mx)) -- a drag is written
       place(me, cfg())
     end)
   end)
@@ -251,52 +251,97 @@ Launcher.ICONS = {
 Launcher.apps = {} -- module name -> its minimap button
 
 -- The button settings of an app: { angle, hide }, in Core's profile.
-function Launcher.AppSettings(name, slot)
+-- Nothing is written until the player drags or hides a button (`create`): the saved file stays
+-- as it was for a player who never touched them (30.10.2026, the round-trip test).
+function Launcher.AppSettings(name, slot, create)
   local p = ns.core.db.profile
-  if type(p.minimapApps) ~= "table" then
-    p.minimapApps = {}
-  end
-  local cfg = p.minimapApps[name]
+  local cfg = type(p.minimapApps) == "table" and p.minimapApps[name] or nil
   if type(cfg) ~= "table" then
-    cfg = { angle = 230 + 24 * (slot or 0) } -- spread beside the suite's button (200 degrees)
-    p.minimapApps[name] = cfg
+    slot = slot or Launcher.SlotOf(name) or 0
+    cfg = { angle = 230 + 24 * slot } -- spread beside the suite's button (200 degrees)
+    if create then
+      if type(p.minimapApps) ~= "table" then
+        p.minimapApps = {}
+      end
+      p.minimapApps[name] = cfg
+    end
   end
   return cfg
 end
 
-local function appTooltip(mod)
+-- The slot of a button entry by name (its default place around the minimap).
+function Launcher.SlotOf(name)
+  for slot, entry in ipairs(Launcher.ButtonEntries()) do
+    if entry.name == name then
+      return slot
+    end
+  end
+  return nil
+end
+
+local function appTooltip(title)
   return function(tt)
-    tt:AddLine("Bastian's " .. tostring(mod.title))
+    tt:AddLine("Bastian's " .. tostring(title))
     S.TipLine(tt, L["Click: open. Drag: move the button."], "tipDim")
     S.TipLine(tt, L["Its settings page hides the button."], "tipDim")
   end
 end
+
+-- The buttons beside the suite's: one per app with a window, and the options window ("Options",
+-- "add bastians option window as minimap button").
+local function buttonEntries()
+  local out = {}
+  for _, mod in ipairs(windowApps()) do
+    out[#out + 1] = {
+      name = mod.name,
+      title = mod.title,
+      icon = mod.def.icon or Launcher.ICONS[mod.name] or B.UI.IconTexture("other"),
+      open = function()
+        openApp(mod)
+      end,
+      shown = function()
+        return mod:IsEnabled()
+      end,
+    }
+  end
+  out[#out + 1] = {
+    name = "Options",
+    title = L["Options"],
+    icon = B.UI.IconTexture("settings"),
+    open = function()
+      B.UI.Hub.Toggle()
+    end,
+    shown = function()
+      return true
+    end,
+  }
+  return out
+end
+Launcher.ButtonEntries = buttonEntries
 
 -- Creates the missing app buttons and shows each by its setting and its app's state.
 function Launcher.UpdateAppButtons()
   if not (ns.core and ns.core.db) then
     return
   end
-  for slot, mod in ipairs(windowApps()) do
-    local name = mod.name
+  for slot, entry in ipairs(buttonEntries()) do
+    local name = entry.name
     local cfg = Launcher.AppSettings(name, slot)
     local b = Launcher.apps[name]
     if not b and not cfg.hide then
       b = makeButton(
         "BastiansMinimapButton" .. name,
-        mod.def.icon or Launcher.ICONS[name] or B.UI.IconTexture("other"),
-        function()
-          openApp(mod)
-        end,
-        appTooltip(mod),
-        function()
-          return Launcher.AppSettings(name, slot)
+        entry.icon,
+        entry.open,
+        appTooltip(entry.title),
+        function(create)
+          return Launcher.AppSettings(name, slot, create)
         end
       )
       Launcher.apps[name] = b
     end
     if b then
-      if cfg.hide or not mod:IsEnabled() then
+      if cfg.hide or not entry.shown() then
         b:Hide()
       else
         b:Show()
@@ -307,7 +352,7 @@ end
 
 -- Turns an app's button on or off (its settings page).
 function Launcher.SetAppButton(name, on)
-  Launcher.AppSettings(name).hide = not on or nil
+  Launcher.AppSettings(name, nil, true).hide = not on or nil
   Launcher.UpdateAppButtons()
 end
 

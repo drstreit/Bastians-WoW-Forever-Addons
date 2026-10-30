@@ -202,7 +202,7 @@ end
 
 S.SKIN_DEFAULTS = {
   skin = "modern",
-  skinFrames = false,
+  skinFrames = true, -- the game's frames are the standard
   rowPortraits = true,
   placeCuts = true,
   diorama = true,
@@ -212,6 +212,8 @@ S.SKIN_DEFAULTS = {
 S.HEADING_FONT = "Fonts\\MORPHEUS.TTF"
 S.ORNAMENT = "Interface\\AddOns\\Bastians_Core\\Media\\Ornament"
 S.FRAME_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Border"
+S.FRAME_BG = "Interface\\DialogFrame\\UI-DialogBox-Background" -- the Blizzard skin's window ground
+S.FRAME_INSETS = { left = 11, right = 12, top = 12, bottom = 11 } -- the border's own insets
 
 function S.Skin(key)
   local core = ns.core
@@ -227,6 +229,47 @@ function S.Azeroth()
   return S.Skin("skin") == "azeroth"
 end
 
+-- The Blizzard skin: the game's
+-- frames, the gold scheme and Friz Quadrata set when it is chosen; headings in the kit's font in
+-- gold; the kit's buttons in the game's own button textures.
+S.BLIZZARD_FONT = "Fonts\\FRIZQT__.TTF"
+S.BUTTON_UP = "Interface\\Buttons\\UI-Panel-Button-Up"
+S.BUTTON_DOWN = "Interface\\Buttons\\UI-Panel-Button-Down"
+S.BUTTON_HIGHLIGHT = "Interface\\Buttons\\UI-Panel-Button-Highlight"
+S.BUTTON_COORDS = { 0, 0.625, 0, 0.6875 } -- the used part of the game's button textures
+
+function S.Blizzard()
+  return S.Skin("skin") == "blizzard"
+end
+
+-- Every kit button, so a skin change re-dresses the ones that exist.
+S.buttons = setmetatable({}, { __mode = "k" })
+
+local function coord(tex)
+  if type(tex) == "table" and tex.SetTexCoord then
+    tex:SetTexCoord(unpack(S.BUTTON_COORDS))
+  end
+end
+
+function S.applyButton(b)
+  if S.Blizzard() then
+    b:SetNormalTexture(S.BUTTON_UP)
+    b:SetPushedTexture(S.BUTTON_DOWN)
+    b:SetHighlightTexture(S.BUTTON_HIGHLIGHT, "ADD")
+    coord(b.GetNormalTexture and b:GetNormalTexture())
+    coord(b.GetPushedTexture and b:GetPushedTexture())
+    coord(b.GetHighlightTexture and b:GetHighlightTexture())
+    b.face:Hide()
+    b.edges:Hide()
+  else
+    b:SetNormalTexture("")
+    b:SetPushedTexture("")
+    b:SetHighlightTexture("")
+    b.face:Show()
+    b.edges:Show()
+  end
+end
+
 -- A heading: the kit's font at `size` in `color` (Modern), Morpheus at `azSize` in `azColor`
 -- (Azeroth); kept, so a skin, font or theme change applies at once.
 S.headings = setmetatable({}, { __mode = "k" })
@@ -238,6 +281,9 @@ function S.applyHeading(fs)
   end
   if S.Azeroth() then
     fs:SetFont(S.CJK and S.font() or S.HEADING_FONT, S.size(h.azSize), "")
+    S.ink(fs, h.azColor)
+  elseif S.Blizzard() then
+    fs:SetFont(S.font(), S.size(h.azSize), "") -- the game's titles: its own type in gold
     S.ink(fs, h.azColor)
   else
     fs:SetFont(S.font(), S.size(h.size), "")
@@ -271,6 +317,9 @@ end
 function S.ApplySkin()
   for fs in pairs(S.headings) do
     S.applyHeading(fs)
+  end
+  for b in pairs(S.buttons) do
+    S.applyButton(b)
   end
   if B.UI.ApplyWindowLook then
     B.UI.ApplyWindowLook()
@@ -651,6 +700,10 @@ function S.button(parent, label, width, height, accent)
   function b.SetEnabledFlat(self, on)
     self.enabledFlat = on and true or false
     self:SetAlpha(on and 1 or 0.4)
+  end
+  S.buttons[b] = true
+  if S.Blizzard() then
+    S.applyButton(b)
   end
   return b
 end

@@ -28,6 +28,7 @@ local TYPES = {
   "flightpath",
   "transport",
   "entrance",
+  "dungeon",
 }
 local SEARCH_SLICE = 200 -- records between yields in the search provider
 
@@ -620,6 +621,21 @@ local SUMMARY = {
     end
     return table.concat(parts, ", ")
   end,
+  -- a dungeon or raid (data.md "Dungeons"): its kind, level band, group size and zone
+  dungeon = function(r)
+    local parts = { r.kind == "raid" and L["Raid"] or L["Dungeon"] }
+    if r.levelLo and r.levelHi then
+      parts[#parts + 1] = L["Level"] .. " " .. r.levelLo .. "-" .. r.levelHi
+    end
+    if r.size then
+      parts[#parts + 1] = string.format(L["%d players"], r.size)
+    end
+    local zone = zoneName(r.zone)
+    if zone then
+      parts[#parts + 1] = zone
+    end
+    return table.concat(parts, ", ")
+  end,
   -- what the object is and where (ADR 0016: the kinds have names)
   object = function(r)
     local parts = {}
@@ -692,6 +708,7 @@ local ICON_KIND = {
   flightpath = "flight",
   transport = "route",
   entrance = "keep",
+  dungeon = "keep",
 }
 
 local function registerTypes(self)
@@ -748,6 +765,17 @@ local function registerTypes(self)
         end
         if typ == "quest" then
           return questPlaces(r)
+        end
+        if typ == "dungeon" then
+          -- a dungeon stands where its doors are (the entrance records of its instance)
+          local out = {}
+          for _, entranceID in ipairs(service:Index("entrance.byInstance", id) or {}) do
+            local door = record("entrance", entranceID)
+            for _, p in ipairs(door and spawns(door) or {}) do
+              out[#out + 1] = p
+            end
+          end
+          return out
         end
         return spawns(r)
       end,
@@ -893,11 +921,70 @@ local function lootRows(ref)
       text = itemName(l[1]),
       ref = "item:" .. l[1],
       icon = B:Entity("item:" .. l[1]):Icon(),
-      note = B.UI.FormatValue(l[2], "percent"),
+      -- no chance: an item ForeverDB players saw drop in Forever, its rate unknown (never zero)
+      note = l[2] and B.UI.FormatValue(l[2], "percent") or nil,
       chance = l[2],
     }
   end
   return rows
+end
+
+-- A dungeon's bosses in the client's order (data.md "Dungeons"); each boss's page carries its loot
+local function bossRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local r = typ == "dungeon" and record("dungeon", id)
+  if not (r and r.bosses) then
+    return nil
+  end
+  local rows = {}
+  for _, b in ipairs(r.bosses) do
+    local e = B:Entity("npc:" .. b[2])
+    rows[#rows + 1] = {
+      text = e:Name() or b[3],
+      ref = "npc:" .. b[2],
+      icon = e:Icon(),
+      value = b[1],
+      valueKind = "number",
+    }
+  end
+  return rows
+end
+
+-- A dungeon's loot: every item ForeverDB ties to the instance, the boss it drops from in the note
+local function dungeonLootRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local r = typ == "dungeon" and record("dungeon", id)
+  if not (r and r.loot) then
+    return nil
+  end
+  local bossByOrder = {}
+  for _, b in ipairs(r.bosses or {}) do
+    bossByOrder[b[1]] = b
+  end
+  local rows = {}
+  for _, l in ipairs(r.loot) do
+    local boss = bossByOrder[l[2]]
+    local e = B:Entity("item:" .. l[1])
+    rows[#rows + 1] = {
+      text = e:Name() or itemName(l[1]),
+      ref = "item:" .. l[1],
+      icon = e:Icon(),
+      note = boss and (B:Entity("npc:" .. boss[2]):Name() or boss[3]) or nil,
+    }
+  end
+  return rows
+end
+
+-- The dungeon a boss, a dungeon quest or an entrance belongs to: one link row, else nothing
+local function dungeonLinkRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local r = record(typ, id)
+  local dungeonID = r and (typ == "entrance" and r.instance or r.dungeon)
+  local d = dungeonID and record("dungeon", dungeonID)
+  if not d then
+    return nil
+  end
+  return { { ref = "dungeon:" .. dungeonID, text = d.name, icon = B.UI.IconTexture("keep") } }
 end
 
 -- Item "Sources": drops [ref, chance, questDrop], a world drop [lowest level, highest level,
@@ -1474,6 +1561,32 @@ local function registerSections(self)
     types = { "recipe" },
     order = 20,
     build = reagentRows,
+  })
+  -- dungeons (data.md "Dungeons"): the bosses in order, the loot of the instance, and the way back
+  -- from a boss, a dungeon quest or a door to its dungeon
+  section({
+    id = "data.bosses",
+    title = L["Bosses"],
+    types = { "dungeon" },
+    order = 20,
+    build = bossRows,
+    tooltip = { max = 3, build = bossRows },
+  })
+  section({
+    id = "data.dungeonloot",
+    title = L["Loot"],
+    types = { "dungeon" },
+    order = 40,
+    block = { limit = 12, table = true },
+    build = dungeonLootRows,
+  })
+  section({
+    id = "data.dungeon",
+    title = L["Dungeon"],
+    types = { "npc", "quest", "entrance" },
+    order = 88,
+    link = L["dungeon"],
+    build = dungeonLinkRows,
   })
   section({
     id = "data.zone",

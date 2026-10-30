@@ -126,6 +126,7 @@ class Sources:
     fdb_quests: list[foreverdb.QuestRow] = field(default_factory=list)
     fdb_items: list[foreverdb.ItemFacts] = field(default_factory=list)
     fdb_names: dict[int, str] = field(default_factory=dict)
+    fdb_dungeons: list[foreverdb.DungeonRow] = field(default_factory=list)
     cm_quests: list[cmangos.QuestRow] = field(default_factory=list)
     cm_creatures: list[dict] = field(default_factory=list)  # creature_template rows
     cm_objects: list[dict] = field(default_factory=list)  # gameobject_template rows
@@ -1466,6 +1467,57 @@ def merge_client_quest_areas(world: World, s: Sources) -> None:
         quests[quest_id]["spots"] = {m: v for m, v in sorted(by_map.items())}
 
 
+def merge_dungeons(world: World, s: Sources) -> None:
+    """ForeverDB's dungeons and raids (data.md "Dungeons", 30.10.2026): a `dungeon` record per
+    instance (id = its Map.db2 id, the key of our entrance rows), its bosses as npc records (named
+    from ForeverDB where no other source knows them, flagged `boss`, the dungeon on them), the loot
+    ForeverDB players saw in Forever added to each boss's loot (chance unknown, never zero), and the
+    dungeon on its quests. Runs after the Classic loot, which keeps its measured chances."""
+    zones_by_name = {
+        rec["name"]: zone_id
+        for zone_id, rec in world.records.get("zone", {}).items()
+        if isinstance(rec.get("name"), str)
+    }
+    for d in s.fdb_dungeons:
+        rec = _rec(world, "dungeon", d.id)
+        rec["name"] = clean_name(d.name)
+        rec["kind"] = d.kind
+        rec["size"] = d.size
+        rec["levelLo"], rec["levelHi"], rec["levelReq"] = d.level_lo, d.level_hi, d.level_req
+        rec["zone"] = zones_by_name.get(d.zone_name) if d.zone_name else None
+        if d.zone_name and rec["zone"] is None:
+            world.notes.append(f"dungeon {d.id} {d.name}: zone {d.zone_name!r} is unknown here")
+        rec["bosses"] = [[b.order, b.npc_id, b.name] for b in d.bosses] or None
+        rec["loot"] = [[x.item_id, x.boss_order, x.label] for x in d.loot] or None
+        rec["quests"] = list(d.quests) or None
+        rec["src"] = "forever"
+        by_order = {b.order: b for b in d.bosses}
+        for b in d.bosses:
+            npc = _rec(world, "npc", b.npc_id)
+            _set_if_missing(npc, "name", clean_name(b.name))
+            flags = npc.get("flags")
+            flags = [flags] if isinstance(flags, str) else list(flags or [])
+            if "boss" not in flags:
+                flags.append("boss")
+            npc["flags"] = flags
+            npc["dungeon"] = d.id
+            _set_if_missing(npc, "src", "forever")
+        for x in d.loot:
+            boss = by_order.get(x.boss_order)
+            if boss is None or x.label != "s":
+                continue  # the instance's unassigned loot stays on the dungeon record
+            npc = world.get("npc", boss.npc_id)
+            loot = npc.get("loot") or []
+            if not any(int(row[0]) == x.item_id for row in loot):
+                loot.append([x.item_id, None])  # seen in Forever, chance unknown
+            npc["loot"] = loot
+            _set_if_missing(npc, "lootSrc", "forever")
+        for quest_id in d.quests:
+            quest = world.get("quest", quest_id)
+            if quest is not None:
+                quest["dungeon"] = d.id
+
+
 def build_world(s: Sources) -> World:
     world = World(client=s.client, build=s.build, sources=list(s.source_names))
     world.notes.extend(s.notes)
@@ -1488,6 +1540,7 @@ def build_world(s: Sources) -> World:
     merge_client_quest_lines(world, s)
     merge_client_quest_areas(world, s)
     merge_tdb_loot(world, s)
+    merge_dungeons(world, s)
     merge_nodes(world, s)
     merge_flightpaths(world, s)
     merge_att_flightpaths(world, s)

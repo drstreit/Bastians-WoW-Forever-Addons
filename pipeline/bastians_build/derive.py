@@ -42,6 +42,24 @@ def quests_by(world: World, field_name: str) -> Index:
     return _grouped(pairs())
 
 
+def entrances_by_instance(world: World) -> Index:
+    """Entrance ids per instance Map.db2 id (the `dungeon` record's id, data.md "Dungeons")."""
+    return _grouped(
+        (int(rec["instance"]), entrance_id)
+        for entrance_id, rec in world.records.get("entrance", {}).items()
+        if rec.get("instance") is not None
+    )
+
+
+def quests_by_dungeon(world: World) -> Index:
+    """Quest ids per dungeon (the `dungeon` field ForeverDB's dungeon quests carry)."""
+    return _grouped(
+        (int(rec["dungeon"]), quest_id)
+        for quest_id, rec in world.records.get("quest", {}).items()
+        if rec.get("dungeon") is not None
+    )
+
+
 def quests_by_item(world: World) -> Index:
     """Quest IDs per item ID: items a quest requires (`requiredItems`) or has as an objective."""
 
@@ -199,6 +217,8 @@ BUILDERS: dict[str, Callable[[World], Index]] = {
     "object.byZone": lambda w: by_zone(w, "object"),
     "node.byZone": lambda w: by_zone(w, "node"),
     "entrance.byZone": lambda w: by_zone(w, "entrance"),
+    "entrance.byInstance": entrances_by_instance,
+    "quest.byDungeon": quests_by_dungeon,
     "area.byZone": lambda w: by_zone(w, "area"),
     "quest.byZone": lambda w: by_zone(w, "quest"),
     "quest.byGiver": lambda w: quests_by(w, "starts"),

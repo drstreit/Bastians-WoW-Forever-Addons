@@ -106,6 +106,7 @@ ns.L:Register("frFR", {
   ["Target of"] = "Cible de",
   ["Starts quests"] = "Débute des quêtes",
   ["Ends quests"] = "Termine des quêtes",
+  ["Dungeon quests"] = "Quêtes de donjon",
   ["Needed for quests"] = "Nécessaire pour des quêtes",
   ["Status"] = "Statut",
   ["Given by"] = "Donnée par",

@@ -80,6 +80,9 @@ ns.L:Register("deDE", {
   ["Zones"] = "Zonen",
   ["Recipes"] = "Rezepte",
   ["Quests"] = "Quests",
+  ["Dungeons"] = "Dungeons",
+  ["Dungeon"] = "Dungeon",
+  ["Raid"] = "Schlachtzug",
   ["Farm spots"] = "Farmplätze",
   ["Quest chains"] = "Questreihen",
 
@@ -219,6 +222,7 @@ ns.L:Register("deDE", {
   ["recipe"] = "Rezept",
   ["flightpath"] = "Flugroute",
   ["transport"] = "Transport",
+  ["dungeon"] = "Dungeon",
   ["chain"] = "Questreihe",
 
   -- the three panes (ADR 0018)

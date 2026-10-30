@@ -106,6 +106,7 @@ local strings = {
   ["Target of"] = "Objetivo de",
   ["Starts quests"] = "Inicia misiones",
   ["Ends quests"] = "Termina misiones",
+  ["Dungeon quests"] = "Misiones de calabozo",
   ["Needed for quests"] = "Necesario para misiones",
   ["Status"] = "Estado",
   ["Given by"] = "Dada por",

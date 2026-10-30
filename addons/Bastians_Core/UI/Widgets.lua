@@ -254,7 +254,7 @@ function W.Color(parent, label, get, set, themeColor)
   f.label = S.text(f, 12)
   f.label:SetPoint("LEFT", 0, 0)
   f.label:SetText(label or "")
-  f.reset = S.button(f, L["Theme"], 70, 20)
+  f.reset = S.button(f, L["Reset"], 70, 20) -- "Theme" said nothing
   f.reset:SetPoint("RIGHT", 0, 0)
   f.reset.tip = L["Back to the theme's colour."]
   f.swatch = CreateFrame("Button", nil, f)

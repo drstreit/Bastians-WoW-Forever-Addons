@@ -3,6 +3,7 @@ Quests' Logic.lua derives them when a pack lacks them. A synthetic world, so eve
 
 from bastians_build.derive import (
     BUILDERS,
+    build_index,
     chain_from,
     chain_members,
     quest_followers,
@@ -55,3 +56,16 @@ def test_the_indexes_are_registered():
         "quest.chainFrom",
     ):
         assert name in BUILDERS
+
+
+def test_entrances_by_instance_and_quests_by_dungeon():
+    """data.md "Dungeons": a dungeon finds its doors by the instance id, its quests by the field."""
+    world = World(client="forever")
+    world.add("entrance", "36-1", {"name": "Deadmines", "instance": 36})
+    world.add("entrance", "70-1", {"name": "Uldaman", "instance": 70})
+    world.add("entrance", "70-2", {"name": "Uldaman", "instance": 70})
+    world.add("quest", 166, {"name": "Underground Assault", "dungeon": 36})
+    world.add("quest", 6, {"name": "Bounty", "dungeon": 36})
+    world.add("quest", 7, {"name": "No dungeon"})
+    assert build_index(world, "entrance.byInstance") == {36: ["36-1"], 70: ["70-1", "70-2"]}
+    assert build_index(world, "quest.byDungeon") == {36: [6, 166]}

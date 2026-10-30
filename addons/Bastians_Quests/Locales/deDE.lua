@@ -107,6 +107,7 @@ ns.L:Register("deDE", {
   ["Target of"] = "Ziel von",
   ["Starts quests"] = "Startet Quests",
   ["Ends quests"] = "Beendet Quests",
+  ["Dungeon quests"] = "Dungeonquests",
   ["Needed for quests"] = "Benötigt für Quests",
   ["Status"] = "Status",
   ["Given by"] = "Vergeben von",

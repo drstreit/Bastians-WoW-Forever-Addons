@@ -79,6 +79,9 @@ ns.L:Register("koKR", {
   ["Zones"] = "지역",
   ["Recipes"] = "제조법",
   ["Quests"] = "퀘스트",
+  ["Dungeons"] = "던전",
+  ["Dungeon"] = "던전",
+  ["Raid"] = "공격대",
   ["Farm spots"] = "사냥터",
   ["Quest chains"] = "연계 퀘스트",
 
@@ -218,6 +221,7 @@ ns.L:Register("koKR", {
   ["recipe"] = "제조법",
   ["flightpath"] = "비행 경로",
   ["transport"] = "이동 수단",
+  ["dungeon"] = "던전",
   ["chain"] = "연계",
 
   -- the three panes (ADR 0018)

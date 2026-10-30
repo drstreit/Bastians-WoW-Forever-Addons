@@ -23,7 +23,9 @@ def test_hub_opens_and_lists_modules(app: WowRuntime):
         for b in app.eval("Bastians.UI.Hub.nav:GetChildren()")
         if b.IsShown(b)
     ]
-    assert names[0] == "General"
+    assert (
+        names[0] == "Bastian's Suite" and names[1] == "General"
+    )  # the Suite page first (30.10.2026)
     assert "Test App" in names
     assert any(
         n.startswith("Bastian's Route") for n in names
@@ -99,9 +101,9 @@ def test_blizzard_panel_categories(app: WowRuntime):
     cats = app.eval("Mock.settingsCategories")
     assert len(cats) == 1 and cats[1].name == "Bastians"
     children = sorted(c.name for c in cats[1].children.values())
-    assert children == ["Test App"]
+    assert children == ["General", "Test App"]  # the root panel is the Suite page (30.10.2026)
     panels = app.eval("Bastians.UI.Settings.Panels()")
-    assert set(panels.keys()) == {"Core", "TestApp"}
+    assert set(panels.keys()) == {"Suite", "Core", "TestApp"}
     app.execute("Bastians.UI.Settings.Open(Bastians:GetModule('TestApp'))")
     assert app.eval("Mock.settingsOpened") == app.eval(
         "Bastians.UI.Settings.Panels().TestApp.category:GetID()"
