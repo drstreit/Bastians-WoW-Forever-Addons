@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\Bastians_Gold\Icon
 ## Notes: Prices, auction capture and gold tracking.
 ## Author: Bastian
-## Version: 1.1.1
+## Version: 1.1.2
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data

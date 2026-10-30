@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.1.2:1",
+    date = "2026-10-30",
+    version = "1.1.2",
+    text = "A window saved larger than the screen opens fitted to the screen again, with its resize grip in reach.",
+  },
+  {
     id = "1.1.1:1",
     date = "2026-10-30",
     version = "1.1.1",
@@ -177,11 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "Creatures that roam show their area on the map.",
-  },
-  {
-    id = "1.0.0-beta.13:24",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "Where you walk and the map knew no way, the route planner learns the way and uses it at once.",
   },
 }

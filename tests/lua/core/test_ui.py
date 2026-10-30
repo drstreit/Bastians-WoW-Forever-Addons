@@ -849,3 +849,26 @@ def test_the_entity_menu_is_opaque_one_line_per_entry_and_wide_enough(app: WowRu
     assert menu.GetWidth(menu) >= min(380, longest + 24)
     assert menu.bg.GetVertexColor(menu.bg)[3] == 1
     assert app.errors == []
+
+
+def test_a_saved_size_beyond_the_screen_is_fitted_and_the_place_kept_on_it(core: WowRuntime):
+    """the book's window was taller than the screen (a saved size from
+    another UI scale), the grip out of reach. A restored size fits the screen with a margin, a
+    restored place stays on the screen, and the saved values follow."""
+    core.execute(
+        """bigDB = { size = { 3000, 2000 }, pos = { 1500, -900 } }
+        big = Bastians.UI.Window("BastiansBigWindow", { maxWidth = Bastians.UI.NO_LIMIT, maxHeight = Bastians.UI.NO_LIMIT, db = bigDB })"""
+    )
+    assert core.eval("big.frame:GetWidth()") == 1920 - 40
+    assert core.eval("big.frame:GetHeight()") == 1080 - 40
+    assert list(core.eval("bigDB.size").values()) == [1880, 1040]
+    left, top = core.eval("select(4, big.frame:GetPoint(1))")
+    assert (left, top) == (40, -40)  # pushed back onto the screen
+    assert list(core.eval("bigDB.pos").values()) == [40, -40]
+    # a size that fits is left alone
+    core.execute(
+        "okDB = { size = { 400, 300 }, pos = { 10, -10 } }; ok = Bastians.UI.Window('BastiansOkWindow', { db = okDB })"
+    )
+    assert list(core.eval("okDB.size").values()) == [400, 300]
+    assert core.eval("select(4, ok.frame:GetPoint(1))") == (10, -10)
+    assert core.errors == []

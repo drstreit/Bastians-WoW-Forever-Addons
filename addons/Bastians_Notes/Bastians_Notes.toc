@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\Bastians_Notes\Icon
 ## Notes: Your notes on NPCs, quests, items and spots, in lists you can share.
 ## Author: Bastian
-## Version: 1.1.1
+## Version: 1.1.2
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Map

@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_zhCN\Icon
 ## Notes: Generated names and quest objectives in Simplified Chinese; builds its tables only on a Simplified Chinese client.
 ## Author: Bastian
-## Version: 1.1.1
+## Version: 1.1.2
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

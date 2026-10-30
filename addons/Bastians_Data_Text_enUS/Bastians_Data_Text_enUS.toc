@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_enUS\Icon
 ## Notes: Generated quest texts in English (loads at startup).
 ## Author: Bastian
-## Version: 1.1.1
+## Version: 1.1.2
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

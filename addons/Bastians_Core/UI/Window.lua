@@ -537,6 +537,37 @@ function Window:ToggleFullScreen()
   self:SetFullScreen(not self.full)
 end
 
+-- A saved size never exceeds the screen and a saved place stays on it (
+-- the book taller than the screen after a UI scale change, the grip out of reach).
+Window.SCREEN_MARGIN = 20
+function Window:FitScreen()
+  local f = self.frame
+  local sw, sh = UIParent:GetWidth() or 0, UIParent:GetHeight() or 0
+  if sw <= 0 or sh <= 0 then
+    return
+  end
+  local w, h = f:GetWidth() or 0, f:GetHeight() or 0
+  local maxW, maxH = sw - 2 * Window.SCREEN_MARGIN, sh - 2 * Window.SCREEN_MARGIN
+  if w > maxW or h > maxH then
+    w, h = math.min(w, maxW), math.min(h, maxH)
+    f:SetSize(w, h)
+    if self.db.size then
+      self.db.size = { w, h }
+    end
+  end
+  local pos = self.db.pos
+  if pos then
+    -- pos: the left edge, and the top edge as a negative offset from the screen's top
+    local left = math.max(0, math.min(pos[1] or 0, sw - w))
+    local top = math.min(0, math.max(pos[2] or 0, -(sh - h)))
+    if left ~= pos[1] or top ~= pos[2] then
+      self.db.pos = { left, top }
+      f:ClearAllPoints()
+      f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", left, top)
+    end
+  end
+end
+
 function Window:RestorePlace()
   local f = self.frame
   f:ClearAllPoints()
@@ -549,6 +580,7 @@ function Window:RestorePlace()
   if self.db.size then
     f:SetSize(self.db.size[1], self.db.size[2])
   end
+  self:FitScreen()
 end
 
 -- Above other addons' windows, which sit on DIALOG or below (some covered the
