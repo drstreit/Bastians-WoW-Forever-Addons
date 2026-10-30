@@ -80,6 +80,9 @@ p { margin: 0; max-width: 66ch; }
 code, .cmd { font-family: var(--mono); font-size: 0.86em; }
 
 /* hero */
+.top { padding-top: 20px; font-size: 15px; color: var(--dim); }
+.top a { color: var(--dim); text-decoration: none; }
+.top a:hover { color: var(--accent); }
 .hero { padding-block: 56px 40px; display: grid; grid-template-columns: auto 1fr; gap: 28px 40px; align-items: center; }
 .hero img { width: clamp(140px, 22vw, 220px); height: auto; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.35)); }
 .hero .lead { font-size: 20px; color: var(--dim); margin-top: 14px; }
@@ -137,6 +140,7 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
 </head>
 <body>
 <div class="wrap">
+  <nav class="top" aria-label="Breadcrumb"><a href="../">bastians.dev</a> / Bastian's Suite</nav>
   <header class="hero">
     <img src="../media/bastians-suite.svg" alt="Bastian's Suite: a B in a ring of the eight app icons" width="512" height="512">
     <div>
@@ -245,8 +249,8 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
         </ol>
       </div>
       <div>
-        <h3>Optional companions</h3>
-        <p><b>TomTom</b> for waypoints, on both clients. On WoW Forever also <b>Questie</b>, for spawns our data lacks, and <b>Spoken Quests</b>, for voiced quest texts. The suite works without them and says once what each would add.</p>
+        <h3>Recommended addons</h3>
+        <p>On WoW Forever: <b>Questie</b>, for spawns our data lacks, and <b>Spoken</b>, for voiced quest texts. No waypoint addon is needed: Route has its own arrow and the map its own waypoints. The suite works without them and says once what each would add.</p>
       </div>
       <div>
         <h3>Something wrong?</h3>

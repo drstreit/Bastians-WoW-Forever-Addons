@@ -16,7 +16,8 @@ Forever release is built while `addons/` holds the retail files. The bundle
 `Bastians-v<Core version>-<client>.zip` holds every zipped addon folder: unzip one file into
 `Interface/AddOns`. Zips are byte-identical for the same input (sorted entries, fixed timestamps
 and modes); `manifest.json` lists every zip with its sha256, version and the git commit.
-Developer-only folders (Bastians_Probe) and addons whose TOC lists no file are never packaged.
+Developer-only folders (`DEV_ONLY`: the probe, the tales spike, the Library, not in version
+one) and addons whose TOC lists no file are never packaged.
 
 `--verify` unzips the result into a temporary AddOns folder and boots it on the WoW mock of
 tests/lua as the release client: every file compiles and runs in dependency order, the windows
@@ -43,7 +44,9 @@ from check_toc import parse_toc
 ROOT = Path(__file__).resolve().parent.parent
 ADDONS_DIR = ROOT / "addons"
 CLIENTS = ("forever", "retail")
-DEV_ONLY = {"Bastians_Probe"}
+# the Library does not ship with version one;
+# after the launch it is for developers only
+DEV_ONLY = {"Bastians_Probe", "Bastians_TalesSpike", "Bastians_Library"}
 DATA_PREFIX = "Bastians_Data_"
 GENERATED = "Generated"
 BUNDLE = "Bastians"  # the suite's bundle zip is listed under this name
@@ -61,6 +64,7 @@ WINDOW_COMMANDS = {
     "Bastians_Map": "/bmap",
     "Bastians_Route": "/broute",
     "Bastians_Strategies": "/bbook",
+    "Bastians_Notes": "/bnotes",
 }
 
 
@@ -358,6 +362,9 @@ def load_order(install: Path) -> list[str]:
 
 
 PACK_NAME = re.compile(r'"Data\.RegisterPack",\s*"(\w+)"')
+# a language pack's first statement (bastians_build.emit.locale_guard) and the mock's locale
+LOCALE_GUARD = re.compile(r"^if not \(\{ (.*?) \}\)\[GetLocale\(\)\]", re.M)
+VERIFY_LOCALE = "enUS"
 
 
 def verify(packages: list[Package], client: str, work: Path) -> list[str]:
@@ -378,7 +385,11 @@ def verify(packages: list[Package], client: str, work: Path) -> list[str]:
             zf.extractall(install)
             for name in zf.namelist():
                 if f"/{GENERATED}/" in name and name.endswith(".lua"):
-                    found = PACK_NAME.search(zf.read(name).decode("utf-8", "replace"))
+                    text = zf.read(name).decode("utf-8", "replace")
+                    found = PACK_NAME.search(text)
+                    guard = LOCALE_GUARD.search(text)
+                    if guard and VERIFY_LOCALE not in re.findall(r"(\w+) = true", guard.group(1)):
+                        continue  # a language pack of another locale returns at once (ADR 0033)
                     if found:
                         expected_packs[found.group(1)] = p.addon
     problems: list[str] = []

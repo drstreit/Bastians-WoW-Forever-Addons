@@ -110,34 +110,14 @@ def test_the_arrow_follows_the_steps_and_the_minimap_gets_the_next_step(wow: Wow
     assert wow.errors == []
 
 
-def test_tomtom_takes_over_when_installed_and_the_setting_turns_everything_off(wow: WowRuntime):
+def test_our_arrow_with_tomtom_installed_and_the_setting_turns_it_off(wow: WowRuntime):
+    """("we drop tomtom as we have it ourselves", "drop that from our plugin"):
+    the arrow is ours alone; an installed TomTom gets no waypoint."""
     boot(wow)
     wow.load_addon("TomTom")
     wow.execute(f"{R}.To('npc:448')")
-    assert wow.eval(f"{A}.IsShown()") is False  # TomTom's arrow, not ours
-    wp = wow.eval("TomTom.waypoints[1]")
-    assert wp.title == "Hogger" and wp.map == 1429 and wow.eval("#TomTom.waypoints") == 1
-    # the place on the map, not nil (Forever 23.10.2026: TomTom failed on x = nil)
-    assert 0 <= wp.x <= 1 and 0 <= wp.y <= 1
-    assert wow.eval(f"{A}.TomTomWaypoint() ~= nil") is True
-    # a route change with the same target keeps the waypoint; a new target replaces it
-    wow.execute(
-        "Bastians:Fire('BASTIANS_ROUTE_CHANGED', Bastians:GetModule('Route').Route.Active())"
-    )
-    assert wow.eval("#TomTom.waypoints") == 1
-    move_player(wow, 0.42, 0.65)
-    wow.execute(f"{R}.To('flightpath:2')")
-    assert (
-        wow.eval("#TomTom.waypoints") == 1
-        and wow.eval("TomTom.waypoints[1].title") == "Stormwind, Elwynn"
-    )
-    # the route cleared: the waypoint goes
-    wow.slash("/broute clear")
-    assert wow.eval("#TomTom.waypoints") == 0 and wow.eval(f"{A}.TomTomWaypoint()") is None
-    # TomTom's arrow declined: the own arrow again
-    wow.execute(f"{MOD}.db.profile.arrowTomTom = false")
-    wow.execute(f"{R}.To('npc:448')")
     assert wow.eval(f"{A}.IsShown()") is True and wow.eval("#TomTom.waypoints") == 0
+    assert wow.eval(f"{A}.TomTomWaypoint") is None and wow.eval(f"{A}.UseTomTom") is None
     # the arrow setting off: nothing
     wow.execute(f"{MOD}.db.profile.arrow = false")
     wow.execute("Bastians:Fire('BASTIANS_SETTING_CHANGED', 'Route', 'arrow', false)")

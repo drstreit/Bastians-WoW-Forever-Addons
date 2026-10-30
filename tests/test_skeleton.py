@@ -28,3 +28,20 @@ def test_check_toc_detects_problems(tmp_path):
     assert any("Extra.lua" in p for p in problems)
     # the client loaded Bastians_Map/Overview.lua twice on 20.10.2026 (listed twice, case ignored)
     assert any("listed twice" in p and "twice.lua" in p for p in problems)
+    assert any("IconTexture" in p for p in problems)  # every addon but the probe has an icon
+
+
+def test_an_icon_must_name_a_file_of_its_addon(tmp_path):
+    folder = tmp_path / "Demo"
+    folder.mkdir()
+    toc = "## Interface: 120105\n## Version: 1\n## IconTexture: Interface\\AddOns\\Demo\\Icon\n"
+    (folder / "Demo.toc").write_text(toc, encoding="utf-8")
+    assert any("names no file" in p for p in check_toc.check_addon(folder))
+    (folder / "Icon.tga").write_bytes(b"tga")
+    assert check_toc.check_addon(folder) == []
+
+
+def test_the_icons_are_current():
+    import make_icons
+
+    assert make_icons.main(["--check"]) == 0

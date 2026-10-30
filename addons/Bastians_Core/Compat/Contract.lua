@@ -23,7 +23,8 @@ Compat.CONTRACT = {
   GetQuestText = "questID -> details, objectives (strings, client language) or nil",
   GetWatchedQuestIDs = "-> array of questIDs on the objective tracker, possibly empty",
   SetQuestWatched = "questID, on -> bool (changed)",
-  GetPlayerFacts = "-> { level, raceID, classID, faction ('Alliance' | 'Horde' | 'Neutral') }",
+  GetPlayerFacts = "-> { level, raceID, classID, faction ('Alliance' | 'Horde' | 'Neutral'), class (the"
+    .. " file token, 'WARRIOR'), race (the file token, 'Human'), health (0..1 or nil) }",
   IsInGroup = "-> bool (party or raid)",
   GetItemCount = "itemID -> number of that item in the bags (0 when none)",
   GetBagItems = "-> array of { bag, slot, itemID, count, quality, bound, noValue, icon, link } for every"
@@ -39,6 +40,24 @@ Compat.CONTRACT = {
     .. " cooldown of the Hearthstone (item 6948); remaining is 0 when ready",
   GetMoveSpeed = "-> yards per second the player moves right now (nil while the client keeps it"
     .. " secret), mounted (bool), onTaxi (bool)",
+  GetDeathState = "-> 'alive' | 'dead' (the body, not released) | 'ghost' (released) of the player",
+  GetTeleportState = "kind ('spell' | 'item' | 'toy'), id, reagent itemID or nil -> owned, ready,"
+    .. " remaining ; owned nil when the client cannot tell, ready nil when the cooldown is unknown,"
+    .. " ready false without the reagent (R26.7)",
+  GetItemSpell = "itemID -> the spellID its use casts, or nil",
+  GroupChannel = "-> 'RAID' | 'PARTY' | nil ; the addon message channel of the character's group",
+  InGuild = "-> bool ; the character is in a guild",
+  ServerTime = "-> the realm's time in seconds (GetServerTime), else the computer's",
+  MaxLevel = "-> the level cap of the character's game, or nil",
+  Friends = "-> { { name, online, area, level } } the character's friends list (C_FriendList), maybe empty",
+  GroupUnits = "-> array of { unit, name } of the other members of the group (raid or party), possibly"
+    .. " empty",
+  RegisterAddonPrefix = "prefix -> bool ; the prefix may be used for addon messages (registered or"
+    .. " already registered), false without the addon message API",
+  SendAddonMessage = "prefix, text, channel ('PARTY' | 'RAID' | 'GUILD' | 'WHISPER'), target -> bool"
+    .. " (handed to the client)",
+  GetCorpsePosition = "-> uiMapID, x, y (map fractions) of the player's corpse, or nil (alive, no"
+    .. " answer, or the corpse on no map of the player's map chain)",
   GetTaxiNodes = "-> array of { id (nil on the legacy path), name, map (uiMapID), x, y (map fractions),"
     .. " state = 'current' | 'reachable' | 'unreachable' } ; empty when no taxi map is open",
   GetItemInfo = "itemID or link -> { id, name, link, quality, level, minLevel, class, subclass, stack,"
@@ -82,6 +101,50 @@ Compat.CONTRACT = {
   AddMask = "texture, path or nil -> mask or nil ; masks the texture with the alpha of the texture at"
     .. " path (clamped), nil clears it; nil also when the client has no mask textures",
   SetTransformTable = "table -> nil ; fallback per-uiMapID affine transforms supplied by Data",
+  -- 3D portraits
+  GetSpellName = "spellID -> name or nil ; a recipe's name on retail, whose packs carry none",
+  NewModel = "parent -> a PlayerModel frame (DressUpModel where the client has no PlayerModel) or nil",
+  ShowCreature = "model, npcID -> bool ; the creature's 3D model, false when the client cannot",
+  ShowItem = "model, itemID -> bool ; the item's own 3D model (weapons, shields, held things, helms,"
+    .. " shoulders), false when it has none or the client cannot",
+  ZoomModel = "model, scale -> nil ; the camera's distance (1 the default, smaller is closer)",
+  Animate = "model, animID -> bool ; plays a model animation (SetAnimation; the emote ids are assumed,"
+    .. " ADR 0034)",
+  HasAnimation = "model, animID -> bool, or nil when the client cannot tell (Model:HasAnimation)",
+  NewBackdrop = "parent -> a frame that answers SetBackdrop (BackdropTemplate) or nil (ADR 0034)",
+  ItemIcon = "itemID -> the icon (file id or path) from the client's item table, or nil for an item"
+    .. " the client does not have",
+  ItemQuality = "itemID -> quality (0 poor .. 7) or nil while the client does not know the item",
+  QualityColor = "quality -> r, g, b of the game's quality colour, or nil",
+  -- the fact layer (library.md §4, ADR 0028)
+  UnitFacts = "unit -> { unit, ref, guid, name, alive, level, health (0..1), reaction (1 hostile .. 8),"
+    .. " targetsPlayer, within (yards 10 | 28, nil farther or unknown) } or nil when the unit does not"
+    .. " exist or is a player",
+  PlayerState = "-> { combat, stealthed, swimming, submerged, falling, flying, mounted, onTaxi, resting,"
+    .. " indoors } (false where the client cannot tell)",
+  PlayerAuras = "-> { [spellID] = name } of the player's helpful auras, possibly empty",
+  LootSlots = "-> array of { slot, item ('item:<id>'), count, from (entity or nil) }, fishing (bool) ;"
+    .. " empty without a loot window",
+  ItemText = "-> { item, text, page } of the readable text open (a book, a plaque, a letter), or nil",
+  Emote = "token[, target] -> bool (done) ; performs the emote (DoEmote); false without the API or in"
+    .. " combat lockdown",
+  TakeScreenshot = "-> bool (asked) ; Screenshot()",
+  EquippedItems = "-> { [itemID] = slot } of what the character wears, possibly empty",
+  IsPvPFlagged = "-> bool ; the character's PvP flag (UnitIsPVP)",
+  InstanceType = "-> 'none' | 'pvp' | 'arena' | 'party' | 'raid' | 'scenario' (IsInInstance's second value)",
+  HookItemUse = "fn(itemID) -> bool (hooked) ; fn after the character uses an item from the bags",
+  AreaName = "areaID -> the area's name (C_Map.GetAreaInfo) or nil",
+  MapName = "uiMapID -> the map's name in the client's language (C_Map.GetMapInfo) or nil",
+  PlayKit = "soundKitID -> nil ; plays one of the client's sounds (PlaySound)",
+  PlayFile = "path, channel -> handle or nil ; plays a sound file (PlaySoundFile); nil when it will not",
+  StopFile = "handle -> nil ; stops a sound PlayFile started",
+  Speak = "text -> bool ; the client's text-to-speech reads the text aloud (C_VoiceChat.SpeakText, the"
+    .. " first voice; assumed, library.md 10.3); false when the client has none",
+  StopSpeaking = "-> nil ; stops what Speak reads",
+  PickColor = "r, g, b, onChange(r, g, b) -> bool (shown) ; the game's colour picker: every change"
+    .. " and a cancel (the old colour) go to onChange; false without it",
+  CombatEvent = "-> { subevent, sourceGUID, sourceName, destGUID, destName, spellID, amount } of the"
+    .. " current combat log event, or nil",
 }
 
 -- Layers call define(layer, name, fn); a later layer replaces an earlier one (Shared < Modern < client).

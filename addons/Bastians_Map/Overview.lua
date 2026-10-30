@@ -224,7 +224,7 @@ function Overview.Enabled()
 end
 
 function Overview.Render(cam)
-  if not Overview.Enabled() then
+  if not Overview.Enabled() or Map.Style() ~= "physical" then -- the game's map overlay keeps the cells
     Tiles.Clear(Overview)
     return
   end

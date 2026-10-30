@@ -5,6 +5,10 @@ local B = ns.B
 
 local S = ns.Style
 local GLYPHS = "Interface\\AddOns\\Bastians_Core\\Media\\Glyphs\\"
+-- the tiles: every symbol on a rounded tile in its category's
+-- colour, the style of the addon icons; what the icons show since. The bare glyphs stay for
+-- whoever needs one tinted (B.UI.GLYPH_PATHS).
+local TILES = "Interface\\AddOns\\Bastians_Core\\Media\\Tiles\\"
 
 -- kind -> texture path: the suite's own glyphs (ST4, ; drawn by
 -- tools/glyphs.py, written by tools/make_media.py). ~~Vanilla-era Blizzard icons~~ until then.
@@ -53,14 +57,25 @@ local KINDS = {
   "arrow",
   "leather",
   "ledger",
+  "chain",
+  "object",
+  "grave",
+  "note",
+  "tale", -- Bastian's Library, a tale's journal (28.10.2026)
+  "buttons", -- the box of the minimap buttons (Bastian's minimap, 28.10.2026)
 }
 local PATHS = {}
-local GLYPH_OF = {} -- path -> kind
+local GLYPH_PATHS = {}
+local GLYPH_OF = {} -- path -> kind, the bare glyphs only: a tile carries its colours itself
+local KIND_OF = {} -- path -> kind, tiles and glyphs
 for _, kind in ipairs(KINDS) do
-  PATHS[kind] = GLYPHS .. kind
+  PATHS[kind] = TILES .. kind
+  GLYPH_PATHS[kind] = GLYPHS .. kind
   GLYPH_OF[GLYPHS .. kind] = kind
+  KIND_OF[GLYPHS .. kind], KIND_OF[TILES .. kind] = kind, kind
 end
 B.UI.ICON_PATHS = PATHS
+B.UI.GLYPH_PATHS = GLYPH_PATHS
 
 -- The theme token that tints a kind (a glyph is white: SetVertexColor colours it); nil keeps it
 -- white with its dark rim, readable on dark and light schemes alike.
@@ -95,6 +110,8 @@ local TINT = {
   other = "dim",
   ledger = "gold", -- the Strategies book's button
   leather = "warn",
+  grave = "dim",
+  note = "gold",
 }
 B.UI.ICON_TINT = TINT
 
@@ -125,9 +142,15 @@ function B.UI.MobKind()
   return mobKind or "mob"
 end
 
--- The kind of a texture path when it is one of the suite's glyphs, else nil.
+-- The kind of a texture path when it is one of the suite's bare glyphs (tinted by the theme),
+-- else nil.
 function B.UI.GlyphKind(path)
   return path and GLYPH_OF[path] or nil
+end
+
+-- The kind of any of the suite's icon paths, a tile or a glyph, else nil.
+function B.UI.IconKind(path)
+  return path and KIND_OF[path] or nil
 end
 
 -- The colour of a kind in the active theme, or nil for a plain white glyph.

@@ -1,0 +1,5 @@
+{"table": "TaxiPath", "build": "fixture", "rowCount": 3, "columns": ["ID", "FromTaxiNode", "ToTaxiNode", "Cost"], "rows": [
+  {"ID": 13, "FromTaxiNode": 2, "ToTaxiNode": 6, "Cost": 110},
+  {"ID": 12, "FromTaxiNode": 6, "ToTaxiNode": 2, "Cost": 110},
+  {"ID": 99, "FromTaxiNode": 7, "ToTaxiNode": 8, "Cost": 0}
+]}

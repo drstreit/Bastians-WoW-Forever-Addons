@@ -1,0 +1,150 @@
+# The Bastian map's styles (ADR 0027): the classes a ground texture or a model falls in by its
+# listfile path (first match in table order), and per style its palette and strokes. Colours are
+# "rrggbb". Read by tools/mapstyle; changing this file changes the map without touching code.
+
+[render]
+supersample = 2          # drawn at twice the pixels, then scaled down (smooth edges)
+seed = 27                # the wavering strokes and the paper grain; fixed, so the build is reproducible
+
+[ground]                 # texture path keywords -> class
+road = ["cobblestone", "road", "/path"]
+farmland = ["crop", "straw", "farm", "hay", "wheat"]
+sand = ["sand", "beach", "coral"]
+snow = ["snow", "ice"]
+ash = ["ash", "charcoal", "burnt", "obsid"]
+rock = ["rock", "cliff", "stone", "rubble", "gravel"]
+dirt = ["dirt", "mud"]
+leaf = ["leaf", "needle"]
+grass = ["grass", "flower", "moss", "scrub", "brush"]
+
+[models]                 # M2 path keywords -> class; others are props and not drawn
+tree = ["/trees/", "tree", "canopy", "pine", "oak", "palm", "willow"]
+bush = ["bush", "shrub", "fern", "/plants/"]
+rock = ["rock", "boulder"]
+fence = ["fence", "wallpiece", "/posts", "woodpost"]
+
+[unnamed]                # models without a listfile name (Forever's new trees in Elwynn, 26.10.2026)
+tree_min_height = 20     # yards of model box: taller ones count as trees
+crown_share = 0.35       # of the box radius (the box holds the widest branch)
+
+[buildings]
+step = 1.2               # a line where the WMO tops rise this many yards per yard (eaves, ridges, walls)
+roof_above = 2.5         # yards between an indoor floor and the top above it: a roof (else open sky)
+under_roof = 2.5         # yards of WMO above a tree or a prop: it stands inside and is not drawn
+
+[liquids]                # LiquidType name keywords -> class
+lava = ["magma", "lava"]
+slime = ["slime", "fel"]
+sea = ["ocean"]
+water = ["water", "river", "lake", "canal"]
+
+[style.parchment]
+label_font = "IMFellEnglish-Regular.ttf"  # OFL, .local/fonts (build time only)
+label_size = 28
+label_ink = "3b2a1a"
+label_halo = "e9dcb8"
+sea = "5f8c93"             # the open sea where the map has no tile (far cells)
+roof_vary = 0.22         # each building lighter or darker by up to this share
+title = "Parchment and ink"
+paper = "e9dcb8"
+grain = 0.06
+ink = "3b2a1a"
+relief = 0.6             # how strongly the hill shading shows
+shade = "7a5f3e"         # the slopes away from the light
+light = "f6ecd0"
+water = "8fb3b0"
+water_deep = "5f8c93"
+coast_width = 1.6        # yards
+ripples = 3
+road = "d8c49a"
+road_edge = "8a6a44"
+roof = "a3503a"
+roof_edge = "3b2a1a"
+shadow = 0.35
+tree = "6f8a4a"
+tree_dark = "445f2f"
+bush = "8a9d5a"
+lava = "c8502a"
+slime = "8db046"
+[style.parchment.ground]
+grass = "c9cf9a"
+leaf = "b5b882"
+dirt = "d6c08e"
+rock = "b9ab90"
+sand = "eadbb0"
+snow = "f2efe6"
+ash = "8d8273"
+farmland = "e0cf8a"
+road = "d8c49a"
+
+[style.modern]
+label_font = "Lato-Bold.ttf"  # OFL, .local/fonts (build time only)
+label_size = 26
+label_ink = "3a3f3a"
+label_halo = "f4f6ee"
+sea = "6fa8f2"             # the open sea where the map has no tile (far cells)
+roof_vary = 0.22         # each building lighter or darker by up to this share
+title = "Modern road map"
+land = "e4ecd6"
+relief = 0.32
+shade = "6f7f6a"
+wood_from = 0.45         # trees per square of 40 yards from which it is a wood
+forest = "a6d58c"
+forest_edge = "86bd6c"
+tree = "6fae55"
+water = "6fa8f2"
+water_edge = "3f7fd6"
+road = "ffffff"
+road_edge = "a39a8c"
+square = "f4f1ea"
+building = "d6cec2"
+building_edge = "8f8373"
+lava = "f0805a"
+slime = "b6dc6a"
+[style.modern.ground]
+grass = "cfe6b2"
+leaf = "bcdc9c"
+dirt = "e3dcbf"
+rock = "c9d8b3"
+sand = "f2e3b6"
+snow = "ffffff"
+ash = "bdb4a8"
+farmland = "ece9b0"
+road = "ffffff"
+
+[style.pencil]
+label_font = "PatrickHand-Regular.ttf"  # OFL, .local/fonts (build time only)
+label_size = 30
+label_ink = "4a443d"
+label_halo = "fbf6ea"
+sea = "4f88bf"             # the open sea where the map has no tile (far cells)
+roof_vary = 0.22         # each building lighter or darker by up to this share
+title = "Bastian's coloured pencil"
+paper = "fbf6ea"
+tooth = 0.04             # below this the paper's hollows stay white
+relief = 1.0
+stroke_angle = 35        # degrees of the hatching, as a right hand draws
+stroke_spacing = 5.5     # yards between pencil strokes (3 pixels in the game)
+water = "2f6fb0"
+water_light = "7fb4dc"
+water_line = "1f4a80"
+road = "d39a55"
+road_line = "6b4220"
+roof = "c4442c"
+roof_line = "6e1e10"
+tree = "3f8a2e"
+tree_light = "8cc456"
+tree_shadow = "2c4a1e"
+tree_line = "1f4a16"
+lava = "e2581f"
+slime = "8fc23a"
+[style.pencil.ground]
+grass = "8cc25a"
+leaf = "6fa848"
+dirt = "d8a462"
+rock = "b9a98a"
+sand = "efcf7e"
+snow = "ffffff"
+ash = "857a6e"
+farmland = "e6c24a"
+road = "d39a55"

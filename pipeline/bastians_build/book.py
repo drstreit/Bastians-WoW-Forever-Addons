@@ -271,6 +271,14 @@ def spot_plate(
         "start": list(start),
         "label": spec.get("label"),
         "labelAt": [_r(cx), _r(max(p[1] for p in farm_p))],
+        # the plate's corners on its map (fractions): the zone's painting behind the dots
+        #
+        "box": [
+            _r(x0 - ox / (sx * scale)),
+            _r(y0 - oy / (sy * scale * PLATE_ASPECT)),
+            _r(x0 + (1 - ox) / (sx * scale)),
+            _r(y0 + (1 - oy) / (sy * scale * PLATE_ASPECT)),
+        ],
         # the farm's centre on its map (fractions): the Rumours map layer's pin
         "place": [
             map_id,

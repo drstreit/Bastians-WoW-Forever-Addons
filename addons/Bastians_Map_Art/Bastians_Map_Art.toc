@@ -1,8 +1,9 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Map Art
+## IconTexture: Interface\AddOns\Bastians_Map_Art\Icon
 ## Notes: Overview map textures for Bastian's Map (loads at startup).
 ## Author: Bastian
-## Version: 1.0.0-beta.12
+## Version: 1.0.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

@@ -222,6 +222,7 @@ local function giverPins(view, wanted, priority)
         status = st,
         quests = qids,
         lines = lines,
+        card = Reg.SignCard, -- the map's hover card (R25.30), made when hovered
       }
     end
   end)
@@ -236,6 +237,7 @@ local function turnInPins(view)
     for _, ref in ipairs(q and q.ends or {}) do
       local pin = seen[ref]
       if pin then
+        pin.quests[#pin.quests + 1] = qid
         if e.isComplete and not pin.complete then
           pin.complete, pin.color, pin.priority = true, COLOR.complete, 70
         end
@@ -252,6 +254,10 @@ local function turnInPins(view)
             priority = e.isComplete and 70 or 55,
             cluster = true,
             complete = e.isComplete or false,
+            -- the quests handed in here: one opens that quest, several the NPC's page with its
+            -- "Ends quests"
+            quests = { qid },
+            card = Reg.SignCard,
           }
           seen[ref] = pin
           pins[#pins + 1] = pin
@@ -322,6 +328,7 @@ end
 local function registerLayers(mod)
   B:RegisterMapLayer(mod, {
     id = "quests.available",
+    icon = "quest", -- the layer bar shows its icon (R27.8)
     label = L["Quests to take"],
     defaultOn = true,
     minLevel = 2,
@@ -331,6 +338,7 @@ local function registerLayers(mod)
   })
   B:RegisterMapLayer(mod, {
     id = "quests.soon",
+    icon = "waiting", -- the layer bar shows its icon (R27.8)
     label = L["Quests soon (level, prerequisite)"],
     defaultOn = false,
     minLevel = 3,
@@ -340,6 +348,7 @@ local function registerLayers(mod)
   })
   B:RegisterMapLayer(mod, {
     id = "quests.turnin",
+    icon = "done", -- the layer bar shows its icon (R27.8)
     label = L["Quest hand-ins"],
     defaultOn = true,
     minLevel = 1,
@@ -347,6 +356,7 @@ local function registerLayers(mod)
   })
   B:RegisterMapLayer(mod, {
     id = "quests.objectives",
+    icon = "mob", -- the layer bar shows its icon (R27.8)
     label = L["Quest objectives"],
     defaultOn = true,
     minLevel = 2,
@@ -811,8 +821,8 @@ local function unlocksRows(id)
   return #rows > 0 and rows or nil
 end
 
--- The "needs" link (C2): the items a quest asks for, each with where it comes from and how far
--- that is now (so the rows are not cached: the distance moves with the player).
+-- The "needs" link (C2): the items a quest asks for, each with where it comes from and how long
+-- the way there is now (so the rows are not cached: the time moves with the player).
 local function needsRows(id)
   local q = Logic.quest(id)
   if not (q and q.objectives) then
@@ -829,7 +839,7 @@ local function needsRows(id)
       if source then
         local from = B:Entity(source):Name()
         if from then
-          local dist = B.UI.Distance(B.Coords.DistanceTo(source))
+          local dist = B.UI.Away(source)
           text = text
             .. "  "
             .. R.COLOR.grey
@@ -945,6 +955,77 @@ local function rewardRows(id)
     }
   end
   return rows
+end
+
+Reg.CARD_QUESTS = 3 -- quests a sign's card names; the rest as "... and n more"
+
+-- A quest's rewards as card lines: the money, the reputation, then every item (the choices
+-- marked); no experience.
+local function rewardLines(qid)
+  local q = Logic.quest(qid)
+  local rw = q and q.rewards or {}
+  local lines = {}
+  if rw.money and rw.money > 0 then
+    lines[#lines + 1] = { text = B.UI.Money(rw.money), color = "gold" }
+  end
+  for _, rep in ipairs(rw.rep or {}) do
+    local value = rep[2] or 0
+    lines[#lines + 1] = {
+      text = (value > 0 and "+" or "") .. value .. " " .. factionName(rep[1]),
+      color = value < 0 and "bad" or "text",
+    }
+  end
+  local function item(it, prefix)
+    local name = B:Entity("item:" .. it[1]):Name() or (L["Item"] .. " " .. it[1])
+    local count = (it[2] or 1) > 1 and (" x" .. it[2]) or ""
+    lines[#lines + 1] = { text = (prefix and (R.COLOR.grey .. prefix .. "|r ") or "") .. name .. count }
+  end
+  for _, it in ipairs(rw.items or {}) do
+    item(it)
+  end
+  for _, it in ipairs(rw.choices or {}) do
+    item(it, L["Choice:"])
+  end
+  return lines
+end
+
+-- The map's card of a quest sign: per quest its name (green,
+-- larger), its chain in grey ("Quest chain 'X' 2/5"), its rewards. One quest: the card is that
+-- quest's; several: the giver's name over up to CARD_QUESTS quests. Not "Available", the worth or
+-- the minutes: the sign says the status, the rest did not help.
+function Reg.SignCard(pin)
+  local qids = pin.quests or {}
+  if #qids == 0 then
+    return nil
+  end
+  local s = State.ForLogic()
+  local single = #qids == 1
+  local lines = {}
+  for i, qid in ipairs(qids) do
+    if i > Reg.CARD_QUESTS then
+      lines[#lines + 1] =
+        { text = string.format(L["... and %d more"], #qids - Reg.CARD_QUESTS), color = "dim" }
+      break
+    end
+    if not single then
+      lines[#lines + 1] = { text = R.questName(qid), color = "good", size = 13 }
+    end
+    local ch = Logic.chain(qid, s)
+    if ch and ch.pos[qid] then
+      lines[#lines + 1] = {
+        text = string.format(L["Quest chain '%s' %d/%d"], ch.name or "?", ch.pos[qid], #ch.quests),
+        color = "dim",
+      }
+    end
+    for _, l in ipairs(rewardLines(qid)) do
+      lines[#lines + 1] = l
+    end
+  end
+  return {
+    title = single and R.questName(qids[1]) or (pin.ref and B:Entity(pin.ref):Name()) or pin.label,
+    titleColor = single and "good" or nil,
+    lines = lines,
+  }
 end
 
 -- Which reward to take (S7, browser.md "Item comparison of quest reward choices"): the choices
@@ -1557,17 +1638,17 @@ end
 -- The Here column (C4): "Do here" and "My quests here" on the player's zone
 -- ---------------------------------------------------------------------------------------------
 
--- Yards from the player to a map point, nil when either side is unknown.
-local function yardsTo(map, x, y)
+-- How far a map point is from the player (Bastians.UI.Away): the travel time's text and a
+-- number to sort by; nil when unknown.
+local function awayTo(map, x, y)
   if not (map and x and y) then
     return nil
   end
-  local continent, wx, wy = B.Coords.Player()
-  local c, px, py = B.Coords.ToWorld(map, x, y)
-  if not (continent and c == continent) then
+  local c, wx, wy = B.Coords.ToWorld(map, x, y)
+  if not c then
     return nil
   end
-  return math.sqrt((px - wx) ^ 2 + (py - wy) ^ 2)
+  return B.UI.Away({ map = c, wx = wx, wy = wy })
 end
 
 -- "Do here": the ranking, best first; the rows lose their "/min" value so the worth shows (C3).
@@ -1613,7 +1694,8 @@ local function hereLogRows(ref)
         end
         row.id = "here:log:" .. tostring(src.qid or row.id)
         row.children = nil
-        local dist = B.UI.Distance(yardsTo(row.map, row.x, row.y))
+        local dist, d = awayTo(row.map, row.x, row.y)
+        row.d = d
         row.text = (row.text or "") .. "  " .. R.COLOR.grey .. (dist or L["distance unknown"]) .. "|r"
         rows[#rows + 1] = row
       end
@@ -1737,6 +1819,7 @@ local function registerLists(mod)
   B:RegisterList(mod, {
     type = "chain",
     label = "Quest chains",
+    glyph = "chain", -- not the quest's "!"
     facet = "level",
     ids = Logic.chainRoots,
     record = function(root)
@@ -1766,6 +1849,89 @@ local function registerLists(mod)
 end
 Reg.LevelBand = levelBand
 
+-- ---------------------------------------------------------------------------------------------
+-- Activity (R26.11, route.md "Explore"): the quest as something to do now, timed by Recommend's
+-- estimate, above Data's rule (priority 100); and the quests worth asking about
+-- ---------------------------------------------------------------------------------------------
+
+Reg.EXPLORE_BELOW, Reg.EXPLORE_ABOVE = 2, 2 -- the zones whose level band meets the character's
+
+-- The quests in the log and those the character can take now in its zone and the zones of its level.
+function Reg.ExploreQuests()
+  local state = State.ForLogic()
+  local out = {}
+  for qid in pairs(State.log or {}) do
+    out[#out + 1] = "quest:" .. qid
+  end
+  local here = ns.Window.PlayerPlace()
+  local maps = { here }
+  local level = state.level
+  if level then
+    for _, z in ipairs(Logic.zones(state.faction)) do
+      local fits = z.lo and z.hi and z.lo <= level + Reg.EXPLORE_ABOVE and z.hi >= level - Reg.EXPLORE_BELOW
+      if fits and z.map ~= here then
+        maps[#maps + 1] = z.map
+      end
+    end
+  end
+  for _, map in ipairs(maps) do
+    for _, g in ipairs(Logic.zoneView(map, state).available) do
+      for _, qid in ipairs(g.quests) do
+        if not State.IsHidden(qid) then
+          out[#out + 1] = "quest:" .. qid
+        end
+      end
+    end
+  end
+  return out
+end
+
+-- { kind = "quest", takes, gives, status, src = "estimate" }: XP by the character's level, the
+-- money and the reward items (the choices as one), the time from the next place on.
+function Reg.QuestActivity(ref)
+  local qid = questID(ref)
+  local q = qid and Logic.quest(qid)
+  if not q then
+    return nil
+  end
+  local Rec = ns.Recommend
+  local state = State.ForLogic()
+  local entry = State.log[qid]
+  local ctx = ns.Window.RecommendContext(nil)
+  local hard = q.level and state.level and q.level - state.level >= 3
+  local minutes =
+    Rec.workMinutes(q, entry, ns.Window.PlayerPlace(), ctx, ctx.objectiveTime, hard and 1.5 or 1)
+  local gives = { { kind = "xp", amount = Rec.xp(q.level, state.level) } }
+  local rw = q.rewards or {}
+  if rw.money and rw.money > 0 then
+    gives[#gives + 1] = { kind = "copper", amount = rw.money }
+  end
+  for _, it in ipairs(rw.items or {}) do
+    gives[#gives + 1] = { kind = "item", id = it[1], amount = it[2] or 1 }
+  end
+  for _, it in ipairs(rw.choices or {}) do
+    gives[#gives + 1] = { kind = "item", id = it[1], amount = it[2] or 1, choice = true }
+  end
+  return {
+    kind = "quest",
+    takes = minutes * 60,
+    gives = gives,
+    status = entry and "log" or Logic.status(qid, state),
+    src = "estimate",
+  }
+end
+
+local function registerActivity(mod)
+  B:RegisterFacet(mod, {
+    facet = "activity",
+    types = { "quest" },
+    priority = 150,
+    invalidateOn = { "BASTIANS_QUESTS_CHANGED", "BASTIANS_DATA_LOADED", "BASTIANS_PLAYER_MOVED_ZONE" },
+    rule = Reg.QuestActivity,
+    list = Reg.ExploreQuests,
+  })
+end
+
 function Reg.Register(mod)
   mod.Registrations = Reg -- for the tests and the perf scripts
   registerLayers(mod)
@@ -1777,6 +1943,7 @@ function Reg.Register(mod)
   registerSearch(mod)
   registerLists(mod) -- the Browser's Quest chains list
   ns.Worth.Register(mod) -- the worth of a quest (C3)
+  registerActivity(mod) -- the quest as an activity for Explore (R26.11)
   Reg.ResetCaches()
   Reg.InvalidateZone()
   mod:RegisterEvent("QUEST_WATCH_LIST_CHANGED", function(me)

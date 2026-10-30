@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_forever_table_is_valid_and_covers_both_continents():
-    rows = read_transports(CONFIG_DIR / "transports_forever.toml")
+    rows = read_transports(CONFIG_DIR / "places_forever.toml")
     ids = {r["id"] for r in rows}
     assert {
         "boat-menethil-auberdine",
@@ -25,7 +25,7 @@ def test_forever_table_is_valid_and_covers_both_continents():
     assert kinds == {"boat", "zeppelin", "tram", "portal"}
     assert all(r["verified"] is False for r in rows)  # nothing measured on Forever yet
     assert all(len(r["stops"]) == 2 for r in rows)
-    assert read_transports(CONFIG_DIR / "transports_retail.toml") == []
+    assert read_transports(CONFIG_DIR / "places_retail.toml") == []
 
 
 def write(tmp_path: Path, body: str) -> Path:
@@ -111,8 +111,7 @@ def test_the_forever_tram_entrances_lie_where_the_exit_triggers_put_a_player():
     dump = probe.read_probe_dump(path)
     transforms = probe.transform_table(dump)
     rows = {
-        r["id"]: r
-        for r in read_transports(root / "pipeline" / "config" / "transports_forever.toml")
+        r["id"]: r for r in read_transports(root / "pipeline" / "config" / "places_forever.toml")
     }
     tram = rows["tram-stormwind-ironforge"]
     triggers = {1453: (-8354.23, 524.068), 1455: (-4839.51, -1317.74)}

@@ -9,10 +9,16 @@
     <RootNamespace>ClientDump</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Deterministic>true</Deterministic>
+    <!-- navmesh: Recast allocates a heap object per span; the workstation GC made 32 threads run like 3 -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
   </PropertyGroup>
 
   <!-- Versions are pinned on purpose; see docs/data/client-extraction.md. -->
   <ItemGroup>
+    <PackageReference Include="DotRecast.Core" Version="2026.3.1" />
+    <PackageReference Include="DotRecast.Detour" Version="2026.3.1" />
+    <PackageReference Include="DotRecast.Recast" Version="2026.3.1" />
     <PackageReference Include="TACTSharp" Version="0.2.0-alpha" />
     <PackageReference Include="DBCD" Version="2.3.1" />
     <PackageReference Include="BLPSharp" Version="0.1.0" />

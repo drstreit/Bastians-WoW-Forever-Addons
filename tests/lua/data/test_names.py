@@ -101,3 +101,14 @@ def test_answered_names_are_stored_searched_and_known_after_a_reload(wow: WowRun
     assert fresh.eval("BastiansDataDB.global.names.quest[9001]") is None  # the oldest went
     assert fresh.eval("BastiansDataDB.global.names.npc[500012]") == "Guard 12"
     assert fresh.errors == []
+
+
+def test_a_recipe_without_a_name_takes_the_spells(wow: WowRuntime):
+    """28.10.2026: retail's recipes (AllTheThings) come without names; the client's spell name
+    answers and is kept like the other names."""
+    boot(wow)
+    wow.execute("Mock.spellNames[3275] = 'Linen Bandage'")
+    assert wow.eval("Bastians.Data.Names.Get('recipe', 3275)") == "Linen Bandage"
+    assert wow.eval("Bastians.Data.Names.Store('recipe')[3275]") == "Linen Bandage"
+    assert wow.eval("Bastians.Data.Names.Get('recipe', 1)") is None
+    assert wow.errors == []

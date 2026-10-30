@@ -1,0 +1,22 @@
+## Interface: 16001, 120105
+## Title: Bastian's Notes
+## IconTexture: Interface\AddOns\Bastians_Notes\Icon
+## Notes: Your notes on NPCs, quests, items and spots, in lists you can share.
+## Author: Bastian
+## Version: 1.0.0
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## OptionalDeps: Bastians_Data, Bastians_Map
+## SavedVariables: BastiansNotesDB
+
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+News.lua
+Notes.lua
+Editor.lua
+Lists.lua
+Share.lua

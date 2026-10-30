@@ -13,6 +13,11 @@
 # slug or a project id of 0 is refused, because CurseForge rejects a file whose relation names an
 # unknown project.
 
+# The clients a release uploads (CurseForge carries WoW Forever only; retail stays a
+# local test install until it is dropped, ADR 0037). curseforge.py --send and suite_release.py refuse
+# or skip the others.
+release_clients = ["forever"]
+
 [game_versions]
 # Names as CurseForge lists them, resolved to ids at upload (an unknown name stops the upload).
 # WoW Forever (interface 16001): CurseForge lists the flavor "Forever" with game version 1.60.1
@@ -36,13 +41,18 @@ folders = [
   "Bastians_Quests",
   "Bastians_Map",
   "Bastians_Map_Art",
+  "Bastians_Map_Blizzard",
+  "Bastians_Map_Modern",
+  "Bastians_Map_Pencil",
+  "Bastians_Map_Parchment",
   "Bastians_Browser",
   "Bastians_Gold",
   "Bastians_Route",
   "Bastians_Strategies",
+  "Bastians_Notes",
 ]
 required = ["Bastians_Data"]
-optional = ["TomTom", "QuestieDB", "Spoken"]
+optional = ["QuestieDB", "Spoken"]
 
 # the loader with every pack, the book included: the packs and their reader ship together
 [projects.Bastians_Data]
@@ -56,6 +66,12 @@ folders = [
   "Bastians_Data_World",
   "Bastians_Data_Items",
   "Bastians_Data_Text_enUS",
+  "Bastians_Data_Text_deDE",
+  "Bastians_Data_Text_frFR",
+  "Bastians_Data_Text_esES",
+  "Bastians_Data_Text_koKR",
+  "Bastians_Data_Text_zhCN",
+  "Bastians_Data_Text_zhTW",
   "Bastians_Data_Market",
   "Bastians_Data_Strategies",
 ]
@@ -65,11 +81,8 @@ optional = ["Bastians_Suite", "QuestieDB"]
 
 # ---- the companions (Bastians.COMPANIONS): where they exist and their CurseForge project ----
 
-[external.TomTom]
-slug = "tomtom"
-id = 18808
-verified = true # its TOC names X-Curse-Project-ID 18808, the hub links curseforge.com/wow/addons/tomtom
-clients = ["forever", "retail"]
+# ~~[external.TomTom]~~ (project 18808): no longer a companion ("we drop tomtom
+# as we have it ourselves"); Map and Route still load after it when a player has it
 
 [external.QuestieDB]
 slug = "questie"

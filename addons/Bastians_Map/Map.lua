@@ -15,9 +15,13 @@ local Map = {}
 ns.Map = Map
 
 local SETTLE_DELAY = 0.1 -- seconds after the last pan or zoom before the layers are queried
+local SETTLE_MAX = 1 -- ... but at most this long: kept centred, the view moves with every step
+local CENTRED_PX = 0.5 -- kept centred: the camera follows once the player is this far off
 local WHEEL_STEP = 0.5 -- levels per wheel notch
 local KEY_PAN = 120 -- pixels per arrow key
 local FOOTER_H = 18
+local TOOLBAR_ROW, TOOLBAR_GAP = 22, 4 -- one toolbar row and the space between two
+Map.SEARCH_MIN = 140 -- the search box never gets narrower: the buttons wrap first
 -- Continent names come from Core (the transform table lists every world map with a zone; the two
 -- Azeroth continents without one). Map.CONTINENTS reads the same table.
 local function continentName(continent)
@@ -34,6 +38,7 @@ local mod, win, clip, footer, toolbar
 local cameras = {} -- continent -> Camera
 local camera -- the current one
 local dragging -- { x, y } last cursor position while the mouse button is down
+local settleSince -- when the pending layer query was first asked for (SETTLE_MAX)
 local settleTimer
 Map.onView = {} -- fn(camera) after every view change
 Map.onResize = {} -- fn(camera) per size change while the grip is held: reposition only, no loads
@@ -42,6 +47,9 @@ Map.onBuild = {} -- fn(clip) once the window exists
 Map.onSetting = {} -- fn(key, value) when one of the Map's settings changes (one bus handler for all)
 Map.onTick = {} -- fn() ten times a second while the window is shown
 Map.onEnable = {} -- fn(module) at every enable
+Map.onZone = {} -- fn(uiMapID, continent) on BASTIANS_PLAYER_MOVED_ZONE (one bus handler, below)
+Map.onWorld = {} -- fn() on PLAYER_ENTERING_WORLD (one event handler per module: the lists share it)
+Map.onLogout = {} -- fn() on PLAYER_LOGOUT
 Map.onDisable = {} -- fn() at every disable
 Map.onLayerChanged = {} -- fn() when a layer changed or was registered (Pins holds the bus handler)
 Map.onFocus = {} -- fn(ref, ctx) on BASTIANS_ENTITY_FOCUSED (one bus handler for all; ref nil: cleared)
@@ -92,7 +100,7 @@ local function remember()
 end
 
 local function settle()
-  settleTimer = nil
+  settleTimer, settleSince = nil, nil
   if not (win and win:IsShown() and camera) then
     return
   end
@@ -115,6 +123,9 @@ function Map.ViewChanged(sizing)
   if settleTimer then
     settleTimer:Cancel()
     settleTimer = nil
+    if settleSince and GetTime() - settleSince >= SETTLE_MAX then
+      settle() -- the view has not stood still for a second (kept centred while walking): query now
+    end
   end
   if sizing then
     for _, fn in ipairs(Map.onResize) do
@@ -127,6 +138,7 @@ function Map.ViewChanged(sizing)
     fn(camera)
   end
   Map.UpdateFooter()
+  settleSince = settleSince or GetTime()
   settleTimer = C_Timer.NewTimer(SETTLE_DELAY, settle)
 end
 
@@ -141,6 +153,9 @@ end
 
 -- Switch to a continent (keeps that continent's camera).
 function Map.SetContinent(continent)
+  if Map.KeepCentred() then
+    Map.SetKeepCentred(false) -- the player looks at another continent: the map lets go
+  end
   camera = cameraFor(continent)
   if toolbar and toolbar.continent then
     toolbar.continent:SetValue(continent)
@@ -149,7 +164,12 @@ function Map.SetContinent(continent)
 end
 
 -- Centre the camera on a world point, optionally at a level, switching continents when needed.
-function Map.Fly(continent, wx, wy, level)
+-- Flying elsewhere lets go of Keep centred, as dragging does (another
+-- continent snapped back to the player's at once); `follow` is the player's own position.
+local function fly(continent, wx, wy, level, follow)
+  if not follow and Map.KeepCentred() then
+    Map.SetKeepCentred(false)
+  end
   if not win then
     Map.Open()
   end
@@ -164,6 +184,10 @@ function Map.Fly(continent, wx, wy, level)
     camera:SetLevel(level)
   end
   Map.ViewChanged()
+end
+
+function Map.Fly(continent, wx, wy, level)
+  fly(continent, wx, wy, level)
 end
 
 -- Centre on the player; false when the player has no world position.
@@ -203,7 +227,63 @@ function Map.CenterOnPlayer()
   if not p then
     return false
   end
-  Map.Fly(p[1], p[2], p[3])
+  fly(p[1], p[2], p[3], nil, true)
+  return true
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Keep centred: the player stays in the middle of the map while
+-- moving; the zoom stays the player's. Dragging the map switches it off, as Google Maps does. Not
+-- the old Follow, which flew to the Browser's pages (removed in round 2).
+-- ---------------------------------------------------------------------------------------------
+
+function Map.KeepCentred()
+  return mod ~= nil and db().keepCentred == true
+end
+
+local function centredLook()
+  local b = toolbar and toolbar.centred
+  if not b then
+    return
+  end
+  local on = Map.KeepCentred()
+  b.token = on and "accent" or "dim"
+  local color = S.C[b.token]
+  S.tint(b.face, color, S.TILE_FACE_ALPHA)
+  S.setEdges(b.edges, color, 0.9)
+end
+
+function Map.SetKeepCentred(on)
+  if not mod then
+    return
+  end
+  db().keepCentred = on and true or false
+  centredLook()
+  if on then
+    Map.CenterOnPlayer()
+  end
+end
+
+-- Each frame while kept centred: the camera follows once the player is half a pixel off its middle.
+function Map.FollowPlayer()
+  if not (Map.KeepCentred() and camera and not dragging) then
+    return false
+  end
+  local p = Map.PlayerWorld()
+  if not p then
+    return false
+  end
+  if p[1] ~= camera.continent then
+    fly(p[1], p[2], p[3], nil, true)
+    return true
+  end
+  local sx, sy = camera:ToScreen(p[2], p[3])
+  local w, h = viewSize()
+  if math.abs(sx - w / 2) < CENTRED_PX and math.abs(sy - h / 2) < CENTRED_PX then
+    return false
+  end
+  camera:Center(p[2], p[3])
+  Map.ViewChanged()
   return true
 end
 
@@ -289,8 +369,13 @@ local function onUpdate(_, elapsed)
     local dx, dy = (x - dragging.x) / scale, (dragging.y - y) / scale
     if dx ~= 0 or dy ~= 0 then
       dragging.x, dragging.y, dragging.moved = x, y, true
+      if Map.KeepCentred() then
+        Map.SetKeepCentred(false) -- the player looks around: the map lets go (R27.9)
+      end
       Map.Pan(dx, dy)
     end
+  else
+    Map.FollowPlayer()
   end
   lastFooter = lastFooter + (elapsed or 0)
   if lastFooter >= 0.1 then
@@ -322,6 +407,9 @@ local KEYS = {
 local ZOOM_KEYS = { ["+"] = 1, ["="] = 1, NUMPADPLUS = 1, ["-"] = -1, NUMPADMINUS = -1 }
 
 local function onKeyDown(frame, key)
+  if InCombatLockdown() then
+    return -- retail forbids SetPropagateKeyboardInput in combat: the keys pass on (set before it)
+  end
   local handler = KEYS[key]
   if handler then
     handler()
@@ -379,11 +467,14 @@ end
 
 local function build()
   win = B.UI.Window("BastiansMapFrame", {
+    module = "Map", -- the options button opens this page (R27.1)
     title = L["Map"],
     width = 760,
     height = 560,
     minWidth = 400,
     minHeight = 300,
+    maxWidth = B.UI.NO_LIMIT, -- as wide as the player wants; Dock narrows it for the Browser
+    maxHeight = B.UI.NO_LIMIT,
     db = db().window,
     onShow = function()
       clip:SetScript("OnUpdate", onUpdate)
@@ -399,6 +490,7 @@ local function build()
       remember()
     end,
     onResize = function(_, sizing)
+      Map.LayoutToolbar() -- the rows first: they decide where the map begins
       Map.ViewChanged(sizing)
     end,
   })
@@ -407,7 +499,7 @@ local function build()
   toolbar = CreateFrame("Frame", nil, content)
   toolbar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -6)
   toolbar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
-  toolbar:SetHeight(22)
+  toolbar:SetHeight(TOOLBAR_ROW)
   local continents = {}
   for id, name in pairs(B.Coords.Continents()) do
     continents[id] = L[name]
@@ -415,32 +507,48 @@ local function build()
   toolbar.continent = Widgets.Select(toolbar, "", continents, function(key)
     Map.SetContinent(key)
   end)
-  toolbar.continent:SetPoint("LEFT", 0, 0)
+  toolbar.continent:SetPoint("TOPLEFT", 0, 0) -- the first row (LayoutToolbar)
   toolbar.continent:SetWidth(170)
-  toolbar.player = S.button(toolbar, L["Player"], 60, 22)
-  toolbar.player.tip = L["Centre the map on you."]
+  toolbar.player = S.tileButton(toolbar, L["Player"], "waypoint", "good")
+  toolbar.player.tip = L["Centre the map on you. Right click: your characters, share your location."]
   toolbar.player:SetPoint("LEFT", toolbar.continent, "RIGHT", 6, 0)
+  toolbar.player:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  toolbar.centred = S.tileButton(toolbar, L["Centred"], "arrow", "dim")
+  toolbar.centred.tip = function()
+    return L["Keep me centred"],
+      L["The map follows you while you move. Dragging the map lets go; click again to follow."]
+  end
+  toolbar.centred:SetPoint("LEFT", toolbar.player, "RIGHT", 6, 0)
+  toolbar.centred:SetScript("OnClick", function()
+    Map.SetKeepCentred(not Map.KeepCentred())
+  end)
+  centredLook()
   ns.Search.Attach(toolbar) -- the search bar (Search.lua, map.md B8.6)
-  toolbar.player:SetScript("OnClick", function()
+  toolbar.player:SetScript("OnClick", function(self, button)
+    if button == "RightButton" then
+      ns.Characters.OpenMenu(self) -- the account's characters and sharing (R26.16)
+      return
+    end
     if not Map.CenterOnPlayer() then
       B:Say(L["No map position here (instance?)"])
     end
   end)
-  toolbar.full = S.button(toolbar, L["Full"], 40, 22) -- full screen and back
+  -- full screen and back
+  toolbar.full = S.tileButton(toolbar, L["Full"], "zone", "accent", 76)
   toolbar.full.tip = L["Full screen, and back."]
   toolbar.full:SetPoint("RIGHT", 0, 0)
   toolbar.full:SetScript("OnClick", function()
     win:ToggleFullScreen()
-    toolbar.full.label:SetText(win:IsFullScreen() and L["Back"] or L["Full"])
+    toolbar.full.label:SetText(win:IsFullScreen() and L["Window"] or L["Full"])
   end)
-  toolbar.full.label:SetText(win:IsFullScreen() and L["Back"] or L["Full"])
-  toolbar.zoomIn = S.button(toolbar, "+", 22, 22)
+  toolbar.full.label:SetText(win:IsFullScreen() and L["Window"] or L["Full"])
+  toolbar.zoomIn = S.tileButton(toolbar, "+", nil, "dim", 22)
   toolbar.zoomIn.tip = L["Zoom in (or the mouse wheel)."]
   toolbar.zoomIn:SetPoint("RIGHT", toolbar.full, "LEFT", -6, 0)
   toolbar.zoomIn:SetScript("OnClick", function()
     Map.ZoomAt(camera.width / 2, camera.height / 2, 1)
   end)
-  toolbar.zoomOut = S.button(toolbar, "-", 22, 22)
+  toolbar.zoomOut = S.tileButton(toolbar, "-", nil, "dim", 22)
   toolbar.zoomOut.tip = L["Zoom out (or the mouse wheel)."]
   toolbar.zoomOut:SetPoint("RIGHT", toolbar.zoomIn, "LEFT", -2, 0)
   toolbar.zoomOut:SetScript("OnClick", function()
@@ -448,12 +556,16 @@ local function build()
   end)
 
   clip = CreateFrame("Frame", nil, content)
-  clip:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -32)
+  clip:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 0, -TOOLBAR_GAP) -- under the last toolbar row
   clip:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, FOOTER_H + 4)
   clip:SetClipsChildren(true)
   -- parchment, not black: the sea is transparent in the overview cells and the zone art under it
   -- arrives late on a streaming client
-  S.fill(clip, S.C.sea) -- the clip's background: parchment like Blizzard's sea
+  -- the clip's background: parchment like Blizzard's sea, at the bottom: the zone art is drawn on
+  -- the clip too (BACKGROUND -4 to 0), and the sea at the default sublevel 0 had covered it, so
+  -- the Blizzard style showed parchment only
+  clip.sea = S.fill(clip, S.C.sea)
+  clip.sea:SetDrawLayer("BACKGROUND", -8)
   clip:EnableMouse(true)
   clip:EnableMouseWheel(true)
   clip:SetScript("OnMouseWheel", onWheel)
@@ -462,6 +574,11 @@ local function build()
   clip:EnableKeyboard(true)
   clip:SetScript("OnKeyDown", onKeyDown)
   clip:SetPropagateKeyboardInput(true)
+  -- before the combat lockdown begins: the keys pass on for the whole fight (onKeyDown leaves them)
+  clip:RegisterEvent("PLAYER_REGEN_DISABLED")
+  clip:SetScript("OnEvent", function(self)
+    self:SetPropagateKeyboardInput(true)
+  end)
 
   footer = S.text(content, 11, S.C.dim)
   footer:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 8, 4)
@@ -472,32 +589,110 @@ local function build()
   for _, fn in ipairs(Map.onBuild) do
     fn(clip)
   end
+  -- the Route window and the Browser, one click away
+  toolbar.route = S.tileButton(toolbar, L["Route"], "route", "water")
+  toolbar.route.app = "Route"
+  toolbar.route.tip = L["Open or close the route's step list."]
+  toolbar.route:SetScript("OnClick", function()
+    B:OpenApp("Route")
+  end)
+  toolbar.browser = S.tileButton(toolbar, L["Browser"], "open", "rare")
+  toolbar.browser.app = "Browser"
+  toolbar.browser.tip = L["Open or close the Browser."]
+  toolbar.browser:SetScript("OnClick", function()
+    B:OpenApp("Browser")
+  end)
   Map.LayoutToolbar()
 end
 
--- The search box spans from Player to the leftmost button of the right group, whichever modules
--- added them (a fixed right margin of 190 let the box cover Dock and half
--- of Follow, which together with Layers, the zoom buttons and Full take 272 units).
+-- The toolbar in rows: the continent, Player and Centred on the left, the right group (Browser,
+-- Route, Dock, zoom, Full) on the right, the search box between them, from Centred to the right
+-- group's leftmost button, whichever modules added them (a fixed right
+-- margin let the box cover Dock; it began at Player and covered Centred).
+-- A window too narrow for one row puts the right group on a second row, and the search on a row of
+-- its own when even that is too tight. Returns
+-- the number of rows.
 function Map.LayoutToolbar()
   local bar = Map.toolbar
-  if not (bar and bar.search) then
-    return
+  if not (bar and bar.search and win) then
+    return 0
   end
-  local right
-  for _, name in ipairs({ "dock", "follow", "layers", "zoomOut", "zoomIn", "full" }) do
-    if bar[name] then
-      right = bar[name]
-      break
+  -- the right group from the right, each with its gap to the button on its right; the buttons of
+  -- other apps' windows only while the app is there
+  local group = { { bar.full, 0 }, { bar.zoomIn, 6 }, { bar.zoomOut, 2 } }
+  if bar.dock then
+    group[#group + 1] = { bar.dock, 8 }
+  end
+  for _, name in ipairs({ "route", "browser" }) do
+    local b = bar[name]
+    if b then
+      b:SetShown(B:HasApp(b.app))
+      if b:IsShown() then
+        group[#group + 1] = { b, 6 }
+      end
     end
   end
-  bar.search:ClearAllPoints()
-  bar.search:SetPoint("LEFT", bar.player, "RIGHT", 8, 0)
-  if right then
-    bar.search:SetPoint("RIGHT", right, "LEFT", -8, 0)
-  else
-    bar.search:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+  local rightW = 0
+  for _, g in ipairs(group) do
+    rightW = rightW + g[2] + (g[1]:GetWidth() or 0)
   end
+  local leftW = (bar.continent:GetWidth() or 0)
+    + 6
+    + (bar.player:GetWidth() or 0)
+    + 6
+    + (bar.centred:GetWidth() or 0)
+  -- the content's width: the toolbar's own is unknown until the client lays it out
+  local width = (win.frame:GetWidth() or 0) - 14
+  local search, gap = Map.SEARCH_MIN, 8
+  local rows, rightRow, searchRow
+  if leftW + gap + search + gap + rightW <= width then
+    rows, rightRow, searchRow = 1, 1, 1
+  elseif leftW + gap + search <= width then
+    rows, rightRow, searchRow = 2, 2, 1
+  elseif search + gap + rightW <= width then
+    rows, rightRow, searchRow = 2, 2, 2
+  else
+    rows, rightRow, searchRow = 3, 2, 3
+  end
+  local function rowY(row)
+    return -(row - 1) * (TOOLBAR_ROW + TOOLBAR_GAP)
+  end
+  bar.continent:ClearAllPoints()
+  bar.continent:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
+  local prev
+  for _, g in ipairs(group) do
+    local b = g[1]
+    b:ClearAllPoints()
+    if prev then
+      b:SetPoint("RIGHT", prev, "LEFT", -g[2], 0)
+    else
+      b:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, rowY(rightRow))
+    end
+    prev = b
+  end
+  local box = bar.search
+  box:ClearAllPoints()
+  if searchRow == 1 then
+    box:SetPoint("LEFT", bar.centred, "RIGHT", gap, 0)
+  else
+    box:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, rowY(searchRow))
+  end
+  if searchRow == rightRow then
+    box:SetPoint("RIGHT", prev, "LEFT", -gap, 0)
+  else
+    box:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, rowY(searchRow)) -- the bar's RIGHT is its middle
+  end
+  bar.rows = rows
+  bar:SetHeight(rows * TOOLBAR_ROW + (rows - 1) * TOOLBAR_GAP)
+  return rows
 end
+
+-- An app came or went: its toolbar button with it (Route, Browser).
+table.insert(Map.onEnable, function(self)
+  self:On("BASTIANS_MODULE_STATE", function()
+    Map.LayoutToolbar()
+  end)
+end)
 
 -- Open on the player's continent (or the last one) centred on the player the first time.
 function Map.Open()
@@ -563,8 +758,80 @@ function Map.IsShown()
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- The map style: "physical" (the ground: native minimap tiles over Map
+-- Art's overview, the zone art underneath) or a baked style whose addon is installed (Styles.lua):
+-- "blizzard" (the game's paintings as one seamless map, ADR 0036), "modern", "pencil",
+-- "parchment" (ADR 0027)
+-- ---------------------------------------------------------------------------------------------
+
+-- Every style the player can pick now: the physical map, then the installed ones by order.
+function Map.StyleList()
+  local out = { "physical" }
+  for _, st in ipairs(ns.Styles.List()) do
+    out[#out + 1] = st.key
+  end
+  return out
+end
+
+local function known(style)
+  return style == "physical" or ns.Styles.Get(style) ~= nil
+end
+
+-- The style chosen, or "physical" when it is unknown here (its addon gone or for the other client).
+function Map.Style()
+  local style = mod and db().mapStyle
+  return style and known(style) and style or "physical"
+end
+
+-- The style's name for the bar and the settings.
+function Map.StyleTitle(style)
+  if style == "physical" then
+    return L["Physical"]
+  end
+  local st = ns.Styles.Get(style)
+  return st and L[st.title] or style
+end
+
+-- Switches the style as the settings panel does, so every listener of the setting hears it.
+function Map.SetStyle(style)
+  if not mod or not known(style) or style == Map.Style() then
+    return
+  end
+  db().mapStyle = style
+  B:Fire("BASTIANS_SETTING_CHANGED", mod.name, "mapStyle", style)
+end
+
+table.insert(Map.onSetting, function(key)
+  if key == "mapStyle" then
+    if Map.bar then
+      Map.bar.Refresh()
+    end
+    if Map.IsShown() then
+      Map.ViewChanged()
+    end
+  end
+end)
+
+-- ---------------------------------------------------------------------------------------------
 -- Module
 -- ---------------------------------------------------------------------------------------------
+
+-- Runs every function of a hook list, each one even when another fails, and raises the first error
+-- afterwards, so Core's guard still logs and counts it (a failing handler
+-- before Mini's on PLAYER_ENTERING_WORLD kept the game's minimap after every reload).
+local function runAll(list, ...)
+  local first
+  for _, fn in ipairs(list) do
+    local ok, err = pcall(fn, ...)
+    if not ok and first == nil then
+      first = err
+    end
+  end
+  if first ~= nil then
+    error(first, 0)
+  end
+end
+Map.RunAll = runAll
 
 mod = B:NewModule("Map", {
   news = ns.NEWS, -- What's new (ADR 0021)
@@ -575,22 +842,53 @@ mod = B:NewModule("Map", {
   title = L["Map"],
   apiVersion = 1,
   data = { "world" },
-  optional = { "Bastians_Map_Art", "TomTom" },
+  optional = {
+    "Bastians_Map_Art",
+    "Bastians_Map_Blizzard",
+    "Bastians_Map_Modern",
+    "Bastians_Map_Pencil",
+    "Bastians_Map_Parchment",
+  },
   defaults = {
     profile = {
       window = {},
       cameras = {},
       layers = {},
       continent = 0,
+      mapStyle = "physical",
+      keepCentred = false, -- the player in the middle while moving (R27.9)
       nativeTiles = true,
       overviewArt = true,
-      follow = false, -- the map follows the Browser's page (ADR 0013 D; off by default)
       minimapPins = true, -- the layers on the game's minimap (S5)
+      barOpen = true, -- the layer bar over the top of the map
       minimapMax = 20,
+      -- Bastian's minimap: on by default, the game's live minimap first
+      miniMap = true,
+      miniStyle = "game",
+      miniShape = "ROUND",
+      miniSize = 200,
+      miniLevel = 4,
+      miniButtonBox = true,
+      miniBorder = true, -- the frame around the view
+      miniWarned = false, -- the warning before the first of our styles was shown and accepted
+      buttonBox = {},
     },
+    global = { characters = {} }, -- the last place of every character of the account (R26.16)
   },
   options = {
     { type = "header", label = L["Imagery"] },
+    {
+      type = "select",
+      key = "mapStyle",
+      label = L["Map style"],
+      values = function()
+        local out = {}
+        for _, style in ipairs(Map.StyleList()) do
+          out[style] = Map.StyleTitle(style)
+        end
+        return out
+      end,
+    },
     { type = "toggle", key = "nativeTiles", label = L["Native minimap tiles at close zoom"] },
     {
       type = "note",
@@ -599,21 +897,6 @@ mod = B:NewModule("Map", {
       end,
     },
     { type = "toggle", key = "overviewArt", label = L["Overview textures from Bastian's Map Art"] },
-    { type = "header", label = L["The minimap"] },
-    {
-      type = "toggle",
-      key = "minimapPins",
-      label = L["Show the map's layers on the minimap (the nearest pins, arrows at the rim)"],
-      default = true,
-    },
-    {
-      type = "range",
-      key = "minimapMax",
-      label = L["Pins on the minimap at most"],
-      min = 5,
-      max = 40,
-      step = 5,
-    },
     { type = "header", label = L["The game's map"] },
     {
       type = "toggle",
@@ -634,28 +917,100 @@ mod = B:NewModule("Map", {
       end,
     },
   },
+  -- the minimap on a page of its own in the options
+  pages = {
+    {
+      id = "minimap",
+      title = L["Minimap"],
+      options = {
+        {
+          type = "toggle",
+          key = "miniMap",
+          label = L["Bastian's minimap in place of the game's (search, styles, layers, the button box)"],
+          default = true,
+        },
+        {
+          type = "select",
+          key = "miniStyle",
+          label = L["Minimap style"],
+          values = function()
+            local out = {}
+            for _, style in ipairs(ns.Mini.StyleList()) do
+              out[style] = ns.Mini.StyleTitle(style)
+            end
+            return out
+          end,
+        },
+        {
+          type = "select",
+          key = "miniShape",
+          label = L["Minimap shape"],
+          values = function()
+            return { ROUND = L["Round"], SQUARE = L["Square"] }
+          end,
+        },
+        { type = "toggle", key = "miniBorder", label = L["A frame around the minimap"], default = true },
+        {
+          type = "range",
+          key = "miniSize",
+          label = L["Minimap size (or Alt + mouse wheel on it)"],
+          min = 120,
+          max = 400,
+          step = 10,
+        },
+        {
+          type = "toggle",
+          key = "miniButtonBox",
+          label = L["Pack the addons' minimap buttons into one box"],
+          default = true,
+        },
+        {
+          type = "execute",
+          label = L["Put every minimap button back into the box"],
+          func = function()
+            ns.MiniButtons.AllIntoBox()
+          end,
+        },
+        {
+          type = "toggle",
+          key = "minimapPins",
+          label = L["Show the map's layers on the minimap (the nearest pins, arrows at the rim)"],
+          default = true,
+        },
+        {
+          type = "range",
+          key = "minimapMax",
+          label = L["Pins on the minimap at most"],
+          min = 5,
+          max = 40,
+          step = 5,
+        },
+      },
+    },
+  },
   OnEnable = function(self)
-    for _, fn in ipairs(Map.onEnable) do
-      fn(self)
-    end
+    runAll(Map.onEnable, self)
     self:On("BASTIANS_SETTING_CHANGED", function(_, _, name, key, value)
       if name == self.name then
-        for _, fn in ipairs(Map.onSetting) do
-          fn(key, value)
-        end
+        runAll(Map.onSetting, key, value)
       end
     end)
+    self:On("BASTIANS_PLAYER_MOVED_ZONE", function(_, _, uiMapID, continent)
+      runAll(Map.onZone, uiMapID, continent)
+    end)
+    self:RegisterEvent("PLAYER_ENTERING_WORLD", function()
+      runAll(Map.onWorld)
+    end)
+    self:RegisterEvent("PLAYER_LOGOUT", function()
+      runAll(Map.onLogout)
+    end)
     self:On("BASTIANS_ENTITY_FOCUSED", function(_, _, ref, ctx)
-      for _, fn in ipairs(Map.onFocus) do
-        fn(ref, ctx)
-      end
+      runAll(Map.onFocus, ref, ctx)
     end)
   end,
   OnDisable = function()
     Map.Hide()
-    for _, fn in ipairs(Map.onDisable) do
-      fn()
-    end
+    runAll(Map.onDisable)
   end,
 })
 ns.mod = mod
@@ -722,15 +1077,21 @@ function Map.Stats()
   layer(L["Minimap tiles"] .. " (" .. (Tiles.Note() or "") .. ")", Tiles)
   layer(L["Overview cells"] .. " (" .. (Overview.Note() or "") .. ")", Overview)
   lines[#lines + 1] = string.format(
-    "%s: %d %s, %d %s, %d %s",
+    "%s: %d %s, %d %s",
     L["Zone art"],
     Imagery.stats.textures,
     L["textures"],
     Imagery.stats.zones,
-    L["zones"],
-    Imagery.stats.labels,
-    L["labels"]
+    L["zones"]
   )
+  -- what the client hands over for the continent at all (R28: the Blizzard style drew nothing on
+  -- retail): the maps found under it, and how many of them have art tiles
+  local zones, withArt = Imagery.Zones(camera.continent), 0
+  for _, z in ipairs(zones) do
+    withArt = withArt + (#z.tiles > 0 and 1 or 0)
+  end
+  lines[#lines + 1] =
+    string.format("  %s %d, %s %d, %s %s", L["maps"], #zones, L["with art"], withArt, L["style"], Map.Style())
   local first = Imagery.pool[1]
   if first then
     local w, h = first:GetSize()

@@ -48,12 +48,12 @@ def test_the_optional_addons_differ_per_client(wow: WowRuntime):
     boot(wow, CORE)
     names = [c.addon for c in wow.eval(f"{SETTINGS}.Companions()").values()]
     if wow.client == "forever":
-        assert sorted(names) == ["QuestieDB", "Spoken", "TomTom"]
+        assert sorted(names) == ["QuestieDB", "Spoken"]
     else:
-        assert names == ["TomTom"]  # QuestieDB and Spoken ship for the Classic flavours only
-    assert len(list(wow.eval(f"{SETTINGS}.Companions('forever')").values())) == 3
+        assert names == []  # QuestieDB and Spoken ship for the Classic flavours only
+    # TomTom is no companion
+    assert len(list(wow.eval(f"{SETTINGS}.Companions('forever')").values())) == 2
     assert wow.eval(f"{SETTINGS}.AppliesHere('Spoken_Quests')") is (wow.client == "forever")
-    assert wow.eval(f"{SETTINGS}.AppliesHere('TomTom')") is True
     assert wow.eval(f"{SETTINGS}.AppliesHere('Bastians_Map_Art')") is True
     assert wow.errors == []
 
@@ -68,9 +68,15 @@ def test_the_parts_follow_what_the_apps_declare(wow: WowRuntime):
         "Bastians_Data_World",
         "Bastians_Data_Items",
         "Bastians_Map_Art",
+        "Bastians_Map_Blizzard",
+        "Bastians_Map_Modern",
+        "Bastians_Map_Pencil",
+        "Bastians_Map_Parchment",
     ]  # the order of B.SUITE_ADDONS; Market is an optional pack, never required
     assert all(parts[a].required for a in (CORE, DATA, *PACKS))
     assert parts["Bastians_Map_Art"].required is False  # Map draws zone art without it
+    # Bastian's map styles (ADR 0027) are options: the Map draws the others without them
+    assert not any(parts[f"Bastians_Map_{s}"].required for s in ("Modern", "Pencil", "Parchment"))
     assert parts["Bastians_Map_Art"].installed is True
     wow.execute("Mock.addons['Bastians_Map_Art'] = nil")  # optional: no missing part without it
     assert wow.eval(f"{SETTINGS}.Parts()[6].installed") is False
@@ -113,12 +119,11 @@ def test_the_login_says_missing_parts_and_the_optional_addons_once_per_update(wo
     boot(wow)
     lines = [strip(x) for x in wow.chat]
     optional = [x for x in lines if "Optional addons for" in x]
-    assert len(optional) == 1  # the first start
     if wow.client == "forever":
-        assert "QuestieDB (installed)" in optional[0] and "TomTom (installed)" in optional[0]
+        assert len(optional) == 1  # the first start
+        assert "QuestieDB (installed)" in optional[0] and "TomTom" not in optional[0]
     else:
-        assert "Optional addons for retail: TomTom (installed)." in optional[0]
-        assert "QuestieDB" not in optional[0] and "Spoken" not in optional[0]
+        assert optional == []  # retail has no companion since TomTom left the list
     assert not any("Missing parts" in x for x in lines)  # the test install is complete
     noted = wow.eval("Bastians:GetModule('Core').db.global.companionsNoted")
     assert noted.startswith(wow.client + ";Bastians_Core=")
@@ -126,14 +131,17 @@ def test_the_login_says_missing_parts_and_the_optional_addons_once_per_update(wo
     fresh = wow.reload()
     fresh.run_frames(5)
     assert not any("Optional addons for" in strip(x) for x in fresh.chat)
-    # an update of any part (not only Core): said again, once
+    # an update of any part (not only Core): said again, once (retail: nothing to say)
     fresh.execute("Mock.addons['Bastians_Quests'].meta.Version = '9.9.9'")
-    assert fresh.eval(f"{SETTINGS}.NoteCompanions()") is True
+    assert fresh.eval(f"{SETTINGS}.NoteCompanions()") is (wow.client == "forever")
     assert fresh.eval(f"{SETTINGS}.NoteCompanions()") is False
     # a missing companion is said with what it would add
-    fresh.execute("Mock.addons['TomTom'] = nil; Mock.addons['Bastians_Gold'].meta.Version = 'x'")
-    assert fresh.eval(f"{SETTINGS}.NoteCompanions()") is True
-    assert "TomTom (not installed: a waypoint arrow" in strip(fresh.chat[-1])
+    if wow.client == "forever":
+        fresh.execute(
+            "Mock.addons['Spoken'] = nil; Mock.addons['Bastians_Gold'].meta.Version = 'x'"
+        )
+        assert fresh.eval(f"{SETTINGS}.NoteCompanions()") is True
+        assert "Spoken (not installed: voiced quest texts" in strip(fresh.chat[-1])
     assert fresh.errors == []
 
 
@@ -144,19 +152,17 @@ def test_the_general_page_and_the_app_pages_tell_this_clients_story(wow: WowRunt
     texts = labels(wow)
     name = CLIENT_NAME[wow.client]
     parts = texts.index(f"Bastian's addons for {name}")
-    optional = texts.index(f"Optional addons for {name}")
-    assert parts < optional
+    optional = texts.index(f"Optional addons for {name}") if wow.client == "forever" else None
+    assert optional is None or parts < optional
     part_rows = texts[parts + 1 : optional]
     assert part_rows[0] == "Bastians_Core: Installed."
     assert "Bastians_Data_World: Needed by Quests, Map, Browser. Installed." in part_rows
     assert "Bastians_Map_Art: Needed by Map. Not installed (optional)." in part_rows
-    companion_rows = [t for t in texts[optional + 1 :] if ": " in t][:3]
     if wow.client == "forever":
+        companion_rows = [t for t in texts[optional + 1 :] if ": " in t][:3]
         assert any(r.startswith("QuestieDB:") and "Not installed:" in r for r in companion_rows)
-    else:
-        assert companion_rows[0].startswith("TomTom:") and not any(
-            "QuestieDB" in r or "Spoken" in r for r in texts
-        )
+    else:  # no companion on retail: no heading, no QuestieDB or Spoken
+        assert not any(t.startswith("Optional addons") or "QuestieDB" in t for t in texts)
     # an app's page names its missing optional addon only where it exists
     wow.execute("Bastians.UI.Hub.Open('Quests')")
     quests = labels(wow)
@@ -181,7 +187,7 @@ def test_slash_addons_lists_both(wow: WowRuntime):
     assert any(
         x.endswith("Bastians_Map_Art: not installed (optional) - needed by Map") for x in lines
     )
-    assert "Optional addons for" in lines[-1]
+    assert ("Optional addons for" in lines[-1]) is (wow.client == "forever")
     assert wow.errors == []
 
 

@@ -411,6 +411,34 @@ function V.active(map, px, py, opts)
   return roots, { log = State.count, here = #here, goals = #goals, hidden = hidden }
 end
 
+-- The Tales section of My quests (quests.md "Tales in the tracker"): the library service's open
+-- leads, { { tale, title, id, text } }, one row each; onOpen(tale) opens that tale's journal. Nil
+-- without a lead.
+function V.tales(leads, onOpen)
+  if not (leads and #leads > 0) then
+    return nil
+  end
+  local rows = {}
+  for _, ld in ipairs(leads) do
+    local head = C.white .. (ld.text or "") .. "|r"
+    local meta = C.grey .. (ld.title or ld.tale) .. "|r"
+    rows[#rows + 1] = {
+      id = "lead:" .. ld.tale .. ":" .. ld.id,
+      text = head .. "  " .. meta,
+      title = head, -- a two-line host draws the tale's title under the lead (R2)
+      meta = meta,
+      onClick = function()
+        onOpen(ld.tale)
+      end,
+      tooltip = function(tip)
+        S.TipLine(tip, ld.title or ld.tale, "tipGold")
+        S.TipLine(tip, L["Click: open the journal"], "tipDim")
+      end,
+    }
+  end
+  return R.section("a_tales", L["Tales"], #rows, rows)
+end
+
 function V.activeSummary(s)
   local text = s.log
     .. " "

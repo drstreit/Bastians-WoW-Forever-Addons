@@ -1,0 +1,9 @@
+{"table": "TaxiPathNode", "build": "fixture", "rowCount": 7, "columns": ["Loc", "ID", "PathID", "NodeIndex", "ContinentID", "Flags", "Delay", "ArrivalEventID", "DepartureEventID"], "rows": [
+  {"Loc": [0.0, 400.0, 0.0], "ID": 3, "PathID": 12, "NodeIndex": 2, "ContinentID": 0, "Flags": 0, "Delay": 0, "ArrivalEventID": 0, "DepartureEventID": 0},
+  {"Loc": [0.0, 0.0, 0.0], "ID": 1, "PathID": 12, "NodeIndex": 0, "ContinentID": 0, "Flags": 0, "Delay": 0, "ArrivalEventID": 0, "DepartureEventID": 0},
+  {"Loc": [300.0, 0.0, 0.0], "ID": 2, "PathID": 12, "NodeIndex": 1, "ContinentID": 0, "Flags": 0, "Delay": 0, "ArrivalEventID": 0, "DepartureEventID": 0},
+  {"Loc": [0.0, 0.0, 10.0], "ID": 4, "PathID": 13, "NodeIndex": 0, "ContinentID": 0, "Flags": 0, "Delay": 0, "ArrivalEventID": 0, "DepartureEventID": 0},
+  {"Loc": [0.0, 0.0, 0.0], "ID": 5, "PathID": 13, "NodeIndex": 1, "ContinentID": 0, "Flags": 0, "Delay": 0, "ArrivalEventID": 0, "DepartureEventID": 0},
+  {"Loc": [100.0, 0.0, 0.0], "ID": 6, "PathID": 99, "NodeIndex": 0, "ContinentID": 0, "Flags": 0, "Delay": 0, "ArrivalEventID": 0, "DepartureEventID": 0},
+  {"Loc": [-5000.0, 900.0, 0.0], "ID": 7, "PathID": 99, "NodeIndex": 1, "ContinentID": 1, "Flags": 1, "Delay": 0, "ArrivalEventID": 0, "DepartureEventID": 0}
+]}

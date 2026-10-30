@@ -76,7 +76,7 @@ B.deferred[#B.deferred + 1] = {
         "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src",
       },
     },
-    sources = { "hand-written fixture world-mini" },
+    sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
     version = "0.1.0",
   },
 }

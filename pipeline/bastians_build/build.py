@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from bastians_build.config import BuildConfig, PackConfig
-from bastians_build.emit import HEADER, emit_pack, emit_transforms
+from bastians_build.emit import HEADER, emit_pack, emit_transforms, locale_guard
 from bastians_build.files import write_text
 from bastians_build.groundtruth import Check, render_section
 from bastians_build.model import World, parse_ref
@@ -101,6 +101,14 @@ def build(
         changed = write_text(path, text) if write else False
         result.transforms_path = path
         result.transforms_changed = changed
+    if write:
+        # the loader's TOC lists the CurseForge download counts, which only the daily edition
+        # writes (tools/data_update.py): a stub that registers nothing, as for an empty pack
+        stub = (
+            f"{HEADER}\n-- no download counts in this {world.client} build "
+            "(tools/data_update.py writes them into the daily edition)\n"
+        )
+        write_text(out_dir / "Bastians_Data" / "Generated" / "Downloads.lua", stub)
     for name in config.pack_order:
         cfg = config.packs[name]
         if cfg.optional and not any(world.count(t) for t in cfg.schema):
@@ -117,6 +125,8 @@ def build(
         text = emit_pack(
             name, table, comment=f"pack {name} for {world.client}, build {world.build}"
         )
+        if cfg.locales:
+            text = locale_guard(text, cfg.locales)
         path = out_dir / cfg.addon / "Generated" / cfg.file
         changed = write_text(path, text) if write else False
         result.packs.append(

@@ -19,6 +19,12 @@ local function entries()
     if not mod.parent and mod ~= ns.core then
       list[#list + 1] = { mod = mod, title = mod.title }
     end
+    -- a module's own pages (core-contracts §8 `pages`): the minimap beside the map
+    if not mod.parent then
+      for _, page in ipairs(mod.def.pages or {}) do
+        list[#list + 1] = { mod = mod, page = page, title = page.title }
+      end
+    end
   end
   for addon, title in pairs(Settings_.LodApps()) do
     if not ns.byAddon[addon] then
@@ -72,7 +78,7 @@ local function select(entry)
   for _, b in ipairs(navButtons) do
     local on = b.entry
       and (
-        (entry.mod and b.entry.mod == entry.mod)
+        (entry.mod and b.entry.mod == entry.mod and b.entry.page == entry.page)
         or (entry.lod and b.entry.lod == entry.lod)
         or (entry.about and b.entry.about)
         or (entry.news and b.entry.news)
@@ -86,7 +92,7 @@ local function select(entry)
     end
   end
   if entry.mod then
-    Settings_.Render(canvas, entry.mod)
+    Settings_.Render(canvas, entry.mod, entry.page)
   elseif entry.about then
     B.UI.About.Render(canvas)
   elseif entry.news then
@@ -180,7 +186,8 @@ function Hub.Refresh()
   select(current)
 end
 
-function Hub.Open(moduleName)
+-- Hub.Open([moduleName[, pageID]]): the module's page, or one of its own pages.
+function Hub.Open(moduleName, pageID)
   if not win then
     build()
   end
@@ -190,7 +197,10 @@ function Hub.Open(moduleName)
     Hub.current = { news = true, title = L["What's new"] }
   elseif moduleName then
     local mod = ns.modules[moduleName]
-    if mod then
+    local page = Settings_.Page(mod, pageID)
+    if page then
+      Hub.current = { mod = mod, page = page, title = page.title }
+    elseif mod then
       Hub.current = { mod = mod, title = mod.title }
     end
   end

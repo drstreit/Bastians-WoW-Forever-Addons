@@ -1,5 +1,5 @@
 """tools/build_client.py: the one-command rebuild of a client's generated files (inputs from
-.local/install.toml, the data and mapart invocations, dry run)."""
+.local/install.toml, the data, mapart and nav invocations, dry run)."""
 
 import sys
 from pathlib import Path
@@ -68,7 +68,7 @@ def test_the_source_addons_can_live_outside_a_client_that_is_gone(tmp_path):
         build_client.read_inputs("forever", config)
 
 
-def test_commands_run_data_then_mapart_when_the_extracts_exist(tmp_path, monkeypatch):
+def test_commands_run_data_then_mapart_when_the_extracts_exist_then_nav(tmp_path, monkeypatch):
     dumps = tmp_path / "out"
     dumps.mkdir()
     monkeypatch.setattr(build_client, "DUMPS", dumps)
@@ -80,7 +80,7 @@ def test_commands_run_data_then_mapart_when_the_extracts_exist(tmp_path, monkeyp
         ground_truth=Path("C:/gt.csv"),
     )
     cmds = build_client.commands(inputs, tmp_path / "addons")
-    assert len(cmds) == 1 and cmds[0][3] == "data"
+    assert [c[3] for c in cmds] == ["data", "nav"]  # nav writes the stub without graphs
     data = cmds[0]
     assert data[data.index("--dump-prefix") + 1] == "beta"
     assert (
@@ -91,12 +91,13 @@ def test_commands_run_data_then_mapart_when_the_extracts_exist(tmp_path, monkeyp
     (dumps / "mm_beta").mkdir()
     (dumps / "beta_Map.json").write_text("{}", encoding="utf-8")
     cmds = build_client.commands(inputs, tmp_path / "addons")
-    assert [c[3] for c in cmds] == ["data", "mapart"]
+    assert [c[3] for c in cmds] == ["data", "mapart", "nav"]
     assert "--overview" not in cmds[1]
     (dumps / "ov_beta").mkdir()
     cmds = build_client.commands(inputs, tmp_path / "addons")
     assert cmds[1][cmds[1].index("--overview") + 1] == str(dumps / "ov_beta")
-    assert build_client.commands(inputs, tmp_path / "addons", skip_mapart=True)[-1][3] == "data"
+    skipped = build_client.commands(inputs, tmp_path / "addons", skip_mapart=True)
+    assert [c[3] for c in skipped] == ["data", "nav"]
 
 
 def test_dry_run_prints_the_commands(tmp_path, monkeypatch, capsys):

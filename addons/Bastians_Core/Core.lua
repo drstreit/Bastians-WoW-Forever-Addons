@@ -205,10 +205,16 @@ for _, name in ipairs({
   "BASTIANS_PRICES_UPDATED",
   "BASTIANS_DATA_LOADED",
   "BASTIANS_REGISTRY_CHANGED",
+  "BASTIANS_GRAPH_CHANGED",
+  "BASTIANS_GRAPH_TIMES",
   "BASTIANS_SERVICE_CHANGED",
   "BASTIANS_ENTITY_CHANGED",
   "BASTIANS_PROFILE_CHANGED",
   "BASTIANS_THEME_CHANGED",
+  "BASTIANS_TALE_NODE",
+  "BASTIANS_TALE_CHAPTER",
+  "BASTIANS_TALE_SHOW",
+  "BASTIANS_TALE_CHANGED",
 }) do
   B:DeclareMessage(name)
 end
@@ -488,6 +494,24 @@ end
 
 function B:GetModule(name)
   return ns.modules[name]
+end
+
+-- Opens (or toggles) an app's window through the `open` of its definition, as the launcher does,
+-- so one app can offer another's window without knowing it (the map's Route and Browser buttons,
+-- ). -> true when an enabled app with a window took the call.
+function B:OpenApp(name)
+  local mod = ns.modules[name]
+  if not (mod and mod:IsEnabled() and type(mod.def.open) == "function") then
+    return false
+  end
+  mod.def.open()
+  return true
+end
+
+-- Whether an app with a window is there and enabled (a button for it makes sense).
+function B:HasApp(name)
+  local mod = ns.modules[name]
+  return mod ~= nil and mod:IsEnabled() and type(mod.def.open) == "function"
 end
 
 function B:IterateModules()

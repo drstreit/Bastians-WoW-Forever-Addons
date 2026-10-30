@@ -57,6 +57,36 @@ function B.UI.Distance(yards)
   return string.format("%d yd", math.floor(yards + 0.5))
 end
 
+-- Bastians.UI.Duration(seconds) -> "< 1 min" | "12 min" | "1 h 05" | nil for nil (unknown stays
+-- unknown). A travel time, rounded to what a player plans with.
+function B.UI.Duration(seconds)
+  if seconds == nil then
+    return nil
+  end
+  if seconds < 30 then
+    return "< 1 min"
+  end
+  local minutes = math.floor(seconds / 60 + 0.5)
+  if minutes >= 60 then
+    return string.format("%d h %02d", math.floor(minutes / 60), minutes % 60)
+  end
+  return string.format("%d min", minutes)
+end
+
+-- Bastians.UI.Away(refOrPlace) -> the text of Coords.Away: the travel time, or the straight
+-- yards where the graph has no network, or nil. Second return: a number to sort rows by (seconds,
+-- or the yards at walking speed), nil when unknown.
+function B.UI.Away(target)
+  local seconds, _, yards = B.Coords.Away(target)
+  if seconds then
+    return B.UI.Duration(seconds), seconds
+  end
+  if yards then
+    return B.UI.Distance(yards), yards / 7
+  end
+  return nil
+end
+
 -- Formats a row value by its kind (core-contracts §7). Unknown kinds and nil pass through.
 function B.UI.FormatValue(value, kind)
   if value == nil then

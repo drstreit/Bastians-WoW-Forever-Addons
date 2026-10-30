@@ -226,6 +226,19 @@ function W.LogFilters()
   return { hideDone = p.logHideDone == true, trackedOnly = p.logTrackedOnly == true }
 end
 
+-- The open leads of the Library's tales for My quests (quests.md "Tales in the tracker"), through
+-- the library service only; nil without the Library or with the setting off.
+function W.Leads()
+  local lib = db().logTales ~= false and B:GetService("library")
+  return lib and lib:Leads() or nil
+end
+
+-- Whether My quests shows the leads where the player looks while playing: the tracker frame on and
+-- the setting on (the Library's own lead card stays away then, library.md 10.3).
+function W.ShowsLeads()
+  return db().logTales ~= false and ns.Tracker ~= nil and ns.Tracker.Enabled() or false
+end
+
 -- A toolbar toggle of the log view: accented while on, a click flips the profile flag.
 local function logToggle(host, key, label, width, tip)
   local p = db()
@@ -248,15 +261,38 @@ end
 local function renderLog(host, args)
   local map = currentMap(args)
   local name = map and R.zoneName(map) or L["Unknown zone"]
-  host:SetControls({
+  local controls = {
     { id = "zone", kind = "label", text = name },
     logToggle(host, "logHideDone", L["Hide done"], 66, L["Hide the complete quests (ready to hand in)."]),
     logToggle(host, "logTrackedOnly", L["Tracked"], 56, L["Show only the quests on the objective tracker."]),
-  })
+  }
+  if B:GetService("route") then -- the quest round (R26.4): only while Route can plan it
+    controls[#controls + 1] = {
+      id = "round",
+      kind = "button",
+      align = "right",
+      width = 86,
+      label = L["Quest round"],
+      tooltip = L["A route through every open quest and every hand-in of the log, in the best order."],
+      onClick = function()
+        ns.Round.Start()
+      end,
+    }
+  end
+  host:SetControls(controls)
   local px, py = playerOn(map)
   local opts = W.LogFilters()
   opts.questText, opts.questItem = questTextOf, questItemOf
   local rows, s = V.active(map, px, py, opts)
+  local tales = V.tales(W.Leads(), function(tale)
+    local lib = B:GetService("library")
+    if lib then
+      lib:Open(tale)
+    end
+  end)
+  if tales then
+    table.insert(rows, 1, tales) -- first: a lead is short and few are open (quests.md)
+  end
   host:SetRows(rows)
   host:SetSummary(V.activeSummary(s))
   W.SetItemBar(itemsOf(rows))
@@ -347,7 +383,10 @@ local function distanceYards(m1, x1, y1, m2, x2, y2)
   return math.sqrt((wx1 - wx2) ^ 2 + (wy1 - wy2) ^ 2)
 end
 
--- Seconds through the travel service (Route) when it is enabled; nil otherwise.
+-- Seconds through the travel service (Data's shim over the world graph's cache); false when the
+-- graph holds the place but has no time for it yet (an unknown leg, ranked again on
+-- BASTIANS_GRAPH_TIMES); nil without an answer (no network there, a leg that does not start at the
+-- character), where the straight line stands in.
 local function travelSeconds(m1, x1, y1, m2, x2, y2)
   local travel = B:GetService("travel")
   if not travel then
@@ -358,7 +397,11 @@ local function travelSeconds(m1, x1, y1, m2, x2, y2)
   if not (c1 and c2) then
     return nil
   end
-  return (travel:Estimate({ c1, wx1, wy1 }, { c2, wx2, wy2 }))
+  local seconds, why = travel:Estimate({ c1, wx1, wy1 }, { c2, wx2, wy2 })
+  if seconds then
+    return seconds
+  end
+  return why == "unknown" and false or nil
 end
 
 local function priceOf(itemID)
@@ -476,6 +519,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansQuestsFrame", {
+    module = "Quests", -- the options button opens this page (R27.1)
     title = L["Quests"],
     width = 560,
     height = 580,
@@ -798,6 +842,7 @@ function W.Register(self)
         "BASTIANS_TRACKED_CHANGED", -- the "Tracked" filter and the tracked tag of a row
         "BASTIANS_ENTITY_CHANGED",
         "BASTIANS_PLAYER_MOVED_ZONE",
+        "BASTIANS_TALE_CHANGED", -- a lead of the Tales section opened or answered (quests.md)
         W.REFRESH,
       },
       onShow = key == "log" and function(host)
@@ -841,7 +886,9 @@ function W.Register(self)
   self:On("BASTIANS_ENTITY_CHANGED", W.Schedule)
   self:On("BASTIANS_REWARD_INFO_CHANGED", W.Schedule) -- a reward item loaded, gear changed (S7)
   self:On("BASTIANS_PLAYER_MOVED_ZONE", W.Schedule)
+  self:On("BASTIANS_GRAPH_TIMES", W.Schedule) -- the ranking's ways from the character got times
   self:On("BASTIANS_TRACKED_CHANGED", W.Schedule)
+  self:On("BASTIANS_TALE_CHANGED", W.Schedule) -- the Tales section: the tracker frame too
   self:On("BASTIANS_THEME_CHANGED", function() -- the colour codes of the rows (ST3)
     W.Schedule()
     if ns.Tracker then
@@ -883,6 +930,8 @@ SlashCmdList.BASTIANSQUESTS = function(msg)
     ns.Tracker.Toggle() -- the log view in its own frame, on or off (R6)
   elseif msg == "journey" then
     ns.Journey.Print() -- this session's XP, gold, kills and quests per zone (S3)
+  elseif msg == "round" then
+    ns.Round.Start() -- every open quest and hand-in as one route (R26.4)
   elseif
     msg == "here"
     or msg == "zone"
@@ -896,6 +945,6 @@ SlashCmdList.BASTIANSQUESTS = function(msg)
   elseif tonumber(msg) then
     W.Open(tonumber(msg))
   else
-    B:Say(L["Usage: /bq [here | log | all | attune | slim | tracker | journey | <questID>]"])
+    B:Say(L["Usage: /bq [here | log | all | attune | slim | tracker | journey | round | <questID>]"])
   end
 end

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "client": "forever",
+  "build": "fixture",
+  "continent": 0,
+  "waypoints": [
+    { "id": 1, "x": 100, "y": 300, "z": 10, "kind": "node", "key": "taxinode:2", "area": 87 },
+    { "id": 2, "x": 100, "y": 150, "z": 12, "kind": "road", "key": null, "area": 87 },
+    { "id": 3, "x": 100, "y": 50, "z": 12, "kind": "road", "key": null, "area": 87 },
+    { "id": 4, "x": 300, "y": 150, "z": 30, "kind": "ground", "key": null, "area": null },
+    { "id": 5, "x": 100, "y": -50, "z": 11, "kind": "road", "key": null, "area": 88 },
+    { "id": 6, "x": 100, "y": -300, "z": 5, "kind": "node", "key": "entrance:36-1", "area": 88 }
+  ],
+  "ways": [
+    { "a": 1, "b": 2, "len": 150, "road": 150, "swim": 0, "up": 2, "down": 0, "indoor": 0,
+      "oneway": false, "area": 87, "points": [] },
+    { "a": 2, "b": 3, "len": 100, "road": 100, "swim": 0, "up": 0, "down": 0, "indoor": 0,
+      "oneway": false, "area": 87, "points": [[100, 100, 12]] },
+    { "a": 1, "b": 3, "len": 120, "road": 0, "swim": 100, "up": 0, "down": 0, "indoor": 0,
+      "oneway": false, "area": 87, "points": [] },
+    { "a": 2, "b": 4, "len": 200, "road": 0, "swim": 0, "up": 18, "down": 0, "indoor": 0,
+      "oneway": false, "area": null, "points": [] },
+    { "a": 4, "b": 3, "len": 220, "road": 0, "swim": 0, "up": 0, "down": 18, "indoor": 0,
+      "oneway": true, "area": null, "points": [] },
+    { "a": 3, "b": 5, "len": 100, "road": 100, "swim": 0, "up": 0, "down": 1, "indoor": 0,
+      "oneway": false, "area": 88, "points": [] },
+    { "a": 5, "b": 6, "len": 250, "road": 250, "swim": 0, "up": 0, "down": 6, "indoor": 40,
+      "oneway": false, "area": 88, "points": [[100, -200, 8], [120, -250, 6]] }
+  ],
+  "anchors": [
+    { "ref": "npc:448", "i": 1, "wp": 2, "len": 30.04, "points": [] },
+    { "ref": "entrance:36-1", "i": 1, "wp": 6, "len": 0, "points": [] }
+  ],
+  "unanchored": [ { "ref": "npc:9", "i": 1, "why": "no walkable ground within 60 yards" } ]
+}

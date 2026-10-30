@@ -1,8 +1,9 @@
 ## Interface: 16001
 ## Title: Bastian's Strategies
+## IconTexture: Interface\AddOns\Bastians_Strategies\Icon
 ## Notes: Bastian's Gold Rumours: a book of gold strategies to read in game, with live prices, places on the map and the travellers who found them.
 ## Author: Bastian
-## Version: 1.0.0-beta.12
+## Version: 1.0.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Data_Strategies
@@ -10,6 +11,11 @@
 ## SavedVariablesPerCharacter: BastiansStrategiesCharDB
 
 Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
 News.lua
 Book.lua
 Plate.lua

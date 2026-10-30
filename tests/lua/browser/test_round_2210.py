@@ -96,6 +96,7 @@ def test_slim_is_the_tracker(wow: WowRuntime):
 def test_rows_show_their_map_button_without_a_hover(wow: WowRuntime):
     boot(wow, CORE, DATA, QUESTS, MAP, BROWSER)
     wow.execute(f"{BR}.Open('npc:240')")
+    wow.execute("Bastians:GetModule('Browser').Browser.SetListOpen(true)")  # out (R25.36)
     icons = wow.eval(
         f"""(function()
           local out = {{}}

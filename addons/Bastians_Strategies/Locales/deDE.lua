@@ -59,6 +59,7 @@ ns.L:Register("deDE", {
   ["The rumours on this page"] = "Die Gerüchte auf dieser Seite",
   ["at %s"] = "bei %s",
   ["copy the link"] = "Link kopieren",
+  ["Read it on the web"] = "Im Netz lesen",
   ["Puts the link into the chat input: copy it with Ctrl+C."] = "Schreibt den Link in die Chat-Eingabe: kopiere ihn mit Strg+C.",
   ["On this page"] = "Auf dieser Seite",
   ["Opens it in Bastian's Browser, or on the map without it."] = "Öffnet es in Bastian's Browser, ohne ihn auf der Karte.",
@@ -124,4 +125,5 @@ ns.L:Register("deDE", {
   ["1 updated page"] = "1 aktualisierte Seite",
   ["%d updated pages"] = "%d aktualisierte Seiten",
   ["%d more changes"] = "%d weitere Änderungen",
+  ["Route there"] = "Route dorthin",
 })

@@ -144,6 +144,7 @@ def test_the_journey_block_on_the_zone_page_and_the_here_column_and_the_chat(wow
     assert wow.chat[-1].endswith("Journey: nothing recorded yet this session")
     # nothing recorded: no block
     wow.slash("/bq here")
+    wow.execute("Bastians:GetModule('Browser').Browser.SetListOpen(true)")  # out (R25.36)
     wow.run_frames(5)
     assert "Journey" not in [t.split("  ")[0] for t in block_titles(wow, DS)]
     # a kill and some gold: the block names this session's figures

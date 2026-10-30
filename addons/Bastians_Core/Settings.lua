@@ -80,13 +80,9 @@ end
 -- `clients` lists where the companion exists (its TOC's interfaces, checked 23.10.2026: QuestieDB
 -- and Spoken ship for the Classic flavours and 16001 only, TomTom for both). `slug` is its
 -- CurseForge project (tools/curseforge.toml relates to it).
+-- TomTom is not one since 29.10.2026 (owner: "we drop tomtom as we have it ourselves": Route's
+-- arrow, the map's own waypoint); a player who has it still gets its arrow and waypoints.
 B.COMPANIONS = {
-  {
-    addon = "TomTom",
-    what = L["a waypoint arrow: pins and places can be sent to it"],
-    url = "https://www.curseforge.com/wow/addons/tomtom",
-    clients = { "forever", "retail" },
-  },
   {
     addon = "QuestieDB",
     what = L["a second source of NPC and object spawns where our data has none"],
@@ -108,11 +104,28 @@ B.PACK_ADDONS = {
   world = "Bastians_Data_World",
   items = "Bastians_Data_Items",
   text = "Bastians_Data_Text_enUS",
+  -- the game data in other languages (data.md, ADR 0033): Data loads the client's
+  text_deDE = "Bastians_Data_Text_deDE",
+  text_frFR = "Bastians_Data_Text_frFR",
+  text_esES = "Bastians_Data_Text_esES",
+  text_koKR = "Bastians_Data_Text_koKR",
+  text_zhCN = "Bastians_Data_Text_zhCN",
+  text_zhTW = "Bastians_Data_Text_zhTW",
   market = "Bastians_Data_Market",
   nav = "Bastians_Data_Nav",
   book = "Bastians_Data_Strategies", -- the Strategies book (strategies-design.md section 6)
 }
-B.OPTIONAL_PACKS = { market = true, nav = true, book = true }
+B.OPTIONAL_PACKS = {
+  market = true,
+  nav = true,
+  book = true,
+  text_deDE = true,
+  text_frFR = true,
+  text_esES = true,
+  text_koKR = true,
+  text_zhCN = true,
+  text_zhTW = true,
+}
 
 -- Every released folder of the suite (the probe is never released): the fingerprint of an update.
 B.SUITE_ADDONS = {
@@ -122,15 +135,26 @@ B.SUITE_ADDONS = {
   "Bastians_Data_World",
   "Bastians_Data_Items",
   "Bastians_Data_Text_enUS",
+  "Bastians_Data_Text_deDE",
+  "Bastians_Data_Text_frFR",
+  "Bastians_Data_Text_esES",
+  "Bastians_Data_Text_koKR",
+  "Bastians_Data_Text_zhCN",
+  "Bastians_Data_Text_zhTW",
   "Bastians_Data_Market",
   "Bastians_Data_Strategies",
   "Bastians_Map",
   "Bastians_Map_Art",
+  "Bastians_Map_Blizzard",
+  "Bastians_Map_Modern",
+  "Bastians_Map_Pencil",
+  "Bastians_Map_Parchment",
   "Bastians_Quests",
   "Bastians_Browser",
   "Bastians_Gold",
   "Bastians_Route",
   "Bastians_Strategies",
+  "Bastians_Notes",
 }
 
 local function exists(addon)
@@ -367,6 +391,15 @@ ns.core = B:NewModule("Core", {
       tipDelay = 1, -- seconds
       font = S.DEFAULT_FONT,
       theme = "teal", -- the colour scheme (ST3, ADR 0017)
+      windowAlpha = 100, -- the windows' opacity in percent (R27.2); windowColor nil: the theme's
+      -- the skin (ADR 0034): Modern or Azeroth, the game's window frames, the content switches
+      skin = "modern",
+      skinFrames = false,
+      rowPortraits = true,
+      placeCuts = true,
+      diorama = true,
+      modelMotion = true,
+      pageSounds = true,
       lod = {},
       minimap = { hide = false, angle = 200 },
       hub = {},
@@ -399,7 +432,22 @@ ns.core = B:NewModule("Core", {
         end
       end,
     },
-    { type = "header", label = L["Display"] },
+    -- every look setting of the suite in one section; every addon
+    -- follows it
+    { type = "header", label = L["Skin (every Bastian's addon)"] },
+    {
+      type = "select",
+      key = "skin",
+      label = L["Skin"],
+      values = function()
+        return { modern = L["Modern (flat)"], azeroth = L["Azeroth (the game's look)"] }
+      end,
+      set = function(id, mod)
+        mod.db.profile.skinFrames = id == "azeroth" -- the frames follow the skin, then stay free
+        S.ApplySkin()
+      end,
+    },
+    { type = "toggle", key = "skinFrames", label = L["The game's window frames"], set = S.ApplySkin },
     {
       type = "select",
       key = "theme",
@@ -415,6 +463,41 @@ ns.core = B:NewModule("Core", {
         S.ApplyTheme(id)
       end,
     },
+    {
+      type = "select",
+      key = "font",
+      label = L["Font"],
+      values = function()
+        return Settings_.FontChoices()
+      end,
+      set = function()
+        S.applyFont()
+      end,
+    },
+    {
+      type = "range",
+      key = "fontScale",
+      label = L["Text size (percent)"],
+      min = 80,
+      max = 130,
+      step = 5,
+      set = function()
+        S.applyFont()
+      end,
+    },
+    { type = "color", key = "windowColor", label = L["Window background"], theme = S.C.bg },
+    { type = "range", key = "windowAlpha", label = L["Window opacity (%)"], min = 20, max = 100, step = 5 },
+    { type = "toggle", key = "rowPortraits", label = L["Faces in the rows of NPCs"], set = S.ApplySkin },
+    { type = "toggle", key = "placeCuts", label = L["Places as cuts of the map"], set = S.ApplySkin },
+    {
+      type = "toggle",
+      key = "diorama",
+      label = L["The zone's painting behind a creature"],
+      set = S.ApplySkin,
+    },
+    { type = "toggle", key = "modelMotion", label = L["Creatures greet and talk"], set = S.ApplySkin },
+    { type = "toggle", key = "pageSounds", label = L["Sounds when a page opens"] },
+    { type = "header", label = L["Display"] },
     {
       type = "toggle",
       key = "minimapHide",
@@ -448,28 +531,6 @@ ns.core = B:NewModule("Core", {
       max = 3,
       step = 0.5,
     },
-    {
-      type = "select",
-      key = "font",
-      label = L["Font"],
-      values = function()
-        return Settings_.FontChoices()
-      end,
-      set = function()
-        S.applyFont()
-      end,
-    },
-    {
-      type = "range",
-      key = "fontScale",
-      label = L["Text size (percent)"],
-      min = 80,
-      max = 130,
-      step = 5,
-      set = function()
-        S.applyFont()
-      end,
-    },
     { type = "header", label = L["Diagnostics"] },
     {
       type = "toggle",
@@ -492,6 +553,7 @@ ns.core = B:NewModule("Core", {
     B.debug = self.db.global.debug and true or false
     S.applyFont()
     S.ApplyTheme(self.db.profile.theme)
+    S.ApplySkin() -- the profile's skin over what was built before it was read (ADR 0034)
     self:On("BASTIANS_THEME_CHANGED", function() -- the hub shows the new scheme at once (ST3)
       if B.UI.Hub then
         B.UI.Hub.Refresh()
@@ -500,6 +562,12 @@ ns.core = B:NewModule("Core", {
     self:On("BASTIANS_PROFILE_CHANGED", function(me)
       S.ApplyTheme(me.db.profile.theme) -- each profile keeps its own scheme
       S.applyFont()
+      S.ApplySkin() -- and its own skin (ADR 0034); redraws the windows too
+    end)
+    self:On("BASTIANS_SETTING_CHANGED", function(me, _, modName, key)
+      if modName == me.name and (key == "windowColor" or key == "windowAlpha") then
+        B.UI.ApplyWindowLook()
+      end
     end)
   end,
 })
@@ -652,7 +720,11 @@ local function widgetFor(canvas, option, mod)
     end)
     return w
   elseif kind == "color" then
-    return Wd.Note(canvas, option.label .. ": " .. L["colour picker comes later"])
+    return Wd.Color(canvas, option.label, function()
+      return getValue(mod, option)
+    end, function(value)
+      setValue(mod, option, value)
+    end, option.theme)
   end
   return Wd.Note(canvas, ("unknown option type %s"):format(tostring(kind)), S.C.warn)
 end
@@ -739,10 +811,14 @@ local function moduleRows(canvas, mod, depth)
       widgets[#widgets + 1] =
         Wd.Note(canvas, ("%s:%s %s"):format(p.addon, who, state), p.installed and S.C.text or nil)
     end
-    -- the companions of this client with their state
-    widgets[#widgets + 1] =
-      Wd.Header(canvas, string.format(L["Optional addons for %s"], Settings_.ClientName()))
-    for _, c in ipairs(Settings_.Companions()) do
+    -- the companions of this client with their state;
+    -- retail has none since TomTom left the list (29.10.2026)
+    local companions = Settings_.Companions()
+    if #companions > 0 then
+      widgets[#widgets + 1] =
+        Wd.Header(canvas, string.format(L["Optional addons for %s"], Settings_.ClientName()))
+    end
+    for _, c in ipairs(companions) do
       widgets[#widgets + 1] = Wd.Note(
         canvas,
         ("%s: %s. %s"):format(
@@ -757,13 +833,35 @@ local function moduleRows(canvas, mod, depth)
   return widgets
 end
 
--- Bastians.UI.Settings.Render(canvas, mod): (re)draws the module's page into canvas.
-function Settings_.Render(canvas, mod)
+-- A module's own page of settings (core-contracts §8 `pages`, the
+-- minimap on a page of its own): its options only, read and written on the module like its others.
+local function pageRows(canvas, mod, page)
+  local widgets = {}
+  for _, option in ipairs(page.options or {}) do
+    widgets[#widgets + 1] = widgetFor(canvas, option, mod)
+  end
+  return widgets
+end
+
+-- The page `id` of a module, or nil.
+function Settings_.Page(mod, id)
+  for _, page in ipairs(mod and mod.def.pages or {}) do
+    if page.id == id then
+      return page
+    end
+  end
+  return nil
+end
+
+-- Bastians.UI.Settings.Render(canvas, mod[, page]): (re)draws the module's page, or one of its own
+-- pages, into canvas.
+function Settings_.Render(canvas, mod, page)
   for _, w in ipairs(canvas.widgets or {}) do
     w:Hide()
   end
   canvas.mod = mod
-  local widgets = moduleRows(canvas, mod, 0)
+  canvas.page = page
+  local widgets = page and pageRows(canvas, mod, page) or moduleRows(canvas, mod, 0)
   canvas.widgets = widgets
   local width = (canvas:GetWidth() or 0) - 24
   if width <= 100 then
@@ -786,9 +884,10 @@ end
 
 -- ---------------------------------------------------------------------------------------------
 -- Blizzard panel: one parent "Bastians", one child per top-level module (sub-modules as sections)
+-- and one per page a module declares (`pages`), right after the module's own
 -- ---------------------------------------------------------------------------------------------
 
-local panels = {} -- module name -> { canvas, category }
+local panels = {} -- module name, or "name:page" for a page -> { canvas, category }
 local parentCategory
 
 local function panelFor(mod)
@@ -810,14 +909,26 @@ local function panelFor(mod)
     category = B.Compat.RegisterSettingsCategory(canvas, mod.title, parentCategory)
   end
   panels[mod.name] = { canvas = canvas, category = category }
+  for _, page in ipairs(mod.def.pages or {}) do
+    local pageCanvas = CreateFrame("Frame", nil, UIParent)
+    pageCanvas:SetSize(600, 500)
+    pageCanvas:Hide()
+    pageCanvas:SetScript("OnShow", function(self)
+      Settings_.Render(self, mod, page)
+    end)
+    panels[mod.name .. ":" .. page.id] = {
+      canvas = pageCanvas,
+      category = B.Compat.RegisterSettingsCategory(pageCanvas, page.title, parentCategory),
+    }
+  end
 end
 
 function Settings_.Panels()
   return panels
 end
 
-function Settings_.Open(mod)
-  local p = mod and panels[mod.name] or panels["Core"]
+function Settings_.Open(mod, pageID)
+  local p = mod and (pageID and panels[mod.name .. ":" .. pageID] or panels[mod.name]) or panels["Core"]
   if p then
     B.Compat.OpenSettings(p.category)
   end

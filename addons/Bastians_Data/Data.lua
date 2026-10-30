@@ -15,8 +15,39 @@ ns.Data = Data
 local PACK_ADDON = B.PACK_ADDONS -- Core's one map of pack names to folders (ADR 0015)
 Data.PACK_ADDON = PACK_ADDON
 local OPTIONAL = B.OPTIONAL_PACKS -- built only when their source exists (data.md)
-local TYPES = { "quest", "npc", "object", "item", "recipe", "zone", "node", "flightpath", "transport" }
+-- area: the subzones (data.md "Areas"), Crystal Lake, Goldshire, ...
+local TYPES = {
+  "quest",
+  "npc",
+  "object",
+  "item",
+  "recipe",
+  "zone",
+  "area",
+  "node",
+  "flightpath",
+  "transport",
+  "entrance",
+}
 local SEARCH_SLICE = 200 -- records between yields in the search provider
+
+-- The game data in the client's language (data.md "Game data in other languages", ADR 0033): the
+-- pack `text_<locale>` carries `<type>_<locale>` records with the local name (and an NPC's
+-- subname, a quest's objectives); esMX reads the Spanish pack. nil on an English client.
+local LOCALE_PACKS = {
+  deDE = "deDE",
+  frFR = "frFR",
+  esES = "esES",
+  esMX = "esES",
+  koKR = "koKR",
+  zhCN = "zhCN",
+  zhTW = "zhTW",
+}
+local LOCALIZED = { quest = true, npc = true, item = true, object = true }
+local QUEST_TEXTS = { "details", "objectives", "offer", "progress" }
+local CLIENT_NAMED = { item = true, quest = true, recipe = true } -- the client names them in its language
+Data.locale = LOCALE_PACKS[type(GetLocale) == "function" and GetLocale() or ""]
+Data.localePack = Data.locale and PACK_ADDON["text_" .. Data.locale] and ("text_" .. Data.locale) or nil
 
 local decoded = setmetatable({}, { __mode = "v" }) -- "type:id" -> decoded record (weak values)
 local mod
@@ -58,6 +89,15 @@ function Data.RegisterPack(name, pack)
   Data.allIDs = {}
   Data.nodeByName = nil -- rebuilt from the new records on the next node lookup
   B:Fire("BASTIANS_DATA_LOADED", name)
+end
+
+-- Called by Generated/Downloads.lua (tools/data_update.py, the daily edition): the CurseForge
+-- download counts { at = "YYYY-MM-DD", suite = n, data = n } when the edition was built, for the
+-- About page. Without the file (a release, a build without the read API) they stay unknown.
+function Data.RegisterDownloads(info)
+  if type(info) == "table" and type(info.suite) == "number" and type(info.data) == "number" then
+    Data.downloads = { at = info.at, suite = info.suite, data = info.data }
+  end
 end
 
 -- Called by Generated/MapTransforms.lua (pipeline, from probe P3 or client files): the per-uiMapID
@@ -110,6 +150,10 @@ local function wantedPacks()
         end
       end
     end
+  end
+  -- the game data in the client's language, with whatever else is wanted (ADR 0033)
+  if #order > 0 and Data.localePack and not wanted[Data.localePack] then
+    order[#order + 1] = Data.localePack
   end
   return order
 end
@@ -168,6 +212,32 @@ local function record(typ, id)
   for i, field in ipairs(pack.schema[typ]) do
     rec[field] = row[i]
   end
+  local loc = Data.locale
+  if loc and (LOCALIZED[typ] or typ == "questText") then
+    -- the client's language over the English record; the English name stays as nameEN
+    local l = record((typ == "questText" and "quest" or typ) .. "_" .. loc, id)
+    if l and typ == "questText" then
+      -- the texts the source has (CMaNGOS: German and Chinese all four; QuestieDB the objectives)
+      for _, field in ipairs(QUEST_TEXTS) do
+        if l[field] then
+          rec[field .. "EN"], rec[field] = rec[field], l[field]
+        end
+      end
+    elseif l then
+      if l.name then
+        rec.nameEN, rec.name = rec.name, l.name
+      end
+      if l.subname then
+        rec.subname = l.subname
+      end
+    end
+  elseif loc and (typ == "zone" or typ == "area") then
+    -- zones and subzones: the client names them in its own language (no pack needed)
+    local name = typ == "zone" and B.Compat.MapName(id) or B.Compat.AreaName(id)
+    if name and name ~= rec.name then
+      rec.nameEN, rec.name = rec.name, name
+    end
+  end
   decoded[key] = rec
   return rec
 end
@@ -183,14 +253,16 @@ local function index(name)
   return nil
 end
 
--- { {map, x, y, src}, ... } positional -> { map =, x =, y =, src = } (cached on the record)
+-- { {map, x, y, src, wz, r}, ... } positional -> { map =, x =, y =, src =, wz =, r = } (cached on
+-- the record); `wz` is the height in world yards where the source has one (CMaNGOS, TaxiNodes),
+-- `r` the radius in yards, the row's own or the record's (an area's, data.md "Areas")
 local function spawns(rec)
   if rec._spawns then
     return rec._spawns
   end
   local out = {}
   for _, s in ipairs(rec.spawns or {}) do
-    out[#out + 1] = { map = s[1], x = s[2], y = s[3], src = s[4] }
+    out[#out + 1] = { map = s[1], x = s[2], y = s[3], src = s[4], wz = s[5], r = s[6] or rec.r }
   end
   rec._spawns = out
   return out
@@ -207,6 +279,25 @@ function service:Get(typ, id)
   return record(typ, id)
 end
 
+-- The name of a record without asking the client: the pack's, else the one the client answered in
+-- this or an earlier session (Names' store); nil when neither knows it. For long lists, where a
+-- client request per row would flood the server (the Browser's quest list showed numbers on
+-- retail, the retail packs carry no quest titles).
+function service:KnownName(typ, id)
+  local r = record(typ, id)
+  if r and r.name then
+    return r.name
+  end
+  local names = Data.Names
+  local k = typ .. ":" .. tostring(id)
+  local cached = names and names.cache[k]
+  if cached then
+    return cached
+  end
+  local stored = names and names.Store(typ)[id]
+  return stored or nil
+end
+
 function service:ByZone(typ, map)
   local idx = index(typ .. ".byZone")
   local list = idx and idx[map] or {}
@@ -218,6 +309,23 @@ function service:ByZone(typ, map)
 end
 
 -- Name search over loaded records: exact 1.0, prefix 0.9, substring 0.7. `yield` is optional.
+-- The zones' and subzones' names in the client's language (record() takes them from the client),
+-- built once per session on the first search of the type: { [id] = name }.
+local placeNames = {}
+local function clientPlaceNames(typ, pack)
+  if not placeNames[typ] then
+    local out = {}
+    for id in pairs(pack[typ] or {}) do
+      local r = record(typ, id)
+      if r and r.nameEN then
+        out[id] = r.name
+      end
+    end
+    placeNames[typ] = out
+  end
+  return placeNames[typ]
+end
+
 function service:Find(typ, text, limit, yield)
   text = string.lower(text or "")
   limit = limit or 20
@@ -269,6 +377,16 @@ function service:Find(typ, text, limit, yield)
         end
       end
     end
+  end
+  -- the client's language first, so a hit shows the local name; the English one still finds it
+  local loc = Data.locale
+  local localPack = loc and Data.localePack and Data.packs[Data.localePack]
+  local localNames = localPack and localPack.names and localPack.names[typ .. "_" .. loc]
+  if localNames then
+    scan(localNames)
+  end
+  if loc and pack and (typ == "zone" or typ == "area") then
+    scan(clientPlaceNames(typ, pack)) -- the client's names of zones and subzones
   end
   if names then
     scan(names)
@@ -405,7 +523,7 @@ function service:Meta()
   for name, client in pairs(Data.foreign) do
     foreign[name] = client
   end
-  return { client = B.Client, packs = packs, foreign = foreign }
+  return { client = B.Client, packs = packs, foreign = foreign, downloads = Data.downloads }
 end
 
 -- One line for the settings hub: which loaded packs were built for another client, or nil.
@@ -483,6 +601,25 @@ local SUMMARY = {
   node = function(r)
     return (r.profession or "") .. (r.skill and (" " .. r.skill) or "")
   end,
+  -- a subzone (data.md "Areas"): the zone it lies in
+  area = function(r)
+    return zoneName(r.zone)
+  end,
+  -- an instance entrance (ADR 0026, places table): which door, the level it asks, the zone
+  entrance = function(r)
+    local parts = { L["Instance entrance"] }
+    if r.label then
+      parts[#parts + 1] = r.label
+    end
+    if r.level and r.level > 0 then
+      parts[#parts + 1] = L["Requires level"] .. " " .. r.level
+    end
+    local zone = zoneName(r.zone)
+    if zone then
+      parts[#parts + 1] = zone
+    end
+    return table.concat(parts, ", ")
+  end,
   -- what the object is and where (ADR 0016: the kinds have names)
   object = function(r)
     local parts = {}
@@ -550,9 +687,11 @@ local ICON_KIND = {
   object = "treasure",
   item = "item",
   zone = "zone",
+  area = "zone",
   node = "herb",
   flightpath = "flight",
   transport = "route",
+  entrance = "keep",
 }
 
 local function registerTypes(self)
@@ -563,10 +702,13 @@ local function registerTypes(self)
       -- the record's name, else the client's (Names.lua: retail packs carry no quest titles)
       name = function(id)
         local r = record(typ, id)
-        if r and r.name then
+        if r and r.name and (r.nameEN or not Data.locale or not CLIENT_NAMED[typ]) then
           return r.name
         end
-        return Data.Names and Data.Names.Get(typ, id) or nil
+        -- on a client in another language an item or quest the language pack lacks takes the
+        -- client's own name (ADR 0033), the English one until the client answers
+        local client = Data.Names and Data.Names.Get(typ, id)
+        return client or (r and r.name) or nil
       end,
       icon = function(id)
         local r = record(typ, id)
@@ -574,8 +716,13 @@ local function registerTypes(self)
           return r.icon
         end
         if typ == "item" and type(id) == "number" then
-          -- the item's own icon from the client; a
-          -- miss asks the client once, ITEM_DATA_LOAD_RESULT refreshes the entities (Names.lua)
+          -- the item's own icon from the client: first
+          -- from its item table, at once even for an item it has not cached (29.10.2026)
+          local icon = B.Compat.ItemIcon(id)
+          if icon then
+            return icon
+          end
+          -- else a miss asks the client once, ITEM_DATA_LOAD_RESULT refreshes the entities
           if Data.Names then
             Data.Names.Get("item", id)
           end
@@ -653,6 +800,7 @@ local function spawnRows(ref)
     rows[#rows + 1] = {
       text = string.format("%s  %.0f, %.0f", zoneName(s.map) or tostring(s.map), s.x * 100, s.y * 100),
       ref = ref,
+      place = { map = s.map, x = s.x, y = s.y }, -- a cut of the map under the skin (ADR 0034)
     }
   end
   return rows
@@ -691,6 +839,13 @@ local function vendorRows(ref)
       note = (not unit and price) and "per stack" or CLASSIC_NOTE(src),
     }
   end
+  -- by name, a to z
+  table.sort(rows, function(a, b)
+    if a.text ~= b.text then
+      return a.text < b.text
+    end
+    return a.ref < b.ref
+  end)
   return rows
 end
 
@@ -710,8 +865,10 @@ local function trainerRows(ref)
     if t[4] and t[4] > 0 then
       req[#req + 1] = L["skill"] .. " " .. t[4]
     end
+    -- the spell's name: the client's on a client in another language (ADR 0033), else the pack's
+    local spell = Data.locale and t[1] and B.Compat.GetSpellName(t[1]) or t[2]
     rows[#rows + 1] = {
-      text = (t[2] or (L["Spell"] .. " " .. tostring(t[1])))
+      text = (spell or (L["Spell"] .. " " .. tostring(t[1])))
         .. (#req > 0 and (" (" .. table.concat(req, ", ") .. ")") or ""),
       ref = t[6] and t[6] > 0 and ("item:" .. t[6]) or nil,
       value = t[3],
@@ -743,7 +900,9 @@ local function lootRows(ref)
   return rows
 end
 
--- Item "Sources": drops [ref, chance, questDrop], vendors (from the npc records), made by
+-- Item "Sources": drops [ref, chance, questDrop], a world drop [lowest level, highest level,
+-- droppers], vendors (from the npc
+-- records), made by
 local function sourceRows(ref)
   local typ, id = B.Entity.Parse(ref)
   local r = typ == "item" and record("item", id)
@@ -760,6 +919,19 @@ local function sourceRows(ref)
       icon = e:Icon(),
       value = d[2],
       valueKind = "percent",
+    }
+  end
+  local world = r.worldDrop
+  if type(world) == "table" then
+    local lo, hi, count = world[1], world[2], world[3]
+    local text = L["World drop"]
+    if lo and hi then
+      -- a plain hyphen: the game fonts lack the dash (CLAUDE.md §12)
+      text = text .. ": " .. string.format(L["creatures level %s"], lo == hi and lo or (lo .. "-" .. hi))
+    end
+    rows[#rows + 1] = {
+      text = text,
+      note = count and string.format(L["%d creatures"], count) or nil,
     }
   end
   if r.madeBy then
@@ -896,8 +1068,9 @@ local function placeRows(ref)
 end
 
 -- "Near" (the Here column, C4): the service NPCs, mailboxes and gathering nodes of the zone by
--- distance from the player, the kind and the distance after the name. Built once per zone; the
--- zone change drops it (the distances are from the moment of the build).
+-- travel time from the player (W8: the world graph's cache, Bastians.UI.Away), the kind and the
+-- time after the name; the rows without a time after the others. Built again on a zone change and
+-- when the graph's times move (BASTIANS_GRAPH_TIMES).
 local NODE_ICON = { ore = "mine", fish = "fish" }
 local function nearRows(ref)
   local _, map = B.Entity.Parse(ref)
@@ -905,35 +1078,19 @@ local function nearRows(ref)
   if not map then
     return nil
   end
-  local continent, wx, wy = B.Coords.Player()
   local rows = {}
   local function add(entityRef, r, kindLabel, icon)
-    local best
-    if continent then
-      for _, s in ipairs(spawns(r)) do
-        if s.map == map then
-          local c, x, y = B.Coords.ToWorld(s.map, s.x, s.y)
-          if c == continent then
-            local d = (x - wx) ^ 2 + (y - wy) ^ 2
-            if not best or d < best then
-              best = d
-            end
-          end
-        end
-      end
-    end
-    local yards = best and math.sqrt(best) or nil
     local words = kindLabel
-    local dist = B.UI.Distance(yards)
-    if dist then
-      words = words .. ", " .. dist
+    local away, d = B.UI.Away(entityRef)
+    if away then
+      words = words .. ", " .. away
     end
     rows[#rows + 1] = {
       id = "near:" .. entityRef,
       ref = entityRef,
       text = (r.name or entityRef) .. "  " .. S.H.muted .. words .. "|r",
       icon = icon,
-      d = yards or math.huge,
+      d = d or math.huge,
     }
   end
   for id in service:ByZone("npc", map) do
@@ -1144,6 +1301,32 @@ local function hasService(r)
   return false
 end
 
+-- "Areas" (data.md "Areas"): the zone's subzones by name, each leads to its own page
+local function areaRows(ref)
+  local _, map = B.Entity.Parse(ref)
+  map = tonumber(map)
+  if not map then
+    return nil
+  end
+  local rows = {}
+  for id in service:ByZone("area", map) do
+    local r = record("area", id)
+    if r and r.name then
+      -- the area's place on the zone's map: a cut of the painting under the skin (ADR 0034)
+      local s = type(r.spawns) == "table" and r.spawns[1]
+      local place
+      if s and tonumber(s[1]) and tonumber(s[2]) and tonumber(s[3]) then
+        place = { map = s[1], x = s[2], y = s[3] }
+      end
+      rows[#rows + 1] = { ref = "area:" .. id, text = r.name, icon = B.UI.IconTexture("zone"), place = place }
+    end
+  end
+  table.sort(rows, function(a, b)
+    return a.text < b.text
+  end)
+  return #rows > 0 and rows or nil
+end
+
 -- The monsters of a zone: NPCs without a service, a faction or a quest to give, by level; their
 -- rows carry the worth per kill through the worth registry when Gold is there.
 local function monsterRows(ref)
@@ -1216,7 +1399,7 @@ local function registerSections(self)
     types = { "zone" },
     order = 97,
     here = { order = 3, limit = 8, only = true },
-    invalidateOn = { "BASTIANS_PLAYER_MOVED_ZONE" },
+    invalidateOn = { "BASTIANS_PLAYER_MOVED_ZONE", "BASTIANS_GRAPH_TIMES" },
     build = nearRows,
   })
   -- the dossier blocks (C2, ADR 0014): Overview and Places show more rows before "+N more", the
@@ -1228,6 +1411,14 @@ local function registerSections(self)
     order = 12,
     block = { wide = true, limit = 12 },
     build = placeRows,
+  })
+  section({
+    id = "data.areas",
+    title = L["Areas"],
+    types = { "zone" },
+    order = 14,
+    block = { limit = 12 },
+    build = areaRows,
   })
   section({
     id = "data.overview",
@@ -1287,7 +1478,7 @@ local function registerSections(self)
   section({
     id = "data.zone",
     title = L["Zone"],
-    types = { "npc", "object", "quest", "node", "item" },
+    types = { "npc", "object", "quest", "node", "item", "area" },
     order = 90,
     link = L["zone"],
     build = function(ref)
@@ -1362,6 +1553,15 @@ mod = B:NewModule("Data", {
     })
     if Data.Names then
       Data.Names.Attach(self)
+    end
+    if Data.Poi then
+      Data.Poi.Attach(self)
+    end
+    if Data.Activity then
+      Data.Activity.Attach(self)
+    end
+    if Data.Graph then
+      Data.Graph.Attach(self)
     end
     -- a module that enables later (load-on-demand app, user switch) may want more packs
     self:On("BASTIANS_MODULE_STATE", function(me, _, _, enabled)

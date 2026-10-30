@@ -106,7 +106,7 @@ def test_layers_show_givers_by_status_hand_ins_and_objectives(wow: WowRuntime):
         ("quest:176", "The Fargodeep Mine", 60, False),
         ("quest:176", "The Fargodeep Mine", 60, False),
     ]
-    assert wow.eval("Bastians.UI.GlyphKind")(spots[0].icon) == wow.eval(
+    assert wow.eval("Bastians.UI.IconKind")(spots[0].icon) == wow.eval(
         "Bastians.UI.MobKind()"
     )  # the monster glyph
     assert wow.eval("Bastians:GetMapLayer('quests.soon').defaultOn") is False

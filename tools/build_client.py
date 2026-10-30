@@ -18,10 +18,14 @@ machine-specific build inputs from its optional [build] section:
     [build.dump_prefix]
     forever = "beta"                                    # clientdump JSON prefix in .local/out
     retail = "retail"
+    [build.tdb]                                         # retail: TrinityCore's world dump
+    retail = ".local/sources/retail/tdb/TDB_full_world_<build>.sql"  # (sources.md), or --tdb
 
 Then runs, in order, `python -m bastians_build data ...` (the packs, MapTransforms.lua, the report)
 and `python -m bastians_build mapart ...` (MinimapTiles.lua and Bastians_Map_Art/Generated, when
-the tile lists and overview cells of that client exist in .local/out; see tools/mapart_extract.py).
+the tile lists and overview cells of that client exist in .local/out; see tools/mapart_extract.py),
+then `python -m bastians_build nav ...` (Bastians_Data_Nav: the walk network from
+tools/nav_build.py's graphs in .local/out/nav_<client>, or a stub without them).
 `addons/` holds one client's generated files at a time: build the other client into another
 folder with --out, or rebuild afterwards.
 """
@@ -29,6 +33,7 @@ folder with --out, or rebuild afterwards.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import subprocess
 import sys
 import tomllib
@@ -51,11 +56,20 @@ class BuildInputs:
     ground_truth: Path | None = None
     export: Path | None = None
     probe: Path | None = None
+    tdb: Path | None = None  # retail: TrinityCore's world dump (sources.md), [build.tdb] or --tdb
+    # the game data in other languages (ADR 0033): QuestieDB's l10n lookups, [build.l10n] or
+    # .local/sources/<client>/questie-l10n (tools/fetch_questie_l10n.py) when it exists
+    l10n: Path | None = None
     extra: list[str] = field(default_factory=list)
 
 
 class BuildClientError(Exception):
     pass
+
+
+def _default_l10n(client: str) -> Path | None:
+    path = ROOT / ".local" / "sources" / client / "questie-l10n"
+    return path if path.is_dir() else None
 
 
 def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
@@ -99,6 +113,8 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         ground_truth=optional("ground_truth"),
         export=optional("export"),
         probe=optional("probe"),
+        tdb=optional("tdb") if client == "retail" else None,
+        l10n=optional("l10n") or _default_l10n(client),
     )
 
 
@@ -129,6 +145,10 @@ def commands(inputs: BuildInputs, out: Path, *, skip_mapart: bool = False) -> li
         data += ["--export", str(inputs.export)]
     if inputs.probe:
         data += ["--probe", str(inputs.probe)]
+    if inputs.tdb:
+        data += ["--tdb", str(inputs.tdb)]
+    if inputs.l10n:
+        data += ["--l10n", str(inputs.l10n)]
     data += inputs.extra
     cmds = [data]
     tiles = DUMPS / f"mm_{inputs.prefix}"
@@ -152,6 +172,10 @@ def commands(inputs: BuildInputs, out: Path, *, skip_mapart: bool = False) -> li
         if overview.is_dir():
             mapart += ["--overview", str(overview)]
         cmds.append(mapart)
+    # the walk network (ADR 0025): from tools/nav_build.py's graphs of this client, else the stub,
+    # so Nav.lua always belongs to the client the other packs were built for
+    nav = [python, "-m", "bastians_build", "nav", "--client", inputs.client, "--out", str(out)]
+    cmds.append(nav)
     return cmds
 
 
@@ -162,14 +186,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print the commands only")
     parser.add_argument("--skip-mapart", action="store_true", help="data packs only")
     parser.add_argument("--config", type=Path, default=CONFIG_PATH, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--tdb", type=Path, help="retail: TrinityCore's world dump (overrides [build.tdb])"
+    )
     args = parser.parse_args(argv)
     try:
         inputs = read_inputs(args.client, args.config)
     except BuildClientError as err:
         print(f"error: {err}", file=sys.stderr)
         return 2
+    if args.tdb:
+        inputs = dataclasses.replace(inputs, tdb=args.tdb)
     cmds = commands(inputs, args.out, skip_mapart=args.skip_mapart)
-    if len(cmds) == 1 and not args.skip_mapart:
+    if not any(cmd[3] == "mapart" for cmd in cmds) and not args.skip_mapart:
         print(
             f"note: no tile lists for prefix {inputs.prefix!r} in {DUMPS}; "
             f"run tools/mapart_extract.py --client {inputs.client} --prefix {inputs.prefix} first"

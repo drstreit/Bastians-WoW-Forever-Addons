@@ -5,6 +5,24 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.0.0:1",
+    date = "2026-10-30",
+    version = "1.0.0",
+    text = "Bastian's book has pictures on its title page, What's new, index and bookmarks.",
+  },
+  {
+    id = "1.0.0-beta.13:1",
+    date = "2026-10-29",
+    version = "1.0.0-beta.13",
+    text = "The book searches its whole text, shows a painted picture on every page, and lists the likeliest loot first before there are prices.",
+  },
+  {
+    id = "1.0.0-beta.13:2",
+    date = "2026-10-29",
+    version = "1.0.0-beta.13",
+    text = "Every page of the book gives you its address on bastians.dev to copy.",
+  },
+  {
     id = "1.0.0-beta.11:1",
     date = "2026-10-24",
     version = "1.0.0-beta.11",

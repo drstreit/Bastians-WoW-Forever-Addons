@@ -1,0 +1,24 @@
+{
+ "table": "QuestPOIPoint",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 1,
+   "QuestPOIBlobID": 10,
+   "X": -100,
+   "Y": 100
+  },
+  {
+   "ID": 2,
+   "QuestPOIBlobID": 10,
+   "X": -120,
+   "Y": 80
+  },
+  {
+   "ID": 3,
+   "QuestPOIBlobID": 11,
+   "X": 0,
+   "Y": 0
+  }
+ ]
+}

@@ -1,0 +1,26 @@
+{
+ "table": "Item",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 2589,
+   "ClassID": 7,
+   "SubclassID": 5
+  },
+  {
+   "ID": 2862,
+   "ClassID": 0,
+   "SubclassID": 8
+  },
+  {
+   "ID": 2835,
+   "ClassID": 7,
+   "SubclassID": 7
+  },
+  {
+   "ID": 190001,
+   "ClassID": 15,
+   "SubclassID": 0
+  }
+ ]
+}

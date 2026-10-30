@@ -1,0 +1,20 @@
+{
+ "table": "SpellEffect",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 1,
+   "SpellID": 2018,
+   "Effect": 47,
+   "EffectItemType": 0,
+   "EffectBasePointsF": 0
+  },
+  {
+   "ID": 2,
+   "SpellID": 2660,
+   "Effect": 24,
+   "EffectItemType": 2862,
+   "EffectBasePointsF": 1
+  }
+ ]
+}

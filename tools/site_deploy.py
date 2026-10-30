@@ -7,8 +7,10 @@ Usage: python tools/site_deploy.py [--overlay <dir>] [--list] [--setup] [--previ
   --overlay  a built folder whose files join site/ (tools/diary_site.py writes the gold diary to
              build/data/site/wow/my-gold-diary; tools/daily.py deploys with it after each edition)
   --list     print the files that would be published and stop (nothing leaves the machine)
-  --setup    create the Pages project and connect the domain when they are missing (idempotent);
-             with --preview only the project
+  --setup    create the Pages project and connect the domain when they are missing (idempotent),
+             and forward www.bastians.dev to bastians.dev (a redirect rule and a proxied record);
+             with --preview only the project. It deploys afterwards: give it the --overlay, or
+             the diary is not in that deployment
   --preview  deploy to the preview branch: a private-looking address, not bastians.dev
 
 The account id and the API token come from CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, else
@@ -34,6 +36,28 @@ SITE = ROOT / "site"
 SECRETS = Path.home() / ".cloudflare" / ".cloudflare-secret"
 PROJECT = "bastians"
 DOMAIN = "bastians.dev"
+WWW = "www." + DOMAIN
+REDIRECT_PHASE = "http_request_dynamic_redirect"
+# www has no site of its own: a proxied AAAA to 100:: (the discard prefix) only exists so that
+# Cloudflare answers for the name and the redirect rule runs
+WWW_RECORD = {"type": "AAAA", "name": WWW, "content": "100::", "proxied": True}
+WWW_RULE = {
+    "description": "www to apex",
+    "expression": f'(http.host eq "{WWW}")',
+    "action": "redirect",
+    "action_parameters": {
+        "from_value": {
+            "status_code": 301,
+            "target_url": {"expression": f'concat("https://{DOMAIN}", http.request.uri.path)'},
+            "preserve_query_string": True,
+        }
+    },
+    "enabled": True,
+}
+# the token's permissions each step needs, named as the dashboard names them
+NEED_DNS = "Zone / DNS / Edit"
+NEED_REDIRECT = "Zone / Single Redirect / Edit"
+DENIED = {9109, 10000}  # Cloudflare's "unauthorized" and "authentication error"
 WRANGLER = "wrangler@4.148.0"
 API = "https://api.cloudflare.com/client/v4"
 
@@ -101,9 +125,57 @@ def api(token: str, method: str, path: str, body: dict | None = None) -> dict:
         return json.load(e)
 
 
+def denied(resp: dict) -> bool:
+    errors = resp.get("errors") or []
+    return not resp.get("success") and any(e.get("code") in DENIED for e in errors)
+
+
+def checked(resp: dict, what: str, need: str) -> dict:
+    """`resp` when it succeeded; else an error that names the permission the token lacks."""
+    if resp.get("success"):
+        return resp
+    if denied(resp):
+        raise SiteError(f"{what}: the API token lacks the permission {need} for {DOMAIN}; add it")
+    raise SiteError(f"{what} failed: {resp.get('errors')}")
+
+
+def www(zone: str, token: str, call=None) -> None:
+    """www.bastians.dev answers 301 to bastians.dev with the path and the query, each part only
+    when missing. Both permissions are read first; the rule goes in before the record, so a token
+    that may not write rules leaves www as it was (not resolving) instead of half set up."""
+    call = call or api
+    entry_path = f"/zones/{zone}/rulesets/phases/{REDIRECT_PHASE}/entrypoint"
+    records = checked(
+        call(token, "GET", f"/zones/{zone}/dns_records?name={WWW}"), "reading DNS", NEED_DNS
+    )["result"]
+    entry = call(token, "GET", entry_path)
+    if not entry.get("success") and not any(
+        e.get("code") == 10003
+        for e in entry.get("errors") or []  # no ruleset in the phase yet
+    ):
+        checked(entry, "reading the redirect rules", NEED_REDIRECT)
+    rules = (entry.get("result") or {}).get("rules") or []
+    if not any(r.get("expression") == WWW_RULE["expression"] for r in rules):
+        if entry.get("success"):
+            ruleset = entry["result"]["id"]
+            made = call(token, "POST", f"/zones/{zone}/rulesets/{ruleset}/rules", WWW_RULE)
+        else:
+            made = call(token, "PUT", entry_path, {"rules": [WWW_RULE]})
+        checked(made, "the redirect rule", NEED_REDIRECT)
+        print(f"redirect: {WWW} -> https://{DOMAIN} (301)")
+    if not records:
+        checked(
+            call(token, "POST", f"/zones/{zone}/dns_records", WWW_RECORD),
+            "the www record",
+            NEED_DNS,
+        )
+        print(f"DNS: {WWW} AAAA 100:: (proxied)")
+
+
 def setup(account: str, token: str, domain: bool = True) -> None:
-    """The Pages project, its custom domain and the domain's DNS record, each only when missing.
-    Without `domain` only the project: a preview never touches bastians.dev."""
+    """The Pages project, its custom domain and the domain's DNS record, each only when missing,
+    and the www forward (`www`). Without `domain` only the project: a preview never touches
+    bastians.dev."""
     base = f"/accounts/{account}/pages/projects"
     got = api(token, "GET", f"{base}/{PROJECT}")
     if not got.get("success"):
@@ -132,6 +204,7 @@ def setup(account: str, token: str, domain: bool = True) -> None:
         if not made.get("success"):
             raise SiteError(f"the DNS record failed: {made.get('errors')}")
         print(f"DNS: {DOMAIN} CNAME {subdomain}")
+    www(zone, token)
     for d in api(token, "GET", f"{base}/{PROJECT}/domains").get("result") or []:
         print(f"domain {d['name']}: {d.get('status')}")
 

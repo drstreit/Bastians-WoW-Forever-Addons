@@ -280,6 +280,7 @@ local mod = B:NewModule("Strategies", {
     })
     B:RegisterMapLayer(self, {
       id = "strategies.rumours",
+      icon = "ledger", -- the layer bar shows its icon (R27.8)
       label = L["Rumours (Bastian's book)"],
       defaultOn = true,
       minLevel = 1,
@@ -309,6 +310,7 @@ ns.mod = mod
 mod.Strategies = Strategies
 mod.Book = Book
 mod.Window = Window
+mod.Plate = ns.Plate
 
 SLASH_BASTIANSSTRATEGIES1 = "/bbook"
 SlashCmdList.BASTIANSSTRATEGIES = function(msg)
@@ -323,6 +325,10 @@ SlashCmdList.BASTIANSSTRATEGIES = function(msg)
     Window.Show({ kind = cmd })
   elseif cmd == "news" then
     Window.Show({ kind = "title" })
+  elseif cmd == "web" then
+    -- /bbook web: the open page's address on bastians.dev into the chat box, else the diary's
+    local now = Window.Current()
+    B.Compat.OpenChat(Book.WebURL(now and now.kind == "page" and page(now.id) and now.id or nil))
   elseif string.match(cmd, "^mill") then
     -- /bbook mill [chapter]: a chapter's Rumour mill, the first one with rumours without a chapter
     local chapter = string.match(cmd, "^mill%s+(%S+)$")

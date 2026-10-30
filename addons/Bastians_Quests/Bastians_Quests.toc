@@ -1,8 +1,9 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Quests
+## IconTexture: Interface\AddOns\Bastians_Quests\Icon
 ## Notes: Quest log, recommendations and tracker.
 ## Author: Bastian
-## Version: 1.0.0-beta.12
+## Version: 1.0.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, QuestieDB, Spoken, Spoken_Quests
@@ -10,9 +11,15 @@
 ## SavedVariablesPerCharacter: BastiansQuestsCharDB
 
 Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
 News.lua
 Logic.lua
 State.lua
+Round.lua
 Rows.lua
 Journey.lua
 Recommend.lua

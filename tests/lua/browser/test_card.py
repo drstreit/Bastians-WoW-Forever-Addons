@@ -51,7 +51,7 @@ def test_npc_quest_item_and_zone_pages_show_a_card(wow: WowRuntime):
     assert c["shown"] and c["name"] == "Marshal Dughan" and c["badge"] == "npc"
     assert c["summary"] == "Level 10, Elwynn Forest"
     assert c["status"] == "0 yd"  # no status words: the distance alone (the player stands on him)
-    assert c["buttons"] == ["Bookmark"]  # no Map, no Route: only the bookmark
+    assert c["buttons"] == ["Wowhead", "Bookmark"]  # no Map, no Route: the link and the bookmark
     assert page_rows(wow, DS)[0] == "Overview"  # the blocks start with the sections
     assert wow.eval(f"{MOD}.header:GetHeight()") == 1  # the band is part of the dossier (C2)
 
@@ -59,7 +59,7 @@ def test_npc_quest_item_and_zone_pages_show_a_card(wow: WowRuntime):
     c = card(wow)
     assert c["name"] == "The Fargodeep Mine" and c["badge"] == "quest"
     assert c["status"] == "In the log, complete  0 yd"  # the distance to the hand-in (C1)
-    assert c["buttons"] == ["Track", "Bookmark"]  # chains are a section, not an action
+    assert c["buttons"] == ["Track", "Wowhead", "Bookmark"]  # chains are a section, not an action
     assert "Chain" in page_rows(wow, DS)
     assert "Status" not in page_rows(wow, DS)  # the one status row moved onto the band
     assert c["height"] > 52
@@ -89,7 +89,7 @@ def test_the_card_actions_run_and_follow_the_state(wow: WowRuntime):
     wow.execute(f"{BR}.Open('quest:176')")
     wow.execute(SIZE)
     buttons = card(wow)["buttons"]
-    assert buttons == ["Track", "Bookmark"]
+    assert buttons == ["Track", "Wowhead", "Bookmark"]
     # Track runs the registered action: the quest is watched, the button turns into Untrack
     wow.execute(f"{DS}.buttons[1]:Click()")
     wow.run_frames(5)
@@ -128,6 +128,9 @@ def test_a_page_without_data_has_a_card_with_the_ref(wow: WowRuntime):
     c = card(wow)
     assert c["shown"] and c["name"] == "npc:999999" and c["badge"] == "npc"
     # the band says why it is empty (ADR 0018: on the page, not on the list's summary line)
-    assert c["summary"].startswith("No data for this entity") and c["buttons"] == ["Bookmark"]
+    assert c["summary"].startswith("No data for this entity") and c["buttons"] == [
+        "Wowhead",
+        "Bookmark",
+    ]
     assert wow.eval(f"{DS}.blockCount") == 0
     assert wow.errors == []

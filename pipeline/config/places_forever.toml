@@ -1,0 +1,617 @@
+# Bastian's places table for forever (ADR 0026, data.md "Our authored tables"): what the
+# client's tables do not give the world graph. Rows are ours; `verified` says when, on which
+# build and how a row was checked in game (empty: not yet).
+#
+# Instance entrances, seeded 25.10.2026 (W4): the CMaNGOS exit teleport of each instance
+# (areatrigger_teleport: its target is where a player leaving stands, next to the
+# entrance); Forever's AreaTrigger table lacks most dungeon triggers. On retail the
+# client's own triggers lie 2 to 10 yards from these targets.
+# `level` is CMaNGOS' required_level. `place` = [map, wx, wy, wz] in world yards.
+
+[[entrance]]
+id = "33-1"
+instance = 33
+name = "Shadowfang Keep"
+place = [0, -233, 1567.5, 76.9]
+level = 10
+src = "cmangos teleport 194"
+verified = ""
+
+[[entrance]]
+id = "34-1"
+instance = 34
+name = "Stormwind Stockade"
+place = [0, -8766.1, 845.5, 88]
+level = 15
+src = "cmangos teleport 503"
+verified = ""
+
+[[entrance]]
+id = "36-1"
+instance = 36
+name = "Deadmines"
+place = [0, -11208.7, 1675.9, 24.6]
+level = 10
+src = "cmangos teleport 119"
+verified = ""
+
+[[entrance]]
+id = "43-1"
+instance = 43
+name = "Wailing Caverns"
+place = [1, -738.5, -2217.8, 16.9]
+level = 10
+src = "cmangos teleport 226"
+verified = ""
+
+[[entrance]]
+id = "47-1"
+instance = 47
+name = "Razorfen Kraul"
+place = [1, -4463.3, -1664.3, 84]
+level = 15
+src = "cmangos teleport 242"
+verified = ""
+
+[[entrance]]
+id = "48-1"
+instance = 48
+name = "Blackfathom Deeps"
+place = [1, 4246.7, 743.4, -24.9]
+level = 10
+src = "cmangos teleport 259"
+verified = ""
+
+[[entrance]]
+id = "70-1"
+instance = 70
+name = "Uldaman"
+label = "front"
+place = [0, -6066.2, -2954.6, 209.8]
+level = 30
+src = "cmangos teleport 288"
+verified = ""
+
+[[entrance]]
+id = "70-2"
+instance = 70
+name = "Uldaman"
+label = "back"
+place = [0, -6620, -3765.7, 266.3]
+level = 30
+src = "cmangos teleport 882"
+verified = ""
+
+[[entrance]]
+id = "90-1"
+instance = 90
+name = "Gnomeregan"
+label = "front"
+place = [0, -5162.6, 927.8, 257.2]
+level = 15
+src = "cmangos teleport 322"
+verified = ""
+
+[[entrance]]
+id = "90-2"
+instance = 90
+name = "Gnomeregan"
+label = "train depot"
+place = [0, -4859, 770.2, 241.8]
+level = 15
+src = "cmangos teleport 525"
+verified = ""
+
+[[entrance]]
+id = "109-1"
+instance = 109
+name = "Sunken Temple"
+place = [0, -10176.6, -3995.3, -112.2]
+level = 35
+src = "cmangos teleport 448"
+verified = ""
+
+[[entrance]]
+id = "129-1"
+instance = 129
+name = "Razorfen Downs"
+place = [1, -4659.6, -2524.2, 81.4]
+level = 25
+src = "cmangos teleport 444"
+verified = ""
+
+[[entrance]]
+id = "189-1"
+instance = 189
+name = "Scarlet Monastery"
+label = "Graveyard"
+place = [0, 2915.3, -801.6, 160.3]
+level = 20
+src = "cmangos teleport 602"
+verified = ""
+
+[[entrance]]
+id = "189-2"
+instance = 189
+name = "Scarlet Monastery"
+label = "Cathedral"
+place = [0, 2915.1, -823.6, 160.3]
+level = 20
+src = "cmangos teleport 604"
+verified = ""
+
+[[entrance]]
+id = "189-3"
+instance = 189
+name = "Scarlet Monastery"
+label = "Armory"
+place = [0, 2886, -835.8, 160.3]
+level = 20
+src = "cmangos teleport 606"
+verified = ""
+
+[[entrance]]
+id = "189-4"
+instance = 189
+name = "Scarlet Monastery"
+label = "Library"
+place = [0, 2869.3, -820.8, 160.3]
+level = 20
+src = "cmangos teleport 608"
+verified = ""
+
+[[entrance]]
+id = "209-1"
+instance = 209
+name = "Zul'Farrak"
+place = [1, -6795.6, -2890.7, 8.9]
+level = 35
+src = "cmangos teleport 922"
+verified = ""
+
+[[entrance]]
+id = "229-1"
+instance = 229
+name = "Blackrock Spire"
+place = [0, -7524.7, -1228.4, 287.2]
+level = 45
+src = "cmangos teleport 1470"
+verified = ""
+
+[[entrance]]
+id = "230-1"
+instance = 230
+name = "Blackrock Depths"
+place = [0, -7178.4, -922.2, 166.1]
+level = 40
+src = "cmangos teleport 1472"
+verified = ""
+
+[[entrance]]
+id = "249-1"
+instance = 249
+name = "Onyxia's Lair"
+place = [1, -4750.4, -3754.4, 49]
+level = 50
+src = "cmangos teleport 1064"
+verified = ""
+
+[[entrance]]
+id = "289-1"
+instance = 289
+name = "Scholomance"
+place = [0, 1273.9, -2553.1, 91.8]
+level = 45
+src = "cmangos teleport 2568"
+verified = ""
+
+[[entrance]]
+id = "309-1"
+instance = 309
+name = "Zul'Gurub"
+place = [0, -11916.2, -1206.9, 92.3]
+level = 50
+src = "cmangos teleport 3930"
+verified = ""
+
+[[entrance]]
+id = "329-1"
+instance = 329
+name = "Stratholme"
+label = "front"
+place = [0, 3392.5, -3389.2, 143.1]
+level = 45
+src = "retail client trigger 2216, assumed the same on Forever"
+verified = ""
+
+[[entrance]]
+id = "329-2"
+instance = 329
+name = "Stratholme"
+label = "back"
+place = [0, 3233.1, -4048.3, 108.4]
+level = 45
+src = "cmangos teleport 2221"
+verified = ""
+
+[[entrance]]
+id = "349-1"
+instance = 349
+name = "Maraudon"
+label = "purple"
+place = [1, -1182.8, 2877.4, 85.9]
+level = 35
+src = "cmangos teleport 3126"
+verified = ""
+
+[[entrance]]
+id = "349-2"
+instance = 349
+name = "Maraudon"
+label = "orange"
+place = [1, -1468.2, 2614.2, 76.4]
+level = 35
+src = "cmangos teleport 3131"
+verified = ""
+
+[[entrance]]
+id = "389-1"
+instance = 389
+name = "Ragefire Chasm"
+place = [1, 1815, -4419.2, -18.8]
+level = 8
+src = "cmangos teleport 2226"
+verified = ""
+
+[[entrance]]
+id = "409-1"
+instance = 409
+name = "Molten Core"
+place = [0, -7508.3, -1039.7, 180.9]
+level = 50
+src = "cmangos teleport 2890"
+verified = ""
+
+[[entrance]]
+id = "429-1"
+instance = 429
+name = "Dire Maul"
+label = "East"
+place = [1, -3738.6, 934.5, 161]
+level = 45
+src = "cmangos teleport 3194"
+verified = ""
+
+[[entrance]]
+id = "429-2"
+instance = 429
+name = "Dire Maul"
+label = "East, back door"
+place = [1, -4031.2, 129.3, 26.5]
+level = 45
+src = "cmangos teleport 3196"
+verified = ""
+
+[[entrance]]
+id = "429-3"
+instance = 429
+name = "Dire Maul"
+label = "West"
+place = [1, -3829.7, 1250.5, 160.2]
+level = 45
+src = "cmangos teleport 3190"
+verified = ""
+
+[[entrance]]
+id = "429-4"
+instance = 429
+name = "Dire Maul"
+label = "West, side door"
+place = [1, -3749.4, 1249.2, 160.2]
+level = 45
+src = "cmangos teleport 3191"
+verified = ""
+
+[[entrance]]
+id = "429-5"
+instance = 429
+name = "Dire Maul"
+label = "North"
+place = [1, -3520.2, 1078.4, 161.1]
+level = 45
+src = "cmangos teleport 3193"
+verified = ""
+
+[[entrance]]
+id = "469-1"
+instance = 469
+name = "Blackwing Lair"
+label = "through Upper Blackrock Spire"
+place = [0, -7524.7, -1228.4, 287.2]
+level = 50
+src = "cmangos teleport 3728"
+verified = ""
+
+[[entrance]]
+id = "509-1"
+instance = 509
+name = "Ruins of Ahn'Qiraj"
+place = [1, -8415.7, 1502.4, 30.7]
+level = 50
+src = "cmangos teleport 4006"
+verified = ""
+
+[[entrance]]
+id = "531-1"
+instance = 531
+name = "Ahn'Qiraj Temple"
+place = [1, -8239, 1993.2, 129.1]
+level = 50
+src = "cmangos teleport 4012"
+verified = ""
+
+[[entrance]]
+id = "533-1"
+instance = 533
+name = "Naxxramas"
+place = [0, 3133.2, -3730.3, 138.7]
+level = 51
+src = "client trigger 4055"
+verified = ""
+
+# Open (not in any source we use): the instances Forever added (The Searing Basin, Demon
+# Fall Canyon, Karazhan Crypts, Scarlet Enclave, ... in Map.db2) and the later expansions'
+# instances on retail; added when measured in game.
+
+# ============================================================================================
+# Transports (moved here from transports_forever.toml on 25.10.2026, ADR 0026 W4)
+# ============================================================================================
+#
+# Transports of the Forever world (route.md, roadmap B9.1): boats, zeppelins, the tram and portals.
+# Authored by us from the Classic layout; every row stays `verified = false` until it was measured in
+# game on Forever (position of both ends, ride time, loop time). HandyNotes: TravelGuide is a
+# cross-check only (no licence, sources.md). Never bundle its data.
+#
+# Fields
+#   id        stable key, lowercase with dashes
+#   kind      "boat" | "zeppelin" | "tram" | "portal"
+#   name      shown to the player
+#   faction   "Alliance" | "Horde" | "both"
+#   stops     [[uiMapID, x, y, label], ...] as map fractions (Forever uiMapIDs); a shuttle has two stops
+#             and runs both ways
+#   ride      seconds on board one way (omit when unknown; never 0)
+#   cycle     seconds for one full loop, so the expected wait is cycle / 2 (omit when unknown)
+#   verified  true once measured in game on this client
+#   note      free text shown to the player, e.g. what is still an estimate
+#
+# Forever's TaxiNodes table (clientdump, build 1.60.1.70450) lists transport dummy nodes that name
+# the routes the client knows: "Transport, Menethil Ships", "Transport, Rut'theran - Auberdine",
+# "Transport, Booty Bay - Ratchet", "Transport, Orgrimmar Zepplins", "Transport, Grom'gol - Orgrimmar",
+# "Transport, Feathermoon - Feralas", "Southshore Ferry, Hillsbrad", "Fishing Village, Teldrassil",
+# "Powderfuse Port, Riverglades", "Tidegear Coast, Dun Morogh". The last five are new in Forever and
+# have no row yet: measure them in game (B9.1 owner check) and add them here.
+
+[[transport]]
+id = "boat-menethil-auberdine"
+kind = "boat"
+name = "Menethil Harbor - Auberdine"
+faction = "both"
+stops = [[1437, 0.048, 0.571, "Menethil Harbor, north dock"], [1439, 0.324, 0.436, "Auberdine dock"]]
+ride = 87.8  # the mean one way; each way from departs
+cycle = 295.581
+departs = [60, 216.085]
+dock = 60
+verified = false
+note = "Loop and departures from NauticusClassic (MIT, its transport 5, measured on Classic); dock positions estimates until measured on Forever."
+
+[[transport]]
+id = "boat-menethil-theramore"
+kind = "boat"
+name = "Menethil Harbor - Theramore"
+faction = "both"
+stops = [[1437, 0.052, 0.606, "Menethil Harbor, south dock"], [1445, 0.714, 0.564, "Theramore Isle dock"]]
+ride = 104.7  # the mean one way; each way from departs
+cycle = 329.316
+departs = [60, 224.003]
+dock = 60
+verified = false
+note = "Loop and departures from NauticusClassic (MIT, its transport 6, measured on Classic); dock positions estimates until measured on Forever."
+
+[[transport]]
+id = "boat-bootybay-ratchet"
+kind = "boat"
+name = "Booty Bay - Ratchet"
+faction = "both"
+stops = [[1434, 0.272, 0.774, "Booty Bay dock"], [1413, 0.639, 0.386, "Ratchet dock"]]
+ride = 115.4  # the mean one way; each way from departs
+cycle = 350.823
+departs = [226.808, 60]
+dock = 60
+verified = false
+note = "Loop and departures from NauticusClassic (MIT, its transport 4, measured on Classic); dock positions estimates until measured on Forever."
+
+[[transport]]
+id = "boat-auberdine-ruttheran"
+kind = "boat"
+name = "Auberdine - Rut'theran Village"
+faction = "Alliance"
+stops = [[1439, 0.330, 0.400, "Auberdine, north dock"], [1438, 0.553, 0.937, "Rut'theran Village dock"]]
+ride = 98.1  # the mean one way; each way from departs
+cycle = 316.254
+departs = [224.465, 60]
+dock = 60
+verified = false
+note = "Loop and departures from NauticusClassic (MIT, its transport 7, measured on Classic); dock positions estimates until measured on Forever."
+
+[[transport]]
+id = "portal-ruttheran-darnassus"
+kind = "portal"
+name = "Rut'theran Village - Darnassus portal"
+faction = "Alliance"
+stops = [[1438, 0.559, 0.904, "Rut'theran Village portal"], [1457, 0.306, 0.415, "Darnassus portal"]]
+ride = 3
+verified = false
+note = "Classic layout; positions are estimates until measured on Forever."
+
+[[transport]]
+id = "tram-stormwind-ironforge"
+kind = "tram"
+name = "Deeprun Tram"
+faction = "Alliance"
+# The entrances where the tram's exit triggers put a player (CMaNGOS areatrigger_teleport 2171
+# Stormwind (-8354.23, 524.07) and 2166 Ironforge (-4839.51, -1317.74), world yards) through the
+# Forever transforms of probe 70532 (23.10.2026). Forever keeps Classic's world positions (four
+# Stormwind NPCs measured on Forever lie within 3 yards of their CMaNGOS spawns), but Stormwind's
+# map is redrawn: the Classic fraction (0.637, 0.235) put the entrance 125 yards north, outside
+# the city wall.
+stops = [[1453, 0.690, 0.309, "Stormwind, Deeprun Tram"], [1455, 0.764, 0.512, "Ironforge, Deeprun Tram"]]
+ride = 59
+cycle = 120
+verified = false
+note = "Ride measured on Forever 21.10.2026: 59 s boarding to arrival. Entrances from the exit triggers (23.10.2026); the loop time is still the Classic estimate."
+
+[[transport]]
+id = "zeppelin-orgrimmar-undercity"
+kind = "zeppelin"
+name = "Orgrimmar - Undercity zeppelin"
+faction = "Horde"
+stops = [[1411, 0.514, 0.118, "Orgrimmar zeppelin tower"], [1420, 0.610, 0.590, "Undercity zeppelin tower"]]
+ride = 118.1  # the mean one way; each way from departs
+cycle = 356.288
+departs = [60, 251.139]
+dock = 60
+verified = false
+note = "Loop and departures from NauticusClassic (MIT, its transport 1, measured on Classic); dock positions estimates until measured on Forever."
+
+[[transport]]
+id = "zeppelin-orgrimmar-gromgol"
+kind = "zeppelin"
+name = "Orgrimmar - Grom'gol zeppelin"
+faction = "Horde"
+stops = [[1411, 0.510, 0.125, "Orgrimmar zeppelin tower"], [1434, 0.264, 0.728, "Grom'gol Base Camp tower"]]
+ride = 91.7  # the mean one way; each way from departs
+cycle = 303.467
+departs = [60, 198.314]
+dock = 60
+verified = false
+note = "Loop and departures from NauticusClassic (MIT, its transport 2, measured on Classic); dock positions estimates until measured on Forever."
+
+[[transport]]
+id = "zeppelin-undercity-gromgol"
+kind = "zeppelin"
+name = "Undercity - Grom'gol zeppelin"
+faction = "Horde"
+stops = [[1420, 0.608, 0.583, "Undercity zeppelin tower"], [1434, 0.269, 0.734, "Grom'gol Base Camp tower"]]
+ride = 107.6  # the mean one way; each way from departs
+cycle = 335.298
+departs = [60, 215.978]
+dock = 60
+verified = false
+note = "Loop and departures from NauticusClassic (MIT, its transport 3, measured on Classic); dock positions estimates until measured on Forever."
+
+# Teleports a character may have (route.md "Home and every way back", R26.7, 26.10.2026). `place`
+# from CMaNGOS spell_target_position (the classic DB) unless the note says otherwise; `verified`
+# empty: not checked in game yet. Route learns the real landing when a teleport is cast and keeps
+# it over the place below. Mage teleports use a Rune of Teleportation (17031).
+
+[[teleport]]
+id = "mage-stormwind"
+name = "Stormwind"
+kind = "spell"
+spell = 3561
+class = 8
+faction = "A"
+reagent = 17031
+place = [0, -9003.5, 870.0, 29.6]
+src = "cmangos spell_target_position 3561"
+verified = ""
+
+[[teleport]]
+id = "mage-ironforge"
+name = "Ironforge"
+kind = "spell"
+spell = 3562
+class = 8
+faction = "A"
+reagent = 17031
+place = [0, -4613.6, -915.4, 501.1]
+src = "cmangos spell_target_position 3562"
+verified = ""
+
+[[teleport]]
+id = "mage-darnassus"
+name = "Darnassus"
+kind = "spell"
+spell = 3565
+class = 8
+faction = "A"
+reagent = 17031
+place = [1, 9664.1, 2526.4, 1334.3]
+src = "cmangos spell_target_position 3565"
+verified = ""
+
+[[teleport]]
+id = "mage-orgrimmar"
+name = "Orgrimmar"
+kind = "spell"
+spell = 3567
+class = 8
+faction = "H"
+reagent = 17031
+place = [1, 1469.9, -4221.5, 59.0]
+src = "cmangos spell_target_position 3567"
+verified = ""
+
+[[teleport]]
+id = "mage-undercity"
+name = "Undercity"
+kind = "spell"
+spell = 3563
+class = 8
+faction = "H"
+reagent = 17031
+place = [0, 1773.5, 61.1, -46.3]
+src = "cmangos spell_target_position 3563"
+verified = ""
+
+[[teleport]]
+id = "mage-thunder-bluff"
+name = "Thunder Bluff"
+kind = "spell"
+spell = 3566
+class = 8
+faction = "H"
+reagent = 17031
+place = [1, -965.0, 283.4, 111.2]
+src = "cmangos spell_target_position 3566"
+verified = ""
+
+[[teleport]]
+id = "druid-moonglade"
+name = "Moonglade"
+kind = "spell"
+spell = 18960
+class = 11
+place = [1, 7991.9, -2679.8, 512.1]
+src = "cmangos spell_target_position 18960"
+verified = ""
+
+[[teleport]]
+id = "ripper-everlook"
+name = "Everlook"
+kind = "item"
+item = 18984
+place = [1, 6755.3, -4658.1, 724.8]
+src = "cmangos spell_target_position 23442 (Dimensional Ripper - Everlook)"
+note = "engineering; the ripper may misfire"
+verified = ""
+
+[[teleport]]
+id = "shaman-astral-recall"
+name = "Astral Recall"
+kind = "spell"
+spell = 556
+class = 7
+hearth = true
+src = "the hearth's bind location"
+verified = ""

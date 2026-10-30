@@ -181,9 +181,9 @@ def test_where_to_farm_section_search_and_actions(wow: WowRuntime):
     boot(wow)
     sections = {s.id: s for s in wow.eval("Bastians:GetDetailSections('item:2589')").values()}
     rows = [(strip(r.text), r.ref) for r in sections["gold.farm"].rows.values()]
-    assert rows == [
-        ("Hogger's camp  verified, 3 channels, reach 12000", "spot:1"),
-        ("Fargodeep Mine  unverified, 1 channel, reach 800", "spot:2"),
+    assert rows == [  # no graph network in the fixture: the straight line stands in (W8)
+        ("Hogger's camp  verified, 3 channels, reach 12000, 103 yd", "spot:1"),
+        ("Fargodeep Mine  unverified, 1 channel, reach 800, 61 yd", "spot:2"),
     ]
     assert "gold.farm" not in {
         s.id for s in wow.eval("Bastians:GetDetailSections('item:6948')").values()

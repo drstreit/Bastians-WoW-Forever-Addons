@@ -1,5 +1,6 @@
-"""Transports (route.md): hand-written tables per client (config/transports_<client>.toml) read into
-`transport` records of the world pack. Pure: TOML in, records out.
+"""Transports (route.md): hand-written rows per client, since 25.10.2026 the `[[transport]]` section
+of our places table (config/places_<client>.toml, ADR 0026), read into `transport` records of the
+world pack. Pure: TOML in, records out.
 
 File format (the TOML carries the field comments)::
 
@@ -11,6 +12,8 @@ File format (the TOML carries the field comments)::
     stops = [[1437, 0.048, 0.571, "Menethil Harbor"], [1439, 0.324, 0.436, "Auberdine"]]
     ride = 150                         # seconds one way, optional
     cycle = 420                        # seconds per loop, optional
+    departs = [60, 216.085]            # seconds into the loop it leaves each stop, optional
+    dock = 60                          # seconds it lies at a stop before it leaves, optional
     verified = false
     note = "..."
 
@@ -72,11 +75,25 @@ def read_transports(path: Path) -> list[dict]:
                 raise TransportError(f"{where}: stop {n} must be [uiMapID, x, y, label]")
             if not (0 <= stop[1] <= 1 and 0 <= stop[2] <= 1):
                 raise TransportError(f"{where}: stop {n} must use map fractions 0..1")
-        for key in ("ride", "cycle"):
+        for key in ("ride", "cycle", "dock"):
             value = row.get(key)
             if value is not None and (not isinstance(value, int | float) or value <= 0):
                 raise TransportError(
                     f"{where}: {key} must be a positive number of seconds or absent"
+                )
+        departs = row.get("departs")
+        if departs is not None:
+            cycle = row.get("cycle")
+            ok = (
+                isinstance(departs, list)
+                and len(departs) == len(stops)
+                and all(isinstance(v, int | float) and v >= 0 for v in departs)
+                and cycle is not None
+                and all(v < cycle for v in departs)
+            )
+            if not ok:
+                raise TransportError(
+                    f"{where}: departs needs one time per stop, each within the cycle"
                 )
         out.append(
             {
@@ -87,6 +104,8 @@ def read_transports(path: Path) -> list[dict]:
                 "stops": [list(s) for s in stops],
                 "ride": row.get("ride"),
                 "cycle": row.get("cycle"),
+                "departs": list(departs) if departs is not None else None,
+                "dock": row.get("dock"),
                 "verified": bool(row.get("verified", False)),
                 "note": row.get("note"),
             }

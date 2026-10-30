@@ -354,7 +354,7 @@ static class Overview
     }
 
     /// <summary>The next mip: 2x2 box over the opaque children only (no dark fringes), opaque if any child is.</summary>
-    static (byte[] rgba, int size) Halve(byte[] rgba, int size)
+    internal static (byte[] rgba, int size) Halve(byte[] rgba, int size)
     {
         var half = size / 2;
         var output = new byte[half * half * 4];

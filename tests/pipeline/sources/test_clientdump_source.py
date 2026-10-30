@@ -207,3 +207,33 @@ def test_every_world_map_with_a_zone_is_a_continent_when_the_map_dump_is_there()
     nodes = read_taxi_nodes(FIXTURE / "TaxiNodes.json", continents)
     assert all(n.continent in continents for n in nodes.nodes)
     assert "continent 30" in {d[0]: d[2] for d in nodes.dropped}[300]
+
+
+from bastians_build.sources.clientdump import TAXI_SPEED, read_taxi_paths  # noqa: E402
+
+
+def test_taxi_paths_keep_their_points_in_flight_order_and_measure_their_length():
+    """ADR 0026, W4: a TaxiPath is a direct flight; its TaxiPathNode points, sorted by NodeIndex,
+    give the length the taxi speed turns into a time."""
+    paths = {
+        p.id: p for p in read_taxi_paths(FIXTURE / "TaxiPath.json", FIXTURE / "TaxiPathNode.json")
+    }
+    assert sorted(paths) == [12, 13, 99]
+    ironforge_to_stormwind = paths[12]
+    assert (ironforge_to_stormwind.from_node, ironforge_to_stormwind.to_node) == (6, 2)
+    assert ironforge_to_stormwind.points == ((0.0, 0.0, 0.0), (300.0, 0.0, 0.0), (0.0, 400.0, 0.0))
+    assert ironforge_to_stormwind.length == 800.0  # 300 + 500
+    assert ironforge_to_stormwind.continent == 0 and ironforge_to_stormwind.cost == 110
+    assert paths[13].length == 10.0  # height counts: the flights climb
+    across = paths[99]
+    assert across.continent is None and across.length == 0.0  # the jump is no distance
+
+
+def test_the_taxi_speed_is_the_one_measured_on_forever():
+    # route.md 21.10.2026: 211 s and 260 s over 6,310 and 7,757 yards of TaxiPath
+    assert abs(6310 / 211 - TAXI_SPEED) < 0.2 and abs(7757 / 260 - TAXI_SPEED) < 0.2
+
+
+def test_a_taxi_dump_of_another_table_is_refused(tmp_path):
+    with pytest.raises(ClientDumpError, match="expected a clientdump TaxiPath dump"):
+        read_taxi_paths(FIXTURE / "TaxiNodes.json", FIXTURE / "TaxiPathNode.json")

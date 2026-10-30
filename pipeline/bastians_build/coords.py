@@ -19,15 +19,25 @@ PARENT_RATIO = 8  # a containing map this many times larger than the smallest is
 
 @dataclass(frozen=True)
 class Spawn:
-    """A placed point: map fractions with their source."""
+    """A placed point: map fractions with their source, and the height in world yards when the
+    source has one (CMaNGOS, TaxiNodes; ADR 0026: the graph's places carry `wz`)."""
 
     ui_map_id: int
     x: float
     y: float
     src: str
+    wz: float | None = None
+    r: float | None = (
+        None  # the area's radius in yards where the thing roams (W5: CMaNGOS spawndist)
+    )
 
     def row(self) -> list:
-        return [self.ui_map_id, round(self.x, 4), round(self.y, 4), self.src]
+        row = [self.ui_map_id, round(self.x, 4), round(self.y, 4), self.src]
+        if self.wz is not None or self.r:
+            row.append(None if self.wz is None else round(self.wz, 1))
+        if self.r:
+            row.append(round(self.r, 1))
+        return row
 
 
 def pct_to_fraction(ui_map_id: int, x_pct: float, y_pct: float, src: str) -> Spawn:
@@ -124,9 +134,15 @@ def named_map(
 
 
 def place_world_point(
-    transforms: dict[int, Transform], cmangos_map: int, wx: float, wy: float, src: str
+    transforms: dict[int, Transform],
+    cmangos_map: int,
+    wx: float,
+    wy: float,
+    src: str,
+    wz: float | None = None,
+    r: float | None = None,
 ) -> Spawn | None:
-    """A CMaNGOS world position -> the smallest Forever zone map containing it, or None."""
+    """A CMaNGOS world position -> the zone map containing it (with the height), or None."""
     continent = CMANGOS_CONTINENT.get(cmangos_map)
     if continent is None:
         return None
@@ -134,4 +150,4 @@ def place_world_point(
     if hit is None:
         return None
     ui_map_id, x, y = hit
-    return Spawn(ui_map_id, round(x, 4), round(y, 4), src)
+    return Spawn(ui_map_id, round(x, 4), round(y, 4), src, wz, r)

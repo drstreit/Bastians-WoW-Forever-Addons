@@ -25,6 +25,9 @@ class PackConfig:
     budget_kb: int | None = None
     optional: bool = False  # not written when every type of the pack has zero records
     budget_kb_by_client: dict[str, int] = field(default_factory=dict)  # overrides per client
+    # the client locales that read the pack (data.md "Game data in other languages"): the file
+    # returns at once on any other, so its tables are never built there
+    locales: list[str] = field(default_factory=list)
 
     def budget_for(self, client: str) -> int | None:
         return self.budget_kb_by_client.get(client, self.budget_kb)
@@ -111,6 +114,7 @@ def load_config(path: Path | None = None) -> BuildConfig:
             budget_kb=p.get("budget_kb"),
             optional=bool(p.get("optional", False)),
             budget_kb_by_client=by_client,
+            locales=list(p.get("locales", [])),
         )
         order.append(name)
     seen: dict[str, str] = {}

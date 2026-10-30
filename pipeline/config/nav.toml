@@ -1,0 +1,33 @@
+# The walk network (ADR 0025, route.md "Walk network"): what tools/nav_build.py passes to
+# `clientdump navgraph`, and how it picks road textures and the liquids that block.
+
+# Map.db2 ids of the continents that get a network (25.10.2026: Eastern Kingdoms first)
+continents = [0]
+
+[graph]
+max_slope = 55.0      # degrees, the steepest of a cell's four triangles. Retail 25.10.2026: 50 split Duskwood
+                      # from Stranglethorn and Wetlands from Loch Modan; 60 crossed the ridges
+                      # between Badlands and Burning Steppes; 55 keeps the passes and the ridges
+swim_depth = 1.6      # yards of water above the ground before a cell is swimming
+swim_factor = 3.0     # a swum yard costs this many walked ones
+road_factor = 0.55    # a yard on a road costs this much: paths keep to the roads
+road_min = 0.35       # road texture weight from which a cell is road
+deep_blocked = true   # the client's "deep" water
+lattice = 400.0       # yards between lattice nodes
+lattice_snap = 150.0  # how far a lattice node may move to reach walkable ground
+road_snap = 120.0     # a road this close takes the lattice node
+neighbours = 8        # nearest nodes by path per node
+radius = 900.0        # yards searched around a node
+prune = 1.02          # an edge as long as two shorter ones via a third node is dropped
+simplify = 6.0        # yards of Douglas-Peucker tolerance for the stored paths
+min_island = 200      # cells; nodes never go on smaller land masses
+height_tolerance = 10.0  # yards: a flight master this far above or below the ground is inside a building
+
+[roads]
+# a ground texture is a road when its listfile file name contains one of these
+patterns = ["cobble", "road", "path", "street", "brick", "paver", "paving", "flagstone"]
+
+[liquids]
+# LiquidType.db2 names: blocked outright, and the sea (wading only)
+blocked = ["magma", "lava", "slime", "fel", "tar pit"]
+ocean = ["ocean"]

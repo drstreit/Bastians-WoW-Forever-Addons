@@ -143,11 +143,13 @@ function Util.flatten(rows, query, expanded)
   return out
 end
 
--- Row action icons (ADR 0013 C): up to four small icons at the right of a row with a ref, shown on
--- hover and always on the focused row, drawn from the registered actions in this order: locate
--- (map.show), route (route.to), play or stop (quests.voice, only where it has a line), open
--- (browser.open). An app that is not installed simply contributes no icon.
-Tree.ROW_ACTIONS = { "map.show", "route.to", "quests.voice", "browser.open", "quests.hide" }
+-- Row action icons (ADR 0013 C): small icons at the right of a row with a ref, shown on hover and
+-- always on the focused row, drawn from the registered actions in this order: locate (map.show),
+-- route (route.to), play or stop (quests.voice, only where it has a line), open (browser.open),
+-- copy the Wowhead link, hide (quests.hide). An app that is
+-- not installed simply contributes no icon.
+Tree.ROW_ACTIONS =
+  { "map.show", "route.to", "quests.voice", "browser.open", "browser.wowhead", "quests.hide" }
 
 -- How many row actions are registered now: the space kept free at the right of every ref row.
 function Util.actionSlots()
@@ -189,7 +191,7 @@ function B.UI.Card(ref, ctx, sections)
     icon = e:Icon() or B.UI.IconTexture(typ) or B.UI.IconTexture("other"),
     typeLabel = L[typ or "entity"],
     summary = e:Summary(),
-    distance = B.Coords.DistanceTo(ref), -- yards to the nearest known place, nil when unknown (C1)
+    away = B.UI.Away(ref), -- the travel time there (C1; W8: the graph's, else the yards), or nil
     worth = e:Worth(), -- { text, copper, xp } from the app that knows, nil without one (C3)
     actions = {},
   }
@@ -672,12 +674,18 @@ function Tree:Render()
   local flat, pool = self.flat, self.pool
   local n = #flat
   local used = 0
+  local faces -- the NPC faces of this render (ADR 0034), nil while the switch is off
   if n > 0 and view > 0 then
     local first = math.max(1, self:FirstVisible(offset) - OVERSCAN)
     local searching = self.query ~= ""
     local tableMode = self.opts.table == true
     local slots = tableMode and 0 or Util.actionSlots() * (ICON_W + ICON_GAP)
     local focused = B:Focused()
+    if S.Skin("rowPortraits") and B.UI.Scenery then
+      self.faces = self.faces or B.UI.Scenery.FacePool(self.content)
+      faces = self.faces
+      faces:Begin()
+    end
     local flatMode = self.opts.flat
     local indentStep = flatMode and FLAT_INDENT or INDENT
     local left = flatMode and 3 or FOLD_W + 1 -- flat rows need no room for the fold marker
@@ -718,8 +726,25 @@ function Tree:Render()
         frame.text:SetTextColor(S.C.text[1], S.C.text[2], S.C.text[3], 1)
       end
       local textLeft = left
-      if row.icon then
-        B.UI.PaintIcon(frame.icon, row.icon)
+      -- an NPC's face in place of its glyph (the skin's `rowPortraits`, ADR 0034)
+      local npc = faces and row.ref and row.npcFace
+      if faces and row.ref and npc == nil then
+        local kind, id = B.Entity.Parse(row.ref)
+        npc = kind == "npc" and tonumber(id) or false
+        row.npcFace = npc
+      end
+      local faceSize = math.min(30, self.heights[i] - 2)
+      -- a row that links an entity shows its picture when it brings none (owner, retail
+      -- 29.10.2026: "always use the picture or 3d model"); `icon = false` keeps a row bare
+      local icon = row.icon
+      if icon == nil and row.ref and row.kind ~= "para" then
+        icon = B:Entity(row.ref):Icon()
+      end
+      if npc and faces:Place(npc, frame, faceSize, left) then
+        frame.icon:Hide()
+        textLeft = left + faceSize + 3
+      elseif icon then
+        B.UI.PaintIcon(frame.icon, icon)
         frame.icon:ClearAllPoints()
         frame.icon:SetPoint("LEFT", left, 0)
         frame.icon:Show()
@@ -782,7 +807,9 @@ function Tree:Render()
         frame.value:Hide()
       end
       if row.note then
-        frame.note:SetText(L[row.note])
+        -- as with the text: a table here stopped the whole tree at that row (Notes, 28.10.2026)
+        local note = L[row.note]
+        frame.note:SetText(type(note) == "string" and note or tostring(note))
         frame.note:ClearAllPoints()
         if tableMode and not two then
           -- the table's middle column: right-aligned against the value (ADR 0018 D)
@@ -867,6 +894,11 @@ function Tree:Render()
   for j = used + 1, #pool do
     pool[j]:Hide()
     pool[j].row = nil
+  end
+  if faces then
+    faces:End()
+  elseif self.faces then
+    self.faces:HideAll() -- the switch went off, or nothing to show
   end
   self.visibleCount = used
   self.bar.Update()

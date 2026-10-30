@@ -2,6 +2,7 @@
 local _, ns = ...
 local B = ns.B
 local S = ns.Style
+local L = ns.L
 
 local W = {}
 B.UI.Widgets = W
@@ -245,6 +246,49 @@ function W.Note(parent, text, color)
   return f
 end
 
+-- A colour row (R27.2): the label, a swatch that opens the game's colour picker, and a button
+-- back to the theme's colour. get() -> { r, g, b } or nil (the theme's), set(colour or nil).
+function W.Color(parent, label, get, set, themeColor)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetHeight(ROW)
+  f.label = S.text(f, 12)
+  f.label:SetPoint("LEFT", 0, 0)
+  f.label:SetText(label or "")
+  f.reset = S.button(f, L["Theme"], 70, 20)
+  f.reset:SetPoint("RIGHT", 0, 0)
+  f.reset.tip = L["Back to the theme's colour."]
+  f.swatch = CreateFrame("Button", nil, f)
+  f.swatch:SetSize(40, 16)
+  f.swatch:SetPoint("RIGHT", f.reset, "LEFT", -8, 0)
+  f.swatch.edges = S.roundEdges(f.swatch, S.C.line, "radiusSmall")
+  f.swatch.fill = S.fill(f.swatch, themeColor or S.C.bg)
+  f.swatch.tip = L["Click to pick a colour."]
+  function f.Refresh()
+    local c = get()
+    S.tint(f.swatch.fill, type(c) == "table" and c or themeColor or S.C.bg)
+  end
+  f.swatch:SetScript("OnClick", function()
+    local c = get() or themeColor or S.C.bg
+    local shown = B.Compat.PickColor(c[1], c[2], c[3], function(r, g, b)
+      set({ r, g, b })
+      f.Refresh()
+    end)
+    if not shown then
+      B:Say(L["The game's colour picker is not available here."])
+    end
+  end)
+  f.reset:SetScript("OnClick", function()
+    set(nil)
+    f.Refresh()
+  end)
+  for _, w in ipairs({ f.swatch, f.reset }) do
+    w:HookScript("OnEnter", S.TipEnter)
+    w:HookScript("OnLeave", S.TipLeave)
+  end
+  f.Refresh()
+  return f
+end
+
 -- Text field with a hint (the kit's search box without the clear button semantics).
 function W.Edit(parent, hint, onEnter)
   local box = S.search(parent, hint)
@@ -390,7 +434,31 @@ local claims = {} -- key -> true
 local trackerHidden = false -- what we did last
 local trackerPending = nil -- the wish kept during combat
 
+-- The game shows its tracker again on its own (at login, on a layout change): while a claim stands
+-- it goes again at once (the option was on and the tracker showed until
+-- the option was switched off and on). Hooked once, when the frame exists.
+local guarded = false
+local function guardTracker()
+  local f = rawget(_G, "ObjectiveTrackerFrame")
+  if guarded or not (f and f.HookScript) then
+    return
+  end
+  guarded = true
+  f:HookScript("OnShow", function(self)
+    if next(claims) == nil then
+      return
+    end
+    if InCombatLockdown() then
+      trackerHidden, trackerPending = false, true -- shown in combat: hidden after it
+    else
+      self:Hide()
+      trackerHidden = true
+    end
+  end)
+end
+
 local function applyTracker()
+  guardTracker()
   local hide = next(claims) ~= nil
   if hide == trackerHidden then
     trackerPending = nil

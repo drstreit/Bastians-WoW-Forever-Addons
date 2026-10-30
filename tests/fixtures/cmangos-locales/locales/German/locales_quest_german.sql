@@ -1,0 +1,6 @@
+--
+-- Daten für Table `locales_quest`
+--
+
+INSERT INTO `locales_quest` VALUES
+(176,NULL,NULL,'Gesucht: Hogger',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Hogger terrorisiert die Höfe des Waldes von Elwynn schon zu lange.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Bringt die riesige Gnollklaue zu Marschall Dughan in Goldhain.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,'Ihr habt Elwynn einen großen Dienst erwiesen.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);

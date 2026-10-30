@@ -50,3 +50,94 @@ def test_the_overlay_joins_the_site_and_must_exist(tmp_path: Path):
     assert "wow/my-gold-diary/index.html" in files and "wow/index.html" in files
     with pytest.raises(site_deploy.SiteError):
         site_deploy.site_files(tmp_path / "missing")
+
+
+class FakeApi:
+    """Cloudflare's API as a dict of canned answers: (method, path) -> response; every call is
+    recorded with its body. A path without an answer fails like the real API."""
+
+    def __init__(self, answers: dict):
+        self.answers, self.calls = answers, []
+
+    def __call__(self, token, method, path, body=None):
+        self.calls.append((method, path, body))
+        return self.answers.get((method, path), {"success": False, "errors": [{"code": 7003}]})
+
+    def writes(self):
+        return [(m, p, b) for m, p, b in self.calls if m != "GET"]
+
+
+ZONE = "z1"
+RECORDS = f"/zones/{ZONE}/dns_records"
+ENTRY = f"/zones/{ZONE}/rulesets/phases/http_request_dynamic_redirect/entrypoint"
+NO_ENTRY = {"success": False, "errors": [{"code": 10003, "message": "could not find entrypoint"}]}
+OK = {"success": True, "errors": [], "result": {}}
+
+
+def test_www_sets_up_the_redirect_rule_then_the_record():
+    fake = FakeApi(
+        {
+            ("GET", f"{RECORDS}?name=www.bastians.dev"): {"success": True, "result": []},
+            ("GET", ENTRY): NO_ENTRY,
+            ("PUT", ENTRY): OK,
+            ("POST", RECORDS): OK,
+        }
+    )
+    site_deploy.www(ZONE, "tok", fake)
+    (m1, p1, rule), (m2, p2, record) = fake.writes()
+    assert (m1, p1) == ("PUT", ENTRY) and (m2, p2) == ("POST", RECORDS)  # the rule first
+    (r,) = rule["rules"]
+    assert r["expression"] == '(http.host eq "www.bastians.dev")' and r["action"] == "redirect"
+    target = r["action_parameters"]["from_value"]
+    assert target["status_code"] == 301 and target["preserve_query_string"] is True
+    assert target["target_url"]["expression"] == (
+        'concat("https://bastians.dev", http.request.uri.path)'
+    )
+    assert record == {
+        "type": "AAAA",
+        "name": "www.bastians.dev",
+        "content": "100::",
+        "proxied": True,
+    }
+
+
+def test_www_is_idempotent_and_adds_to_an_existing_ruleset():
+    rule = dict(site_deploy.WWW_RULE)
+    done = FakeApi(
+        {
+            ("GET", f"{RECORDS}?name=www.bastians.dev"): {"success": True, "result": [{"id": "r"}]},
+            ("GET", ENTRY): {"success": True, "result": {"id": "rs", "rules": [rule]}},
+        }
+    )
+    site_deploy.www(ZONE, "tok", done)
+    assert done.writes() == []
+    other = FakeApi(
+        {
+            ("GET", f"{RECORDS}?name=www.bastians.dev"): {"success": True, "result": [{"id": "r"}]},
+            ("GET", ENTRY): {
+                "success": True,
+                "result": {"id": "rs", "rules": [{"expression": "x"}]},
+            },
+            ("POST", f"/zones/{ZONE}/rulesets/rs/rules"): OK,
+        }
+    )
+    site_deploy.www(ZONE, "tok", other)
+    assert [(m, p) for m, p, _ in other.writes()] == [("POST", f"/zones/{ZONE}/rulesets/rs/rules")]
+
+
+def test_a_missing_permission_is_named_and_nothing_is_written():
+    no = {"success": False, "errors": [{"code": 10000, "message": "Authentication error"}]}
+    fake = FakeApi(
+        {
+            ("GET", f"{RECORDS}?name=www.bastians.dev"): {"success": True, "result": []},
+            ("GET", ENTRY): NO_ENTRY,
+            ("PUT", ENTRY): no,
+        }
+    )
+    with pytest.raises(site_deploy.SiteError, match="Single Redirect / Edit"):
+        site_deploy.www(ZONE, "tok", fake)
+    assert [m for m, _, _ in fake.writes()] == ["PUT"]  # the record was not made
+    reads = FakeApi({("GET", f"{RECORDS}?name=www.bastians.dev"): no})
+    with pytest.raises(site_deploy.SiteError, match="DNS / Edit"):
+        site_deploy.www(ZONE, "tok", reads)
+    assert reads.writes() == []

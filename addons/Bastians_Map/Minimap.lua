@@ -8,6 +8,8 @@
 -- player stands (nfr.md: no OnUpdate while idle).
 -- The yards a minimap shows per zoom step are the client's own figures (HereBeDragons measures
 -- them the same way); indoors is told from the two zoom cvars as HereBeDragons does.
+-- A host other than the game's minimap (MM.SetHost: Bastian's minimap drawing one of our styles,
+-- Mini.lua) gives its own centre, scale, size and shape; north stays up there.
 local _, ns = ...
 local B = Bastians
 local S = B.UI.Style
@@ -38,6 +40,7 @@ MM.pieces = pieces
 local pins = {} -- the nearest pins of the last query, with their world coordinates
 local paths = {} -- the path pins of the last query (points in world yards)
 local center -- { continent, wx, wy } of the last query
+local host -- nil: the game's minimap; else { frame, Center(), Scale(), Half(), Shape() }
 local indoors = false
 local elapsed = 0
 local moving, turning, ticking = false, false, false
@@ -256,22 +259,36 @@ local function drawPaths(px, py, scale, facing, half, shapeName)
   return n
 end
 
+-- The point the overlay is centred on: the player on the game's minimap, the view's centre on a
+-- host (it may be dragged away from the player).
+local function viewCenter()
+  if host then
+    return host.Center()
+  end
+  return B.Coords.Player()
+end
+
 -- Move every pin to its place around the player; rim pins shrink and show the arrow.
 function MM.Reposition()
   if not (frame and frame:IsShown()) then
     return
   end
-  local continent, px, py = B.Coords.Player()
+  local continent, px, py = viewCenter()
   if not continent or (center and continent ~= center[1]) then
     hideFrom(0)
     hidePiecesFrom(0)
     MM.stats.shown, MM.stats.edge, MM.stats.pieces = 0, 0, 0
     return
   end
-  local scale = MM.Scale()
-  local half = (Minimap:GetWidth() or 140) / 2
-  local facing = cvarBool("rotateMinimap") and (B.Compat.GetPlayerFacing() or 0) or nil
-  local shapeName = shape()
+  local scale, half, facing, shapeName
+  if host then
+    scale, half, shapeName = host.Scale(), host.Half(), host.Shape()
+  else
+    scale = MM.Scale()
+    half = (Minimap:GetWidth() or 140) / 2
+    facing = cvarBool("rotateMinimap") and (B.Compat.GetPlayerFacing() or 0) or nil
+    shapeName = shape()
+  end
   local edge = 0
   for i, pin in ipairs(pins) do
     local f = pinButton(i)
@@ -313,7 +330,7 @@ function MM.Query()
   if not (enabled() and frame) then
     return
   end
-  local continent, px, py = B.Coords.Player()
+  local continent, px, py = viewCenter()
   if not continent then
     frame:Hide() -- an instance: nothing to show, no ticks until the next zone or world event
     MM.stats.shown, MM.stats.edge, MM.stats.queried, MM.stats.pieces = 0, 0, 0, 0
@@ -408,7 +425,7 @@ onUpdate = function(_, dt)
     stopTicks()
     return
   end
-  local continent, px, py = B.Coords.Player()
+  local continent, px, py = viewCenter()
   if continent ~= center[1] then
     MM.Schedule()
     return
@@ -427,11 +444,29 @@ onUpdate = function(_, dt)
 end
 
 local function build()
-  frame = CreateFrame("Frame", "BastiansMinimapOverlay", Minimap)
-  frame:SetAllPoints(Minimap)
-  frame:SetFrameLevel((Minimap:GetFrameLevel() or 0) + 5)
+  local over = host and host.frame or Minimap
+  frame = CreateFrame("Frame", "BastiansMinimapOverlay", over)
+  frame:SetAllPoints(over)
+  frame:SetFrameLevel((over:GetFrameLevel() or 0) + 5)
   frame:Hide()
   MM.frame = frame
+end
+
+-- Puts the overlay on a host (nil: back on the game's minimap) and asks the layers again.
+function MM.SetHost(newHost)
+  host = newHost
+  if frame then
+    local over = host and host.frame or Minimap
+    frame:SetParent(over)
+    frame:ClearAllPoints()
+    frame:SetAllPoints(over)
+    frame:SetFrameLevel((over:GetFrameLevel() or 0) + 5)
+  end
+  MM.Schedule()
+end
+
+function MM.Host()
+  return host
 end
 
 -- The setting decides: on builds the frame once and queries, off hides everything.
@@ -460,10 +495,6 @@ table.insert(Map.onEnable, function(self)
   self:RegisterEvent("MINIMAP_UPDATE_ZOOM", function()
     MM.UpdateZoom(false) -- never a probe here: it would answer with this event again
     MM.Reposition()
-  end)
-  self:RegisterEvent("PLAYER_ENTERING_WORLD", function()
-    MM.UpdateZoom()
-    MM.Schedule()
   end)
   self:RegisterEvent("ZONE_CHANGED_NEW_AREA", MM.Schedule)
   -- movement (retail family events, assumed on Forever until seen: forever-api.md); the subzone
@@ -494,9 +525,14 @@ table.insert(Map.onEnable, function(self)
     MM.Reposition()
     MM.StartTicks()
   end)
-  self:On("BASTIANS_PLAYER_MOVED_ZONE", MM.Schedule)
   MM.Apply()
 end)
+-- once at load, not per enable (the Map runs these lists from its one handler per event)
+table.insert(Map.onWorld, function()
+  MM.UpdateZoom()
+  MM.Schedule()
+end)
+table.insert(Map.onZone, MM.Schedule)
 table.insert(Map.onSetting, function(key)
   if key == "minimapPins" or key == "minimapMax" then
     MM.Apply()

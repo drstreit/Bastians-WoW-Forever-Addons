@@ -16,14 +16,16 @@ strategies. Every app works on its own, and together they work as one system.
 | Gold | prices from your scans and vendor visits, farm spots, your gold over time | `/bgold` |
 | Route | the way there by flight path, boat, zeppelin, tram, portal or hearthstone | `/broute` |
 | Strategies | Bastian's Gold Rumours, a book of gold strategies with today's prices (WoW Forever) | `/bbook` |
+| Notes | your notes on NPCs, quests, items and spots, in lists, with reminders | `/bnotes` |
 | Data | the game data behind every app, built per client and updated daily | |
 
 ## Install
 
 From launch day (4 November 2026) on CurseForge: install **Bastian's Suite**, and the CurseForge
 app installs **Bastian's Data** with it. The first time, restart the game fully: `/reload` does not
-find new addons. Optional companions: TomTom (both clients), Questie and Spoken Quests (WoW
-Forever).
+find new addons. Recommended on WoW Forever: Questie and Spoken. No waypoint addon is needed:
+Route has its own arrow and the map its own waypoints. The suite needs no other addon. Languages: English, German, French, Spanish, Korean, Simplified
+and Traditional Chinese.
 
 ## Building from source
 
@@ -34,12 +36,15 @@ included (on Lua 5.1 against a WoW API mock).
 
 ## Credits
 
-Game data from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), ForeverDB (GPL-3.0),
-CMaNGOS classic-db (GPL-3.0), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger, voice
-lines through Spoken (MIT), and the Blizzard client files (map imagery and tables read from the
-installed client). Build tools: TACTSharp, DBCD and BLPSharp (MIT), WoWDBDefs (CC BY-SA 4.0).
-Libraries: LibStub, CallbackHandler, LibDataBroker, LibDeflate. The book credits every traveller
-whose video or guide it retells, with the link.
+Game data first from the Blizzard client files read from the installed client (items, recipes,
+quest chains and areas, names in every language, map imagery and tables); what only the servers
+hold from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), ForeverDB (GPL-3.0),
+CMaNGOS classic-db (GPL-3.0), TrinityCore TDB (GPL-2.0 or later, retail), NauticusClassic (MIT,
+ferry departures), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger, voice lines
+through Spoken (MIT). Build tools: TACTSharp, DBCD and BLPSharp (MIT), WoWDBDefs (CC BY-SA 4.0).
+Libraries: LibStub, CallbackHandler, LibDataBroker. The book credits every traveller
+whose video or guide it retells, with the link. The book's drawings are made with Google's Gemini
+image model from our own scene descriptions.
 
 ## Licence
 

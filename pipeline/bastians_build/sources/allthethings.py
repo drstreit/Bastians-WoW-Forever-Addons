@@ -157,7 +157,7 @@ end
 
 -- Flat per-kind tables of the fields the pipeline reads; conversion to Python happens once.
 function extract()
-  local out = { q = {}, n = {}, o = {}, fp = {}, m = {} }
+  local out = { q = {}, n = {}, o = {}, fp = {}, m = {}, r = {} }
   for _, r in ipairs(records) do
     local kind = r.__kind
     if kind == "q" then
@@ -186,6 +186,13 @@ function extract()
       end
     elseif kind == "m" then
       out.m[#out.m + 1] = { id = r.__id, lvl = rawget(r, "lvl"), maps = rawget(r, "maps") }
+    elseif kind == "Recipe" then
+      -- a recipe (CreateRecipe): the spell, its profession's skill line, the skill it is learned
+      -- at, the item that teaches it (28.10.2026: retail's recipes)
+      out.r[#out.r + 1] = {
+        id = r.__id, skill = rawget(r, "requireSkill"), learnedAt = rawget(r, "learnedAt"),
+        item = rawget(r, "itemID"), u = inherited(r, "u"),
+      }
     end
   end
   return out
@@ -240,6 +247,18 @@ class AttPlaced:
 
 
 @dataclass
+class AttRecipe:
+    """A recipe: the spell that crafts, its profession's skill line, the skill it is learned at
+    and the item that teaches it (``itemID``), as far as ATT knows them."""
+
+    id: int
+    skill_line: int | None = None
+    learned_at: int | None = None
+    teacher_item: int | None = None
+    unavailable: int | None = None
+
+
+@dataclass
 class AttMap:
     id: int
     level_lo: int | None = None
@@ -257,6 +276,7 @@ class AllTheThings:
     flightpaths: dict[int, AttPlaced]
     maps: dict[int, AttMap]
     object_names: dict[int, str]
+    recipes: dict[int, AttRecipe] = field(default_factory=dict)
 
 
 class AllTheThingsError(ValueError):
@@ -428,6 +448,21 @@ def assemble(
         for v in _int_list(e.get("maps")):
             if v not in m.maps:
                 m.maps.append(v)
+    recipes: dict[int, AttRecipe] = {}
+    for e in raw.get("r") or []:
+        rid = e.get("id")
+        if not isinstance(rid, int):
+            continue
+        seen = rid in recipes
+        rec = recipes.setdefault(rid, AttRecipe(id=rid))
+        rec.unavailable = _merge_unavailable(rec.unavailable, e.get("u"), seen)
+        for attr, key in (
+            ("skill_line", "skill"),
+            ("learned_at", "learnedAt"),
+            ("teacher_item", "item"),
+        ):
+            if getattr(rec, attr) is None and isinstance(e.get(key), int):
+                setattr(rec, attr, e[key])
     return AllTheThings(
         flavor=flavor,
         version=version,
@@ -437,6 +472,7 @@ def assemble(
         flightpaths=placed["fp"],
         maps=maps,
         object_names=object_names,
+        recipes=recipes,
     )
 
 

@@ -8,21 +8,32 @@ addon = "Bastians_Data_World"
 file = "World.lua"
 # 12 MB since 20.10.2026 (was 10): Classic mob places, up to 12 per map, made the Forever pack 10.9 MB
 budget_kb = 12288
-indexes = ["npc.byZone", "object.byZone", "node.byZone", "area.toMap"]
+indexes = ["npc.byZone", "object.byZone", "node.byZone", "entrance.byZone", "area.byZone", "area.toMap"]
 
 [packs.world.schema]
 # loot = { {itemID, chance percent}, ... } with lootSrc "classic" (CMaNGOS) or "tdb" (retail, ItemDB)
 npc = ["name", "subname", "level", "levelMax", "zone", "flags", "faction", "spawns", "vendor", "trainer", "loot", "lootSrc", "src"]
 object = ["name", "kind", "zone", "spawns", "loot", "lootSrc", "src"]
 zone = ["name", "parent", "continent", "levelLo", "levelHi", "levelMed", "questsA", "questsH", "mapType"]
+# the subzones (data.md "Areas"), id = AreaTable id: zone the uiMapID it lies in; continent, wx, wy
+# the world place (the chunk nearest the mean of its terrain chunks), r its radius in yards; spawns
+# the map place for drawing when the build had transforms; chunks how many terrain chunks carry it
+area = ["name", "zone", "continent", "wx", "wy", "r", "chunks", "spawns", "src"]
 node = ["name", "kind", "profession", "skill", "item", "icon", "spawns", "src"]
 # flight masters from the client's TaxiNodes table (route.md): world yards are the planner's frame,
 # spawns (map fractions) exist when the build had a transform table; faction is A | H | both
 flightpath = ["name", "faction", "continent", "wx", "wy", "spawns", "src"]
-# boats, zeppelins, trams, portals from pipeline/config/transports_<client>.toml (route.md): stops are
+# boats, zeppelins, trams, portals from pipeline/config/places_<client>.toml (route.md): stops are
 # [uiMapID, x, y, label], world is [continent, wx, wy] per stop when the build had transforms, ride and
 # cycle are seconds (nil = unknown), verified = measured in game
-transport = ["name", "kind", "faction", "stops", "world", "ride", "cycle", "verified", "note", "spawns", "src"]
+# departs: seconds into the cycle the vessel leaves each stop; dock: seconds it lies at a stop (R26.6)
+transport = ["name", "kind", "faction", "stops", "world", "ride", "cycle", "verified", "note", "spawns", "src", "departs", "dock"]
+# instance entrances from pipeline/config/places_<client>.toml (ADR 0026, data.md "Our authored
+# tables"): id <instance>-<n>; continent, wx, wy, wz the world place; spawns the map place for
+# drawing when the build had transforms; level the required level; verified = checked in game
+entrance = ["name", "label", "instance", "level", "zone", "continent", "wx", "wy", "wz", "spawns", "verified", "note", "src"]
+# the teleports a character may have (places_<client>.toml [[teleport]], route.md "Home and every way back")
+teleport = ["name", "kind", "spell", "item", "faction", "class", "reagent", "hearth", "continent", "wx", "wy", "wz", "cast", "verified", "note", "src"]
 
 [packs.quests]
 addon = "Bastians_Data_Quests"
@@ -30,7 +41,8 @@ file = "Quests.lua"
 budget_kb = 6144
 # retail (20.10.2026): 32,409 obtainable quests with a giver, place or zone make 9.0 MB; budget per
 # client, the in-game cost is measured in B11.1 (data.md "Retail data")
-budget_kb_retail = 10240
+# 11 MB since 29.10.2026: the client's quest lines and objective areas (ADR 0035) took it to 10.9 MB
+budget_kb_retail = 11264
 # byStart, byTurnIn, followers, chainMembers and chainFrom are the quest graph Quests' Logic reads
 # (B11.1, 21.10.2026): shipped, so no zone page decodes every quest to build them
 indexes = [
@@ -50,11 +62,13 @@ file = "Items.lua"
 budget_kb = 8192
 # retail (20.10.2026): 57,726 referenced items make 10.2 MB in format A (the plain name table for
 # search adds 1.7 MB); headroom for the next AllTheThings release
-budget_kb_retail = 11264
+budget_kb_retail = 14336  # 13 MB since 28.10.2026: TrinityCore's loot (11.0 MB) and 12,208 recipes from
+# AllTheThings (+1.1 MB) took it to 12.1 MB; 14 MB since 29.10.2026: the client's item facts and the
+# recipes' names, products and reagents (ADR 0035) took it to 13.5 MB
 indexes = []
 
 [packs.items.schema]
-item = ["name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew", "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "src"]
+item = ["name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew", "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src"]
 recipe = ["name", "profession", "skill", "item", "count", "reagents", "source", "sourceItem", "foreverNew", "src"]
 
 # the AHSync market export (ahsync-export.md), read with --export; optional: no export, no pack
@@ -112,6 +126,117 @@ indexes = []
 [packs.text.schema]
 # quest texts live on the quest record as `text`; the text pack carries them separately (B3.5)
 questText = ["details", "objectives", "offer", "progress", "src"]
+
+# The game data in German, French and Spanish (data.md "Game data in other languages", ADR 0033):
+# the local names and texts of the records our packs carry, from QuestieDB's l10n lookups and
+# CMaNGOS' quest locales (bastians_build data --l10n, --cmangos); stubs without them. esES serves
+# the Mexican client too; Korean and Chinese since 29.10.2026 (owner).
+# Measured 29.10.2026 (Forever, QuestieDB 7901fee): frFR 3.4 MB, esES 3.6 MB, koKR 3.6 MB, zhTW 3.8 MB;
+# deDE and zhCN carry CMaNGOS' long quest texts as well (6.5 and 5.2 MB). Only the
+# client's own language builds its tables (the guard), so one pack costs memory, like Text_enUS.
+[packs.text_deDE]
+addon = "Bastians_Data_Text_deDE"
+file = "Text_deDE.lua"
+# with CMaNGOS' long quest texts: measured 29.10.2026 deDE 6.5 MB, zhCN 5.2 MB
+# 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
+budget_kb = 8192  # was 7168
+indexes = []
+# retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
+budget_kb_retail = 6144
+optional = true
+locales = ["deDE"]
+
+[packs.text_deDE.schema]
+quest_deDE = ["name", "objectives", "details", "offer", "progress"]
+npc_deDE = ["name", "subname"]
+item_deDE = ["name"]
+object_deDE = ["name"]
+
+[packs.text_frFR]
+addon = "Bastians_Data_Text_frFR"
+file = "Text_frFR.lua"
+# 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
+budget_kb = 5120  # was 4096
+indexes = []
+# retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
+budget_kb_retail = 6144
+optional = true
+locales = ["frFR"]
+
+[packs.text_frFR.schema]
+quest_frFR = ["name", "objectives", "details", "offer", "progress"]
+npc_frFR = ["name", "subname"]
+item_frFR = ["name"]
+object_frFR = ["name"]
+
+[packs.text_esES]
+addon = "Bastians_Data_Text_esES"
+file = "Text_esES.lua"
+# 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
+budget_kb = 5120  # was 4096
+indexes = []
+# retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
+budget_kb_retail = 6144
+optional = true
+locales = ["esES", "esMX"]
+
+[packs.text_esES.schema]
+quest_esES = ["name", "objectives", "details", "offer", "progress"]
+npc_esES = ["name", "subname"]
+item_esES = ["name"]
+object_esES = ["name"]
+
+[packs.text_koKR]
+addon = "Bastians_Data_Text_koKR"
+file = "Text_koKR.lua"
+# 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
+budget_kb = 5120  # was 4096
+indexes = []
+# retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
+budget_kb_retail = 6144
+optional = true
+locales = ["koKR"]
+
+[packs.text_koKR.schema]
+quest_koKR = ["name", "objectives", "details", "offer", "progress"]
+npc_koKR = ["name", "subname"]
+item_koKR = ["name"]
+object_koKR = ["name"]
+
+[packs.text_zhCN]
+addon = "Bastians_Data_Text_zhCN"
+file = "Text_zhCN.lua"
+# with CMaNGOS' long quest texts: measured 29.10.2026 deDE 6.5 MB, zhCN 5.2 MB
+# 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
+budget_kb = 8192  # was 7168
+indexes = []
+# retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
+budget_kb_retail = 6144
+optional = true
+locales = ["zhCN"]
+
+[packs.text_zhCN.schema]
+quest_zhCN = ["name", "objectives", "details", "offer", "progress"]
+npc_zhCN = ["name", "subname"]
+item_zhCN = ["name"]
+object_zhCN = ["name"]
+
+[packs.text_zhTW]
+addon = "Bastians_Data_Text_zhTW"
+file = "Text_zhTW.lua"
+# 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
+budget_kb = 5120  # was 4096
+indexes = []
+# retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
+budget_kb_retail = 6144
+optional = true
+locales = ["zhTW"]
+
+[packs.text_zhTW.schema]
+quest_zhTW = ["name", "objectives", "details", "offer", "progress"]
+npc_zhTW = ["name", "subname"]
+item_zhTW = ["name"]
+object_zhTW = ["name"]
 
 # Overview textures for Bastians_Map_Art (map.md "Imagery pipeline", roadmap B8.5): one DXT1 texture per
 # span x span cell of ADT tiles with `pixels` pixels per ADT, levels 0-2 through the mip chain. Measured

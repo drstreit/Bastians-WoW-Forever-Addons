@@ -153,6 +153,15 @@ def test_window_opens_on_the_player_and_reacts_to_wheel_drag_and_keys(wow: WowRu
     wow.execute(f"{MAP_}.clip:GetScript('OnKeyDown')({MAP_}.clip, 'HOME')")
     c = wow.eval(f"{MAP_}.Camera()")
     assert (round(c.wx, 6), round(c.wy, 6)) == (-60, 32)
+    # in combat the keys pass on untouched
+    wow.execute(f"{MAP_}.clip.propagateKeys = false")
+    wow.execute(f"{MAP_}.clip:GetScript('OnEvent')({MAP_}.clip, 'PLAYER_REGEN_DISABLED')")
+    assert wow.eval(f"{MAP_}.clip.propagateKeys") is True
+    wow.execute("Mock.combat = true")
+    wow.execute(f"{MAP_}.clip:GetScript('OnKeyDown')({MAP_}.clip, 'LEFT')")
+    c2 = wow.eval(f"{MAP_}.Camera()")
+    assert (round(c2.wx, 6), round(c2.wy, 6)) == (-60, 32)
+    wow.execute("Mock.combat = false")
     # the settle callback fires once after the burst of changes
     wow.execute(
         f"settled = 0; table.insert({MAP_}.onSettle, function(cam, view) settled = settled + 1; lastView = view end)"

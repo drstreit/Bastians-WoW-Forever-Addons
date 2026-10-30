@@ -1,0 +1,17 @@
+# The fixture network's connectors (tests/pipeline/test_nav.py, tests/lua/route/test_walk_network.py)
+
+[[link]]
+name = "fixture-tunnel"
+kind = "tunnel"
+continent = 530
+a = [0, 1000]
+b = [0, 2000]
+path = [[-10, 1500]]
+verified = false
+
+[[link]]
+name = "fixture-gate"
+kind = "gate"
+continent = 530
+a = "flightpath:900"
+b = "flightpath:901"

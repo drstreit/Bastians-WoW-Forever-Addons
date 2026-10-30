@@ -1,8 +1,9 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Data: Items
+## IconTexture: Interface\AddOns\Bastians_Data_Items\Icon
 ## Notes: Generated item data pack (loads at startup).
 ## Author: Bastian
-## Version: 1.0.0-beta.12
+## Version: 1.0.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

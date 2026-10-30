@@ -1,0 +1,87 @@
+-- German strings of Bastians_Notes (deDE). Keys are the English texts (Locale.lua); loaded before the
+-- addon's other files so load-time labels are translated too.
+local _, ns = ...
+local B = Bastians
+ns.L = ns.L or B.NewLocale()
+ns.L:Register("deDE", {
+  -- Notes.lua
+  ["Notes"] = "Notizen",
+  ["Note"] = "Notiz",
+  ["My notes"] = "Meine Notizen",
+  ["a spot"] = "eine Stelle",
+  ["Click to edit"] = "Klicken zum Bearbeiten",
+  ["Add note"] = "Notiz hinzufügen",
+  ["Add note here"] = "Notiz hier hinzufügen",
+  ["Your notes on spots; notes on NPCs and quests show on their tooltips."] = "Deine Notizen an Stellen; Notizen zu NPCs und Quests stehen in deren Tooltips.",
+  ["Reminders: say a note when near it or when its NPC is targeted"] = "Erinnerungen: eine Notiz nennen, wenn du in der Nähe bist oder ihren NPC anvisierst",
+  ["No map position here (instance?)"] = "Hier keine Kartenposition (Instanz?)",
+  ["Note kept: %s"] = "Notiz behalten: %s",
+
+  -- Editor.lua
+  ["On %s"] = "An: %s",
+  ["Title"] = "Titel",
+  ["List"] = "Liste",
+  ["Private"] = "Privat",
+  ["Goes with its list"] = "Geht mit ihrer Liste",
+  ["Never"] = "Nie",
+  ["When near"] = "In der Nähe",
+  ["When I target it"] = "Beim Anvisieren",
+  ["Keep"] = "Behalten",
+  ["Cancel"] = "Abbrechen",
+  ["Remove"] = "Entfernen",
+  ["A note needs a title."] = "Eine Notiz braucht einen Titel.",
+  ["The note could not be kept (%s)."] = "Die Notiz konnte nicht behalten werden (%s).",
+
+  -- Lists.lua
+  ["List name"] = "Name der Liste",
+  ["New list"] = "Neue Liste",
+  ["Rename"] = "Umbenennen",
+  ["Remove list"] = "Liste entfernen",
+  ["on"] = "an",
+  ["off"] = "aus",
+  ["Bookmarks"] = "Lesezeichen",
+
+  -- Share.lua, sharing (N3)
+  ["Share"] = "Teilen",
+  ["Import"] = "Importieren",
+  ["Party"] = "Gruppe",
+  ["Raid"] = "Schlachtzug",
+  ["Guild"] = "Gilde",
+  ["Whisper"] = "Flüstern",
+  ["Player name"] = "Name des Spielers",
+  ["Or copy this text (Ctrl+C) for a forum, Discord or another account:"] = "Oder kopiere diesen Text (Strg+C) für ein Forum, Discord oder einen anderen Account:",
+  ["Type the name of the player to whisper to."] = "Gib den Namen des Spielers ein, dem du flüstern willst.",
+  ["Not sent (%s)."] = "Nicht gesendet (%s).",
+  ["Nothing to share: every note of this list is private."] = "Nichts zu teilen: jede Notiz dieser Liste ist privat.",
+  ["%s: %d notes, %d bookmarks go along."] = "%s: %d Notizen, %d Lesezeichen gehen mit.",
+  ["%d private notes stay here."] = "%d private Notizen bleiben hier.",
+  ["A list for you"] = "Eine Liste für dich",
+  ["Accept"] = "Annehmen",
+  ["Decline"] = "Ablehnen",
+  ['%s shares the list "%s" with %d notes and %d bookmarks. Nothing is kept without your click.'] = '%s teilt die Liste "%s" mit %d Notizen und %d Lesezeichen. Nichts wird ohne deinen Klick behalten.',
+  ["Import a list"] = "Eine Liste importieren",
+  ["Paste the text (Ctrl+V), then Read."] = "Füge den Text ein (Strg+V), dann Lesen.",
+  ["Read"] = "Lesen",
+  ["This text holds no list (%s)."] = "Dieser Text enthält keine Liste (%s).",
+  ["Sent: %s (%d notes, %d bookmarks)."] = "Gesendet: %s (%d Notizen, %d Lesezeichen).",
+  ["%d private notes stayed here."] = "%d private Notizen sind hier geblieben.",
+  ["a pasted text"] = "ein eingefügter Text",
+  ["Kept: %s (%d notes, %d bookmarks)."] = "Behalten: %s (%d Notizen, %d Lesezeichen).",
+
+  -- location sharing (R26.9, N4)
+  ["You are not in a group."] = "Du bist in keiner Gruppe.",
+  ["Sent to your group: %s"] = "An deine Gruppe gesendet: %s",
+  ["[%s] %s: %s (on your map)"] = "[%s] %s: %s (auf deiner Karte)",
+  ["%s is here"] = "%s ist hier",
+  ["From %s, %d min ago"] = "Von %s, vor %d Min.",
+  ["Click for a route there"] = "Klicken für eine Route dorthin",
+  ["From others"] = "Von anderen",
+  ["Places your group, your guild or a friend sent you, for half an hour."] = "Orte, die dir Gruppe, Gilde oder Freunde geschickt haben, eine halbe Stunde lang.",
+  ["Sent to your guild: %s"] = "An deine Gilde gesendet: %s",
+  ["Sent to %s: %s"] = "An %s gesendet: %s",
+  ["Places your group sent you, for half an hour."] = "Orte, die deine Gruppe dir geschickt hat, für eine halbe Stunde.",
+  ["Send this spot to my group"] = "Diese Stelle an meine Gruppe senden",
+  ["Send to my group"] = "An meine Gruppe senden",
+  ["No place to send."] = "Kein Ort zum Senden.",
+  ["Bookmark: a click shows it on the map, a right click renames it"] = "Lesezeichen: Klick zeigt es auf der Karte, Rechtsklick benennt es um",
+})

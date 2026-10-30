@@ -96,8 +96,11 @@ def test_bq_opens_the_zone_page_with_its_sections_and_counts(wow: WowRuntime):
         "Innkeeper Farley  Innkeeper",
         "Vendors  1",
         "Trainers  1",
+        "Auction house  1",  # the fixture auctioneer (W10 step 2)
         "Neighbours",
         "> Westfall  9-10",
+        "Areas",  # Data's subzones (data.md "Areas", 28.10.2026)
+        "Crystal Lake",
         "Monsters",  # Data's block (guide gaps, 23.10.2026): no service, by level
         "Goldtooth  8",
         "Hogger  11",
@@ -105,7 +108,9 @@ def test_bq_opens_the_zone_page_with_its_sections_and_counts(wow: WowRuntime):
     assert chips(wow) == []  # no facet chips on a page
     rows = page_entries(wow, DS)
     assert rows[4].ref == "npc:240" and rows[5].ref == "quest:62"  # the taker group is the NPC
-    assert rows[12].ref == "npc:295" and rows[16].ref == "zone:1436"
+    assert (
+        rows[12].ref == "npc:295" and rows[17].ref == "zone:1436"
+    )  # one row down: the auction house
     assert summary(wow) == ""
     # the sections are the registered ones: the ranking first, then by status, the places, the zone's
     # neighbours; Done folded (it has no rows here)
@@ -117,6 +122,7 @@ def test_bq_opens_the_zone_page_with_its_sections_and_counts(wow: WowRuntime):
         "quests.zone.onward",
         "data.places",
         "quests.zone.neighbours",
+        "data.areas",  # the subzones (data.md "Areas", 28.10.2026)
         "data.monsters",  # guide gaps, 23.10.2026
         "quests.here.todo",  # the Here column's sections (C4), not drawn on the page
         "quests.here.log",

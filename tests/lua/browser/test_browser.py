@@ -86,10 +86,10 @@ def test_entity_page_has_header_actions_and_sections_in_order(wow: WowRuntime):
         "Starts quests",
         "Ends quests",
     ]
-    # no action for an NPC without Map and Route: the page's own card does not offer to re-open
-    # itself (ADR 0013, N1); in rows and menus the action is greyed while the Browser is open
-    # and refuses to run
-    assert actions(wow) == []
+    # without Map and Route only the Wowhead link (25.10.2026): the page's own card does not offer
+    # to re-open itself (ADR 0013, N1); in rows and menus the action is greyed while the Browser
+    # is open and refuses to run
+    assert actions(wow) == ["Wowhead"]
     assert (
         wow.eval("Bastians:RunAction('browser.open', 'npc:240', { source = 'browser' })") is False
     )
@@ -144,6 +144,7 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     wow.run_frames(5)
     assert title(wow) == "NPCs"
     assert flat(wow) == [  # the list opens on the player's zone (C9): Westfall's Gryan is not here
+        "Auctioneer Fitch  30",  # the fixture auctioneer (W10 step 2)
         "Corina Steele  15",
         "Goldtooth  8",
         "Hogger  11",
@@ -169,18 +170,19 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     # one filter bar (ADR 0016): a pill per dimension, the counts inside the dropdowns, given the
     # other filters (Here: Westfall's quest giver is not counted)
     assert chips(wow) == ["Where: Here", "Service: All", "Rank: All", "Level: All", "Sort: Name"]
-    assert menu(wow, TREE, "where") == ["All  7", "Here  6", "Continent  7"]
+    assert menu(wow, TREE, "where") == ["All  8", "Here  7", "Continent  8"]
     assert menu(wow, TREE, "service") == [
-        "All  6",
+        "All  7",
+        "Auctioneer  1",
         "Innkeeper  1",
         "Quest giver  1",
         "Trainer  1",
         "Vendor  1",
         "No service  2",  # Hogger (elite, no service) and Goldtooth
     ]
-    assert menu(wow, TREE, "rank") == ["All  6", "Normal  5", "Elite  1"]
-    assert menu(wow, TREE, "level") == ["All  6", "1-10  3", "11-20  2", "21-30  1"]
-    assert strip(wow.eval(f"{MOD}.summary:GetText()")) == "6 of 6 shown"
+    assert menu(wow, TREE, "rank") == ["All  7", "Normal  6", "Elite  1"]
+    assert menu(wow, TREE, "level") == ["All  7", "1-10  3", "11-20  2", "21-30  2"]
+    assert strip(wow.eval(f"{MOD}.summary:GetText()")) == "7 of 7 shown"
     pick(wow, TREE, "service", "Quest giver")  # quest givers, within the zone
     assert flat(wow) == ["Marshal Dughan  10"]
     assert menu(wow, TREE, "where") == ["All  2", "Here  1", "Continent  2"]  # filters combine
@@ -300,4 +302,34 @@ def test_quest_chains_are_a_list_of_their_own(wow: WowRuntime):
     assert wow.eval(f"{BR}.Current().ref") == first.ref
     # without Quests there is no such list
     assert wow.eval("#Bastians:GetLists()") == 1
+    assert wow.errors == []
+
+
+def test_quests_without_a_title_in_the_pack_show_the_clients_title(wow: WowRuntime):
+    """the quest list showed numbers, the page the title. The retail
+    packs carry no quest titles; the list takes the one the client gave before, and a row still
+    without one asks for it (the entity's name) when it is shown."""
+    boot(wow)
+    wow.execute(
+        """local d = Bastians:GetService('data')
+        d:Get('quest', 62).name = nil
+        d:Get('quest', 76).name = nil
+        Bastians.Data.Names.Store('quest')[76] = 'The Jasperlode Mine'"""
+    )
+    assert wow.eval("Bastians:GetService('data'):KnownName('quest', 76)") == "The Jasperlode Mine"
+    assert wow.eval("Bastians:GetService('data'):KnownName('quest', 62)") is None
+    name62 = wow.eval("Bastians:Entity('quest:62'):Name()")
+    assert name62 and not name62.startswith("quest")
+    wow.slash("/bb quests")
+    wow.execute(SIZE)
+    wow.run_frames(5)
+    rows = flat(wow)
+    assert any(r.startswith("The Jasperlode Mine") for r in rows)  # from the store, at build
+    assert not any(r.startswith("quest ") for r in rows)
+    # a shown row still without a name asks the entity
+    text = wow.eval(
+        f"""{MOD}.Browser.ListText({{ type = "quest", ids = {{ 62 }}, names = {{ "quest 62" }},
+             unnamed = {{ true }}, levels = {{}}, suffixes = {{}} }}, 1)"""
+    )
+    assert text == wow.eval("Bastians:Entity('quest:62'):Name()") and not text.startswith("quest")
     assert wow.errors == []

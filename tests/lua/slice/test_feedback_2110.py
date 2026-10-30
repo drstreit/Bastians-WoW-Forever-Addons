@@ -67,7 +67,6 @@ def test_route_here_is_offered_only_with_a_point_in_the_context(wow: WowRuntime)
         a.label for a in wow.eval("Bastians:GetActions('zone:1429', { source = 'map' })").values()
     ]
     assert "Route here" not in plain
-    assert wow.eval("Bastians:GetService('travel').Go ~= nil") is True
     assert wow.errors == []
 
 

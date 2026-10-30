@@ -15,7 +15,10 @@ sealed class Client
     public string BuildString => Version;
 
     /// <param name="install">A flavor folder (_retail_, _classic_beta_) or the folder holding .build.info.</param>
-    public static Client Open(string install, string? product, string cacheDir, string? cdnConfig = null)
+    /// <param name="locale">The text language to read (enUS, deDE, zhCN, ...): the install must carry it
+    /// (the launcher's Text language); default enUS (ADR 0033, 29.10.2026).</param>
+    public static Client Open(string install, string? product, string cacheDir, string? cdnConfig = null,
+        string? locale = null)
     {
         var root = new DirectoryInfo(Path.GetFullPath(install));
         while (root != null && !File.Exists(Path.Combine(root.FullName, ".build.info")))
@@ -36,6 +39,8 @@ sealed class Client
         build.Settings.TryCDN = false;           // fail instead of downloading
         build.Settings.ListfileFallback = false; // no listfile download
         build.Settings.CacheDir = cacheDir;
+        if (locale != null)
+            build.Settings.Locale = Enum.Parse<RootInstance.LocaleFlags>(locale);
         Settings.LogLevel = TSLogLevel.Warn;
 
         var info = new BuildInfo(Path.Combine(root.FullName, ".build.info"), build.Settings, build.cdn);

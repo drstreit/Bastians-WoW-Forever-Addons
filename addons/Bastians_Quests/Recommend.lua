@@ -130,6 +130,8 @@ local function nearestSpot(q, map, x, y)
 end
 
 -- Minutes for one leg: the travel service, else a straight line at run speed, else the default.
+-- travel answers false where the world graph holds the leg but has no time yet: unknown, never a
+-- straight line (world-graph.md §12.2).
 local function legMinutes(ctx, m1, x1, y1, m2, x2, y2)
   if not (m1 and x1 and m2 and x2) then
     return Rec.UNKNOWN_LEG_MINUTES, true
@@ -138,6 +140,8 @@ local function legMinutes(ctx, m1, x1, y1, m2, x2, y2)
     local seconds = ctx.travel(m1, x1, y1, m2, x2, y2)
     if seconds then
       return seconds / 60, false
+    elseif seconds == false then
+      return Rec.UNKNOWN_LEG_MINUTES, true
     end
   end
   local yards = ctx.distance and ctx.distance(m1, x1, y1, m2, x2, y2) or nil
@@ -206,6 +210,38 @@ function Rec.minutes(q, entry, map, ctx, times, levelMod)
   end
   leg(place(q and q.endPlaces))
   return minutes, unknown
+end
+
+-- The quest's next place: the giver before it is taken, an objective spot while it has work (on
+-- `map` when it has one there, else on the lowest map id), the hand-in when complete.
+local function nextPlace(q, entry, map)
+  if not entry then
+    return place(q.startPlaces)
+  end
+  if not entry.isComplete and q.spots then
+    local m = map and q.spots[map] and map or nil
+    if not m then
+      for sm in pairs(q.spots) do
+        if not m or sm < m then
+          m = sm
+        end
+      end
+    end
+    local s = m and q.spots[m][1]
+    if s then
+      return m, s[1], s[2]
+    end
+  end
+  return place(q.endPlaces)
+end
+
+-- Minutes from the quest's next place on (R26.11, route.md "Explore": the way there is the
+-- graph's): from the giver over the work to the hand-in, the work by `times`. Returns minutes,
+-- unknownLegs.
+function Rec.workMinutes(q, entry, map, ctx, times, levelMod)
+  local m, x, y = nextPlace(q, entry, map)
+  local from = setmetatable({ px = x, py = y }, { __index = ctx })
+  return Rec.minutes(q, entry, m or map, from, times, levelMod)
 end
 
 -- ---------------------------------------------------------------------------------------------

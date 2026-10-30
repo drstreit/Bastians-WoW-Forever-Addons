@@ -186,9 +186,9 @@ def test_the_path_is_the_second_attempt_and_the_old_table_form_still_registers(w
         wow.eval(f"{TILES}.File(0, 32, 32)") == 777 and wow.eval(f"{TILES}.Path(0, 32, 32)") is None
     )
     kept = live(wow)[32 * 64 + 32]
-    assert (
-        kept.GetTexture(kept) == "World\\Minimaps\\Azeroth\\map32_32"
-    )  # a live tile keeps its texture
+    # the newer table wins for a live tile too: the same position takes the new file (R27.7, owner
+    # 27.10.2026: a kept texture had shown the old map style until a zoom)
+    assert kept.texture == 777 and kept.source == "file"
     wow.execute(f"{TILES}.live[{32 * 64 + 32}].GetTexture = nil")  # the mock's own answer again
     wow.execute(f"{TILES}.Clear({TILES}); {MAP_}.ViewChanged()")
     t = live(wow)[32 * 64 + 32]

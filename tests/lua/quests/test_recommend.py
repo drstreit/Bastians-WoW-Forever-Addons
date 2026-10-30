@@ -99,6 +99,30 @@ def test_ranking_reasons_and_flags(wow: WowRuntime):
     assert recs[62][1] > recs[176][1]
 
 
+def test_a_leg_the_graph_holds_without_a_time_is_unknown_never_a_straight_line(wow: WowRuntime):
+    boot(wow)
+    ctx(wow, log=f"{MOD}.State.log")
+
+    def minutes(first: str) -> tuple:
+        # the travel service answers only the leg from the character (data.md "Shims until W8")
+        wow.execute(
+            f"""ctx.travel = function(m1, x1, y1)
+              if x1 == ctx.px and y1 == ctx.py then return {first} end
+              return nil
+            end"""
+        )
+        q, entry = f"{MOD}.Logic.quest(176)", f"{MOD}.State.log[176]"
+        return wow.eval(f"{REC}.minutes({q}, {entry}, 1429, ctx, {REC}.DEFAULT_TIMES)")
+
+    straight, unknown_straight = minutes("nil")  # no network: the straight line stands in
+    timed, unknown_timed = minutes("60")
+    pending, unknown_pending = minutes("false")  # the graph has no time yet
+    assert unknown_timed == unknown_straight
+    assert unknown_pending == unknown_timed + 1
+    assert abs((pending - timed) - (wow.eval(f"{REC}.UNKNOWN_LEG_MINUTES") - 1)) < 1e-9
+    assert straight != timed
+
+
 def test_unlocks_next_area_bonus_and_hard_quests(wow: WowRuntime):
     boot(wow)
     wow.execute("Mock.completedQuests = { 783, 7, 18, 62 }; Mock.questLog[3] = nil")

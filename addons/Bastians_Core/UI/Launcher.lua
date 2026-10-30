@@ -135,9 +135,9 @@ Launcher.ShowMenu = showMenu
 
 -- Left click: the player's zone page (ADR 0013: "what can I do here" is one click away) when a
 -- host shows pages and the zone is known, else the omnibox; right click: the menu.
-local function onClick(_, mouse)
+local function onClick(self, mouse)
   if mouse == "RightButton" then
-    showMenu(button or UIParent)
+    showMenu(self or button or UIParent)
     return
   end
   local _, _, _, map = B.Coords.Player()
@@ -211,6 +211,11 @@ local function makeButton(name, iconPath, click, tip, cfg)
   place(b, cfg())
   return b
 end
+
+-- The suite button's click and tooltip, for a button of an app that stands in for it (the badge
+-- on Bastian's minimap, Map's Mini.lua).
+Launcher.OnClick = onClick
+Launcher.Tooltip = tooltip
 
 function Launcher.MinimapButton()
   if button then

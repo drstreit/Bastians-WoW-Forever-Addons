@@ -103,30 +103,30 @@ def test_a_browser_row_focuses_without_flying_and_esc_clears(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_follow_flies_to_the_browser_page(wow: WowRuntime):
+def test_the_map_no_longer_follows_the_browser_page(wow: WowRuntime):
+    """Follow is gone; a page in the Browser leaves the map where it is."""
     boot(wow)
-    assert wow.eval(f"{FOCUS}.IsFollowing()") is False
-    assert wow.eval(f"{MOD}.db.profile.follow") is False
+    assert wow.eval(f"{MAP_}.toolbar.follow") is None
     cx, cy = wow.eval(f"{MAP_}.Camera().wx"), wow.eval(f"{MAP_}.Camera().wy")
-    wow.execute(f"{BR}.Browser.Open('npc:448')")  # Hogger, far from the view's centre
-    assert (wow.eval(f"{MAP_}.Camera().wx"), wow.eval(f"{MAP_}.Camera().wy")) == (cx, cy)
-    wow.execute(f"{MAP_}.toolbar.follow:Click()")
-    assert wow.eval(f"{FOCUS}.IsFollowing()") is True
-    assert wow.eval(f"{MOD}.db.profile.follow") is True
-    wow.execute(f"{BR}.Browser.Open('npc:240')")
     wow.execute(f"{BR}.Browser.Open('npc:448')")
-    hx, hy = wow.eval("Bastians.Coords.ToWorld(1429, 0.27, 0.86)")[1:3]
-    assert (
-        round(wow.eval(f"{MAP_}.Camera().wx")),
-        round(wow.eval(f"{MAP_}.Camera().wy")),
-    ) == (round(hx), round(hy))
-    assert wow.eval(f"{MOD}.Waypoints.Get().label") == "Hogger"
-    # a page without a place does not move the map; off again, nothing follows
-    wow.execute(f"{BR}.Browser.Open('item:2589')")
-    assert round(wow.eval(f"{MAP_}.Camera().wx")) == round(hx)
-    wow.execute(f"{MAP_}.toolbar.follow:Click()")
-    wow.execute(f"{BR}.Browser.Open('npc:240')")
-    assert round(wow.eval(f"{MAP_}.Camera().wx")) == round(hx)
+    assert (wow.eval(f"{MAP_}.Camera().wx"), wow.eval(f"{MAP_}.Camera().wy")) == (cx, cy)
+    assert wow.errors == []
+
+
+def test_the_map_grows_without_limit_and_dock_makes_room_for_the_browser(wow: WowRuntime):
+    """the map stopped at half the screen; it grows as far as the player
+    drags it, and Dock narrows a map too wide for the Browser beside it, then moves the pair onto
+    the screen."""
+    boot(wow)
+    bounds = wow.eval("{ BastiansMapFrame:GetResizeBounds() }")
+    assert bounds[3] >= 100000 and bounds[4] >= 100000
+    wow.execute("BastiansMapFrame:SetWidth(1900)")  # UIParent is 1920 wide in the mock
+    wow.execute(f"{MAP_}.toolbar.dock:Click()")
+    assert wow.eval("Bastians.UI.IsDocked()") is True
+    map_w = wow.eval("BastiansMapFrame:GetWidth()")
+    browser_w = wow.eval("BastiansBrowserFrame:GetWidth()")
+    assert map_w + 2 + browser_w <= 1920 and map_w >= 400
+    assert wow.eval("Bastians:GetModule('Map').db.profile.window.size[1]") == map_w  # kept
     assert wow.errors == []
 
 

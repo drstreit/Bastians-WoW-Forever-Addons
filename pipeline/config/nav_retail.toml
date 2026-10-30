@@ -1,0 +1,10 @@
+# Connectors of the retail walk network (ADR 0025, route.md "Walk network"): what the terrain cells
+# cannot see. One [[link]] per connection, a walk edge of its own:
+#   name = "ironforge-gate"           unique lower-case slug
+#   kind = "gate"                     tunnel, bridge, gate, inside, stairs, path
+#   continent = 0                     Map.db2 id
+#   a = [wx, wy] or "flightpath:6"    world yards (north +wx, west +wy) or a node ref
+#   b = [wx, wy] or "transport:3:1"
+#   path = [[wx, wy], ...]            inner points, optional (else straight)
+#   verified = false                  true once walked in game (date and build in the note)
+#   note = "..."

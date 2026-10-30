@@ -11,10 +11,10 @@ B.deferred[#B.deferred + 1] = {
     client = "forever",
     index = {},
     item = {
-      [1185] = [=[{ "Blood Saber", 2, 7, 2, 2, 7, 200, 1000, 1, nil, nil, nil, nil, nil, nil, "classic" }]=],
+      [1185] = [=[{ "Blood Saber", 2, 7, 2, 2, 7, 200, 1000, 1, nil, nil, nil, nil, nil, nil, nil, "classic" }]=],
       [1931] = [=[{ "Huge Gnoll Claw", 1, 1, nil, 12, 0 }]=],
-      [2318] = [=[{ "Light Leather", 1, 5, nil, 7, 6, 25, nil, 20, nil, nil, nil, nil, nil, nil, "classic" }]=],
-      [2589] = [=[{ "Linen Cloth", 1, 5, nil, 7, 5, 13, 260, 20, nil, nil, nil, nil, { { "npc:448", 45.5, false }, { "npc:327", 12, false } }, "classic", "classic" }]=],
+      [2318] = [=[{ "Light Leather", 1, 5, nil, 7, 6, 25, nil, 20, nil, nil, nil, nil, nil, nil, nil, "classic" }]=],
+      [2589] = [=[{ "Linen Cloth", 1, 5, nil, 7, 5, 13, 260, 20, nil, nil, nil, nil, { { "npc:448", 45.5, false }, { "npc:327", 12, false } }, "classic", nil, "classic" }]=],
     },
     names = {
       item = {
@@ -33,11 +33,11 @@ B.deferred[#B.deferred + 1] = {
     schema = {
       item = {
         "name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew",
-        "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "src",
+        "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src",
       },
       recipe = { "name", "profession", "skill", "item", "count", "reagents", "source", "sourceItem", "foreverNew", "src" },
     },
-    sources = { "hand-written fixture world-mini" },
+    sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
     version = "0.1.0",
   },
 }

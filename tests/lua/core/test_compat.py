@@ -285,6 +285,10 @@ def test_secret_values_are_unknown_never_compared(core: WowRuntime):
     assert speed is None and mounted is False and taxi is False
     assert core.eval("Bastians.Compat.GetPlayerFacing()") is None
     assert core.eval("Bastians.Compat.TargetEntity()") is None
+    # the player's health is secret on retail 12.x (found in game, 28.10.2026): unknown, no error
+    core.execute("Mock.unitHealth.player = { Mock.Secret(), Mock.Secret() }")
+    facts = core.eval("Bastians.Compat.GetPlayerFacts()")
+    assert facts.health is None and facts.level is not None
     # the mock's secret value raises like the client's
     ok, _ = core.eval("pcall(function() return Mock.unitSpeed > 1 end)")
     assert ok is False

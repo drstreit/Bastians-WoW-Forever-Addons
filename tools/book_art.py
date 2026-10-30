@@ -7,8 +7,10 @@ and hands them over in its export (`art/<page id>.jpg`); this turns each one int
 
 Usage: python tools/book_art.py <art folder> [--packs build/data/packs]
 
-Only pictures named after a page of content/strategies are taken. Deterministic: the same picture
-gives the same bytes. Needs Pillow (the dev dependencies); the pipeline itself decodes no images.
+Only pictures named after a page of content/strategies are taken, and the book's own pages'
+pictures from content/strategies/art/front.
+Deterministic: the same picture gives the same bytes. Needs Pillow (the dev dependencies); the
+pipeline itself decodes no images.
 """
 
 from __future__ import annotations
@@ -23,6 +25,10 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTENT = ROOT / "content" / "strategies"
 PACKS = ROOT / "build" / "data" / "packs"
 ADDON = "Bastians_Data_Strategies"
+# the book's own pages (the title page, What's new, the index, the bookmarks): fixed pictures,
+# approved by , not drawn from a page's scene by AHSync
+FRONT = CONTENT / "art" / "front"
+FRONT_IDS = frozenset({"title", "news", "index", "bookmarks"})
 ART_DIR = Path("Generated") / "Art"
 SOURCES = (".jpg", ".png")
 GAME_SIZE = (512, 256)
@@ -168,11 +174,16 @@ def game_texture(path: Path) -> bytes:
 # ---- installing ---------------------------------------------------------------------------------
 
 
-def install(art: Path, packs: Path, ids: set[str] | None = None) -> list[str]:
-    """Writes the game's textures of the pictures in `art` into `packs` (and removes those of
-    pictures that are gone). -> the page ids with a texture."""
+def install(
+    art: Path | None, packs: Path, ids: set[str] | None = None, front: Path | None = None
+) -> list[str]:
+    """Writes the game's textures of the pictures in `art` (the pages') and in `front` (the book's
+    own pages, FRONT_IDS) into `packs`, and removes those of pictures that are gone. -> the ids
+    with a texture."""
     ids = page_ids() if ids is None else ids
-    found = pictures(art, ids)
+    found = pictures(art, ids) if art is not None else {}
+    if front is not None:
+        found.update(pictures(front, set(FRONT_IDS)))
     target = packs / ADDON / ART_DIR
     if target.is_dir():
         for old in target.glob("*.blp"):

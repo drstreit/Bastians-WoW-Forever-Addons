@@ -61,7 +61,7 @@ def test_choices_are_remembered_per_list_and_fall_back_when_empty(wow: WowRuntim
     # the list is not empty; the memory itself stays
     wow.execute(f"{MOD}.db.profile.listFilters.npc.picks.service = 'Banker'")
     open_list(wow, "npc")
-    assert pills(wow, TREE)[1] == "Service: All" and len(flat(wow)) == 6
+    assert pills(wow, TREE)[1] == "Service: All" and len(flat(wow)) == 7
     assert wow.eval(f"{MOD}.db.profile.listFilters.npc.picks.service") == "Banker"
     # the x clears a choice and the memory follows
     pick(wow, TREE, "rank", "Elite")
@@ -136,7 +136,7 @@ def test_an_app_facet_is_a_pill_and_a_row_may_count_for_two_keys(wow: WowRuntime
     )
     open_list(wow, "npc")
     assert "Side: All" in pills(wow, TREE)
-    assert menu(wow, TREE, "test.side") == ["All  6", "Friend  5", "Foe  1", "Guard  1"]
+    assert menu(wow, TREE, "test.side") == ["All  7", "Friend  6", "Foe  1", "Guard  1"]
     pick(wow, TREE, "test.side", "Guard")
     assert flat(wow) == ["Marshal Dughan  10"]
     assert wow.errors == []

@@ -1,10 +1,10 @@
--- The arrow to the next step (route.md "The arrow", S6, 22.10.2026): TomTom's crazy arrow when
--- TomTom is installed (a waypoint at the step's end, replaced at every step, removed with the
--- route), else our own small movable arrow that turns with the player's facing and names the
--- step's end with the distance. The own arrow moves ten times a second only while the player
--- moves or turns (the movement events) and once a second from the route's own ticker; nothing
--- ticks while the player stands without a route. The minimap shows the next step through the
--- route.path layer (a pin the minimap overlay draws, Map S5).
+-- The arrow to the next step (route.md "The arrow", S6, 22.10.2026): our own small movable arrow
+-- that turns with the player's facing and names the step's end with the distance (TomTom's crazy
+-- arrow is no longer used: , "we drop tomtom as we have it ourselves"). The arrow
+-- moves ten times a second only while the player moves or turns (the movement events) and once a
+-- second from the route's own ticker; nothing ticks while the player stands without a route. The
+-- minimap shows the next step through the route.path layer (a pin the minimap overlay draws, Map
+-- S5).
 local _, ns = ...
 local B = Bastians
 local L = ns.L
@@ -14,6 +14,7 @@ local Arrow = {}
 ns.Arrow = Arrow
 
 Arrow.TICK = 0.1
+Arrow.BEND_YARDS = 30 -- on a walk network path the arrow turns to the next bend this close to the current one
 Arrow.SIZE = 72 -- the arrow texture
 Arrow.WIDTH, Arrow.HEIGHT = 150, 112
 -- Core's arrow texture points east; the rotation below is counted from north (up)
@@ -24,24 +25,11 @@ Arrow.AHEAD, Arrow.SIDE = math.rad(25), math.rad(100)
 Arrow.COLORS = { ahead = S.C.good, side = S.C.gold, behind = S.C.bad } -- the theme's (ST3)
 
 local mod, frame
-local tomtomUID, tomtomKey -- the TomTom waypoint of the current target and what it was set for
 local moving, turning, ticking = false, false, false
 local elapsed = 0
 
 local function db()
   return mod.db.profile
-end
-
-local function tomtom()
-  local tt = rawget(_G, "TomTom")
-  if type(tt) == "table" and type(tt.AddWaypoint) == "function" and type(tt.RemoveWaypoint) == "function" then
-    return tt
-  end
-  return nil
-end
-
-function Arrow.UseTomTom()
-  return db().arrowTomTom ~= false and tomtom() ~= nil
 end
 
 -- The next step's end: { continent, wx, wy, name, mode } or nil without a route.
@@ -59,7 +47,18 @@ function Arrow.Target()
   if not name and step == active.steps[#active.steps] and active.goal then
     name = active.goal.name
   end
-  return { continent = to.continent, wx = to.wx, wy = to.wy, name = name, mode = step.mode }
+  local wx, wy = to.wx, to.wy
+  if step.legs then
+    -- a walk on the walk network: the next bend of its path, not the end behind the mountain
+    local c, px, py = B.Coords.Player()
+    if c == to.continent and px then
+      local _, p = ns.Graph.PathProgress(step, px, py, Arrow.BEND_YARDS)
+      if p then
+        wx, wy = p[1], p[2]
+      end
+    end
+  end
+  return { continent = to.continent, wx = wx, wy = wy, name = name, mode = step.mode }
 end
 
 -- The direction from the player to a point, counter-clockwise from north like the facing (world
@@ -221,48 +220,6 @@ onUpdate = function(_, dt)
 end
 
 -- ---------------------------------------------------------------------------------------------
--- TomTom
--- ---------------------------------------------------------------------------------------------
-
-local function clearTomTom()
-  local tt = tomtom()
-  if tt and tomtomUID then
-    tt:RemoveWaypoint(tomtomUID)
-  end
-  tomtomUID, tomtomKey = nil, nil
-end
-
-local function setTomTom(t)
-  local key = t.continent .. ":" .. t.wx .. ":" .. t.wy
-  if key == tomtomKey then
-    return
-  end
-  clearTomTom()
-  -- BestMap answers the map alone; the place on it comes from ToMap (Forever 23.10.2026: x and y
-  -- were read from BestMap, always nil, and TomTom failed on them 244 times a session)
-  local map = B.Coords.BestMap(t.continent, t.wx, t.wy)
-  local x, y
-  if map then
-    x, y = B.Coords.ToMap(t.continent, t.wx, t.wy, map)
-  end
-  local tt = tomtom()
-  if tt and map and x and y then
-    tomtomUID = tt:AddWaypoint(map, x, y, {
-      title = t.name or L["Next step"],
-      persistent = false,
-      crazy = true,
-      from = "Bastians",
-      cleardistance = 0, -- the route's own ticker completes the step and moves the waypoint
-    })
-    tomtomKey = key
-  end
-end
-
-function Arrow.TomTomWaypoint()
-  return tomtomUID
-end
-
--- ---------------------------------------------------------------------------------------------
 -- The route changed (also every step): the arrow follows
 -- ---------------------------------------------------------------------------------------------
 
@@ -272,22 +229,12 @@ function Arrow.Update()
   end
   local t = db().arrow ~= false and mod:IsEnabled() and Arrow.Target() or nil
   if not t then
-    clearTomTom()
     if frame then
       stopTicks()
       frame:Hide()
     end
     return
   end
-  if Arrow.UseTomTom() then
-    setTomTom(t)
-    if frame then
-      stopTicks()
-      frame:Hide()
-    end
-    return
-  end
-  clearTomTom()
   if not frame then
     build()
   end
@@ -324,7 +271,6 @@ function Arrow.Register(self)
 end
 
 function Arrow.Unregister()
-  clearTomTom()
   if frame then
     stopTicks()
     frame:Hide()

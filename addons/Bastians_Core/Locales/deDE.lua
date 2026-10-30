@@ -7,7 +7,6 @@ ns.L:Register("deDE", {
   ["Performance since login (%.0f s), snapshot saved"] = "Leistung seit dem Login (%.0f s), Momentaufnahme gespeichert",
 
   -- Settings.lua
-  ["a waypoint arrow: pins and places can be sent to it"] = "ein Wegpunktpfeil: Markierungen und Orte lassen sich an ihn senden",
   ["a second source of NPC and object spawns where our data has none"] = "eine zweite Quelle für NPC- und Objektpositionen, wo unsere Daten keine haben",
   ["voiced quest texts: Quests hands it the quest you look at"] = "vertonte Questtexte: Quests gibt ihm die Quest, die du ansiehst",
   ["switched off in the AddOns list"] = "in der AddOn-Liste ausgeschaltet",
@@ -35,7 +34,6 @@ ns.L:Register("deDE", {
   ["Show the log"] = "Protokoll anzeigen",
   ["The log is empty."] = "Das Protokoll ist leer.",
   ["%s turns off at the next /reload."] = "%s schaltet sich beim nächsten /reload aus.",
-  ["colour picker comes later"] = "Farbwähler kommt später",
   ["Enabled"] = "Aktiviert",
   ["enabled"] = "aktiviert",
   ["Disabled for this session after repeated errors. See /bastians log."] = "Für diese Sitzung nach wiederholten Fehlern deaktiviert. Siehe /bastians log.",
@@ -69,6 +67,8 @@ ns.L:Register("deDE", {
   ["Core API %d. Client: %s, game build %s (interface %s)."] = "Core-API %d. Client: %s, Spielversion %s (Interface %s).",
   ["Licence: "] = "Lizenz: ",
   ["Source and issues: "] = "Quellcode und Fehlermeldungen: ",
+  ["Downloaded on CurseForge: the suite %d times, its data %d times (%s)."] = "Auf CurseForge heruntergeladen: die Suite %d-mal, ihre Daten %d-mal (%s).",
+  ["Website: "] = "Webseite: ",
   ["Addons"] = "Addons",
   ["loads at login"] = "wird beim Login geladen",
   ["not loaded"] = "nicht geladen",
@@ -77,7 +77,7 @@ ns.L:Register("deDE", {
   ["build"] = "Version",
   ["(built for %s, not this client)"] = "(erstellt für %s, nicht für diesen Client)",
   ["Credits"] = "Danksagung",
-  ["Data and ideas from these sources; every value keeps its source label in the addons."] = "Daten und Ideen aus diesen Quellen; jeder Wert behält in den Addons seine Quellenangabe.",
+  ["Most of the data comes from your own game client; what only the game's servers know comes from these sources. Every value keeps its source label in the addons."] = "Die meisten Daten stammen aus deinem eigenen Spielclient; was nur die Server des Spiels wissen, stammt aus diesen Quellen. Jeder Wert behält in den Addons seine Quellenangabe.",
   ["Libraries and build tools"] = "Bibliotheken und Build-Werkzeuge",
 
   -- Dossier.lua, FilterBar.lua, Tree.lua
@@ -130,6 +130,7 @@ ns.L:Register("deDE", {
   ["item"] = "Gegenstand",
   ["quest"] = "Quest",
   ["zone"] = "Zone",
+  ["area"] = "Gebiet",
   ["object"] = "Objekt",
   ["node"] = "Sammelpunkt",
   ["spot"] = "Farmplatz",
@@ -154,4 +155,24 @@ ns.L:Register("deDE", {
   ["Always"] = "Immer",
   ["Weekly"] = "Wöchentlich",
   ["Never"] = "Nie",
+  -- every window: its options, one background and opacity (R27.1, R27.2)
+  ["Theme"] = "Thema",
+  ["Windows"] = "Fenster",
+  ["Window background"] = "Fensterhintergrund",
+  ["Window opacity (%)"] = "Deckkraft der Fenster (%)",
+  ["Options of this window"] = "Optionen dieses Fensters",
+  -- the skin (ADR 0034)
+  ["Skin (every Bastian's addon)"] = "Aussehen (alle Bastian's-Addons)",
+  ["Skin"] = "Aussehen",
+  ["Modern (flat)"] = "Modern (flach)",
+  ["Azeroth (the game's look)"] = "Azeroth (wie das Spiel)",
+  ["The game's window frames"] = "Fensterrahmen des Spiels",
+  ["Faces in the rows of NPCs"] = "Gesichter in den Zeilen von NPCs",
+  ["Places as cuts of the map"] = "Orte als Kartenausschnitte",
+  ["The zone's painting behind a creature"] = "Das Gemälde der Zone hinter einer Kreatur",
+  ["Creatures greet and talk"] = "Kreaturen grüßen und sprechen",
+  ["Sounds when a page opens"] = "Geräusche beim Öffnen einer Seite",
+  ["Click to pick a colour."] = "Klicken, um eine Farbe zu wählen.",
+  ["The game's colour picker is not available here."] = "Die Farbauswahl des Spiels ist hier nicht verfügbar.",
+  ["Back to the theme's colour."] = "Zurück zur Farbe des Themas.",
 })

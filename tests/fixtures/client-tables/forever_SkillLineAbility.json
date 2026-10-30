@@ -1,0 +1,18 @@
+{
+ "table": "SkillLineAbility",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 1283,
+   "SkillLine": 164,
+   "Spell": 2018,
+   "MinSkillLineRank": 1
+  },
+  {
+   "ID": 1631,
+   "SkillLine": 164,
+   "Spell": 2660,
+   "MinSkillLineRank": 1
+  }
+ ]
+}

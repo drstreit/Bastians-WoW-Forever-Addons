@@ -5,8 +5,17 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from bastians_build.canon import Sources
-from bastians_build.sources import clientdump, cmangos, foreverdb, probe, questiedb
+from bastians_build.areas import AreasError, read_navmesh_dir
+from bastians_build.canon import PROFESSION_SKILL_LINES, Sources
+from bastians_build.sources import (
+    client_tables,
+    clientdump,
+    cmangos,
+    foreverdb,
+    probe,
+    questiedb,
+    tdb,
+)
 from bastians_build.sources.allthethings import read_allthethings
 from bastians_build.sources.everything_quests import read_everything_quests
 from bastians_build.sources.itemdb import read_itemdb
@@ -28,6 +37,43 @@ class SourcePaths:
     )
     dump_prefix: str = "beta"
     everything_quests_flavor: str = "Forever"
+    # TrinityCore's retail world database, TDB_full_world_*.sql (sources.md); its FactionTemplate
+    # and ContentTuning come from the dumps folder (<prefix>_FactionTemplate.json, ...)
+    tdb: Path | None = None
+    # the navmesh folder (`clientdump navmesh`, <Map>.navmesh): the subzones' places (data.md
+    # "Areas"); default <dumps>/navmesh_<client>
+    navmesh: Path | None = None
+
+
+def load_areas(s: Sources, client: str, paths: SourcePaths) -> None:
+    """The navmesh files' area blocks and the client's AreaTable, when both exist (data.md
+    "Areas"); otherwise `s.areas_note` says what was missing."""
+    assert paths.dumps is not None
+    folder = paths.navmesh or paths.dumps / f"navmesh_{client}"
+    table_path = next(
+        (
+            p
+            for p in (paths.dumps / f"{x}_AreaTable.json" for x in (paths.dump_prefix, client))
+            if p.is_file()
+        ),
+        None,
+    )
+    files = sorted(folder.glob("*.navmesh")) if folder.is_dir() else []
+    if not files:
+        s.areas_note = f"areas: no navmesh files in {folder}, no areas"
+        return
+    if table_path is None:
+        s.areas_note = f"areas: no {paths.dump_prefix}_AreaTable.json in {paths.dumps}, no areas"
+        return
+    try:
+        s.area_blocks = read_navmesh_dir(folder)
+    except (AreasError, OSError) as err:
+        s.areas_note = f"areas: {err}, no areas"
+        return
+    s.area_table = clientdump.read_area_table(table_path)
+    builds = sorted({b.build for b in s.area_blocks})
+    s.source_names.append(f"clientdump navmesh area blocks {', '.join(builds)}")
+    s.source_names.append(f"clientdump AreaTable ({table_path.name.split('_')[0]})")
 
 
 def find_dump(cmangos_dir: Path) -> Path:
@@ -61,6 +107,11 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
         if ui_map_path.is_file() and assign_path.is_file():
             ui_maps = clientdump.read_ui_maps(ui_map_path)
             assignments = clientdump.read_ui_map_assignments(assign_path)
+            for a in assignments:
+                if a.area_id and a.ui_map_id not in s.area_maps.get(a.area_id, []):
+                    s.area_maps.setdefault(a.area_id, []).append(a.ui_map_id)
+            for maps in s.area_maps.values():
+                maps.sort()
             maps_path = paths.dumps / f"{prefix}_Map.json"
             if maps_path.is_file():  # every world map is a continent (coordinates.md)
                 s.continents = clientdump.world_continents(
@@ -78,6 +129,11 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
                 s.map_types = {m: r.type for m, r in ui_maps.items()}
             s.notes.extend(notes)
             s.source_names.append(f"clientdump UiMap ({prefix})")
+        taxi_paths = paths.dumps / f"{prefix}_TaxiPath.json"
+        taxi_points = paths.dumps / f"{prefix}_TaxiPathNode.json"
+        if taxi_paths.is_file() and taxi_points.is_file():  # the travel level (ADR 0026, W4)
+            s.taxi_paths = clientdump.read_taxi_paths(taxi_paths, taxi_points)
+            s.source_names.append(f"clientdump TaxiPath ({prefix})")
         taxi_path = paths.dumps / f"{prefix}_TaxiNodes.json"
         if paths.taxi is None and taxi_path.is_file():
             paths = SourcePaths(**{**paths.__dict__, "taxi": taxi_path})
@@ -88,10 +144,16 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.fallback_map_names = {m: r.name for m, r in others.items() if r.name}
             s.fallback_map_types = {m: r.type for m, r in others.items()}
             s.source_names.append("clientdump UiMap (retail, for maps this client lacks)")
+        load_areas(s, client, paths)
         titles_path = paths.dumps / f"{prefix}_QuestV2CliTask.json"
         if titles_path.is_file():  # retail: the client tasks' titles (D1, data.md "Retail data")
             s.quest_titles = clientdump.read_quest_titles(titles_path)
             s.source_names.append(f"clientdump QuestV2CliTask ({prefix})")
+        # the client's data tables (ADR 0035): items, recipes, quest chains and areas
+        tables = client_tables.read_client_tables(paths.dumps, client, set(PROFESSION_SKILL_LINES))
+        if tables is not None:
+            s.client_tables = tables
+            s.source_names.extend(tables.sources)
     if paths.taxi and paths.taxi.is_file():
         dump = clientdump.read_taxi_nodes(paths.taxi, s.continents or None)
         s.taxi = dump.nodes
@@ -147,4 +209,23 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             if r.get("SpellName")
         }
         s.source_names.append(f"CMaNGOS classic-db {dump_path.name}")
+        if paths.dumps:
+            # the build's own prefix first, else the client's (the Forever beta is gone: its tables
+            # come from the launch client as forever_*.json, 26.10.2026)
+            for prefix in (paths.dump_prefix, client):
+                factions = paths.dumps / f"{prefix}_FactionTemplate.json"
+                if factions.is_file():
+                    s.cm_factions = tdb.faction_sides(tdb.table_rows(factions))
+                    s.source_names.append(f"clientdump FactionTemplate ({prefix})")
+                    break
+    if paths.tdb:
+        if not paths.dumps:
+            raise FileNotFoundError("--tdb needs --dumps (FactionTemplate and ContentTuning)")
+        prefix = paths.dump_prefix
+        s.tdb = tdb.read_tdb(
+            paths.tdb,
+            paths.dumps / f"{prefix}_FactionTemplate.json",
+            paths.dumps / f"{prefix}_ContentTuning.json",
+        )
+        s.source_names.append(f"TrinityCore {s.tdb.name}")
     return s

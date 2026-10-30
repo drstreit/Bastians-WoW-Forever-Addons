@@ -265,6 +265,15 @@ def emit_pack(name: str, pack: Mapping, comment: str | None = None) -> str:
     return emit_call("Bastians.Data.RegisterPack", [name, packed], comment)
 
 
+def locale_guard(text: str, locales: Sequence[str]) -> str:
+    """The pack text with a first statement that returns on a client of any other locale, so a
+    language pack builds no tables there (data.md "Game data in other languages")."""
+    keys = ", ".join(f"{loc} = true" for loc in sorted(locales))
+    guard = f"if not ({{ {keys} }})[GetLocale()] then\n  return\nend\n"
+    head, _, rest = text.partition("\n")
+    return f"{head}\n{guard}{rest}"
+
+
 def emit_transforms(
     table: Mapping[int, Sequence],
     comment: str | None = None,

@@ -1,6 +1,6 @@
 -- Waypoints and actions (map.md): the own waypoint pin (loud for three seconds, then a faint dot) on
--- the layer map.waypoint, the actions map.show (fly to the entity and highlight it), tomtom.waypoint
--- (when TomTom is loaded) and chat.way (the /way line into the chat box), the right click on empty
+-- the layer map.waypoint, the actions map.show (fly to the entity and highlight it) and chat.way
+-- (the /way line into the chat box; no TomTom waypoints since 29.10.2026), the right click on empty
 -- ground ("what's here": the zone's menu and a waypoint at the point), and BASTIANS_ENTITY_FOCUSED.
 -- Blizzard's user waypoints are never used (CLAUDE.md golden rule 6).
 local _, ns = ...
@@ -17,12 +17,14 @@ Waypoints.SHOW_LEVEL = 5
 Waypoints.ZONE_LEVEL = 3 -- "Show on map" of a zone starts here and fits the zone from there
 Waypoints.FIT_MAX = 12 -- places "Show on map" fits into the view at most
 
-local mod
 local waypoint -- { continent, wx, wy, label, setAt, map, x, y }
 local loudTimer
 
 -- The entity's first location in world yards and map fractions, or nil.
 local function firstLocation(ref)
+  if type(ref) ~= "string" or not B.Entity.Parse(ref) then
+    return nil -- a point without an entity (a route step to a spot on the map)
+  end
   for _, loc in ipairs(B:Entity(ref):Locations()) do
     local continent, wx, wy = B.Coords.ToWorld(loc.map, loc.x, loc.y)
     if continent then
@@ -32,6 +34,14 @@ local function firstLocation(ref)
   return nil
 end
 Waypoints.FirstLocation = firstLocation
+
+-- The entity's name, or nil for a point without an entity.
+local function nameOf(ref)
+  if type(ref) == "string" and B.Entity.Parse(ref) then
+    return B:Entity(ref):Name()
+  end
+  return nil
+end
 
 function Waypoints.Get()
   return waypoint
@@ -105,40 +115,36 @@ function Waypoints.WayLine(continent, wx, wy, label)
   return line
 end
 
-local function tomtom()
-  local tt = _G.TomTom
-  if type(tt) == "table" and type(tt.AddWaypoint) == "function" then
-    return tt
-  end
-  return nil
-end
-
-function Waypoints.HasTomTom()
-  return tomtom() ~= nil
-end
-
 -- Right click on empty ground: a waypoint at the point and the zone's menu.
+-- A right click on empty ground, on the map or the minimap: the waypoint there and the menu of the
+-- place (Route here, Note here, ... from the apps that read `ctx.point`).
+function Waypoints.PointMenu(continent, wx, wy, source)
+  local text, map = Map.Describe(continent, wx, wy)
+  Waypoints.Set(continent, wx, wy, text, map)
+  B:Say("%s", text)
+  if map then
+    -- the point travels in the context, so Route can offer "Route here" without the Map knowing it
+    B.UI.EntityMenu("zone:" .. map, nil, { source = source or "map", point = { continent, wx, wy, text } })
+  end
+  return map ~= nil
+end
+
 local function onRightClick(sx, sy)
   local cam = Map.Camera()
   if not cam then
     return
   end
   local wx, wy = cam:ToWorld(sx, sy)
-  local text, map = Map.Describe(cam.continent, wx, wy)
-  Waypoints.Set(cam.continent, wx, wy, text, map)
-  B:Say("%s", text)
-  if map then
-    -- the point travels in the context, so Route can offer "Route here" without the Map knowing it
-    B.UI.EntityMenu("zone:" .. map, nil, { source = "map", point = { cam.continent, wx, wy, text } })
-  end
+  Waypoints.PointMenu(cam.continent, wx, wy)
 end
 
 function Waypoints.Register(self)
-  mod = self
   Map.OnRightClick = onRightClick
   B:RegisterMapLayer(self, {
     id = "map.waypoint",
-    label = L["Waypoint"],
+    icon = "waypoint", -- the layer bar shows its icon (R27.8)
+    label = L["My waypoint"], -- was "Waypoint": it looked like a filter
+    tip = L["Your own waypoint: a right click on empty map ground sets it, so does Show on map."],
     defaultOn = true,
     minLevel = 0,
     query = waypointPins,
@@ -149,8 +155,10 @@ function Waypoints.Register(self)
     icon = B.UI.IconTexture("zone"),
     types = "*",
     order = 10,
-    when = function(ref)
-      return firstLocation(ref) ~= nil
+    when = function(ref, ctx)
+      -- a point in the context needs no entity (a route step to a
+      -- spot raised "Entity: nil")
+      return (ctx ~= nil and ctx.point ~= nil) or firstLocation(ref) ~= nil
     end,
     run = function(ref, ctx)
       local point = ctx and ctx.point
@@ -181,7 +189,7 @@ function Waypoints.Register(self)
         end
         Map.Open()
         Map.FitWorld(continent, pts, math.max(Map.Camera().level, Waypoints.SHOW_LEVEL))
-        Waypoints.Set(continent, wx, wy, B:Entity(ref):Name(), map, x, y)
+        Waypoints.Set(continent, wx, wy, nameOf(ref), map, x, y)
         return
       end
       if not (point or continent) then
@@ -192,7 +200,7 @@ function Waypoints.Register(self)
       if point then
         -- the caller names the place (a route step's end): that point, not the entity's places
         Map.Fly(point[1], point[2], point[3], level)
-        Waypoints.Set(point[1], point[2], point[3], point[4] or B:Entity(ref):Name())
+        Waypoints.Set(point[1], point[2], point[3], point[4] or nameOf(ref))
         return
       end
       -- every place on that continent (a quest's giver and targets, an NPC's spawn areas,
@@ -227,24 +235,6 @@ function Waypoints.Register(self)
     run = function(ref)
       local map = tonumber(string.match(ref, "^zone:(%d+)$"))
       Map.ShowUiMap(map, Waypoints.ZONE_LEVEL)
-    end,
-  })
-  B:RegisterAction(self, {
-    id = "tomtom.waypoint",
-    label = L["TomTom waypoint"],
-    icon = B.UI.IconTexture("route"),
-    types = "*",
-    order = 80,
-    when = function(ref)
-      return Waypoints.HasTomTom() and firstLocation(ref) ~= nil
-    end,
-    run = function(ref)
-      local _, _, _, map, x, y = firstLocation(ref)
-      local tt = tomtom()
-      if tt and map then
-        local uid = tt:AddWaypoint(map, x, y, { title = B:Entity(ref):Name() or ref, persistent = false })
-        mod.lastTomTom = uid
-      end
     end,
   })
   B:RegisterAction(self, {

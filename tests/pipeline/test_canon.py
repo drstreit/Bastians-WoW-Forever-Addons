@@ -124,6 +124,8 @@ def test_hogger_merges_classic_facts_with_forever_names():
     assert spawns and all(s[3] == "classic" and s[0] == 1429 for s in spawns)
     assert all(0 <= s[1] <= 1 and 0 <= s[2] <= 1 for s in spawns)
     assert hogger["zone"] == 1429
+    # the height as the fifth field and, where the creature roams, its radius as the sixth (W5)
+    assert any(len(s) == 6 and s[4] == 39.6 and s[5] == 8.0 for s in spawns)
     assert hogger.get("loot"), "Classic loot of creature 448 is in the fixture"
 
 

@@ -11,29 +11,59 @@ local W = B.UI.Widgets
 local About = {}
 B.UI.About = About
 
-About.URL = "github.com/drstreit/Bastians-WoW-Forever-Addons"
+About.URL = "bastians.dev/wow" -- the suite's address (ADR 0023)
+About.SOURCE_URL = "github.com/drstreit/Bastians-WoW-Forever-Addons"
 About.LICENCE = "GPL-3.0"
 
--- { name, licence, what it gives }: the bundled sources, in the order of sources.md
+-- { name, licence, what it gives }: the bundled sources. The client first since ADR 0035 (owner,
+-- 29.10.2026: "do a max ourselves"): what it holds comes from it; the others give what the server
+-- holds (spawns, loot, vendors, trainers, quests) and the names the client does not carry.
 About.SOURCES = {
-  { "Everything Quests", "MIT", "quests, their places and objective points (Forever)" },
-  { "AllTheThings", "MIT", "quests, NPCs, objects and flight paths (retail)" },
-  {
-    "ItemDB / LibItemDB",
-    "MIT",
-    "item names and where to get them (retail); its places are re-expressed from the TrinityCore "
-      .. "world database (GPL-2.0)",
-  },
-  { "QuestieDB", "GPL-3.0", "zone table and spawns (Forever)" },
-  { "ForeverDB", "GPL-3.0", "vendors, trainers, recipes and gather nodes (Forever)" },
-  { "CMaNGOS classic-db", "GPL-3.0", "quest rewards and texts, loot and trainers, labelled classic" },
-  { "AHledger", "Prices from AHledger", "market prices through the AHSync export" },
-  { "Spoken", "MIT", "the voice bridge of Bastian's Quests" },
   {
     "Blizzard client files",
     "Blizzard Entertainment",
-    "minimap tiles, map transforms, taxi nodes and the overview textures of Bastian's Map Art, "
-      .. "read from your own installed client",
+    "items, their prices and levels, recipes with reagents and products, quest chains and quest "
+      .. "areas, item names in every language, zones, taxi nodes, minimap tiles, map transforms and "
+      .. "the overview textures of Bastian's Map Art, read from your own installed client",
+  },
+  { "Everything Quests", "MIT", "quests, their places and objective points (Forever)" },
+  { "AllTheThings", "MIT", "quests, NPCs, objects, flight paths and the recipe list (retail)" },
+  {
+    "ItemDB / LibItemDB",
+    "MIT",
+    "where to get an item (retail); its places are re-expressed from the TrinityCore world "
+      .. "database (GPL-2.0)",
+  },
+  {
+    "QuestieDB",
+    "GPL-3.0",
+    "zone table and spawns; NPC names, quest titles and objectives in other languages (Forever)",
+  },
+  {
+    "ForeverDB",
+    "GPL-3.0",
+    "vendors, trainers, gather nodes and the skill a recipe is taught at (Forever)",
+  },
+  {
+    "CMaNGOS classic-db",
+    "GPL-3.0",
+    "quest rewards and texts (German and Chinese too), loot and trainers, labelled classic",
+  },
+  { "NauticusClassic", "MIT", "the loops and departures of the boats and zeppelins (Forever)" },
+  {
+    "TrinityCore TDB",
+    "GPL-2.0 or later",
+    "NPC services, levels and places, mailboxes and forges, the danger of the routes, and NPC, "
+      .. "object and quest names in every language (retail)",
+  },
+  { "AHledger", "Prices from AHledger", "market prices through the AHSync export" },
+  { "Spoken", "MIT", "the voice bridge of Bastian's Quests" },
+  -- the Library's fonts (EB Garamond, IM FELL Types, Atkinson Hyperlegible, OpenDyslexic; SIL Open
+  -- Font License 1.1) come back with the Library: it is private until it ships
+  {
+    "Google Gemini image model",
+    "Gemini API terms",
+    "the drawings of Bastian's book, made from our own scene descriptions (Bastian draws them in the story)",
   },
 }
 
@@ -41,8 +71,9 @@ About.SOURCES = {
 About.LIBRARIES = {
   { "TACTSharp, DBCD, BLPSharp (wowdev, Marlamin)", "MIT, build time only" },
   { "WoWDBDefs definitions (wowdev)", "CC BY-SA 4.0, build time only" },
+  { "EasyOCR, LaMa, Real-ESRGAN, spandrel", "Apache-2.0, Apache-2.0, BSD-3-Clause, MIT; build time only" },
   { "LibStub", "public domain" },
-  { "CallbackHandler-1.0, LibDataBroker-1.1, LibDeflate", "see their files in Bastians_Core/Libs" },
+  { "CallbackHandler-1.0, LibDataBroker-1.1", "see their files in Bastians_Core/Libs" },
 }
 
 local function addonVersion(addon)
@@ -77,7 +108,21 @@ function About.Lines()
       tostring(B.Interface)
     )
   )
-  note(L["Licence: "] .. About.LICENCE .. ". " .. L["Source and issues: "] .. About.URL)
+  note(L["Licence: "] .. About.LICENCE .. ". " .. L["Website: "] .. About.URL)
+  note(L["Source and issues: "] .. About.SOURCE_URL)
+  local data = B:GetService("data")
+  local meta = data and data.Meta and data:Meta()
+  local downloads = meta and meta.downloads
+  if downloads then -- the daily edition's counts; unknown says nothing
+    note(
+      string.format(
+        L["Downloaded on CurseForge: the suite %d times, its data %d times (%s)."],
+        downloads.suite,
+        downloads.data,
+        tostring(downloads.at or "?")
+      )
+    )
+  end
 
   header(L["Addons"])
   local addons = {}
@@ -110,8 +155,6 @@ function About.Lines()
   end
 
   header(L["Data packs"])
-  local data = B:GetService("data")
-  local meta = data and data.Meta and data:Meta()
   if not meta or not next(meta.packs) then
     note(L["No data packs are loaded."])
   else
@@ -131,7 +174,10 @@ function About.Lines()
   end
 
   header(L["Credits"])
-  note(L["Data and ideas from these sources; every value keeps its source label in the addons."])
+  -- the client first (ADR 0035); the key is one sentence, the locale files carry it whole
+  local sources = "Most of the data comes from your own game client; what only the game's servers "
+    .. "know comes from these sources. Every value keeps its source label in the addons."
+  note(L[sources])
   for _, source in ipairs(About.SOURCES) do
     note(string.format("%s (%s): %s", source[1], source[2], source[3]))
   end

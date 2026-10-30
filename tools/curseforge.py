@@ -49,18 +49,68 @@ class UploadError(Exception):
     pass
 
 
-def api_token(env: dict | None = None, secrets: Path = SECRETS) -> str | None:
-    """The upload token: CF_API_KEY from the environment, else the API-TOKEN line of the owner's
-    secrets file (generated at authors.curseforge.com, settings, API tokens; never in the repo)."""
+def _secret(variable: str, line: str, env: dict | None, secrets: Path) -> str | None:
     env = os.environ if env is None else env
-    if env.get("CF_API_KEY"):
-        return env["CF_API_KEY"]
+    if env.get(variable):
+        return env[variable]
     if secrets.is_file():
-        for line in secrets.read_text(encoding="utf-8").splitlines():
-            m = re.match(r"\s*API-TOKEN\s*[=:]\s*(\S+)", line)
+        for text in secrets.read_text(encoding="utf-8").splitlines():
+            m = re.match(rf"\s*{re.escape(line)}\s*[=:]\s*(\S+)", text)
             if m:
                 return m.group(1).strip("\"'")
     return None
+
+
+def api_token(env: dict | None = None, secrets: Path = SECRETS) -> str | None:
+    """The upload token: CF_API_KEY from the environment, else the API-TOKEN line of the owner's
+    secrets file (generated at authors.curseforge.com, settings, API tokens; never in the repo)."""
+    return _secret("CF_API_KEY", "API-TOKEN", env, secrets)
+
+
+# ---- the read API: whether a sent file went live, and the
+# projects' download counts. Its key is not the upload token: CF_CORE_API_KEY, else the
+# CURSEFORGE-API-FOR-STUDIOS line of the secrets file (console.curseforge.com). It reads only.
+CORE_API = "https://api.curseforge.com"
+FILE_STATUS = {
+    1: "processing",
+    2: "changes required",
+    3: "under review",
+    4: "approved",
+    5: "rejected",
+    6: "malware detected",
+    7: "deleted",
+    8: "archived",
+    9: "testing",
+    10: "released",
+    11: "ready for review",
+    12: "deprecated",
+    13: "baking",
+    14: "awaiting publishing",
+    15: "failed publishing",
+}
+LIVE = frozenset({4, 10})  # players get the file
+REFUSED = frozenset({2, 5, 6, 7, 8, 12, 15})  # they never will
+
+
+def core_key(env: dict | None = None, secrets: Path = SECRETS) -> str | None:
+    return _secret("CF_CORE_API_KEY", "CURSEFORGE-API-FOR-STUDIOS", env, secrets)
+
+
+def core_get(path: str, key: str, transport: Transport) -> dict:
+    request = urllib.request.Request(
+        f"{CORE_API}{path}", headers={"x-api-key": key, "Accept": "application/json"}
+    )
+    return json.loads(transport(request))
+
+
+def file_state(project_id: int, file_id: int, key: str, transport: Transport) -> tuple[int, bool]:
+    """(fileStatus, isAvailable) of a project's file."""
+    data = core_get(f"/v1/mods/{project_id}/files/{file_id}", key, transport)["data"]
+    return int(data["fileStatus"]), bool(data.get("isAvailable"))
+
+
+def download_count(project_id: int, key: str, transport: Transport) -> int:
+    return int(core_get(f"/v1/mods/{project_id}", key, transport)["data"]["downloadCount"])
 
 
 @dataclass
@@ -346,6 +396,12 @@ def main(argv: list[str] | None = None, transport: Transport = _urlopen) -> int:
     if not args.send:
         print("dry run: nothing sent (--send uploads)")
         return 0
+    if args.client not in config.get("release_clients", CLIENTS):
+        print(
+            f"error: {args.client} is not a release client (release_clients in {args.config.name})",
+            file=sys.stderr,
+        )
+        return 1
     blocked = [u for u in uploads if u.problems]
     if blocked:
         print(

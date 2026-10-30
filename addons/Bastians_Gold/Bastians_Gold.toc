@@ -1,8 +1,9 @@
 ## Interface: 16001
 ## Title: Bastian's Gold
+## IconTexture: Interface\AddOns\Bastians_Gold\Icon
 ## Notes: Prices, auction capture and gold tracking.
 ## Author: Bastian
-## Version: 1.0.0-beta.12
+## Version: 1.0.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data
@@ -10,12 +11,18 @@
 ## SavedVariablesPerCharacter: BastiansGoldCharDB
 
 Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
 News.lua
 Capture.lua
 Prices.lua
 Sections.lua
 Today.lua
 Spots.lua
+Signals.lua
 Worth.lua
 Income.lua
 Advisor.lua

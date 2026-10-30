@@ -157,6 +157,7 @@ def test_the_here_column_honours_the_tracker_filters(wow: WowRuntime):
     boot(wow, CORE, DATA, QUESTS, BROWSER)
     HD = f"{BMOD}.hereDossier"
     wow.slash("/bb npc:240")
+    wow.execute("Bastians:GetModule('Browser').Browser.SetListOpen(true)")  # out (R25.36)
     wow.run_frames(5)
     assert len(block_rows(wow, HD, "My quests here  2")) == 2
     wow.execute(f"{MOD}.db.profile.logHideDone = true")
@@ -258,6 +259,7 @@ def test_the_here_block_carries_the_log_toggles(wow: WowRuntime):
     boot(wow, CORE, DATA, QUESTS, BROWSER)
     HD = f"{BMOD}.hereDossier"
     wow.slash("/bb npc:240")
+    wow.execute("Bastians:GetModule('Browser').Browser.SetListOpen(true)")  # out (R25.36)
     wow.run_frames(5)
     assert block_controls(wow, HD, "My quests here  2") == [
         ("Hide done", False),
@@ -386,4 +388,27 @@ def test_the_game_tracker_comes_back_when_the_last_claim_goes(wow: WowRuntime):
     wow.execute(f"{BMOD}.Browser.SetSlim(false)")
     assert wow.eval(f"{GAME}:IsShown()") is True
     assert wow.eval("Bastians.UI.GameTrackerHidden()") is False
+    assert wow.errors == []
+
+
+def test_the_game_shows_its_tracker_again_and_it_goes_again(wow: WowRuntime):
+    """the option was on and the game's tracker showed until the option
+    was switched off and on: the game shows its tracker again on its own (login, a layout); while
+    the frame claims it, it goes again at once."""
+    boot_tracker(wow)
+    assert wow.eval(f"{GAME}:IsShown()") is False
+    wow.execute(f"{GAME}:Show()")  # the game, on its own
+    assert wow.eval(f"{GAME}:IsShown()") is False
+    # without a claim the game keeps it
+    wow.execute(f"{TRACKER}.Hide()")
+    assert wow.eval(f"{GAME}:IsShown()") is True
+    wow.execute(f"{GAME}:Hide(); {GAME}:Show()")
+    assert wow.eval(f"{GAME}:IsShown()") is True
+    assert wow.errors == []
+
+
+def test_lock_sits_left_of_the_options_button(wow: WowRuntime):
+    """Lock and the window's options button (R27.1) overlapped."""
+    boot_tracker(wow)
+    assert wow.eval(f"select(2, {TRACKER}.win.lock:GetPoint(1)) == {TRACKER}.win.options") is True
     assert wow.errors == []

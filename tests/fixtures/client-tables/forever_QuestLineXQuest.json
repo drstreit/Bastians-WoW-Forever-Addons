@@ -1,0 +1,18 @@
+{
+ "table": "QuestLineXQuest",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 1,
+   "QuestLineID": 7,
+   "QuestID": 62,
+   "OrderIndex": 1
+  },
+  {
+   "ID": 2,
+   "QuestLineID": 7,
+   "QuestID": 176,
+   "OrderIndex": 0
+  }
+ ]
+}

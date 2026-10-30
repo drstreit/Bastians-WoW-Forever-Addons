@@ -17,7 +17,7 @@ B.deferred[#B.deferred + 1] = {
     schema = {
       questText = { "details", "objectives", "offer", "progress", "src" },
     },
-    sources = { "hand-written fixture world-mini" },
+    sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
     version = "0.1.0",
   },
 }

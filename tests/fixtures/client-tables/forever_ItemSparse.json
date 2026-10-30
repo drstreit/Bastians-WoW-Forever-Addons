@@ -1,0 +1,50 @@
+{
+ "table": "ItemSparse",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 2589,
+   "Display_lang": "Linen Cloth",
+   "OverallQualityID": 1,
+   "ItemLevel": 5,
+   "RequiredLevel": 0,
+   "SellPrice": 13,
+   "BuyPrice": 55,
+   "Stackable": 20,
+   "StartQuestID": 0
+  },
+  {
+   "ID": 2862,
+   "Display_lang": "Rough Sharpening Stone",
+   "OverallQualityID": 1,
+   "ItemLevel": 5,
+   "RequiredLevel": 0,
+   "SellPrice": 1,
+   "BuyPrice": 4,
+   "Stackable": 20,
+   "StartQuestID": 0
+  },
+  {
+   "ID": 2835,
+   "Display_lang": "Rough Stone",
+   "OverallQualityID": 1,
+   "ItemLevel": 5,
+   "RequiredLevel": 0,
+   "SellPrice": 2,
+   "BuyPrice": 8,
+   "Stackable": 20,
+   "StartQuestID": 0
+  },
+  {
+   "ID": 190001,
+   "Display_lang": "Forever Token",
+   "OverallQualityID": 3,
+   "ItemLevel": 10,
+   "RequiredLevel": 5,
+   "SellPrice": 0,
+   "BuyPrice": 0,
+   "Stackable": 1,
+   "StartQuestID": 0
+  }
+ ]
+}

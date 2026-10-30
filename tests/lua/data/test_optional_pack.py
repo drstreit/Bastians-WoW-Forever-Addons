@@ -5,6 +5,9 @@ from harness import WowRuntime
 
 
 def test_an_optional_pack_without_data_is_logged_once(wow: WowRuntime):
+    # the repo's own addons without the fixtures: their Generated files are never test input, so the
+    # nav pack has no data here (the fixture nav pack has, since 25.10.2026)
+    wow = WowRuntime(wow.client)
     wow.start("Bastians_Core", "Bastians_Data")
     wow.run_frames(5)
     wow.advance(0.5)

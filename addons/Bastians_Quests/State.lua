@@ -262,4 +262,9 @@ ns.Progress = {
   KnownFlightPaths = function()
     return State.flightPaths
   end,
+  -- Whether the tracker frame shows the Library's leads (quests.md "Tales in the tracker"); the
+  -- Library's own lead card stays away then.
+  ShowsLeads = function()
+    return ns.Window.ShowsLeads()
+  end,
 }

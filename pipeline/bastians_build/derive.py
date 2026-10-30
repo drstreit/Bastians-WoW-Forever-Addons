@@ -198,6 +198,8 @@ BUILDERS: dict[str, Callable[[World], Index]] = {
     "npc.byZone": lambda w: by_zone(w, "npc"),
     "object.byZone": lambda w: by_zone(w, "object"),
     "node.byZone": lambda w: by_zone(w, "node"),
+    "entrance.byZone": lambda w: by_zone(w, "entrance"),
+    "area.byZone": lambda w: by_zone(w, "area"),
     "quest.byZone": lambda w: by_zone(w, "quest"),
     "quest.byGiver": lambda w: quests_by(w, "starts"),
     "quest.byEnder": lambda w: quests_by(w, "ends"),

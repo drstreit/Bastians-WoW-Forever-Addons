@@ -1,0 +1,15 @@
+[
+ {
+  "id": "flightpath:900",
+  "continent": 530,
+  "wx": 0.0,
+  "wy": 0.0,
+  "wz": 10.0
+ },
+ {
+  "id": "flightpath:901",
+  "continent": 530,
+  "wx": 900.0,
+  "wy": -500.0
+ }
+]

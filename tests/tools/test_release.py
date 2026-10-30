@@ -268,6 +268,9 @@ def test_verify_boots_the_zipped_suite_on_the_mock(tmp_path):
         "-- GENERATED\n-- 2 maps on 1 continent, 2 exact; forever; from the fixture\n",
         encoding="utf-8",
     )
+    (transforms / "Downloads.lua").write_text(  # the build's stub (pipeline build.py)
+        "-- GENERATED\n-- no download counts in this forever build\n", encoding="utf-8"
+    )
     packs = {p.name for p in FIXTURE_ADDONS.glob("Bastians_Data_*")}
     packages, notes = release.release(
         "forever",

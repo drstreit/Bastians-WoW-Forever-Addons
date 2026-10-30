@@ -85,3 +85,11 @@ def test_place_world_point_uses_the_cmangos_map_as_continent():
     assert 0 <= spawn.x <= 1 and 0 <= spawn.y <= 1
     assert place_world_point(TABLE, 1, -10000, -1500, "classic") is None
     assert place_world_point(TABLE, 530, 0, 0, "classic") is None  # Outland: no continent mapping
+
+
+def test_place_world_point_keeps_the_height():
+    """ADR 0026: places carry `wz`; a spawn row appends it as a fifth field, only when known."""
+    spawn = place_world_point(TABLE, 0, -10000, -1500, "classic", 56.149)
+    assert spawn.wz == 56.149
+    assert spawn.row()[3:] == ["classic", 56.1]
+    assert len(place_world_point(TABLE, 0, -10000, -1500, "classic").row()) == 4

@@ -61,6 +61,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansOmniboxFrame", {
+    module = "Core", -- the options button opens this page (R27.1)
     title = L["Search"],
     width = 420,
     height = 380,

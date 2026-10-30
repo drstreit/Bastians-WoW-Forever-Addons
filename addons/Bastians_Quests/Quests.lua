@@ -85,6 +85,7 @@ local mod = B:NewModule("Quests", {
       autoTrack = true, -- the tracker
       logTrackedOnly = false,
       logHideDone = false,
+      logTales = true, -- the Library's open leads in My quests (quests.md "Tales in the tracker")
       journey = true, -- XP, gold, kills and quests per zone and session (S3)
       allKind = "any",
       allBand = "any",
@@ -121,6 +122,12 @@ local mod = B:NewModule("Quests", {
       default = true,
     },
     { type = "toggle", key = "logTrackedOnly", label = L["Show only tracked quests"], default = false },
+    {
+      type = "toggle",
+      key = "logTales",
+      label = L["Show the open leads of the Library's tales (needs Bastian's Library)"],
+      default = true,
+    },
     {
       type = "toggle",
       key = "journey",
@@ -259,6 +266,7 @@ mod.Logic = ns.Logic -- the pure logic, reachable for tests and other views of t
 mod.State = ns.State -- the cached quest state (State.lua)
 mod.Tracker = ns.Tracker -- the tracker frame (Tracker.lua, R6)
 mod.Journey = ns.Journey -- the journey per zone and session (Journey.lua, S3)
+mod.Round = ns.Round -- the quest round (Round.lua, R26.4)
 mod.Rows = ns.Rows -- the row builders (Rows.lua)
 mod.Views = ns.Views -- the view builders (Views.lua)
 mod.Recommend = ns.Recommend -- scoring and the next-area planner (Recommend.lua)

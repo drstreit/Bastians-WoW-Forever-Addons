@@ -1,16 +1,21 @@
 """The canonical model (data.md): merge every source into one World, with explicit precedence.
 
-Precedence per field, highest first: own captures > Forever sources (Everything Quests, ForeverDB
-where a player saw it) > ForeverDB converted places > QuestieDB > Classic (CMaNGOS). Every point
-carries its ``src``; Classic values are labelled ``classic`` (CLAUDE.md §8); unknown stays ``None``.
+Precedence per field, highest first: own captures > the client's own tables for what the client
+holds (items, recipes, quest lines and areas; ADR 0035) > Forever sources (Everything Quests,
+ForeverDB where a player saw it) > ForeverDB converted places > QuestieDB > Classic (CMaNGOS).
+Every point carries its ``src``; Classic values are labelled ``classic`` (CLAUDE.md §8); unknown
+stays ``None``.
 Classic world positions are placed through the transform table or dropped with a reason.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
+from itertools import pairwise
 
+from bastians_build.areas import AreaBlock, add_areas
 from bastians_build.coords import (
     CMANGOS_CONTINENT,
     Spawn,
@@ -18,18 +23,27 @@ from bastians_build.coords import (
     named_map,
     pct_to_fraction,
     place_world_point,
+    world_to_map,
 )
 from bastians_build.model import World
 from bastians_build.sources import cmangos, foreverdb
 from bastians_build.sources.allthethings import AllTheThings
-from bastians_build.sources.clientdump import TaxiNode
+from bastians_build.sources.client_tables import ClientTables
+from bastians_build.sources.clientdump import AreaRow, TaxiNode, TaxiPath
 from bastians_build.sources.everything_quests import EverythingQuests
 from bastians_build.sources.itemdb import ItemDB
 from bastians_build.sources.probe import Transform
+from bastians_build.sources.tdb import Tdb
 
+GRAPH_CONTINENTS = (0, 1)  # Map ids of Eastern Kingdoms and Kalimdor, the world graph's (ADR 0026)
 MAX_SPOTS_PER_MAP = 8  # objective spots kept per quest and map (EQ orders densest first)
 MAX_DROPS_PER_ITEM = 20
 MAX_LOOT_PER_NPC = 30
+# An item that reaches this many creatures and objects through shared loot lists
+# (``reference_loot_template``) is a world drop: the item keeps the droppers' level band and their
+# count instead of hundreds of droppers ("World drop: creatures level
+# 20-25").
+WORLD_DROP_MIN_DROPPERS = 25
 
 # CMaNGOS NpcFlags bits -> service flags (data.md npc record)
 NPC_FLAGS = {
@@ -121,10 +135,16 @@ class Sources:
     cm_loot: list[cmangos.LootRow] = field(default_factory=list)
     cm_items: list[cmangos.ItemRow] = field(default_factory=list)
     cm_spell_names: dict[int, str] = field(default_factory=dict)  # spell_template SpellName
+    # the client's FactionTemplate as { id: (side, hostile) } (sources/tdb.faction_sides):
+    # the side and hostility of CMaNGOS' creatures (guards and the danger, R26.5)
+    cm_factions: dict[int, tuple[str | None, bool]] = field(default_factory=dict)
     area_to_map: dict[int, int] = field(default_factory=dict)
     att: AllTheThings | None = None  # retail: AllTheThings db/Standard (quests, places)
     idb: ItemDB | None = None  # retail: ItemDB names, item facts, places
+    tdb: Tdb | None = None  # retail: TrinityCore's world database (services, levels, places)
     taxi: list[TaxiNode] = field(default_factory=list)  # clientdump TaxiNodes (flight masters)
+    # clientdump TaxiPath + TaxiPathNode: the flights as the client flies them (ADR 0026, W4)
+    taxi_paths: list[TaxiPath] = field(default_factory=list)
     quest_titles: dict[int, str] = field(default_factory=dict)  # clientdump QuestV2CliTask (D1)
     transforms: dict[int, Transform] = field(default_factory=dict)
     transforms_source: str | None = None  # where the transform table came from
@@ -142,6 +162,15 @@ class Sources:
     fallback_map_names: dict[int, str] = field(default_factory=dict)
     fallback_map_types: dict[int, int] = field(default_factory=dict)
     source_names: list[str] = field(default_factory=list)
+    # the subzones (data.md "Areas"): the navmesh files' area blocks, the client's AreaTable and
+    # its UiMapAssignment's area -> uiMapIDs; `areas_note` says why a build has none
+    area_blocks: list[AreaBlock] = field(default_factory=list)
+    area_table: dict[int, AreaRow] = field(default_factory=dict)
+    area_maps: dict[int, list[int]] = field(default_factory=dict)
+    areas_note: str | None = None
+    # the client's own data tables (ADR 0035, sources/client_tables): items, recipes, quest lines
+    # and objective areas; None without the dumps
+    client_tables: ClientTables | None = None
 
 
 def _rec(world: World, record_type: str, record_id: int) -> dict:
@@ -185,6 +214,15 @@ def merge_zones(world: World, s: Sources) -> None:
         rec["parent"] = parent
         rec["continent"] = continent
         rec["mapType"] = s.map_types.get(ui_map_id)  # None when the source has no type
+
+
+def merge_areas(world: World, s: Sources) -> None:
+    """The subzones as `area` records (areas.py); without navmesh or AreaTable none, and the
+    report says why (unknown, never guessed)."""
+    if s.area_blocks and s.area_table:
+        add_areas(world, s.area_blocks, s.area_table, s.transforms, s.area_maps)
+    elif s.areas_note:
+        world.notes.append(s.areas_note)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -272,6 +310,10 @@ def merge_creatures(world: World, s: Sources) -> None:
             services.append(rank)
         rec["flags"] = services or None
         rec["src"] = "classic"
+        side, hostile = s.cm_factions.get(int(row.get("Faction") or 0), (None, None))
+        _set_if_missing(rec, "faction", side)
+        if hostile is not None:
+            rec["hostile"] = hostile  # build-time only: no pack schema carries it
     for row in s.cm_objects:
         rec = _rec(world, "object", int(row["entry"]))
         _set_if_missing(rec, "name", clean_name(row.get("name")))
@@ -317,7 +359,13 @@ def merge_creatures(world: World, s: Sources) -> None:
             )
             continue
         placed = place_world_point(
-            s.transforms, spawn.map_id, spawn.position_x, spawn.position_y, "classic"
+            s.transforms,
+            spawn.map_id,
+            spawn.position_x,
+            spawn.position_y,
+            "classic",
+            spawn.position_z,
+            spawn.spawndist if (spawn.spawndist or 0) >= 1 else None,
         )
         if placed is None:
             world.drop(
@@ -498,6 +546,184 @@ def merge_quests(world: World, s: Sources) -> None:
 # ---------------------------------------------------------------------------------------------
 
 
+def _either(a: float, b: float) -> float:
+    """Percent that at least one of two independent rolls drops the item."""
+    return 100.0 * (1.0 - (1.0 - a / 100.0) * (1.0 - b / 100.0))
+
+
+def reference_items(loot: list[cmangos.LootRow]) -> dict[int, list[tuple[int, float, bool]]]:
+    """Each shared loot list's items, nested lists expanded: ``{list: [(item, percent, quest)]}``,
+    the percent of one roll of the list; a list that refers to itself again is cut."""
+    lists: dict[int, list[cmangos.LootRow]] = {}
+    for row in loot:
+        if row.kind == "reference":
+            lists.setdefault(row.entry, []).append(row)
+    done: dict[int, list[tuple[int, float, bool]]] = {}
+
+    def expand(list_id: int, seen: frozenset[int]) -> list[tuple[int, float, bool]]:
+        if list_id in done:
+            return done[list_id]
+        if list_id in seen:
+            return []
+        items: dict[int, tuple[float, bool]] = {}
+
+        def add(item: int, chance: float, quest: bool) -> None:
+            old = items.get(item)
+            items[item] = (_either(old[0], chance), old[1] and quest) if old else (chance, quest)
+
+        for row in lists.get(list_id, []):
+            if row.reference_id is not None:
+                factor = (row.chance_pct or 100.0) / 100.0
+                for item, chance, quest in expand(row.reference_id, seen | {list_id}):
+                    add(item, chance * factor, quest)
+            elif row.item_id is not None:
+                add(row.item_id, row.chance_pct, row.quest_drop)
+        done[list_id] = [(i, c, q) for i, (c, q) in sorted(items.items())]
+        return done[list_id]
+
+    for list_id in sorted(lists):
+        expand(list_id, frozenset())
+    return done
+
+
+def _level_band(world: World, droppers: set[tuple[str, int]]) -> tuple[int | None, int | None]:
+    """The lowest and highest level of the creatures among the droppers (objects have none)."""
+    lows, highs = [], []
+    for kind, entry in droppers:
+        npc = world.get("npc", entry) if kind == "creature" else None
+        if npc and npc.get("level") is not None:
+            lows.append(int(npc["level"]))
+            highs.append(int(npc.get("levelMax") or npc["level"]))
+    return (min(lows), max(highs)) if lows else (None, None)
+
+
+def merge_loot(
+    world: World,
+    rows: list[cmangos.LootRow],
+    src: str,
+    *,
+    item_record: Callable[[int], dict | None] | None = None,
+    keep: Callable[[str, int], bool] | None = None,
+    levels: Callable[[str, int], tuple[int | None, int | None]] | None = None,
+) -> None:
+    """Drops per item (top N), loot per npc/object and world drops from loot rows of either
+    client. The shared lists a creature or object rolls are expanded: an item few reach that way
+    joins their drops, an item many reach is a world drop (WORLD_DROP_MIN_DROPPERS) with the
+    droppers' level band. `item_record(id)` makes a missing item's record (retail: the ItemDB
+    name) or gives nil; `keep(kind, entry)` limits the droppers (retail: those on the continents);
+    `levels(kind, entry)` gives a dropper's level band (else the npc record's). Drops and loot
+    already set by another source stay."""
+    by_item: dict[int, list] = {}
+    by_entry: dict[tuple[str, int], list] = {}
+    shared = reference_items(rows)
+    via_lists: dict[int, dict[tuple[str, int], tuple[float, bool]]] = {}
+    for row in rows:
+        if row.kind == "reference" or (keep is not None and not keep(row.kind, row.entry)):
+            continue
+        if row.reference_id is not None:
+            factor = (row.chance_pct or 100.0) / 100.0
+            for item, chance, quest in shared.get(row.reference_id, []):
+                droppers = via_lists.setdefault(item, {})
+                key = (row.kind, row.entry)
+                old = droppers.get(key)
+                droppers[key] = (
+                    (_either(old[0], chance * factor), old[1] and quest)
+                    if old
+                    else (chance * factor, quest)
+                )
+            continue
+        if row.item_id is None:
+            continue
+        ref = f"{'npc' if row.kind == 'creature' else 'object'}:{row.entry}"
+        by_item.setdefault(row.item_id, []).append([ref, round(row.chance_pct, 2), row.quest_drop])
+        by_entry.setdefault((row.kind, row.entry), []).append(
+            [row.item_id, round(row.chance_pct, 2)]
+        )
+
+    def item_rec(item_id: int) -> dict | None:
+        rec = world.get("item", item_id)
+        if rec is None and item_record is not None:
+            rec = item_record(item_id)
+        return rec
+
+    def band(droppers: set[tuple[str, int]]) -> tuple[int | None, int | None]:
+        if levels is None:
+            return _level_band(world, droppers)
+        lows, highs = [], []
+        for kind, entry in droppers:
+            lo, hi = levels(kind, entry)
+            if lo is not None:
+                lows.append(lo)
+                highs.append(hi if hi is not None else lo)
+        return (min(lows), max(highs)) if lows else (None, None)
+
+    for item_id, droppers in sorted(via_lists.items()):
+        if len(droppers) >= WORLD_DROP_MIN_DROPPERS:
+            rec = item_rec(item_id)
+            if rec is not None and rec.get("worldDrop") is None:
+                lo, hi = band(set(droppers))
+                rec["worldDrop"] = [lo, hi, len(droppers)]
+            continue
+        for (kind, entry), (chance, quest) in sorted(droppers.items()):
+            ref = f"{'npc' if kind == 'creature' else 'object'}:{entry}"
+            by_item.setdefault(item_id, []).append([ref, round(chance, 2), quest])
+            by_entry.setdefault((kind, entry), []).append([item_id, round(chance, 2)])
+    for item_id, drops in by_item.items():
+        rec = item_rec(item_id)
+        if rec is None or rec.get("drops") is not None:
+            continue
+        drops.sort(key=lambda d: (-d[1], d[0]))
+        rec["drops"] = drops[:MAX_DROPS_PER_ITEM]
+        rec["dropsSrc"] = src
+    for (kind, entry), loot in by_entry.items():
+        rec = world.get("npc" if kind == "creature" else "object", entry)
+        if rec is None or rec.get("loot") is not None:
+            continue
+        loot.sort(key=lambda d: (-d[1], d[0]))
+        rec["loot"] = loot[:MAX_LOOT_PER_NPC]
+        rec["lootSrc"] = src
+
+
+def merge_tdb_loot(world: World, s: Sources) -> None:
+    """Retail's loot from TrinityCore's tables (28.10.2026): drops for the items ItemDB's places
+    leave without, world drops, the creatures' and chests' loot. Only droppers on Eastern Kingdoms
+    and Kalimdor; a dropped item without a record gets one from ItemDB's name and facts."""
+    t = s.tdb
+    if t is None or not t.loot:
+        return
+    placed = {("creature", sp.entry) for sp in t.spawns}
+    placed |= {("object", sp.entry) for sp in t.object_spawns}
+    idb = s.idb
+
+    def item_record(item_id: int) -> dict | None:
+        name = idb.names.get(item_id) if idb is not None else None
+        if not name:
+            return None
+        rec = _rec(world, "item", item_id)
+        _set_if_missing(rec, "name", clean_name(name))
+        core = idb.core.get(item_id) if idb is not None else None
+        if core is not None:
+            _set_if_missing(rec, "quality", core.quality)
+            _set_if_missing(rec, "level", core.item_level)
+            _set_if_missing(rec, "class", core.class_id)
+            _set_if_missing(rec, "subclass", core.subclass_id)
+        _set_if_missing(rec, "src", "tdb")
+        return rec
+
+    def levels(kind: str, entry: int) -> tuple[int | None, int | None]:
+        c = t.creatures.get(entry) if kind == "creature" else None
+        return (c.level, c.level_max) if c is not None else (None, None)
+
+    merge_loot(
+        world,
+        t.loot,
+        "tdb",
+        item_record=item_record,
+        keep=lambda kind, entry: (kind, entry) in placed,
+        levels=levels,
+    )
+
+
 def merge_items(world: World, s: Sources) -> None:
     for it in s.cm_items:
         rec = _rec(world, "item", it.id)
@@ -530,31 +756,8 @@ def merge_items(world: World, s: Sources) -> None:
             rec["madeBy"] = [facts.made_by.profession, facts.made_by.skill]
         if facts.quest:
             rec["questItem"] = True
-    # Classic loot: drops per item (top N) and loot per npc/object
-    by_item: dict[int, list] = {}
-    by_entry: dict[tuple[str, int], list] = {}
-    for row in s.cm_loot:
-        if row.item_id is None or row.kind == "reference":
-            continue
-        ref = f"{'npc' if row.kind == 'creature' else 'object'}:{row.entry}"
-        by_item.setdefault(row.item_id, []).append([ref, round(row.chance_pct, 2), row.quest_drop])
-        by_entry.setdefault((row.kind, row.entry), []).append(
-            [row.item_id, round(row.chance_pct, 2)]
-        )
-    for item_id, drops in by_item.items():
-        rec = world.get("item", item_id)
-        if rec is None:
-            continue
-        drops.sort(key=lambda d: (-d[1], d[0]))
-        rec["drops"] = drops[:MAX_DROPS_PER_ITEM]
-        rec["dropsSrc"] = "classic"
-    for (kind, entry), loot in by_entry.items():
-        rec = world.get("npc" if kind == "creature" else "object", entry)
-        if rec is None:
-            continue
-        loot.sort(key=lambda d: (-d[1], d[0]))
-        rec["loot"] = loot[:MAX_LOOT_PER_NPC]
-        rec["lootSrc"] = "classic"
+    # Classic loot: drops per item, loot per npc/object, world drops (merge_loot)
+    merge_loot(world, s.cm_loot, "classic")
     for r in s.fdb_recipes:
         rec = _rec(world, "recipe", r.spell_id)
         rec["name"] = clean_name(r.name)
@@ -668,6 +871,48 @@ def merge_att_quests(world: World, s: Sources) -> None:
             f"AllTheThings: {races_lost} race restrictions on race ids above {MAX_MASK_BIT} "
             "cannot be expressed in a 32-bit mask and were not applied"
         )
+
+
+# The professions' skill lines (SkillLine.db2 ids, the same on both clients) as Forever's recipe
+# files name them.
+PROFESSION_SKILL_LINES = {
+    164: "Blacksmithing",
+    165: "Leatherworking",
+    171: "Alchemy",
+    182: "Herbalism",
+    185: "Cooking",
+    186: "Mining",
+    197: "Tailoring",
+    202: "Engineering",
+    333: "Enchanting",
+    356: "Fishing",
+    393: "Skinning",
+    755: "Jewelcrafting",
+    773: "Inscription",
+    129: "First Aid",
+    794: "Archaeology",
+}
+ATT_GONE = frozenset({1, 2})  # never implemented, removed from the game
+
+
+def merge_att_recipes(world: World, s: Sources) -> None:
+    """Retail's recipes from AllTheThings (28.10.2026: "we have no recipes"): the spell, the
+    profession, the skill it is learned at, the item that teaches it. The names come from the
+    client at runtime (Data's Names); the crafted item and the reagents are not in ATT."""
+    att = s.att
+    if att is None or s.client != "retail":
+        return
+    for rid, r in sorted(att.recipes.items()):
+        profession = PROFESSION_SKILL_LINES.get(r.skill_line or 0)
+        if profession is None or r.unavailable in ATT_GONE:
+            continue
+        rec = _rec(world, "recipe", rid)
+        _set_if_missing(rec, "profession", profession)
+        _set_if_missing(rec, "skill", r.learned_at)
+        if r.teacher_item:
+            _set_if_missing(rec, "source", "item")
+            _set_if_missing(rec, "sourceItem", r.teacher_item)
+        _set_if_missing(rec, "src", "att")
 
 
 def merge_att_places(world: World, s: Sources) -> None:
@@ -952,6 +1197,7 @@ def merge_flightpaths(world: World, s: Sources) -> None:
         rec["continent"] = node.continent
         rec["wx"] = node.wx
         rec["wy"] = node.wy
+        rec["wz"] = node.wz  # not in the pack schema: only the walk network's nodes read it
         rec["src"] = "client"
         hit = None
         if s.transforms:
@@ -965,7 +1211,7 @@ def merge_flightpaths(world: World, s: Sources) -> None:
                     by_rect += 1
         if hit is not None:
             ui_map_id, x, y = hit
-            _add_spawn(rec, Spawn(ui_map_id, round(x, 4), round(y, 4), "client"))
+            _add_spawn(rec, Spawn(ui_map_id, round(x, 4), round(y, 4), "client", node.wz))
         elif s.transforms:
             world.notes.append(
                 f"flightpath {node.id} ({node.name}): no map contains ({node.wx}, {node.wy})"
@@ -1037,20 +1283,211 @@ def prune_classic_spawns(world: World) -> None:
             rec["spawns"] = thinned
 
 
+# Object kinds a player looks for, placed from the TDB (R25.39: retail had no object kinds)
+TDB_OBJECT_KINDS = frozenset({"mailbox", "fire and forge", "auction house", "meeting stone"})
+
+
+def _thinned(spawns: list[Spawn], limit: int) -> list[Spawn]:
+    """At most `limit` places per map, spread by farthest-point sampling (as Classic's)."""
+    by_map: dict[int, list] = {}
+    for sp in spawns:
+        by_map.setdefault(sp.ui_map_id, []).append(sp.row())
+    out = []
+    for ui_map_id in sorted(by_map):
+        rows = by_map[ui_map_id]
+        out.extend(rows if len(rows) <= limit else farthest_points(rows, limit))
+    return out
+
+
+def merge_tdb(world: World, s: Sources) -> None:
+    """TrinityCore's retail world database (sources.md): services, rank, side and level band for
+    the NPCs the retail sources know, and the NPCs with a service (vendors, trainers, innkeepers,
+    flight masters, bankers ...) with their places on Eastern Kingdoms and Kalimdor; the objects
+    a player looks for (mailboxes, forges and anvils, the auction house, meeting stones)."""
+    t = s.tdb
+    if t is None:
+        return
+    places: dict[int, list[Spawn]] = {}
+    for sp in t.spawns:
+        placed = place_world_point(s.transforms, sp.map_id, sp.x, sp.y, "tdb", sp.z)
+        if placed is not None:
+            places.setdefault(sp.entry, []).append(placed)
+    for c in sorted(t.creatures.values(), key=lambda c: c.id):
+        serves = bool(set(c.services) - {"questgiver"})
+        rec = world.get("npc", c.id)
+        if rec is None and not (serves and places.get(c.id)):
+            continue
+        rec = _rec(world, "npc", c.id)
+        _set_if_missing(rec, "name", clean_name(c.name))
+        _set_if_missing(rec, "subname", clean_name(c.subname))
+        if c.level is not None and rec.get("level") is None:
+            rec["level"], rec["levelMax"] = c.level, c.level_max
+        flags = list(rec.get("flags") or [])
+        for f in (*c.services, *((c.rank,) if c.rank else ())):
+            if f not in flags:
+                flags.append(f)
+        rec["flags"] = flags or None
+        _set_if_missing(rec, "faction", c.side)
+        _set_if_missing(rec, "src", "tdb")
+        if serves:
+            for row in _thinned(places.get(c.id, []), MAX_CLASSIC_SPAWNS_PER_MAP):
+                if row not in (rec.get("spawns") or []):
+                    rec.setdefault("spawns", []).append(row)
+    object_places: dict[int, list[Spawn]] = {}
+    for sp in t.object_spawns:
+        placed = place_world_point(s.transforms, sp.map_id, sp.x, sp.y, "tdb", sp.z)
+        if placed is not None:
+            object_places.setdefault(sp.entry, []).append(placed)
+    for entry, (type_number, name) in sorted(t.objects.items()):
+        kind = object_kind(type_number)
+        rec = world.get("object", entry)
+        wanted = kind in TDB_OBJECT_KINDS and object_places.get(entry)
+        if rec is None and not wanted:
+            continue
+        rec = _rec(world, "object", entry)
+        _set_if_missing(rec, "name", clean_name(name))
+        _set_if_missing(rec, "kind", kind)
+        _set_if_missing(rec, "src", "tdb")
+        if wanted:
+            for row in _thinned(object_places[entry], MAX_CLASSIC_SPAWNS_PER_MAP):
+                if row not in (rec.get("spawns") or []):
+                    rec.setdefault("spawns", []).append(row)
+
+
+# ---------------------------------------------------------------------------------------------
+# The client's own tables (ADR 0035, "client first"): what the client holds wins, it is the build
+# ---------------------------------------------------------------------------------------------
+
+
+def merge_client_items(world: World, s: Sources) -> None:
+    """ItemSparse and Item over the older sources (CMaNGOS' Classic values, ForeverDB, ItemDB):
+    name, quality, levels, class, prices, stack. Forever keeps every item the client has (an item
+    CMaNGOS lacks is new in Forever); retail only the items something refers to, as before (the
+    client knows the rest at runtime, recipes' products and reagents too: with them the retail
+    Items pack measured 14.5 MB, 29.10.2026)."""
+    t = s.client_tables
+    if t is None:
+        return
+    items = world.records.setdefault("item", {})
+    wanted = set(items)
+    classic = {it.id for it in s.cm_items}
+    for item_id, it in sorted(t.items.items()):
+        if s.client != "forever" and item_id not in wanted:
+            continue
+        if it.name is None and item_id not in items:
+            continue
+        rec = _rec(world, "item", item_id)
+        values = {
+            "name": clean_name(it.name),
+            "quality": it.quality,
+            "level": it.level,
+            "reqLevel": it.required_level,
+            "class": it.item_class,
+            "subclass": it.item_subclass,
+            "sell": it.sell,
+            "buy": it.buy,
+            "stack": it.stack,
+        }
+        for key, value in values.items():
+            if value is not None:
+                rec[key] = value
+        if s.client == "forever" and classic and item_id not in classic:
+            _set_if_missing(rec, "foreverNew", True)
+        if rec.get("src") in (None, "classic", "tdb"):
+            rec["src"] = "client"
+
+
+def merge_client_recipes(world: World, s: Sources) -> None:
+    """SkillLineAbility, SpellName, SpellEffect and SpellReagents: a recipe's profession, name,
+    product and reagents. Forever keeps every recipe of a profession; retail fills the recipes
+    AllTheThings lists (the client has every expansion's). The level a trainer teaches it at stays
+    the other sources' (the server holds it); the client's own rank only where none is known."""
+    t = s.client_tables
+    if t is None:
+        return
+    known = world.records.get("recipe", {})
+    for r in t.recipes:
+        if s.client != "forever" and r.spell not in known:
+            continue
+        profession = PROFESSION_SKILL_LINES.get(r.skill_line)
+        if profession is None:
+            continue
+        rec = _rec(world, "recipe", r.spell)
+        if r.name:
+            rec["name"] = clean_name(r.name)
+        rec["profession"] = profession
+        if r.item:
+            rec["item"] = r.item
+            rec["count"] = r.count
+        if r.reagents:
+            rec["reagents"] = [list(x) for x in r.reagents]
+        _set_if_missing(rec, "skill", r.learned_at)
+        _set_if_missing(rec, "src", "client")
+
+
+def merge_client_quest_lines(world: World, s: Sources) -> None:
+    """QuestLineXQuest: each quest of a line chains into the next one, where no other source
+    named its successor."""
+    t = s.client_tables
+    if t is None:
+        return
+    quests = world.records.get("quest", {})
+    for line in t.quest_lines:
+        for a, b in pairwise(line):
+            if a in quests and b in quests and a != b:
+                _set_if_missing(quests[a], "chain", b)
+
+
+def merge_client_quest_areas(world: World, s: Sources) -> None:
+    """QuestPOIBlob and QuestPOIPoint: the areas the quest log draws, one spot per objective area
+    (the centre of its corners, as a map fraction), kind `area`, for quests without spots; on the
+    world graph's continents only (Eastern Kingdoms, Kalimdor: ADR 0026), as the other places."""
+    t = s.client_tables
+    if t is None or not s.transforms:
+        return
+    quests = world.records.get("quest", {})
+    found: dict[int, dict[int, list]] = {}
+    for a in t.quest_areas:
+        rec = quests.get(a.quest)
+        transform = s.transforms.get(a.ui_map)
+        if rec is None or rec.get("spots") or transform is None or a.objective < 0:
+            continue
+        if transform.continent not in GRAPH_CONTINENTS:
+            continue
+        wx = sum(p[0] for p in a.points) / len(a.points)
+        wy = sum(p[1] for p in a.points) / len(a.points)
+        xy = world_to_map(transform, wx, wy)
+        if xy is None or not (0 <= xy[0] <= 1 and 0 <= xy[1] <= 1):
+            continue
+        spots = found.setdefault(a.quest, {}).setdefault(a.ui_map, [])
+        if len(spots) < MAX_SPOTS_PER_MAP:
+            spots.append([round(xy[0], 4), round(xy[1], 4), "area", 1 << min(a.objective, 30)])
+    for quest_id, by_map in found.items():
+        quests[quest_id]["spots"] = {m: v for m, v in sorted(by_map.items())}
+
+
 def build_world(s: Sources) -> World:
     world = World(client=s.client, build=s.build, sources=list(s.source_names))
     world.notes.extend(s.notes)
     world.area_to_map = dict(s.area_to_map)
     merge_zones(world, s)
+    merge_areas(world, s)
     merge_creatures(world, s)
     merge_att_places(world, s)
     merge_itemdb_places(world, s)
+    merge_tdb(world, s)
     merge_vendors_and_trainers(world, s)
     merge_quests(world, s)
     merge_att_quests(world, s)
+    merge_att_recipes(world, s)
     merge_client_quest_titles(world, s)
     merge_items(world, s)
     merge_itemdb_items(world, s)
+    merge_client_recipes(world, s)
+    merge_client_items(world, s)
+    merge_client_quest_lines(world, s)
+    merge_client_quest_areas(world, s)
+    merge_tdb_loot(world, s)
     merge_nodes(world, s)
     merge_flightpaths(world, s)
     merge_att_flightpaths(world, s)

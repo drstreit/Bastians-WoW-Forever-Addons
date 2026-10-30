@@ -8,6 +8,19 @@ local L = ns.L
 local HEADER_H = 30
 local DEFAULTS =
   { width = 420, height = 520, minWidth = 300, minHeight = 240, maxWidth = 1200, maxHeight = 1200 }
+-- `maxWidth` or `maxHeight` = B.UI.NO_LIMIT: as large as the player drags it (owner, retail
+-- 28.10.2026: the map stopped at half the screen); the window stays clamped to the screen.
+B.UI.NO_LIMIT = 100000
+
+-- The resize bounds of a window, at least `w` x `h` (full screen lifts them to the screen).
+local function resizeBounds(frame, opts, w, h)
+  frame:SetResizeBounds(
+    opts.minWidth or DEFAULTS.minWidth,
+    opts.minHeight or DEFAULTS.minHeight,
+    math.max(w or 0, opts.maxWidth or DEFAULTS.maxWidth),
+    math.max(h or 0, opts.maxHeight or DEFAULTS.maxHeight)
+  )
+end
 
 local Window = {}
 Window.__index = Window
@@ -19,6 +32,7 @@ B.UI.DOCK = { left = "BastiansMapFrame", right = "BastiansBrowserFrame" }
 B.UI.DOCK_MODULES = { BastiansMapFrame = "Map", BastiansBrowserFrame = "Browser" }
 local DOCK_GAP = 2
 local RESIZE_COALESCE = 0.1 -- seconds between content refreshes while the grip is held
+local GRIP_LEVEL = 100 -- frame levels above the window: no content frame reaches it
 local GESTURE_PX = 40 -- a right-button drag this far goes back or forward
 local GESTURE_FLASH = 0.4 -- seconds the arrow shows
 local GESTURE_RECENT = 0.5 -- a right click this soon after a gesture opens no menu
@@ -139,12 +153,7 @@ function B.UI.Window(name, opts)
   frame:SetClampedToScreen(true)
   frame:SetMovable(true)
   frame:SetResizable(true)
-  frame:SetResizeBounds(
-    opts.minWidth or DEFAULTS.minWidth,
-    opts.minHeight or DEFAULTS.minHeight,
-    opts.maxWidth or DEFAULTS.maxWidth,
-    opts.maxHeight or DEFAULTS.maxHeight
-  )
+  resizeBounds(frame, opts)
   S.panel(frame)
   frame:EnableMouse(true)
   draggable(frame, win)
@@ -188,7 +197,7 @@ function B.UI.Window(name, opts)
   draggable(head, win)
   win.head = head
 
-  win.title = S.text(head, 15, S.C.text)
+  win.title = S.heading(head, 15, 17, S.C.text, S.C.gold) -- Morpheus under the Azeroth skin
   win.title:SetPoint("LEFT", 10, 0)
   win.title:SetPoint("RIGHT", -34, 0)
   win.title:SetText(opts.title or name)
@@ -200,6 +209,27 @@ function B.UI.Window(name, opts)
     frame:Hide()
   end)
 
+  -- the window's options, straight to its app's page of the settings (,
+  -- R27.1): `opts.module` names the app, `opts.page` one of its own pages (core-contracts §8)
+  if opts.module then
+    local b = CreateFrame("Button", nil, head)
+    b:SetSize(20, 20)
+    b:SetPoint("RIGHT", win.close, "LEFT", -4, 0)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetAllPoints()
+    B.UI.PaintIcon(b.icon, B.UI.IconTexture("settings"))
+    b.tip = L["Options of this window"]
+    b:SetScript("OnEnter", S.TipEnter)
+    b:SetScript("OnLeave", S.TipLeave)
+    b:SetScript("OnClick", function()
+      if B.UI.Hub then
+        B.UI.Hub.Open(opts.module, opts.page)
+      end
+    end)
+    win.options = b
+    win.title:SetPoint("RIGHT", -58, 0)
+  end
+
   -- content area: apps anchor their widgets here
   local content = CreateFrame("Frame", nil, frame)
   content:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, 0)
@@ -208,9 +238,11 @@ function B.UI.Window(name, opts)
 
   -- resize grip, bottom right
   local grip = CreateFrame("Button", nil, frame)
-  grip:SetSize(12, 12)
+  grip:SetSize(16, 16)
   grip:SetPoint("BOTTOMRIGHT", -1, 1)
-  grip:SetFrameLevel((content:GetFrameLevel() or 1) + 2)
+  -- above everything the content builds (the book's "turn the page"
+  -- button sat over the grip at the same level, so the grip took the mouse only now and then)
+  grip:SetFrameLevel((frame:GetFrameLevel() or 1) + GRIP_LEVEL)
   local gripTex = S.fill(grip, S.C.accent, "OVERLAY")
   gripTex:SetAlpha(0.5)
   grip:SetScript("OnMouseDown", function()
@@ -241,6 +273,7 @@ function B.UI.Window(name, opts)
   if opts.escape ~= false and name then
     table.insert(UISpecialFrames, name)
   end
+  win:ApplyLook()
   if name then
     B.UI.Windows[name] = win
     -- a dock remembered in the profile comes back once both windows exist (both build lazily)
@@ -282,7 +315,49 @@ function Window:DockWith(other, side)
   other.followers = other.followers or {}
   other.followers[self] = true
   self:PlaceDocked()
+  self:FitDocked()
   return true
+end
+
+-- The docked pair fits the screen (a map as wide as the screen left no
+-- room for the Browser): the leader narrows down to its minimum width, then the follower; then the
+-- leader moves so that both lie on the screen. The leader keeps its new place and size.
+function Window:FitDocked()
+  local d = self.dock
+  if not d then
+    return
+  end
+  local lead, f = d.with.frame, self.frame
+  local screen = UIParent:GetWidth()
+  local lw, fw = lead:GetWidth() or 0, f:GetWidth() or 0
+  if not (screen and screen > 0 and lw > 0 and fw > 0) then
+    return
+  end
+  local excess = lw + DOCK_GAP + fw - screen
+  if excess > 0 then
+    local leadMin = d.with.opts.minWidth or DEFAULTS.minWidth
+    local cut = math.min(excess, math.max(0, lw - leadMin))
+    lw, excess = lw - cut, excess - cut
+    if cut > 0 then
+      lead:SetWidth(lw)
+    end
+    if excess > 0 then
+      fw = math.max(self.opts.minWidth or DEFAULTS.minWidth, fw - excess)
+      f:SetWidth(fw)
+    end
+  end
+  local left, top = lead:GetLeft(), lead:GetTop()
+  if not (left and top) then
+    return
+  end
+  -- the pair's left edge, and where the leader must stand for the pair to fit
+  local pairLeft = d.side == "left" and left - DOCK_GAP - fw or left
+  local fitLeft = math.max(0, math.min(pairLeft, screen - (lw + DOCK_GAP + fw)))
+  if fitLeft ~= pairLeft then
+    lead:ClearAllPoints()
+    lead:SetPoint("TOPLEFT", UIParent, "TOPLEFT", left + fitLeft - pairLeft, top - UIParent:GetHeight())
+  end
+  d.with:SavePlace()
 end
 
 -- The content refresh after a size change: at once when `sizing` is false, else at most once per
@@ -437,12 +512,7 @@ function Window:SetFullScreen(on)
     local w, h = UIParent:GetWidth(), UIParent:GetHeight()
     self.full = { w, h }
     self.db.full = true
-    f:SetResizeBounds(
-      opts.minWidth or DEFAULTS.minWidth,
-      opts.minHeight or DEFAULTS.minHeight,
-      math.max(w, opts.maxWidth or DEFAULTS.maxWidth),
-      math.max(h, opts.maxHeight or DEFAULTS.maxHeight)
-    )
+    resizeBounds(f, opts, w, h)
     f:ClearAllPoints()
     f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
     f:SetSize(w, h)
@@ -450,12 +520,7 @@ function Window:SetFullScreen(on)
   elseif not on and self.full then
     self.full = nil
     self.db.full = nil
-    f:SetResizeBounds(
-      opts.minWidth or DEFAULTS.minWidth,
-      opts.minHeight or DEFAULTS.minHeight,
-      opts.maxWidth or DEFAULTS.maxWidth,
-      opts.maxHeight or DEFAULTS.maxHeight
-    )
+    resizeBounds(f, opts)
     self.grip:Show()
     self:RestorePlace()
     if not self.db.size then
@@ -492,6 +557,68 @@ Window.STRATA = "FULLSCREEN_DIALOG"
 function Window:PlaceStrata()
   self.frame:SetFrameStrata(Window.STRATA)
   self.frame:Raise()
+end
+
+-- The background colour and opacity of Core's settings (R27.2), the same for every window; the
+-- header stays opaque, a title over the world reads badly.
+function Window:ApplyLook()
+  local core = ns.core and ns.core.db and ns.core.db.profile
+  local c = core and core.windowColor
+  local color = S.C.bg
+  if type(c) == "table" and tonumber(c[1]) and tonumber(c[2]) and tonumber(c[3]) then
+    color = c
+  end
+  local alpha = core and tonumber(core.windowAlpha) or 100
+  if self.frame.bg then
+    S.tint(self.frame.bg, color, math.max(0.2, math.min(1, alpha / 100)))
+  end
+  self:ApplyFrame()
+end
+
+-- The game's window frame (the skin's `skinFrames`, ADR 0034): the dialog border over the window's
+-- edge, the header, content and grip moved in by FRAME_INSET, the round outline hidden. Without
+-- the client's backdrop the window keeps its flat look.
+Window.FRAME_INSET = 9
+function Window:ApplyFrame()
+  local on = S.Skin("skinFrames") == true
+  local border = self.border
+  if on and not border then
+    border = B.Compat.NewBackdrop(self.frame)
+    if border then
+      border:SetAllPoints(self.frame)
+      border:SetFrameLevel((self.frame:GetFrameLevel() or 1) + 40) -- over the content's edge
+      border:SetBackdrop({ edgeFile = S.FRAME_BORDER, edgeSize = 32 })
+      self.border = border
+    end
+  end
+  on = on and border ~= nil
+  if border then
+    border:SetShown(on)
+  end
+  if self.framed == on then
+    return
+  end
+  self.framed = on
+  local inset = on and Window.FRAME_INSET or 1
+  self.head:ClearAllPoints()
+  self.head:SetPoint("TOPLEFT", inset, -inset)
+  self.head:SetPoint("TOPRIGHT", -inset, -inset)
+  self.content:SetPoint("BOTTOMRIGHT", -inset, inset)
+  self.grip:ClearAllPoints()
+  self.grip:SetPoint("BOTTOMRIGHT", -inset, inset)
+  if self.frame.edges then
+    if on then
+      self.frame.edges:Hide()
+    else
+      self.frame.edges:Show()
+    end
+  end
+end
+
+function B.UI.ApplyWindowLook()
+  for _, win in pairs(B.UI.Windows) do
+    win:ApplyLook()
+  end
 end
 
 function Window:SetTitle(text)

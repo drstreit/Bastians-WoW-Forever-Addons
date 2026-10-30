@@ -1,3 +1,5 @@
 # StyLua skips generated packs and third-party libraries (never reformat vendored code).
 **/Generated/
 **/Libs/
+# generated beside hand-written files (bastians_build tales --catalogue; a test keeps it current)
+addons/Bastians_Library/Catalogue.lua

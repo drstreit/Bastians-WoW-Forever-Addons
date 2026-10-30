@@ -1,0 +1,542 @@
+# Bastian's places table for retail (ADR 0026, data.md "Our authored tables"): what the
+# client's tables do not give the world graph. Rows are ours; `verified` says when, on which
+# build and how a row was checked in game (empty: not yet).
+#
+# Instance entrances, seeded 25.10.2026 (W4): the client's entering trigger
+# (AreaTrigger.db2, retail 12.1.5.70575), joined to the instance by the CMaNGOS
+# teleport of the same id. Measured: they lie 2 to 10 yards from the CMaNGOS exit
+# targets used for Forever.
+# `level` is CMaNGOS' required_level. `place` = [map, wx, wy, wz] in world yards.
+
+[[entrance]]
+id = "33-1"
+instance = 33
+name = "Shadowfang Keep"
+place = [0, -228, 1576.7, 80.9]
+level = 10
+src = "client trigger 145"
+verified = ""
+
+[[entrance]]
+id = "34-1"
+instance = 34
+name = "Stormwind Stockade"
+place = [0, -8761.9, 848.6, 87.8]
+level = 15
+src = "client trigger 101"
+verified = ""
+
+[[entrance]]
+id = "36-1"
+instance = 36
+name = "Deadmines"
+place = [0, -11207.3, 1684.2, 26.9]
+level = 10
+src = "client trigger 78"
+verified = ""
+
+[[entrance]]
+id = "43-1"
+instance = 43
+name = "Wailing Caverns"
+place = [1, -753.6, -2212.8, 21.5]
+level = 10
+src = "client trigger 228"
+verified = ""
+
+[[entrance]]
+id = "47-1"
+instance = 47
+name = "Razorfen Kraul"
+place = [1, -4455.1, -1655, 85]
+level = 15
+src = "client trigger 244"
+verified = ""
+
+[[entrance]]
+id = "48-1"
+instance = 48
+name = "Blackfathom Deeps"
+place = [1, 4253.1, 757, -19.5]
+level = 10
+src = "client trigger 257"
+verified = ""
+
+[[entrance]]
+id = "70-1"
+instance = 70
+name = "Uldaman"
+label = "front"
+place = [0, -6055.5, -2955, 220]
+level = 30
+src = "client trigger 286"
+verified = ""
+
+[[entrance]]
+id = "70-2"
+instance = 70
+name = "Uldaman"
+label = "back"
+place = [0, -6606.5, -3762.2, 266.9]
+level = 30
+src = "client trigger 902"
+verified = ""
+
+[[entrance]]
+id = "90-1"
+instance = 90
+name = "Gnomeregan"
+label = "front"
+place = [0, -5155, 916.5, 287.4]
+level = 15
+src = "client trigger 324"
+verified = ""
+
+[[entrance]]
+id = "90-2"
+instance = 90
+name = "Gnomeregan"
+label = "train depot"
+place = [0, -4914.9, 827.9, 271.1]
+level = 15
+src = "client trigger 523"
+verified = ""
+
+[[entrance]]
+id = "109-1"
+instance = 109
+name = "Sunken Temple"
+place = [0, -10292.3, -3990, -68]
+level = 35
+src = "client trigger 446"
+verified = ""
+
+[[entrance]]
+id = "129-1"
+instance = 129
+name = "Razorfen Downs"
+place = [1, -4664.6, -2536.9, 82.7]
+level = 25
+src = "client trigger 442"
+verified = ""
+
+[[entrance]]
+id = "189-1"
+instance = 189
+name = "Scarlet Monastery of Old"
+label = "Graveyard"
+place = [0, 2924.4, -798.4, 161.6]
+level = 20
+src = "client trigger 45"
+verified = ""
+
+[[entrance]]
+id = "189-2"
+instance = 189
+name = "Scarlet Monastery of Old"
+label = "Cathedral"
+place = [0, 2925.2, -820.5, 161.6]
+level = 20
+src = "client trigger 610"
+verified = ""
+
+[[entrance]]
+id = "189-3"
+instance = 189
+name = "Scarlet Monastery of Old"
+label = "Armory"
+place = [0, 2878, -839.3, 163]
+level = 20
+src = "client trigger 612"
+verified = ""
+
+[[entrance]]
+id = "189-4"
+instance = 189
+name = "Scarlet Monastery of Old"
+label = "Library"
+place = [0, 2864.8, -823.4, 160.3]
+level = 20
+src = "client trigger 614"
+verified = ""
+
+[[entrance]]
+id = "209-1"
+instance = 209
+name = "Zul'Farrak"
+place = [1, -6790.9, -2891.9, 8.9]
+level = 35
+src = "client trigger 924"
+verified = ""
+
+[[entrance]]
+id = "229-1"
+instance = 229
+name = "Lower Blackrock Spire"
+place = [0, -7475, -1322.1, 302.9]
+level = 45
+src = "client trigger 1468"
+verified = ""
+
+[[entrance]]
+id = "230-1"
+instance = 230
+name = "Blackrock Depths"
+place = [0, -7176.6, -937.7, 170.2]
+level = 40
+src = "client trigger 1466"
+verified = ""
+
+[[entrance]]
+id = "249-1"
+instance = 249
+name = "Onyxia's Lair"
+place = [1, -4768.6, -3752.1, 53.4]
+level = 50
+src = "client trigger 2848"
+verified = ""
+
+[[entrance]]
+id = "289-1"
+instance = 289
+name = "Scholomance"
+place = [0, 1282, -2548.7, 85.4]
+level = 45
+src = "client trigger 2567"
+verified = ""
+
+[[entrance]]
+id = "309-1"
+instance = 309
+name = "Ancient Zul'Gurub"
+place = [0, -11916.2, -1206.9, 92.3]
+level = 50
+src = "cmangos teleport 3930"
+verified = ""
+
+[[entrance]]
+id = "329-1"
+instance = 329
+name = "Stratholme"
+label = "front"
+place = [0, 3392.5, -3389.2, 143.1]
+level = 45
+src = "client trigger 2216"
+verified = ""
+
+[[entrance]]
+id = "329-2"
+instance = 329
+name = "Stratholme"
+label = "back"
+place = [0, 3233.1, -4048.3, 108.4]
+level = 45
+src = "cmangos teleport 2221"
+verified = ""
+
+[[entrance]]
+id = "349-1"
+instance = 349
+name = "Maraudon"
+label = "purple"
+place = [1, -1182, 2861.9, 85.3]
+level = 35
+src = "client trigger 3134"
+verified = ""
+
+[[entrance]]
+id = "349-2"
+instance = 349
+name = "Maraudon"
+label = "orange"
+place = [1, -1484.1, 2617.6, 75.7]
+level = 35
+src = "client trigger 3133"
+verified = ""
+
+[[entrance]]
+id = "389-1"
+instance = 389
+name = "Ragefire Chasm"
+place = [1, 1818.4, -4427.3, -10.4]
+level = 8
+src = "client trigger 2230"
+verified = ""
+
+[[entrance]]
+id = "409-1"
+instance = 409
+name = "Molten Core"
+place = [0, -7510.9, -1035.9, 183]
+level = 50
+src = "client trigger 3528"
+verified = ""
+
+[[entrance]]
+id = "429-1"
+instance = 429
+name = "Dire Maul"
+label = "East"
+place = [1, -3759.7, 934.9, 161]
+level = 45
+src = "client trigger 3183"
+verified = ""
+
+[[entrance]]
+id = "429-2"
+instance = 429
+name = "Dire Maul"
+label = "East, back door"
+place = [1, -4028.2, 124, 31]
+level = 45
+src = "client trigger 3185"
+verified = ""
+
+[[entrance]]
+id = "429-3"
+instance = 429
+name = "Dire Maul"
+label = "West"
+place = [1, -3822.6, 1249.9, 160.3]
+level = 45
+src = "client trigger 3186"
+verified = ""
+
+[[entrance]]
+id = "429-4"
+instance = 429
+name = "Dire Maul"
+label = "West, side door"
+place = [1, -3757.8, 1249.2, 160.3]
+level = 45
+src = "client trigger 3187"
+verified = ""
+
+[[entrance]]
+id = "429-5"
+instance = 429
+name = "Dire Maul"
+label = "North"
+place = [1, -3519.9, 1089.9, 161.1]
+level = 45
+src = "client trigger 3189"
+verified = ""
+
+[[entrance]]
+id = "469-1"
+instance = 469
+name = "Blackwing Lair"
+label = "through Upper Blackrock Spire"
+place = [0, -7524.7, -1228.4, 287.2]
+level = 50
+src = "cmangos teleport 3728"
+verified = ""
+
+[[entrance]]
+id = "509-1"
+instance = 509
+name = "Ruins of Ahn'Qiraj"
+place = [1, -8424.9, 1508.7, 32]
+level = 50
+src = "client trigger 4008"
+verified = ""
+
+[[entrance]]
+id = "531-1"
+instance = 531
+name = "Ahn'Qiraj Temple"
+place = [1, -8230.4, 2005.3, 129.9]
+level = 50
+src = "client trigger 4010"
+verified = ""
+
+# Open (not in any source we use): the instances Forever added (The Searing Basin, Demon
+# Fall Canyon, Karazhan Crypts, Scarlet Enclave, ... in Map.db2) and the later expansions'
+# instances on retail; added when measured in game.
+# Retail renewed some of these dungeons under new map ids; the rows keep the Classic ids
+# (309 is "Ancient Zul'Gurub", 189 "Scarlet Monastery of Old", 229 "Lower Blackrock
+# Spire" in retail's Map.db2): the places are right, the instance ids are to be mapped
+# when retail instances pay off.
+
+# ============================================================================================
+# Transports (moved here from transports_retail.toml on 25.10.2026, ADR 0026 W4)
+# ============================================================================================
+#
+# Transports of the retail world (route.md, roadmap B9.1); the format is the one of
+# places_forever.toml's transports. Still empty on 20.10.2026: the retail data sources are decided (B4.1) but
+# none of them carries transport positions or times, and golden rule 1 forbids guessing them. The
+# candidates for the two old continents (the planner's frame until Outland and later are in it) are
+# listed in route.md "Transports"; each row is written after a measurement in game (`/way` at both
+# ends, a stopwatch for ride and cycle), `verified = true` from the start.
+
+# Teleports a character may have (route.md "Home and every way back", R26.7, 26.10.2026). `place`
+# from CMaNGOS spell_target_position (the classic DB; retail redrew the cities, so assumed here);
+# `verified` empty: not checked in game yet. Route learns the real landing when a teleport is cast
+# and keeps it over the place below. Mage teleports use a Rune of Teleportation (17031) where the
+# client still asks for it.
+
+[[teleport]]
+id = "mage-stormwind"
+name = "Stormwind"
+kind = "spell"
+spell = 3561
+class = 8
+faction = "A"
+reagent = 17031
+place = [0, -9003.5, 870.0, 29.6]
+src = "cmangos spell_target_position 3561"
+verified = ""
+
+[[teleport]]
+id = "mage-ironforge"
+name = "Ironforge"
+kind = "spell"
+spell = 3562
+class = 8
+faction = "A"
+reagent = 17031
+place = [0, -4613.6, -915.4, 501.1]
+src = "cmangos spell_target_position 3562"
+verified = ""
+
+[[teleport]]
+id = "mage-darnassus"
+name = "Darnassus"
+kind = "spell"
+spell = 3565
+class = 8
+faction = "A"
+reagent = 17031
+place = [1, 9664.1, 2526.4, 1334.3]
+src = "cmangos spell_target_position 3565"
+verified = ""
+
+[[teleport]]
+id = "mage-orgrimmar"
+name = "Orgrimmar"
+kind = "spell"
+spell = 3567
+class = 8
+faction = "H"
+reagent = 17031
+place = [1, 1469.9, -4221.5, 59.0]
+src = "cmangos spell_target_position 3567"
+verified = ""
+
+[[teleport]]
+id = "mage-undercity"
+name = "Undercity"
+kind = "spell"
+spell = 3563
+class = 8
+faction = "H"
+reagent = 17031
+place = [0, 1773.5, 61.1, -46.3]
+src = "cmangos spell_target_position 3563"
+verified = ""
+
+[[teleport]]
+id = "mage-thunder-bluff"
+name = "Thunder Bluff"
+kind = "spell"
+spell = 3566
+class = 8
+faction = "H"
+reagent = 17031
+place = [1, -965.0, 283.4, 111.2]
+src = "cmangos spell_target_position 3566"
+verified = ""
+
+[[teleport]]
+id = "druid-moonglade"
+name = "Moonglade"
+kind = "spell"
+spell = 18960
+class = 11
+place = [1, 7991.9, -2679.8, 512.1]
+src = "cmangos spell_target_position 18960"
+verified = ""
+
+[[teleport]]
+id = "ripper-everlook"
+name = "Everlook"
+kind = "item"
+item = 18984
+place = [1, 6755.3, -4658.1, 724.8]
+src = "cmangos spell_target_position 23442 (Dimensional Ripper - Everlook)"
+note = "engineering; the ripper may misfire"
+verified = ""
+
+[[teleport]]
+id = "shaman-astral-recall"
+name = "Astral Recall"
+kind = "spell"
+spell = 556
+class = 7
+hearth = true
+src = "the hearth's bind location"
+verified = ""
+
+# Retail only: the guild cloaks to Stormwind and Orgrimmar. Item ids from Wowhead as remembered
+# (assumed, 26.10.2026: a wrong id only means "not owned"); the landing assumed at the mage
+# teleport's place until Route learns it in game.
+
+[[teleport]]
+id = "cloak-coordination-a"
+name = "Stormwind (Cloak of Coordination)"
+kind = "item"
+item = 65360
+faction = "A"
+place = [0, -9003.5, 870.0, 29.6]
+src = "assumed: item id remembered from Wowhead, landing as the mage teleport"
+verified = ""
+
+[[teleport]]
+id = "cloak-coordination-h"
+name = "Orgrimmar (Cloak of Coordination)"
+kind = "item"
+item = 65274
+faction = "H"
+place = [1, 1469.9, -4221.5, 59.0]
+src = "assumed: item id remembered from Wowhead, landing as the mage teleport"
+verified = ""
+
+[[teleport]]
+id = "shroud-cooperation-a"
+name = "Stormwind (Shroud of Cooperation)"
+kind = "item"
+item = 63352
+faction = "A"
+place = [0, -9003.5, 870.0, 29.6]
+src = "assumed: item id remembered from Wowhead, landing as the mage teleport"
+verified = ""
+
+[[teleport]]
+id = "shroud-cooperation-h"
+name = "Orgrimmar (Shroud of Cooperation)"
+kind = "item"
+item = 63353
+faction = "H"
+place = [1, 1469.9, -4221.5, 59.0]
+src = "assumed: item id remembered from Wowhead, landing as the mage teleport"
+verified = ""
+
+[[teleport]]
+id = "wrap-unity-a"
+name = "Stormwind (Wrap of Unity)"
+kind = "item"
+item = 63206
+faction = "A"
+place = [0, -9003.5, 870.0, 29.6]
+src = "assumed: item id remembered from Wowhead, landing as the mage teleport"
+verified = ""
+
+[[teleport]]
+id = "wrap-unity-h"
+name = "Orgrimmar (Wrap of Unity)"
+kind = "item"
+item = 63207
+faction = "H"
+place = [1, 1469.9, -4221.5, 59.0]
+src = "assumed: item id remembered from Wowhead, landing as the mage teleport"
+verified = ""

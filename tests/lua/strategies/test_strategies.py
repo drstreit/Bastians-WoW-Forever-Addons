@@ -326,6 +326,37 @@ def test_the_back_shelf_is_in_the_index_with_its_flow_plate_table_and_flip(wow: 
     assert wow.errors == []
 
 
+def test_every_page_gives_its_address_on_the_web_to_copy(wow: WowRuntime):
+    boot(wow)
+    assert wow.eval(f"{BOOK}.WebURL('baeldun-dig')") == (
+        "https://bastians.dev/wow/my-gold-diary/baeldun-dig/"
+    )
+    assert wow.eval(f"{BOOK}.WebURL(nil)") == "https://bastians.dev/wow/my-gold-diary/"
+    # not on the title page
+    wow.slash("/bbook title")
+    assert "Read it on the web  copy the link" not in both(wow)
+    # a page: the row under the meta line, the address below it, the click into the chat box
+    wow.slash("/bbook hogger-camp")
+    left = texts(wow, "left")
+    assert "Read it on the web  copy the link" in left
+    assert "bastians.dev/wow/my-gold-diary/hogger-camp/" in left
+    click_row(wow, "left", "Read it on the web")
+    assert wow.eval("Mock.chatInput") == "https://bastians.dev/wow/my-gold-diary/hogger-camp/"
+    # a back-shelf page and a tombstone: their addresses work on the web too
+    for pid in ("leather-trick", "old-gnolls"):
+        wow.execute(f"{WIN}.Show({{ kind = 'page', id = '{pid}' }})")
+        click_row(wow, "left", "Read it on the web")
+        assert wow.eval("Mock.chatInput") == f"https://bastians.dev/wow/my-gold-diary/{pid}/"
+    # /bbook web: the open page, else the diary's front page
+    wow.execute("Mock.chatInput = nil")
+    wow.slash("/bbook web")
+    assert wow.eval("Mock.chatInput") == "https://bastians.dev/wow/my-gold-diary/old-gnolls/"
+    wow.slash("/bbook contents")
+    wow.slash("/bbook web")
+    assert wow.eval("Mock.chatInput") == "https://bastians.dev/wow/my-gold-diary/"
+    assert wow.errors == []
+
+
 def test_turning_pages_follows_the_reading_order(wow: WowRuntime):
     boot(wow)
     wow.slash("/bbook")
@@ -453,3 +484,68 @@ def test_a_page_shows_its_picture_and_none_before_a_restart(wow: WowRuntime):
     wow.execute(f"Mock.unseen = {{ [{path!r}] = true }} {WIN}.Render()")
     assert not pic.IsShown(pic)
     assert any("gnoll camp" in t for t in both(wow))  # the page itself reads as before
+
+
+def test_a_plate_lies_on_the_zones_painting_and_offers_route_there(wow: WowRuntime):
+    """ "hard to read without reference - should we not add the option for
+    a route there (if our route is installed) or at least show a real map as background?"."""
+    boot(wow, CORE, DATA, GOLD, STRAT)
+    wow.execute(
+        f"""plate = {MOD}.Plate.New(UIParent)
+        spec = {{ kind = "spot", farm = {{ {{ 0.4, 0.5 }}, {{ 0.6, 0.5 }} }}, avoid = {{}},
+          box = {{ 0.2, 0.05, 0.4, 0.25 }}, place = {{ 1429, 0.3, 0.15 }}, label = "the camp" }}
+        plate:Draw(spec, 340)"""
+    )
+    shown = [t for t in wow.eval("plate.art").values() if t.IsShown(t)]
+    assert shown and all(t.GetAlpha(t) < 1 for t in shown)  # Elwynn's painting, dimmed
+    assert wow.eval("plate.route:IsShown()") is False  # no Route: no button
+    wow.execute(
+        """asked = nil
+        Bastians:ProvideService(Bastians:GetModule('Strategies'), "route", {
+          ToPoint = function(_, c, wx, wy, name) asked = { c, wx, wy, name } return true end })
+        plate:Draw(spec, 340)"""
+    )
+    assert wow.eval("plate.route:IsShown()") is True
+    wow.execute("plate.route:GetScript('OnClick')(plate.route)")
+    assert wow.eval("asked[1]") == 0 and wow.eval("asked[4]") == "the camp"
+    # a trade's steps: no map, no button
+    wow.execute('plate:Draw({ kind = "flow", nodes = { { glyph = "mob", title = "x" } } }, 340)')
+    assert not [t for t in wow.eval("plate.art").values() if t.IsShown(t)]
+    assert wow.eval("plate.route:IsShown()") is False
+    assert wow.errors == []
+
+
+def test_the_book_window_grows_as_far_as_the_reader_drags_it(wow: WowRuntime):
+    """ "the width has a maximum - let it scale freely"; the grip sits
+    above the page buttons that covered it."""
+    boot(wow, CORE, DATA, GOLD, STRAT)
+    wow.slash("/bbook")
+    frame = wow.eval(f"{WIN}.win.frame")
+    bounds = wow.eval(f"{{ {WIN}.win.frame:GetResizeBounds() }}")
+    assert bounds[3] > 5000 and bounds[4] > 5000
+    grip = wow.eval(f"{WIN}.win.grip")
+    folio = wow.eval(f"{WIN}.folio.next")
+    assert grip.GetFrameLevel(grip) > folio.GetFrameLevel(folio)
+    assert frame is not None and wow.errors == []
+
+
+def test_the_books_own_pages_open_with_their_pictures(wow: WowRuntime):
+    """the title page (Bastian dreaming at the inn), What's new, the index and
+    the bookmarks each show their picture (content/strategies/art/front) above the text."""
+    boot(wow, CORE, DATA, GOLD, STRAT)
+    wow.slash("/bbook")
+    art = f"{WIN}.ART"
+
+    def pictures(side: str) -> list[str]:
+        page = wow.eval(f"{WIN}.{side}")
+        return [
+            t.GetTexture(t).replace(wow.eval(art), "") for t in page.pics.values() if t.IsShown(t)
+        ]
+
+    wow.execute(f"{WIN}.Show({{ kind = 'title' }})")
+    assert pictures("left") == ["title"] and pictures("right") == ["news"]
+    wow.execute(f"{WIN}.Show({{ kind = 'index' }})")
+    assert pictures("left") == ["index"]
+    wow.execute(f"{WIN}.Show({{ kind = 'bookmarks' }})")
+    assert pictures("left") == ["bookmarks"]
+    assert wow.errors == []

@@ -56,17 +56,17 @@ def test_the_npc_list_opens_on_the_players_zone_then_widens(wow: WowRuntime):
     current = wow.eval(f"{BR}.Current()")
     assert current.near == "here"
     assert chips(wow)[0] == "Where: Here"
-    assert menu(wow, TREE, "where") == ["All  7", "Here  6", "Continent  7"]
+    assert menu(wow, TREE, "where") == ["All  8", "Here  7", "Continent  8"]
     rows = flat(wow)
-    assert len(rows) == 6 and not any("Gryan" in r for r in rows)  # Westfall's NPC is not here
+    assert len(rows) == 7 and not any("Gryan" in r for r in rows)  # Westfall's NPC is not here
     assert "Corina Steele  15" in rows
     # Continent: Westfall's NPC comes in; All: everything (the fixture has one continent)
     pick(wow, TREE, "where", "Continent")
     wow.execute(SIZE)
     assert wow.eval(f"{BR}.Current().near") == "continent"
-    assert len(flat(wow)) == 7 and any("Gryan" in r for r in flat(wow))
+    assert len(flat(wow)) == 8 and any("Gryan" in r for r in flat(wow))
     clear(wow, TREE, "where")  # the x: All
-    assert wow.eval(f"{BR}.Current().near") is None and len(flat(wow)) == 7
+    assert wow.eval(f"{BR}.Current().near") is None and len(flat(wow)) == 8
     assert chips(wow)[0] == "Where: All"
     # the choice sticks on a re-render
     wow.execute(f"{BR}.Render()")
@@ -209,4 +209,28 @@ def test_repeated_names_say_where_they_are_and_merge_per_zone(wow: WowRuntime):
     ]
     assert wow.eval("totalOut") == 3
     assert (wow.eval("nearIn.here"), wow.eval("nearIn.continent")) == (2, 3)
+    assert wow.errors == []
+
+
+def test_the_order_holds_while_the_mouse_is_over_the_list(wow: WowRuntime):
+    """ "when you click several times, the detail tile on the right jumps
+    to another entry that you never clicked": the Nearest order took each new batch of travel
+    times, so rows moved under a resting cursor. The order holds while the mouse is over the list
+    and takes the new one once it has left."""
+    boot(wow)
+    open_list(wow, "npc")
+    pick(wow, TREE, "sort", "Nearest")
+    wow.run_frames(3)
+    entry = f"{BR}.Current()"
+    wow.execute(f"Mock.mouseOverFrame = {TREE}.scroll")
+    held = wow.eval(f"{BR}.HoldOrder({entry}, {{ 3, 2, 1 }})")
+    assert list(held.values()) != [3, 2, 1]  # the shown order stays under the mouse
+    assert wow.eval(f"{entry}.heldStale") is True
+    wow.execute(f"{BR}.ShowList({entry})")  # a render while the mouse rests
+    assert list(wow.eval(f"{entry}.held.order").values()) == list(held.values())
+    wow.execute("Mock.mouseOverFrame = nil")
+    wow.execute(f"{BR}.OnRowHover(nil, false)")  # the mouse leaves the list
+    wow.advance(1)
+    assert wow.eval(f"{entry}.heldStale") is None
+    assert list(wow.eval(f"{BR}.HoldOrder({entry}, {{ 3, 2, 1 }})").values()) == [3, 2, 1]
     assert wow.errors == []

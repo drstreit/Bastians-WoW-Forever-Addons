@@ -18,6 +18,9 @@ text = "#2e2014"
 dim = "#5e4a33"
 muted = "#7a6750"
 bright = "#1a1008"
+mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
+mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
+mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
 accent = "#8c2f1a"
 gold = "#8a6200"
 on = "#2f7a2a"
@@ -27,6 +30,13 @@ warn = "#b35c00"
 neutral = "#6b5e4c"
 rare = "#7a1fb8"
 water = "#1f6fa8"
+# the six note colours of Bastian's Notes (notes.md, J), dark enough for the paper
+note1 = "#a87b00"
+note2 = "#2e8a36"
+note3 = "#1f6fa8"
+note4 = "#7b3fa0"
+note5 = "#b35a00"
+note6 = "#b53c3c"
 chat = "#66ccff"
 tipText = "#ffffff"
 tipDim = "#cccccc"
@@ -44,6 +54,35 @@ path = "#1f6fa8e6"
 waypoint = "#3b2a1799"
 waypointLoud = "#b36b00"
 grid = "#3b2a1740"
+# the Library's book (library.md 10.1): the same paper and ink in every theme, a book keeps its
+# paper. The paper colours multiply the drawn paper (white: as drawn); night darkens it.
+bookPaper = "#ffffff"
+bookInk = "#2a1c10"
+bookInkSoft = "#6b5538"
+bookRubric = "#8f2716"
+bookGold = "#e0bd72"
+bookSepia = "#d8b98a"
+bookCover = "#ffffff"
+bookPaperNight = "#4a4d5a"
+bookInkNight = "#efe3c8"
+bookInkSoftNight = "#b7a98d"
+bookRubricNight = "#f08f74"
+# the reading settings (library.md 10.2): the backgrounds, inks and highlights a reader picks, the
+# same in every theme; a test measures the contrast of every pair
+# the drawn paper's mean colour (Media/Paper.tga, a test keeps it true): the contrast is
+# measured against it
+bookPaperTone = "#e3d3b0"
+bookBgWhite = "#fbfaf6"
+bookBgCream = "#f3e9d2"
+bookBgGrey = "#d4d4d0"
+bookBgGreen = "#cde6cf"
+bookBgBlack = "#121212"
+bookInkBlack = "#141414"
+bookInkBlue = "#16306a"
+bookInkWhite = "#f2efe8"
+bookInkAmber = "#ffc871"
+bookBlue = "#1f4fa3"
+bookBlueNight = "#9cc2ff"
 
 [shape]
 radius = 6

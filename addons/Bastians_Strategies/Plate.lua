@@ -1,5 +1,7 @@
 -- Bastian's Strategies: the plates (strategies-design.md section 6): the place from above or the steps
--- of a trade, drawn from the suite's glyphs and discs on a card in the theme's colours.
+-- of a trade, drawn from the suite's glyphs and discs on a card in the theme's colours. Since
+-- 29.10.2026 (owner, retail: "hard to read without reference ... route there ... or at least show
+-- a real map as background") the place lies on the zone's painting, and Route plans the way there.
 local _, ns = ...
 local B = Bastians
 local S = B.UI.Style
@@ -14,16 +16,38 @@ local STEP = 7 -- px between the loop's dots
 local LOOP_DOT = 3
 local LEGEND_H = 18
 local EDGE = 0.05 -- the flight point's arrow keeps this much of the plate free at the border
+local MAP_ALPHA = 0.45 -- the zone's painting under the dots: dimmed on the card, the dots stay first
 
 local Obj = {}
 Obj.__index = Obj
 
 function Plate.New(parent)
-  local self = setmetatable({ tex = {}, fs = {}, nt = 0, nf = 0 }, Obj)
+  local self = setmetatable({ tex = {}, fs = {}, art = {}, nt = 0, nf = 0 }, Obj)
   local frame = CreateFrame("Frame", nil, parent)
   S.panel(frame, S.C.header, "radiusSmall")
   self.frame = frame
+  -- Route there: the way to the farm's centre, while Route offers its service
+  local route = S.button(frame, L["Route there"], 96, 18)
+  route:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -6, 1)
+  route:SetScript("OnClick", function()
+    Plate.RouteTo(self.place, self.name)
+  end)
+  route:Hide()
+  self.route = route
   return self
+end
+
+-- Asks Route for the way to a plate's place ({ map, x, y } in map fractions). -> true when asked.
+function Plate.RouteTo(place, name)
+  local route = B:GetService("route")
+  if not (route and route.ToPoint and place) then
+    return false
+  end
+  local continent, wx, wy = B.Coords.ToWorld(place[1], place[2], place[3])
+  if not continent then
+    return false
+  end
+  return route:ToPoint(continent, wx, wy, name) ~= false
 end
 
 local function texture(self, path, size, color, alpha)
@@ -144,6 +168,19 @@ end
 
 function Obj:DrawSpot(spec, w, h, ctx)
   local frame = self.frame
+  -- the zone's painting of the plate's box (the build's `box`, map fractions), dimmed
+  local box, place = spec.box, spec.place
+  if
+    not (
+      box
+      and place
+      and B.UI.Scenery.DrawBox(frame, self.art, place[1], box[1], box[2], box[3], box[4], w, h, MAP_ALPHA)
+    )
+  then
+    B.UI.Scenery.DrawBox(frame, self.art, nil)
+  end
+  self.place, self.name = place, spec.label or (ctx and ctx.title)
+  self.route:SetShown(place ~= nil and B:GetService("route") ~= nil)
   for _, p in ipairs(spec.avoid or {}) do
     dot(self, p[1], p[2], w, h, S.C.bad, 0.75)
   end
@@ -219,6 +256,8 @@ local FLOW_GLYPH = 40
 
 function Obj:DrawFlow(spec, w, h)
   local frame = self.frame
+  B.UI.Scenery.DrawBox(frame, self.art, nil) -- a trade's steps: no map
+  self.route:Hide()
   local nodes = spec.nodes or {}
   local n = #nodes
   if n == 0 then

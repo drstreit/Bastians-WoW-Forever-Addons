@@ -1,0 +1,92 @@
+# The correction table of the forever world graph's network (world-graph.md §6.1 step 4, data.md
+# "Our authored tables"): what the collision mesh gets wrong. Read by `bastians_build nav`
+# (corrections.py) before the network is built; every change is printed in the build's output.
+#
+# [[lift]]   name, continent (Map.db2 id), top = [wx, wy, wz], bottom = [wx, wy, wz] (world yards,
+#            north +wx, west +wy), ride = seconds, cycle = seconds (optional: half of it is the
+#            expected wait), verified = false | "date, build, how", note
+# [[link]]   name, kind (ramp, stairs, tunnel, door, path), continent, a = [wx, wy, wz],
+#            b = [wx, wy, wz], points = [[wx, wy, wz], ...] (optional), oneway (optional), verified, note
+# [[block]]  name, continent, center = [wx, wy], r = yards: every way with an end inside goes
+#            (forbidden ground: a gate, an invisible wall), verified, note
+#
+# Each end of a lift or a link joins the nearest waypoint that has ways (3D, within 100 yards), so
+# the height picks the floor. Stops the mesh left without ways (a dock, a zeppelin tower) join
+# their nearest connected waypoint within 40 yards without a row.
+#
+# The lift ends below are the CMaNGOS classic-db game objects (Undercity: the upper and lower lift
+# doors, entries 20650/20651, 20653/20654, 20656/20657; elsewhere the two cabins, which start one
+# at each end). Measured 25.10.2026 on the forever local levels (1.60.1.70532): without these rows
+# Thunder Bluff's mesas cannot be reached from Mulgore at all, Undercity's top and bottom are
+# about 2,000 yards apart, the Great Lift 2,143 and Freewind Post 1,242. Rides and cycles are
+# assumed (not timed); time them in game and write the date here.
+
+[[lift]]
+name = "undercity-lift-north"
+continent = 0
+top = [1596.04, 282.74, 55.40]
+bottom = [1596.21, 302.40, -40.66]
+ride = 12
+cycle = 30
+verified = false
+note = "CMaNGOS upperLdoor 20650, lowerLdoor 20651; ride and cycle assumed"
+
+[[lift]]
+name = "undercity-lift-south"
+continent = 0
+top = [1595.38, 197.71, 55.40]
+bottom = [1595.21, 178.69, -40.52]
+ride = 12
+cycle = 30
+verified = false
+note = "CMaNGOS upperLdoor 20653, lowerLdoor 20654; ride and cycle assumed"
+
+[[lift]]
+name = "undercity-lift-west"
+continent = 0
+top = [1553.30, 240.66, 55.40]
+bottom = [1533.88, 240.83, -32.35]
+ride = 12
+cycle = 30
+verified = false
+note = "CMaNGOS upperLdoor 20656, lowerLdoor 20657; ride and cycle assumed"
+
+[[lift]]
+name = "thunderbluff-lift-west"
+continent = 1
+top = [-1286.24, 189.72, 130.08]
+bottom = [-1308.38, 185.29, 68.59]
+ride = 12
+cycle = 30
+verified = false
+note = "CMaNGOS Mesa Elevator cabins 4170 (top), 4171 (bottom); ride and cycle assumed"
+
+[[lift]]
+name = "thunderbluff-lift-east"
+continent = 1
+top = [-1037.27, -49.24, 140.50]
+bottom = [-1028.04, -28.36, 69.02]
+ride = 12
+cycle = 30
+verified = false
+note = "CMaNGOS Mesa Elevator cabins 47297 (top), 47296 (bottom); ride and cycle assumed"
+
+[[lift]]
+name = "great-lift"
+continent = 1
+top = [-4665.43, -1827.67, 85.41]
+bottom = [-4670.77, -1849.61, -44.14]
+ride = 20
+cycle = 50
+verified = false
+note = "The Great Lift, The Barrens to Thousand Needles: CMaNGOS cabins, spawns 16874 and 16876; ride and cycle assumed"
+
+[[lift]]
+name = "freewind-lift"
+continent = 1
+top = [-5399.19, -2504.62, 89.02]
+bottom = [-5382.50, -2489.42, -40.53]
+ride = 20
+cycle = 50
+verified = false
+note = "Freewind Post: CMaNGOS cabins, spawns 16875 and 16877; ride and cycle assumed"

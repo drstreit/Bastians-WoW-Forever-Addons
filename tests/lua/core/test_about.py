@@ -26,6 +26,10 @@ def test_about_lines_name_the_versions_client_and_credits(app: WowRuntime):
     assert "GPL-3.0" in text and "github.com/" in text
     assert "Everything Quests (MIT)" in text and "CMaNGOS classic-db (GPL-3.0)" in text
     assert "TACTSharp, DBCD, BLPSharp" in text
+    # the suite's address, the repository beside it, and the model behind the book's drawings
+    assert "Website: bastians.dev/wow" in text
+    assert "Source and issues: github.com/drstreit/Bastians-WoW-Forever-Addons" in text
+    assert "Google Gemini image model (Gemini API terms)" in text
     # the fixture app and Core are listed with their TOC versions and states
     addon_rows = [t for _, t in rows if " (on)" in t or " (off)" in t]
     assert any(t.startswith("Bastian's Core ") for t in addon_rows)
@@ -44,6 +48,20 @@ def test_about_lists_loaded_data_packs_and_flags_foreign_ones(wow: WowRuntime):
     )
     text = "\n".join(t for _, t in lines(wow))
     assert f"items: build x (built for {other}, not this client)" in text
+    assert wow.errors == []
+
+
+def test_about_names_the_curseforge_downloads_only_when_the_edition_brought_them(wow: WowRuntime):
+    wow.start("Bastians_Core", "Bastians_Data")
+    wow.run_frames(5)
+    assert "Downloaded on CurseForge" not in "\n".join(t for _, t in lines(wow))
+    wow.execute(
+        'Bastians.Data.RegisterDownloads({ at = "2026-10-29", suite = 8 })'
+    )  # half: unknown
+    assert "Downloaded on CurseForge" not in "\n".join(t for _, t in lines(wow))
+    wow.execute('Bastians.Data.RegisterDownloads({ at = "2026-10-29", suite = 8, data = 9 })')
+    text = "\n".join(t for _, t in lines(wow))
+    assert "Downloaded on CurseForge: the suite 8 times, its data 9 times (2026-10-29)." in text
     assert wow.errors == []
 
 

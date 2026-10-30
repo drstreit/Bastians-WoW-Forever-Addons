@@ -28,11 +28,15 @@ def test_money_formats_and_keeps_unknown_unknown(core: WowRuntime):
 
 def test_icon_paths_keep_their_backslashes(core: WowRuntime):
     inline = core.eval("Bastians.UI.Icon('herb')")
-    glyphs = "Interface\\AddOns\\Bastians_Core\\Media\\Glyphs\\"  # one backslash each in Lua
-    # the glyph is white; the inline escape carries the kind's tint as 0..255 rgb
-    assert inline.startswith("|T" + glyphs + "herb:12:12:0:0:64:64:0:64:0:64:")
-    assert inline.endswith("|t ")
-    assert core.eval("Bastians.UI.IconTexture('quest')") == glyphs + "quest"
+    tiles = "Interface\\AddOns\\Bastians_Core\\Media\\Tiles\\"  # one backslash each in Lua
+    glyphs = "Interface\\AddOns\\Bastians_Core\\Media\\Glyphs\\"
+    # a tile carries its colours (R25.38): the inline escape has no tint
+    assert inline == "|T" + tiles + "herb:12:12|t "
+    assert core.eval("Bastians.UI.IconTexture('quest')") == tiles + "quest"
+    assert core.eval("Bastians.UI.IconKind")(tiles + "chain") == "chain"
+    # the bare glyph is white; tinted, the escape carries the kind's colour as 0..255 rgb
+    assert core.eval("Bastians.UI.GLYPH_PATHS.herb") == glyphs + "herb"
+    assert core.eval("Bastians.UI.GlyphKind")(glyphs + "herb") == "herb"
     assert core.eval("Bastians.UI.Icon('nope')") == ""
     assert core.eval("Bastians.UI.InlineTexture(135812, 16)") == "|T135812:16:16|t "
     paths = core.eval("Bastians.UI.ICON_PATHS")

@@ -222,7 +222,7 @@ function R.tags(qid, q, state, map)
     tags[#tags + 1] = color .. text .. "|r"
   end
   local ch = Logic.chain(qid, state)
-  if ch then
+  if ch and ch.pos[qid] then -- retail chains may not list every quest that names them (25.10.2026)
     add(accent(), L["Chain"] .. " " .. ch.pos[qid] .. "/" .. #ch.quests)
   end
   for _, m in ipairs(Logic.marks(q)) do

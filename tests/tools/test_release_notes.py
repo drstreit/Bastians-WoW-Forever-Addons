@@ -8,6 +8,7 @@ from pathlib import Path
 import curseforge
 import pytest
 import release_notes as rn
+from release import DEV_ONLY
 
 
 def test_trailers_parse_with_their_kind_sentence_and_app():
@@ -38,7 +39,7 @@ def test_the_tracks_cover_every_shipped_folder_once():
     shipped = {
         p.name
         for p in (rn.ROOT / "addons").iterdir()
-        if p.is_dir() and p.name != "Bastians_Probe" and (p / f"{p.name}.toc").is_file()
+        if p.is_dir() and p.name not in DEV_ONLY and (p / f"{p.name}.toc").is_file()
     }
     folders = {p.split("/", 1)[1] for p in suite + data if p.startswith("addons/")}
     assert folders >= shipped - {"Bastians_Data_Nav"}  # the Nav pack has no generator yet

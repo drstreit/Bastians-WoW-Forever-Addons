@@ -269,8 +269,25 @@ end
 function Region:GetParent()
   return self.parent
 end
+-- A new parent gives its strata to the frame unless the frame's strata is fixed (LibDBIcon fixes
+-- its buttons' strata and level, ).
 function Region:SetParent(p)
   self.parent = p
+  if p and not self.fixedStrata and p.strata then
+    self.strata = p.strata
+  end
+end
+function Region:SetFixedFrameStrata(on)
+  self.fixedStrata = on and true or false
+end
+function Region:HasFixedFrameStrata()
+  return self.fixedStrata == true
+end
+function Region:SetFixedFrameLevel(on)
+  self.fixedLevel = on and true or false
+end
+function Region:HasFixedFrameLevel()
+  return self.fixedLevel == true
 end
 -- Show/Hide run the OnShow/OnHide scripts on a state change, as the client does.
 function Region:Show()
@@ -405,7 +422,13 @@ end
 function Region:SetResizable(b)
   self.resizable = b
 end
-function Region:SetResizeBounds() end
+function Region:SetResizeBounds(minW, minH, maxW, maxH)
+  self.resizeBounds = { minW, minH, maxW, maxH } -- for tests
+end
+function Region:GetResizeBounds()
+  local b = self.resizeBounds or {}
+  return b[1], b[2], b[3], b[4]
+end
 function Region:StartMoving() end
 function Region:StopMovingOrSizing() end
 function Region:StartSizing(edge)
@@ -426,7 +449,13 @@ end
 function Region:RegisterForClicks(...)
   self.clicks = { ... }
 end
-function Region:SetPropagateKeyboardInput() end
+-- protected in combat on retail
+function Region:SetPropagateKeyboardInput(on)
+  if Mock.combat then
+    error("ADDON_ACTION_BLOCKED: SetPropagateKeyboardInput in combat")
+  end
+  self.propagateKeys = on
+end
 function Region:EnableKeyboard() end
 function Region:SetID(id)
   self.id = id
@@ -466,10 +495,50 @@ function Region:IsMouseOver()
   return Mock.mouseOverFrame == self -- a test sets Mock.mouseOverFrame to put the cursor on a frame
 end
 function Region:SetHitRectInsets() end
-function Region:SetClipsChildren() end
+function Region:SetClipsChildren(on)
+  self.clips = on and true or nil -- Mock.Layout clips what it lays out inside
+end
 function Region:SetIgnoreParentScale() end
 function Region:SetIgnoreParentAlpha() end
-function Region:SetDrawLayer() end
+-- the draw layer and sublevel as the client keeps them (R27.5: what covers what on one frame)
+function Region:SetDrawLayer(layer, sublevel)
+  self.layer, self.sublevel = layer, sublevel or 0
+end
+function Region:GetDrawLayer()
+  return self.layer, self.sublevel or 0
+end
+-- Model frames (PlayerModel, DressUpModel; the Browser's portraits): what was shown, for tests.
+-- the plate's width when the subject was set: a model set on a frame of no size stays empty
+function Region:SetCreature(id)
+  self.creature, self.unit, self.worn, self.item = id, nil, nil, nil
+  self.plateWidthAtSet = self.parent and self.parent.width
+end
+function Region:SetItem(id)
+  self.item, self.creature, self.unit, self.worn = id, nil, nil, nil
+  self.plateWidthAtSet = self.parent and self.parent.width
+end
+function Region:SetCamDistanceScale(s)
+  self.camDistance = s
+end
+function Region:SetUnit(unit)
+  self.unit, self.creature, self.worn = unit, nil, {}
+end
+function Region:Undress()
+  self.worn = {}
+end
+function Region:TryOn(link)
+  self.worn = self.worn or {}
+  self.worn[#self.worn + 1] = link
+end
+function Region:ClearModel()
+  self.creature, self.unit, self.worn, self.item = nil, nil, nil, nil
+end
+function Region:SetFacing(f)
+  self.facing = f
+end
+function Region:GetFacing()
+  return self.facing or 0
+end
 function Region:SetBackdrop() end
 function Region:SetBackdropColor() end
 function Region:SetBackdropBorderColor() end
@@ -507,7 +576,11 @@ function Region:HookScript(name, fn)
 end
 
 -- events
+-- an event the client does not know raises, as the game does (Mock.unknownEvents[ev] = true)
 function Region:RegisterEvent(ev)
+  if Mock.unknownEvents and Mock.unknownEvents[ev] then
+    error('Attempt to register unknown event "' .. tostring(ev) .. '"', 2)
+  end
   self.events[ev] = true
 end
 function Region:RegisterUnitEvent(ev)
@@ -525,9 +598,9 @@ end
 
 -- children
 local newRegion
-function Region:CreateTexture(name, layer, template)
+function Region:CreateTexture(name, layer, template, sublevel)
   local t = newRegion("Texture", name, self, template)
-  t.layer = layer
+  t.layer, t.sublevel = layer or "ARTWORK", sublevel or 0
   return t
 end
 function Region:CreateFontString(name, layer, template)
@@ -565,6 +638,11 @@ function Region:SetTexture(tex)
   -- a file the client has not seen since it started (a new file in a known addon) is taken
   -- without an error, but GetTexture stays nil until a full restart (Forever, 22.10.2026)
   if Mock.unseen and tex and Mock.unseen[tex] then
+    self.texture = nil
+    return true
+  end
+  -- a test that draws the UI (render.py) says which addon files exist: a missing one stays nil
+  if Mock.fileExists and type(tex) == "string" and not Mock.fileExists(tex) then
     self.texture = nil
     return true
   end
@@ -684,11 +762,45 @@ function Region:SetMaxLines(n)
 end
 function Region:SetShadowOffset() end
 function Region:SetShadowColor() end
+function Region:SetSpacing(n)
+  self.spacing = n
+end
+function Region:GetSpacing()
+  return self.spacing or 0
+end
+-- Mock.measure(text, fontPath, size, width, spacing) -> width, height: a test that lays out text
+-- (the Library's pages) gives the font's real metrics (tests/lua/render.py); else a rough guess.
 function Region:GetStringWidth()
+  if Mock.measure and self.font then
+    return (Mock.measure(self.text or "", self.font[1], self.font[2], 0, self.spacing or 0))
+  end
   return (self.text and #self.text or 0) * 6
 end
 function Region:GetStringHeight()
+  if Mock.measure and self.font then
+    local _, h = Mock.measure(self.text or "", self.font[1], self.font[2], self.width or 0, self.spacing or 0)
+    return h
+  end
   return 12
+end
+-- Models (the Library's witness portrait): what was asked is kept
+function Region:SetUnit(unit)
+  self.modelUnit = unit
+end
+function Region:ClearModel()
+  self.modelUnit = nil
+end
+function Region:SetPortraitZoom(z)
+  self.portraitZoom = z
+end
+-- a model's animation (the skin's greetings, ADR 0034): the last one asked, and every one in order
+function Region:HasAnimation()
+  return true -- every model has every animation; a test sets its own on the model
+end
+function Region:SetAnimation(id)
+  self.animation = id
+  self.animations = self.animations or {}
+  self.animations[#self.animations + 1] = id
 end
 function Region:GetWrappedWidth()
   return self:GetStringWidth()
@@ -766,6 +878,9 @@ function Region:SetMultiLine(on)
   self.multiLine = on and true or false
 end
 function Region:SetMaxLetters() end
+function Region:SetAltArrowKeyMode(on)
+  self.altArrowKeyMode = on
+end
 function Region:SetNumber(n)
   self.text = tostring(n)
 end
@@ -803,6 +918,7 @@ end
 function Region:SetStepsPerPage() end
 function Region:SetScrollChild(c)
   self.scrollChild = c
+  c.scrollParent = self -- Mock.Layout puts it at the scroll frame's top left
 end
 function Region:GetScrollChild()
   return self.scrollChild
@@ -875,6 +991,13 @@ Minimap:SetSize(140, 140)
 Mock.minimapZoom = 0
 function Minimap:GetZoom()
   return Mock.minimapZoom
+end
+function Minimap:GetZoomLevels()
+  return 6
+end
+-- the minimap's shape (Bastian's minimap squares it, Mini.lua)
+function Minimap:SetMaskTexture(path)
+  self.maskPath = path
 end
 function Minimap:SetZoom(zoom)
   -- the client fires MINIMAP_UPDATE_ZOOM when the zoom changes, on a later frame (an addon
@@ -995,8 +1118,25 @@ end
 function IsModifierKeyDown()
   return IsShiftKeyDown() or IsControlKeyDown() or IsAltKeyDown()
 end
-function PlaySound() end
-function PlaySoundFile() end
+-- the client's sound kits: what was played is kept (the skin's page sounds, ADR 0034)
+Mock.kits = {}
+function PlaySound(id)
+  Mock.kits[#Mock.kits + 1] = id
+end
+SOUNDKIT = { IG_ABILITY_PAGE_TURN = 836, IG_QUEST_LOG_OPEN = 844 }
+-- sounds: what was played is kept; like the client, willPlay and a handle for StopSound
+Mock.sounds, Mock.stopped = {}, {}
+function PlaySoundFile(file, channel)
+  -- a test that knows which addon files exist (render.py) gets the client's answer for a missing one
+  if Mock.fileExists and type(file) == "string" and not Mock.fileExists(file) then
+    return false
+  end
+  Mock.sounds[#Mock.sounds + 1] = { file = file, channel = channel }
+  return true, #Mock.sounds
+end
+function StopSound(handle)
+  Mock.stopped[#Mock.stopped + 1] = handle
+end
 function CreateColor(r, g, b, a)
   return {
     r = r,
@@ -1125,14 +1265,21 @@ function UnitName(unit)
   end
   return Mock.unitNames and Mock.unitNames[unit] or nil
 end
+-- Mock.classID switches the class (8 mage by default; 7 shaman, 11 druid for the teleports)
+local CLASS_NAMES = { [7] = { "Shaman", "SHAMAN" }, [8] = { "Mage", "MAGE" }, [11] = { "Druid", "DRUID" } }
 function UnitClass()
-  return "Mage", "MAGE", 8
+  local id = Mock.classID or 8
+  local n = CLASS_NAMES[id] or { "Class", "CLASS" }
+  return n[1], n[2], id
 end
 function UnitRace()
   return "Human", "Human", 1
 end
 function UnitLevel(unit)
-  return unit == "player" and (Mock.level or 12) or 0
+  if unit == "player" then
+    return Mock.level or 12
+  end
+  return Mock.unitLevels and Mock.unitLevels[unit] or 0
 end
 function UnitXP(unit)
   return unit == "player" and (Mock.xp or 0) or 0
@@ -1199,6 +1346,167 @@ end
 function UnitOnTaxi()
   return Mock.onTaxi or false
 end
+-- addon messages (N3): what was sent is kept in Mock.addonMessages; the prefixes registered
+Mock.addonMessages, Mock.addonPrefixes = {}, {}
+C_ChatInfo = C_ChatInfo or {}
+C_ChatInfo.RegisterAddonMessagePrefix = function(prefix)
+  Mock.addonPrefixes[prefix] = true
+  return 0
+end
+C_ChatInfo.IsAddonMessagePrefixRegistered = function(prefix)
+  return Mock.addonPrefixes[prefix] == true
+end
+C_ChatInfo.SendAddonMessage = function(prefix, text, channel, target)
+  Mock.addonMessages[#Mock.addonMessages + 1] =
+    { prefix = prefix, text = text, channel = channel, target = target }
+end
+-- death (R26.8): Mock.deathState "alive" | "dead" | "ghost"; Mock.corpse = { map, x, y }
+Mock.deathState = "alive"
+function UnitIsGhost(unit)
+  return unit == "player" and Mock.deathState == "ghost"
+end
+function UnitIsDeadOrGhost(unit)
+  if unit == "player" then
+    return Mock.deathState ~= "alive"
+  end
+  return Mock.unitDead[unit] or false
+end
+
+-- The fact layer (library.md §4, Core Facts.lua): the player's state, other units, loot, readable
+-- text, emotes, screenshots, the combat log. Tests set the Mock tables.
+Mock.player = {} -- stealthed, swimming, submerged, falling, flying, resting, indoors
+Mock.unitTargets = {} -- [unit] = the unit it targets ("player")
+Mock.unitHealth = {} -- [unit] = { current, max }
+Mock.unitDead = {}
+Mock.unitLevels = {}
+Mock.unitReaction = {} -- [unit] = 1 (hostile) .. 8
+Mock.unitDistance = {} -- [unit] = yards from the player
+Mock.auras = {} -- { { name, spellId } } the player's helpful auras
+Mock.loot = { slots = {}, fishing = false } -- slots: { { item, name, quantity, source } }
+Mock.itemText = nil -- { item, text, page } while a readable text is open
+Mock.emotes = {} -- what DoEmote was asked
+Mock.screenshots = 0
+Mock.combatLogEvent = nil -- { n = 15, ... } what CombatLogGetCurrentEventInfo returns
+function IsStealthed()
+  return Mock.player.stealthed or false
+end
+function IsSwimming()
+  return Mock.player.swimming or false
+end
+function IsSubmerged()
+  return Mock.player.submerged or false
+end
+function IsFalling()
+  return Mock.player.falling or false
+end
+function IsFlying()
+  return Mock.player.flying or false
+end
+function IsResting()
+  return Mock.player.resting or false
+end
+function IsIndoors()
+  return Mock.player.indoors or false
+end
+function IsOutdoors()
+  return not (Mock.player.indoors or false)
+end
+local function resolveUnit(u)
+  if u == "player" then
+    return "player"
+  end
+  local base = string.match(u, "^(.+)target$")
+  if base then
+    local t = Mock.unitTargets[base]
+    return t and resolveUnit(t) or nil
+  end
+  return u
+end
+function UnitIsUnit(a, b)
+  local ra, rb = resolveUnit(a), resolveUnit(b)
+  return ra ~= nil and ra == rb
+end
+function UnitHealth(unit)
+  local h = Mock.unitHealth[unit]
+  return h and h[1] or 100
+end
+function UnitHealthMax(unit)
+  local h = Mock.unitHealth[unit]
+  return h and h[2] or 100
+end
+function UnitIsDead(unit)
+  return Mock.unitDead[unit] or false
+end
+function UnitReaction(_, unit)
+  return Mock.unitReaction[unit] or 4
+end
+local INTERACT_YARDS = { 28, 11.11, 9.9, 28 } -- inspect, trade, duel, follow
+function CheckInteractDistance(unit, index)
+  local d = Mock.unitDistance[unit]
+  return d ~= nil and d <= (INTERACT_YARDS[index] or 28)
+end
+function GetNumLootItems()
+  return #Mock.loot.slots
+end
+function GetLootSlotInfo(i)
+  local s = Mock.loot.slots[i]
+  if not s then
+    return nil
+  end
+  return "icon", s.name or ("Item " .. s.item), s.quantity or 1, nil, 1, false, false
+end
+function GetLootSlotLink(i)
+  local s = Mock.loot.slots[i]
+  if not s then
+    return nil
+  end
+  return "|cffffffff|Hitem:" .. s.item .. "::::::::1:::::|h[" .. (s.name or "Item") .. "]|h|r"
+end
+function GetLootSourceInfo(i)
+  local s = Mock.loot.slots[i]
+  if not s then
+    return nil
+  end
+  return s.source, s.quantity or 1
+end
+function IsFishingLoot()
+  return Mock.loot.fishing or false
+end
+function ItemTextGetItem()
+  return Mock.itemText and Mock.itemText.item or nil
+end
+function ItemTextGetText()
+  return Mock.itemText and Mock.itemText.text or nil
+end
+function ItemTextGetPage()
+  return Mock.itemText and (Mock.itemText.page or 1) or nil
+end
+function DoEmote(token, target)
+  Mock.emotes[#Mock.emotes + 1] = { token = token, target = target }
+end
+function Screenshot()
+  Mock.screenshots = Mock.screenshots + 1
+end
+function CombatLogGetCurrentEventInfo()
+  local e = Mock.combatLogEvent
+  if not e then
+    return nil
+  end
+  return unpack(e, 1, e.n or #e)
+end
+C_UnitAuras = C_UnitAuras or {}
+C_UnitAuras.GetAuraDataByIndex = function(_, i)
+  local a = Mock.auras[i]
+  return a and { name = a.name, spellId = a.spellId } or nil
+end
+C_DeathInfo = {
+  GetCorpseMapPosition = function(mapID)
+    local c = Mock.corpse
+    if c and c.map == mapID then
+      return CreateVector2D(c.x, c.y)
+    end
+  end,
+}
 Mock.bindLocation = "Goldshire"
 function GetBindLocation()
   return Mock.bindLocation
@@ -1213,6 +1521,26 @@ function GetItemCooldown(itemID)
 end
 C_Container = C_Container or {}
 C_Container.GetItemCooldown = GetItemCooldown
+-- teleports (R26.7): Mock.spells[spellID] = true (known), Mock.spellCooldowns[spellID] = { start,
+-- duration }, Mock.worn[itemID] = true, Mock.toys[itemID] = true, Mock.itemSpells[itemID] = spellID
+Mock.spells, Mock.spellCooldowns, Mock.worn, Mock.toys, Mock.itemSpells = {}, {}, {}, {}, {}
+C_SpellBook = C_SpellBook or {}
+C_SpellBook.IsSpellKnown = function(spellID)
+  return Mock.spells[spellID] == true
+end
+C_Spell = C_Spell or {}
+-- spell names (retail's recipes come without names, 28.10.2026): Mock.spellNames[spellID]
+Mock.spellNames = {}
+C_Spell.GetSpellName = function(spellID)
+  return Mock.spellNames[tonumber(spellID)]
+end
+C_Spell.GetSpellCooldown = function(spellID)
+  local c = Mock.spellCooldowns[spellID]
+  return { startTime = c and c.start or 0, duration = c and c.duration or 0, isEnabled = true, modRate = 1 }
+end
+function PlayerHasToy(itemID)
+  return Mock.toys[itemID] == true
+end
 -- Reputation (C_Reputation.GetFactionDataByID documented on both clients; runtime assumed)
 Mock.reputation = { [529] = { name = "Argent Dawn", reaction = 4, currentStanding = 0 } }
 C_Reputation = C_Reputation or {}
@@ -1268,6 +1596,29 @@ end
 function IsInGroup()
   return Mock.groupSize > 0
 end
+function IsInRaid()
+  return Mock.raid == true
+end
+function IsInGuild()
+  return Mock.inGuild == true
+end
+C_FriendList = C_FriendList or {}
+function C_FriendList.GetNumFriends()
+  return #(Mock.friends or {})
+end
+function C_FriendList.GetFriendInfoByIndex(i)
+  local f = (Mock.friends or {})[i]
+  if not f then
+    return nil
+  end
+  return { name = f.name, connected = f.online ~= false, area = f.area, level = f.level }
+end
+function GetMaxPlayerLevel()
+  return Mock.maxLevel
+end
+function GetMaxLevelForPlayerExpansion()
+  return Mock.maxLevel -- nil: the client cannot tell (R26.11)
+end
 function GetZoneText()
   return Mock.zoneText or "Elwynn Forest"
 end
@@ -1280,8 +1631,13 @@ end
 function GetMinimapZoneText()
   return GetSubZoneText()
 end
+Mock.instanceType = "none" -- the second value of IsInInstance ("pvp" in a battleground)
 function IsInInstance()
-  return false, "none"
+  return Mock.instanceType ~= "none", Mock.instanceType
+end
+-- the PvP flag (the Library's `pvp` trigger): Mock.pvp
+function UnitIsPVP(unit)
+  return unit == "player" and Mock.pvp == true
 end
 function GetInstanceInfo()
   return "Azeroth", "none", 0, "", 0, 0, false, 0
@@ -1486,12 +1842,24 @@ Mock.playerMap = 1429
 Mock.playerMapPos = { x = 0.42, y = 0.65 }
 C_Map = {
   GetBestMapForUnit = function(unit)
-    return unit == "player" and Mock.playerMap or nil
+    if unit == "player" then
+      return Mock.playerMap
+    end
+    local m = Mock.unitMaps and Mock.unitMaps[unit]
+    return m and m.map or nil
   end,
   GetPlayerMapPosition = function(mapID, unit)
     if unit == "player" and mapID == Mock.playerMap then
       return CreateVector2D(Mock.playerMapPos.x, Mock.playerMapPos.y)
     end
+    local m = Mock.unitMaps and Mock.unitMaps[unit] -- group members (R26.9): { map, x, y }
+    if m and m.map == mapID then
+      return CreateVector2D(m.x, m.y)
+    end
+  end,
+  -- an area's name (the Library's `discovered`): Mock.areas[areaID] = name
+  GetAreaInfo = function(areaID)
+    return Mock.areas and Mock.areas[areaID] or nil
   end,
   GetMapInfo = function(mapID)
     local m = Mock.maps[mapID]
@@ -1537,7 +1905,7 @@ C_Map = {
           tileWidth = 256,
           tileHeight = 256,
           minScale = 1,
-          maxScale = 1,
+          maxScale = Mock.artMaxScale or 1, -- Blizzard's largest scale (2.14 for zones on retail)
         },
       }
     end
@@ -1548,6 +1916,15 @@ C_Map = {
   end,
   GetMapArtID = function(mapID)
     return Mock.maps[mapID] and mapID or nil
+  end,
+}
+-- The explored areas of a map (the Blizzard style's colours): Mock.explored[mapID] = { infos }
+-- with textureWidth, textureHeight, offsetX, offsetY, fileDataIDs, isDrawOnTopLayer,
+-- isShownByMouseOver as the retail family hands them out.
+Mock.explored = {}
+C_MapExplorationInfo = {
+  GetExploredMapTextures = function(mapID)
+    return Mock.explored[mapID] or {}
   end,
 }
 
@@ -1719,6 +2096,18 @@ local function itemInfo(idOrLink)
 end
 C_Item = C_Item or {}
 C_Item.GetItemInfo = itemInfo
+-- the quality of a known item and the game's quality colours (the skin's loot cells, ADR 0034)
+function C_Item.GetItemQualityByID(id)
+  local it = Mock.items[tonumber(id)]
+  return it and it.quality or nil
+end
+Mock.QUALITY_RGB = { [0] = { 0.62, 0.62, 0.62 }, [1] = { 1, 1, 1 }, [2] = { 0.12, 1, 0 }, [3] = { 0, 0.44, 0.87 } }
+function C_Item.GetItemQualityColor(q)
+  local c = Mock.QUALITY_RGB[q]
+  if c then
+    return c[1], c[2], c[3]
+  end
+end
 -- Item stats and levels (C_Item.GetItemStats, GetDetailedItemLevelInfo: in both P1 dumps, the
 -- returns assumed from the retail docs): Mock.items[id].stats = { ITEM_MOD_STAMINA_SHORT = 3 }.
 local function itemIDOf(idOrLink)
@@ -1759,8 +2148,13 @@ C_Item.GetItemInfoInstant = function(idOrLink)
   local id = tonumber(idOrLink) or tonumber(string.match(tostring(idOrLink), "item:(%d+)"))
   local it = id and Mock.items[id]
   if it then
-    return id, "Tradeskill", "Cloth", "INVTYPE_NON_EQUIP", it.icon, 7, 0
+    return id, "Tradeskill", "Cloth", it.equipLoc or "INVTYPE_NON_EQUIP", it.icon, 7, 0
   end
+end
+-- which items can be worn (the Browser's portrait tries them on): Mock.equippable[itemID] = true
+Mock.equippable = {}
+C_Item.IsEquippableItem = function(id)
+  return Mock.equippable[tonumber(id)] == true
 end
 C_Item.GetItemNameByID = function(id)
   return Mock.items[id] and Mock.items[id].name
@@ -1885,6 +2279,15 @@ end
 C_Item.GetItemCount = function(id)
   return Mock.bags[id] or 0
 end
+C_Item.IsEquippedItem = function(id)
+  return Mock.worn[id] == true
+end
+C_Item.GetItemSpell = function(id)
+  local spell = Mock.itemSpells[id]
+  if spell then
+    return "Spell " .. spell, spell
+  end
+end
 -- Bag slots (C_Container, the retail info table): Mock.bagSlots[bag] = { { itemID, count, quality,
 -- bound, noValue }, ... }; a nil entry is an empty slot.
 Mock.bagSlots = {}
@@ -1894,6 +2297,15 @@ C_Container.GetContainerNumSlots = function(bag)
     return bag == 0 and 16 or 0
   end
   return b.slots or 16 -- slot tables may have holes, so # is no measure
+end
+C_Container.GetContainerItemID = function(bag, slot)
+  local b = Mock.bagSlots[bag]
+  return b and b[slot] and b[slot].itemID or nil
+end
+-- using an item from the bags (the Library's `used` trigger hooks it): what was used is kept
+Mock.used = {}
+C_Container.UseContainerItem = function(bag, slot)
+  Mock.used[#Mock.used + 1] = { bag, slot }
 end
 C_Container.GetContainerItemInfo = function(bag, slot)
   local b = Mock.bagSlots[bag]
@@ -2383,6 +2795,192 @@ function Mock.SerializeSavedVariables(names)
     end
   end
   return table.concat(out)
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Layout for pictures of the UI (tests/lua/render.py): the anchors resolved into rectangles and
+-- every visible texture and text in drawing order. Scales are taken as 1.
+-- ---------------------------------------------------------------------------------------------
+
+local LAYERS = { BACKGROUND = 1, BORDER = 2, ARTWORK = 3, OVERLAY = 4, HIGHLIGHT = 5 }
+
+local function anchorXY(r, point)
+  local l, b, rr, t = r[1], r[2], r[3], r[4]
+  local x = point:find("LEFT") and l or point:find("RIGHT") and rr or (l + rr) / 2
+  local y = point:find("TOP") and t or point:find("BOTTOM") and b or (b + t) / 2
+  return x, y
+end
+
+local function ownSize(f)
+  local w, h = f.width or 0, f.height or 0
+  if f.objectType == "FontString" then
+    local tw, th = 0, 0
+    if Mock.measure and f.font then
+      tw, th = Mock.measure(f.text or "", f.font[1], f.font[2], w or 0, f.spacing or 0)
+    end
+    if w == 0 then
+      w = tw
+    end
+    if h == 0 then
+      h = th
+    end
+  end
+  return w, h
+end
+
+local function rectOf(f, memo)
+  if memo[f] then
+    return memo[f]
+  end
+  if f == UIParent or not f.parent and #f.points == 0 then
+    local r = { 0, 0, f.width or 1920, f.height or 1080 }
+    memo[f] = r
+    return r
+  end
+  memo[f] = { 0, 0, 0, 0 } -- a cycle stops here
+  if #f.points == 0 and f.scrollParent then
+    -- a scroll child: its top left at the scroll frame's, moved up by the scroll
+    local sr = rectOf(f.scrollParent, memo)
+    local w, h = ownSize(f)
+    local top = sr[4] + (f.scrollParent.verticalScroll or 0)
+    local r = { sr[1], top - h, sr[1] + w, top }
+    memo[f] = r
+    return r
+  end
+  local l, rgt, cx, b, t, cy
+  for _, p in ipairs(f.points) do
+    local rel = p.rel
+    if type(rel) == "string" then
+      rel = _G[rel]
+    end
+    rel = rel or f.parent or UIParent
+    local rr = rectOf(rel, memo)
+    if p.point == "ALL" then
+      l, b, rgt, t = rr[1], rr[2], rr[3], rr[4]
+    else
+      local ax, ay = anchorXY(rr, p.relPoint or p.point)
+      ax, ay = ax + (p.x or 0), ay + (p.y or 0)
+      if p.point:find("LEFT") then
+        l = ax
+      elseif p.point:find("RIGHT") then
+        rgt = ax
+      else
+        cx = ax
+      end
+      if p.point:find("TOP") then
+        t = ay
+      elseif p.point:find("BOTTOM") then
+        b = ay
+      else
+        cy = ay
+      end
+    end
+  end
+  local w, h = ownSize(f)
+  if l and rgt and f.objectType == "FontString" and Mock.measure and f.font then
+    local _, th = Mock.measure(f.text or "", f.font[1], f.font[2], rgt - l, f.spacing or 0)
+    h = (f.height or 0) > 0 and f.height or th -- anchored at both sides: it wraps at that width
+  end
+  if not (l and rgt) then
+    if l then
+      rgt = l + w
+    elseif rgt then
+      l = rgt - w
+    else
+      cx = cx or 0
+      l, rgt = cx - w / 2, cx + w / 2
+    end
+  end
+  if not (t and b) then
+    if t then
+      b = t - h
+    elseif b then
+      t = b + h
+    else
+      cy = cy or 0
+      b, t = cy - h / 2, cy + h / 2
+    end
+  end
+  local r = { l, b, rgt, t }
+  memo[f] = r
+  return r
+end
+
+function Mock.Layout(root)
+  local memo, out = {}, {}
+  local function walk(f, alpha, clip)
+    if not f.shown then
+      return
+    end
+    alpha = alpha * (f.alpha or 1)
+    if f.clips or f.objectType == "ScrollFrame" then -- what lies outside is not drawn
+      local r = rectOf(f, memo)
+      clip = clip
+          and {
+            math.max(clip[1], r[1]),
+            math.max(clip[2], r[2]),
+            math.min(clip[3], r[3]),
+            math.min(clip[4], r[4]),
+          }
+        or { r[1], r[2], r[3], r[4] }
+    end
+    local regions = {}
+    for i, r in ipairs(f.regions) do
+      regions[#regions + 1] = { r = r, i = i }
+    end
+    table.sort(regions, function(a, c)
+      local la, lc = LAYERS[a.r.layer or "ARTWORK"] or 3, LAYERS[c.r.layer or "ARTWORK"] or 3
+      if la ~= lc then
+        return la < lc
+      end
+      if (a.r.sublevel or 0) ~= (c.r.sublevel or 0) then
+        return (a.r.sublevel or 0) < (c.r.sublevel or 0)
+      end
+      return a.i < c.i
+    end)
+    for _, e in ipairs(regions) do
+      local r = e.r
+      if r.shown and r.objectType ~= "MaskTexture" and (r.layer or "ARTWORK") ~= "HIGHLIGHT" then
+        local rect = rectOf(r, memo)
+        out[#out + 1] = {
+          kind = r.objectType,
+          l = rect[1],
+          b = rect[2],
+          r = rect[3],
+          t = rect[4],
+          alpha = alpha * (r.alpha or 1),
+          texture = r.texture,
+          color = r.color,
+          vertexColor = r.vertexColor,
+          texCoord = r.texCoord,
+          desaturated = r.desaturated,
+          text = r.text,
+          font = r.font,
+          textColor = r.textColor,
+          justifyH = r.justifyH,
+          spacing = r.spacing,
+          width = r.width,
+          clip = clip,
+        }
+      end
+    end
+    local kids = {}
+    for i, c in ipairs(f.children) do
+      kids[#kids + 1] = { c = c, i = i }
+    end
+    table.sort(kids, function(a, c)
+      if (a.c.level or 0) ~= (c.c.level or 0) then
+        return (a.c.level or 0) < (c.c.level or 0)
+      end
+      return a.i < c.i
+    end)
+    for _, k in ipairs(kids) do
+      walk(k.c, alpha, clip)
+    end
+  end
+  walk(root, 1, nil)
+  local box = rectOf(root, memo)
+  return out, box
 end
 
 return Mock

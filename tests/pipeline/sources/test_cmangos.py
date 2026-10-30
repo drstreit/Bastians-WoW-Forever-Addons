@@ -110,7 +110,10 @@ def test_creature_templates_and_escaped_apostrophe(tables):
 
 def test_spawns(tables):
     rows = {r.guid: r for r in cmangos.spawn_rows(tables)}
-    assert rows[81064] == cmangos.SpawnRow("creature", 81064, 448, 0, -9947.88, 594.773, 39.608)
+    assert rows[81064] == cmangos.SpawnRow(
+        "creature", 81064, 448, 0, -9947.88, 594.773, 39.608, spawndist=8.0
+    )  # Hogger roams 8 yards (W5: area runs)
+    assert rows[456].spawndist is None  # objects do not roam
     assert rows[80334].entry == 240 and rows[80334].position_x == -9465.52
     assert rows[456].kind == "object" and rows[456].entry == 1617
     assert rows[458].map_id == 1  # Kalimdor

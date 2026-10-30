@@ -100,7 +100,7 @@ def test_the_full_button_fills_the_screen_and_comes_back(wow: WowRuntime):
     wow.execute(f"{MAP_}.toolbar.full:Click()")
     assert wow.eval(f"{MAP_}.win:IsFullScreen()") is True
     assert wow.eval(f"{MOD}.db.profile.window.full") is True
-    assert wow.eval(f"{MAP_}.toolbar.full.label:GetText()") == "Back"
+    assert wow.eval(f"{MAP_}.toolbar.full.label:GetText()") == "Window"
     assert wow.eval(f"{MAP_}.win.frame:GetWidth()") == 1920
     wow.execute(f"{MAP_}.toolbar.full:Click()")
     assert wow.eval(f"{MAP_}.win:IsFullScreen()") is False
@@ -197,4 +197,68 @@ def test_a_continent_switch_drops_the_other_continents_textures(wow: WowRuntime)
     cell = wow.eval(f"{OVERVIEW}.live[29]")
     assert cell.GetTexture(cell) == wow.eval(f"{OVERVIEW}.File(1, 3, 5)")
     assert wow.eval(f"{OVERVIEW}.continent") == 1
+    assert wow.errors == []
+
+
+def test_keep_centred_follows_the_player_and_a_drag_lets_go(wow: WowRuntime):
+    """(R27.9): a switch that keeps the player in the middle while moving;
+    dragging the map lets go, as Google Maps does; the layers still refresh while walking."""
+    wow.start("Bastians_Core", "Bastians_Data", "Bastians_Map")
+    wow.run_frames(5)
+    wow.slash("/bmap")
+    wow.execute(f"{MAP_}.clip:SetSize(600, 400); {MAP_}.ViewChanged()")
+    assert wow.eval(f"{MAP_}.KeepCentred()") is False
+    wow.execute(f"{MAP_}.toolbar.centred:Click()")
+    assert wow.eval(f"{MAP_}.KeepCentred()") is True
+    assert wow.eval(f"{MAP_}.toolbar.centred.token") == "accent"
+
+    def offset() -> tuple[float, float]:
+        cam = wow.eval(f"{MAP_}.Camera()")
+        p = wow.eval(f"{MAP_}.PlayerWorld()")
+        sx, sy = cam.ToScreen(cam, p[2], p[3])
+        return abs(sx - 300), abs(sy - 200)
+
+    assert max(offset()) < 1
+    # walking: each frame the camera follows
+    wow.execute("Mock.playerMapPos = { x = 0.45, y = 0.62 }")
+    wow.run_frames(1)
+    assert max(offset()) < 1
+    # the layers are queried at least once a second while the view never stands still
+    wow.execute(f"Q = 0; table.insert({MAP_}.onSettle, function() Q = Q + 1 end)")
+    for i in range(30):
+        wow.execute(f"Mock.playerMapPos = {{ x = 0.45 + {i} * 0.001, y = 0.62 }}")
+        wow.run_frames(1, 0.05)
+    assert wow.eval("Q") >= 1
+    # a drag lets go
+    wow.execute(
+        f"Mock.cursorX, Mock.cursorY = 300, 200; {MAP_}.clip:GetScript('OnMouseDown')({MAP_}.clip, 'LeftButton')"
+    )
+    wow.execute("Mock.cursorX = 340")
+    wow.run_frames(1)
+    assert wow.eval(f"{MAP_}.KeepCentred()") is False
+    assert wow.eval(f"{MAP_}.toolbar.centred.token") == "dim"
+    assert wow.errors == []
+
+
+def test_another_continent_or_a_flight_lets_go_of_keep_centred(wow: WowRuntime):
+    """with Centred on, choosing another continent snapped back to the
+    player's at once. Choosing a continent or flying the map elsewhere lets go, as a drag does;
+    the Player button keeps it."""
+    wow.start("Bastians_Core", "Bastians_Data", "Bastians_Map")
+    wow.run_frames(5)
+    wow.slash("/bmap")
+    wow.execute(f"{MAP_}.clip:SetSize(600, 400); {MAP_}.ViewChanged()")
+    wow.execute(f"{MAP_}.toolbar.centred:Click()")
+    wow.execute(f"{MAP_}.toolbar.player:Click()")
+    assert wow.eval(f"{MAP_}.KeepCentred()") is True
+    wow.execute(f"{MAP_}.SetContinent(1)")
+    wow.run_frames(3)
+    assert wow.eval(f"{MAP_}.Camera().continent") == 1
+    assert wow.eval(f"{MAP_}.KeepCentred()") is False
+    wow.execute(f"{MAP_}.SetKeepCentred(true)")  # back on the player's continent
+    assert wow.eval(f"{MAP_}.Camera().continent") == 0
+    wow.execute(f"{MAP_}.Fly(0, 500, 500, 4)")  # a search result, a bookmark, a page's place
+    wow.run_frames(3)
+    cam = wow.eval(f"{MAP_}.Camera()")
+    assert (cam.wx, cam.wy) == (500, 500) and wow.eval(f"{MAP_}.KeepCentred()") is False
     assert wow.errors == []

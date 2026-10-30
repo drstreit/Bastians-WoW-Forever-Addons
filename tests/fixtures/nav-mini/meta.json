@@ -1,0 +1,4 @@
+{
+ "build": "fixture",
+ "client": "forever"
+}

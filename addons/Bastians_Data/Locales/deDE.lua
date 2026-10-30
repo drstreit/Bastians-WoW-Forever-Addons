@@ -16,6 +16,7 @@ ns.L:Register("deDE", {
   ["elite"] = "Elite",
   ["Item level"] = "Gegenstandsstufe",
   ["Requires level"] = "Benötigt Stufe",
+  ["Instance entrance"] = "Instanzeingang",
   ["new in Forever"] = "neu in Forever",
   ["Zone"] = "Zone",
   ["Item"] = "Gegenstand",
@@ -37,6 +38,7 @@ ns.L:Register("deDE", {
   ["Monsters"] = "Monster",
   ["Near"] = "In der Nähe",
   ["Places"] = "Orte",
+  ["Areas"] = "Gebiete",
   ["Overview"] = "Übersicht",
   ["Locations"] = "Orte",
   ["Sells"] = "Verkauft",
@@ -45,6 +47,7 @@ ns.L:Register("deDE", {
   ["Sources"] = "Quellen",
   ["Reagents"] = "Reagenzien",
   ["zone"] = "Zone",
+  ["area"] = "Gebiet",
   ["per stack"] = "pro Stapel",
 
   -- QuestieDB.lua
@@ -153,4 +156,7 @@ ns.L:Register("deDE", {
   ["object"] = "Objekt",
   ["node"] = "Sammelpunkt",
   ["recipe"] = "Rezept",
+  ["World drop"] = "Weltdrop",
+  ["creatures level %s"] = "Kreaturen Stufe %s",
+  ["%d creatures"] = "%d Kreaturen",
 })

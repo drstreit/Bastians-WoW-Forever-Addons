@@ -32,6 +32,9 @@ def _norm(name: str) -> str:
     return name.replace("\\", "/").lower()
 
 
+NO_ICON: set[str] = set()  # since 25.10.2026 every addon, the probe too
+
+
 def check_addon(folder: Path) -> list[str]:
     """Return a list of problems for one addon folder (empty when fine)."""
     name = folder.name
@@ -44,6 +47,16 @@ def check_addon(folder: Path) -> list[str]:
         problems.append(f"{name}: no '## Interface' line")
     if not meta.get("Version"):
         problems.append(f"{name}: no '## Version' line")
+    # the icon in the game's AddOns list (tools/make_icons.py)
+    icon = meta.get("IconTexture")
+    if icon:
+        parts = icon.replace("\\", "/").split("/")
+        if parts[:3] != ["Interface", "AddOns", name] or not any(
+            (folder / "/".join(parts[3:])).with_suffix(ext).is_file() for ext in (".tga", ".blp")
+        ):
+            problems.append(f"{name}: IconTexture names no file of this addon: {icon}")
+    elif name not in NO_ICON:
+        problems.append(f"{name}: no '## IconTexture' line (tools/make_icons.py)")
     listed = {_norm(f) for f in files}
     seen: set[str] = set()
     for entry in files:

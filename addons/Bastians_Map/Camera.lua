@@ -44,8 +44,14 @@ function Camera:Center(wx, wy)
   self.wx, self.wy = wx, wy
 end
 
+-- `maxLevel` (optional) caps zooming in for what the map shows (the Blizzard style's paintings);
+-- it never zooms out a view that is already closer: the cap is the larger of the two.
 function Camera:SetLevel(level)
-  self.level = clamp(level, Camera.MIN_LEVEL, Camera.MAX_LEVEL)
+  local hi = Camera.MAX_LEVEL
+  if self.maxLevel then
+    hi = math.min(hi, math.max(self.maxLevel, self.level or Camera.MIN_LEVEL))
+  end
+  self.level = clamp(level, Camera.MIN_LEVEL, hi)
 end
 
 -- World yards -> pixels from the view's top-left corner (x right, y down).

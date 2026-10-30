@@ -42,6 +42,20 @@ parent = 1436
 continent = 0
 mapType = 4
 
+# a subzone (data.md "Areas"): the world place in the mock's Elwynn Forest (40, -40), its radius
+# in yards and the map place for drawing; the radius reaches the place through the record
+[[area]]
+id = 18
+name = "Crystal Lake"
+zone = 1429
+continent = 0
+wx = 40.0
+wy = -40.0
+r = 221.7
+chunks = 139
+spawns = [[1429, 0.6, 0.4, "client"]]
+src = "client"
+
 [[npc]]
 id = 448
 name = "Hogger"
@@ -63,6 +77,16 @@ spawns = [[1429, 0.42, 0.65, "eq"]]
 src = "forever"
 
 [[npc]]
+id = 8719
+name = "Auctioneer Fitch"
+subname = "Auctioneer"
+level = 30
+zone = 1429
+flags = "auctioneer"
+spawns = [[1429, 0.425, 0.645, "eq"]]
+src = "forever"
+
+[[npc]]
 id = 295
 name = "Innkeeper Farley"
 subname = "Innkeeper"
@@ -77,7 +101,7 @@ id = 327
 name = "Goldtooth"
 level = 8
 zone = 1429
-spawns = [[1429, 0.38, 0.82, "classic"]]
+spawns = [[1429, 0.38, 0.82, "classic", 41.3]]  # the fifth field: height in world yards (ADR 0026)
 src = "classic"
 
 [[npc]]
@@ -296,6 +320,9 @@ stops = [[1429, 0.9, 0.9, "Elwynn dock"], [1413, 0.639, 0.386, "Ratchet dock"]]
 world = [[0, -160.0, -160.0], [1, -900.0, -3770.0]]
 ride = 120
 cycle = 480
+# R26.6: it leaves Elwynn 60 s into the loop, Ratchet 240 s in; it lies 60 s at a dock
+departs = [60, 240]
+dock = 60
 verified = false
 note = "fixture"
 spawns = [[1429, 0.9, 0.9, "config"], [1413, 0.639, 0.386, "config"]]
@@ -344,3 +371,56 @@ starts = ["npc:234"]
 ends = ["npc:234"]
 zone = 1436
 src = "forever"
+
+# an instance entrance as pipeline/bastians_build/places.py writes it (ADR 0026, places table)
+[[entrance]]
+id = "36-1"
+name = "Deadmines"
+instance = 36
+level = 10
+zone = 1436
+continent = 0
+wx = -11208.7
+wy = 1675.9
+wz = 24.6
+spawns = [[1436, 0.42, 0.72, "places", 24.6]]
+src = "places"
+
+# teleports as pipeline/bastians_build/places.py writes them (R26.7): a place on the navnet-mini
+# network's east road (waypoint 5) and one to the hearth
+[[teleport]]
+id = "mage-stormwind"
+name = "Stormwind"
+kind = "spell"
+spell = 3561
+class = 8
+faction = "A"
+reagent = 17031
+continent = 0
+wx = 100.0
+wy = -50.0
+wz = 11.0
+cast = 10
+src = "places"
+
+[[teleport]]
+id = "shaman-astral-recall"
+name = "Astral Recall"
+kind = "spell"
+spell = 556
+class = 7
+hearth = true
+cast = 10
+src = "places"
+
+[[teleport]]
+id = "ripper-everlook"
+name = "Everlook"
+kind = "item"
+item = 18984
+continent = 1
+wx = 6755.3
+wy = -4658.1
+wz = 724.8
+cast = 10
+src = "places"

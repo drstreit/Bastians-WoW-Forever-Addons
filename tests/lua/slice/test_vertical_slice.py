@@ -57,7 +57,7 @@ def test_data_loads_the_packs_enabled_modules_declare(wow: WowRuntime):
         for i in wow.eval(
             f"(function() local t = {{}} for id in {data}:ByZone('npc', 1429) do t[#t+1] = id end return t end)()"
         ).values()
-    ] == [54, 198, 240, 295, 327, 448]
+    ] == [54, 198, 240, 295, 327, 448, 8719]
     hits = wow.eval(f"{data}:Find('npc', 'hog', 5)")
     assert [(h.name, h.score) for h in hits.values()] == [("Hogger", 0.9)]
     assert wow.eval(f"{data}:Meta().packs.world.client") == "forever"

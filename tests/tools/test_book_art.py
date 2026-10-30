@@ -82,3 +82,22 @@ def test_install_takes_pages_only_and_removes_stale_textures(tmp_path):
 def test_the_page_ids_are_the_books_pages():
     ids = book_art.page_ids()
     assert {"baeldun-dig", "preface"} <= ids and "README" not in ids
+
+
+def test_the_books_own_pages_bring_their_pictures(tmp_path):
+    """the title page, What's new, the index and the bookmarks have pictures,
+    fixed ones from content/strategies/art/front; the pages' pictures stay as they were."""
+    assert {p.stem for p in book_art.FRONT.glob("*.jpg")} == set(book_art.FRONT_IDS)
+    assert not book_art.FRONT_IDS & book_art.page_ids()  # never a page's id
+    art = tmp_path / "art"
+    art.mkdir()
+    picture(art / "baeldun-dig.jpg", (320, 180))
+    front = tmp_path / "front"
+    front.mkdir()
+    picture(front / "title.jpg", (320, 180))
+    picture(front / "chapter-one.jpg", (320, 180))  # not one of the book's own pages
+    packs = tmp_path / "packs"
+    done = book_art.install(art, packs, {"baeldun-dig"}, front=front)
+    assert done == ["baeldun-dig", "title"]
+    # without the export's pictures the book's own still come
+    assert book_art.install(None, packs, {"baeldun-dig"}, front=front) == ["title"]

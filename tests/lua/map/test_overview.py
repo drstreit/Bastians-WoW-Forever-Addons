@@ -194,3 +194,20 @@ def test_coast_tiles_get_their_sea_mask_while_the_cells_are_drawn(wow: WowRuntim
     coast = tiles[32 * 64 + 32]
     assert coast.maskPath is None and coast.GetNumMaskTextures(coast) == 0
     assert wow.errors == []
+
+
+def test_the_style_menu_holds_the_physical_map_without_a_style_addon(wow: WowRuntime):
+    """R26.3: the map style is one icon with a menu (R27.8). Since ADR 0036 the
+    Blizzard map is a style addon like ours: without one, the physical map is the only entry."""
+    boot(wow, tiles=True)
+    bar = f"{MOD}.LayerBar"
+    assert wow.eval(f"{MAP_}.Style()") == "physical"
+    first = wow.eval(f"{bar}.Items()[1]")
+    assert first.id == "style" and first.text == "Map style: Physical"
+    items = list(wow.eval(f"{bar}.StyleItems()").values())
+    assert [(i.id, i.on) for i in items] == [("style:physical", True)]
+    wow.execute(f"{MOD}.db.profile.mapStyle = 'blizzard'")  # chosen before the addon went
+    assert wow.eval(f"{MAP_}.Style()") == "physical"
+    wow.execute(f"{MAP_}.Fly(0, -9000, 1000, 0)")
+    assert wow.eval(f"{OV}.stats.shown") == 3
+    assert wow.errors == []

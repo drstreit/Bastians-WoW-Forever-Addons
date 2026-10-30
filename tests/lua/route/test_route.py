@@ -1,4 +1,4 @@
-"""The Route module (route.md): the travel service, route.to over an entity's places, the path layer,
+"""The Route module (route.md): its own planner, route.to over an entity's places, the path layer,
 step completion and re-routing while following, the flight network modes with learning from the taxi
 map and real flights, the hearth, the step list window, and life without Map or Quests."""
 
@@ -34,20 +34,30 @@ def move_player(wow: WowRuntime, x: float, y: float, map_id: int = 1429) -> None
     wow.execute(f"Mock.playerMap = {map_id}; Mock.playerMapPos = {{ x = {x}, y = {y} }}")
 
 
-def test_travel_service_estimates_and_goes_away_with_the_module(wow: WowRuntime):
+def plan(wow: WowRuntime, a: tuple, b: tuple, name: str = "goal"):
+    """Route's own planner (where the graph has no network): P = the route, M = its mode."""
+    wow.execute(
+        f"P = {R}.Plan({{ continent = {a[0]}, wx = {a[1]}, wy = {a[2]} }}, "
+        f"{{ continent = {b[0]}, wx = {b[1]}, wy = {b[2]}, name = '{name}' }}); "
+        f"M = P and {MOD}.Graph.Mode(P)"
+    )
+    return wow.eval("P"), wow.eval("M")
+
+
+def test_route_plans_on_its_own_where_the_graph_has_no_network(wow: WowRuntime):
     boot(wow)
-    assert wow.eval(f"{TRAVEL} ~= nil") is True
-    seconds, mode = wow.eval(f"{TRAVEL}:Estimate({{ 0, 0, 0 }}, {{ 0, 100, 0 }})")
-    assert round(seconds, 2) == 14.29 and mode == "walk"
+    route, mode = plan(wow, (0, 0, 0), (0, 100, 0))
+    assert round(route.seconds, 2) == 14.29 and mode == "walk"
     # the fixture ferry carries the player to Kalimdor
-    seconds, mode = wow.eval(f"{TRAVEL}:Estimate({{ 0, 0, 0 }}, {{ 1, -800, -3700 }})")
-    assert mode == "boat" and seconds > 360
-    assert wow.eval(f"{TRAVEL}:Estimate({{ 0, 0, 0 }}, {{ 5, 0, 0 }})") is None  # no way there
-    route = wow.eval(f"{TRAVEL}:Route({{ 0, 0, 0 }}, {{ 1, -800, -3700, 'Ratchet' }})")
+    route, mode = plan(wow, (0, 0, 0), (1, -800, -3700), "Ratchet")
+    assert mode == "boat" and route.seconds > 360
     assert [s.mode for s in route.steps.values()] == ["walk", "boat", "walk"]
+    assert plan(wow, (0, 0, 0), (5, 0, 0))[0] is None  # no way there
+    # the travel service is Data's shim over the graph since W8 (data.md): Route no longer
+    # provides it, and the fixture's nav pack has no network, so it has no time
+    assert wow.eval(f"{TRAVEL} ~= nil") is True
+    assert wow.eval(f"{TRAVEL}:Estimate({{ 0, 0, 0 }}, {{ 0, 100, 0 }})") is None
     wow.execute(f"{MOD}:Disable()")
-    assert wow.eval(f"{TRAVEL}") is None
-    wow.execute(f"{MOD}:Enable()")
     assert wow.eval(f"{TRAVEL} ~= nil") is True
     assert wow.errors == []
 
@@ -104,7 +114,7 @@ def test_following_completes_steps_and_reroutes_when_off_course(wow: WowRuntime)
         first.start.wx
     ) == -60
     move_player(wow, 0.9, 0.1)  # world (160, -160): about 280 yards from the planned line
-    wow.advance(1.1)
+    wow.advance(2.1)  # two checks in a row off the way
     second = wow.eval(f"{R}.Active()")
     assert second.reason == "off course" and round(second.start.wx) == 160
     assert second.ref == "flightpath:2" and second.goal.name == "Stormwind, Elwynn"
@@ -132,8 +142,11 @@ def test_flight_network_modes_learn_from_the_taxi_map_and_real_flights(wow: WowR
         "TAXIMAP_OPENED", 1
     )  # the mock shows Stormwind (current), Sentinel Hill, Ironforge (far)
     assert flights() == [2, 4]
-    assert sorted(wow.eval(f"{MOD}.db.global.known").keys()) == [2, 4]
-    wow.execute(f"{MOD}.db.char.known = {{}}")
+    # Data's graph learns the flight masters (W8), for the character and the account
+    graph = "Bastians:GetService('graph')"
+    assert sorted(wow.eval(f"{graph}:Character().taxi").keys()) == [2, 4]
+    assert sorted(wow.eval(f"{graph}:Account().taxi").keys()) == [2, 4]
+    wow.execute(f"{graph}:Character().taxi = {{}}")
     assert flights() == []
     wow.execute(f"{MOD}.db.profile.network = 'account'")
     assert flights() == [2, 4]
@@ -143,12 +156,32 @@ def test_flight_network_modes_learn_from_the_taxi_map_and_real_flights(wow: WowR
     wow.advance(100)
     wow.execute("Mock.onTaxi = false")
     wow.fire("PLAYER_CONTROL_GAINED")
-    times = wow.eval(f"{MOD}.db.global.flightTimes")
-    assert times["2>4"] == 100 and times["4>2"] == 100
-    seconds, mode = wow.eval(f"{TRAVEL}:Estimate({{ 0, 200, 200 }}, {{ 0, -700, 500 }})")
-    assert seconds == 100 and mode == "fly"
+    times = wow.eval(f"{graph}:Learned().taxi")
+    assert dict(times.items()) == {"taxinode:2>taxinode:4": 100}  # the direction flown only
+    route, mode = plan(wow, (0, 200, 200), (0, -700, 500))
+    assert route.seconds == 100 and mode == "fly"
     note = wow.eval(f"{R}.Note()")
     assert "2 flight masters learned, 1 flight times measured" in note
+    assert wow.errors == []
+
+
+def test_what_route_learned_before_moves_into_the_graph_once(wow: WowRuntime):
+    boot(wow)
+    graph = "Bastians:GetService('graph')"
+    wow.execute(
+        f"""local db = {MOD}.db
+        db.global.movedToGraph = nil
+        db.char.known = {{ [2] = true, ["Sentinel Hill, Westfall"] = true }}
+        db.global.known = {{ [6] = true }}
+        db.global.flightTimes = {{ ["2>4"] = 90, ["4>2"] = 95 }}
+        {MOD}:Disable(); {MOD}:Enable()"""
+    )
+    assert sorted(wow.eval(f"{graph}:Character().taxi").keys()) == [2, 4]
+    assert sorted(wow.eval(f"{graph}:Account().taxi").keys()) == [2, 4, 6]
+    times = dict(wow.eval(f"{graph}:Learned().taxi").items())
+    assert times == {"taxinode:2>taxinode:4": 90, "taxinode:4>taxinode:2": 95}
+    assert wow.eval(f"{MOD}.db.global.movedToGraph") is True
+    assert wow.eval(f"next({MOD}.db.global.flightTimes)") is None
     assert wow.errors == []
 
 
@@ -189,9 +222,10 @@ def test_hearth_is_learned_and_used_only_when_ready(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_window_and_service_work_without_map(wow: WowRuntime):
+def test_the_window_works_without_map(wow: WowRuntime):
     boot(wow, CORE, DATA, ROUTE)
-    wow.execute(f"{R}.Set({TRAVEL}:Route({{ 0, 0, 0 }}, {{ 1, -800, -3700, 'Ratchet' }}))")
+    plan(wow, (0, 0, 0), (1, -800, -3700), "Ratchet")
+    wow.execute(f"{R}.Set(P)")
     wow.slash("/broute")
     assert wow.eval(f"{W}.IsShown()") is True
     rows = list(wow.eval(f"{W}.tree.rows").values())
@@ -231,6 +265,39 @@ def test_mount_speed_is_learned_from_movement(wow: WowRuntime):
     assert wow.errors == []
 
 
+def test_following_trims_the_walked_part_and_counts_the_time_down(wow: WowRuntime):
+    """like a car navigator, the line starts where the player is, the
+    remaining time goes down, and a short step aside re-routes nothing."""
+    boot(wow)
+    move_player(wow, 0.42, 0.65)
+    wow.execute(f"{R}.To('flightpath:2')")
+    G = f"{MOD}.Graph"
+    wow.execute(f"S = {R}.Active().steps[1]; PTS = {G}.StepPoints(S)")
+    full = wow.eval(f"{G}.Remaining({R}.Active())")
+    # halfway along the first step's line (the elwynn mock: x = (200 - wy) / 400, y = (200 - wx) / 400)
+    a, b = wow.eval("PTS[1]"), wow.eval("PTS[#PTS]")
+    mx, my = (a[1] + b[1]) / 2, (a[2] + b[2]) / 2
+    move_player(wow, (200 - my) / 400, (200 - mx) / 400)
+    wow.advance(1.1)
+    progress = wow.eval(f"{R}.Active().progress")
+    assert progress is not None and progress.step == 1 and progress.off < 5
+    assert wow.eval(f"{G}.Remaining({R}.Active())") < full
+    path = next(
+        p
+        for p in wow.eval(
+            "Bastians:QueryLayer('route.path', { continent = 0, level = 5 })"
+        ).values()
+        if p.kind == "path"
+    )
+    first = path.points[1]
+    assert abs(first[1] - progress.x) < 0.01 and abs(first[2] - progress.y) < 0.01
+    # one check off the way is a step aside: no re-route yet
+    move_player(wow, 0.9, 0.1)
+    wow.advance(1.1)
+    assert wow.eval(f"{R}.Active().reason") is None
+    assert wow.errors == []
+
+
 def test_a_route_to_a_place_at_hand_says_so_and_a_failed_reroute_keeps_the_route(wow: WowRuntime):
     """a route was drawn and gone two seconds later. Two causes closed:
     the goal within the arrival distance (now "already there", nothing drawn) and a re-route that
@@ -246,7 +313,7 @@ def test_a_route_to_a_place_at_hand_says_so_and_a_failed_reroute_keeps_the_route
     # far off the line the re-route runs; when the planner finds nothing the route is kept
     wow.execute(f"{R}.Plan = function() return nil end")
     move_player(wow, 0.9, 0.1)
-    wow.advance(1.1)
+    wow.advance(2.1)
     assert wow.eval(f"{R}.Active() ~= nil") is True and wow.eval(f"{R}.Active().reason") is None
     assert any("Could not re-route" in line for line in wow.chat)
     assert wow.errors == []

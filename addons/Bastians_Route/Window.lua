@@ -13,7 +13,9 @@ ns.Window = W
 
 local RENDER_DELAY = 0.05
 
-local mod, win, tree, summary, hint, clearButton, replanButton
+local mod, win, tree, summary, hint, clearButton, replanButton, homeButton
+local kindButtons = {} -- kind -> button (R26.5)
+local KIND_LABELS = { fastest = "Fastest", safe = "Safest", nocost = "No flights" }
 
 local function db()
   return mod.db.profile
@@ -25,7 +27,23 @@ local function stepRows(route)
   for i, step in ipairs(route.steps) do
     approx = approx or step.approx
     local text = string.format("%d. %s", i, Graph.StepText(step, L))
-    if step.wait and step.wait > 0 then
+    -- creatures well above the character along a walk (R26.5)
+    local facts = B.Compat.GetPlayerFacts() or {}
+    if step.danger and facts.level and step.danger >= facts.level + ns.Route.CAREFUL_LEVELS then
+      local words = string.format(L["Careful: level %d creatures"], step.danger)
+      if step.elite then
+        words = words .. ", " .. L["elite"]
+      end
+      text = text .. "  " .. S.H.warn .. words .. "|r"
+    end
+    local leaves = step.from and ns.Ferries.NextDeparture(step.from.transport, step.from.stop)
+    if leaves and i >= (route.index or 1) then -- the loop is known (R26.6): when it leaves, live
+      text = text
+        .. "  "
+        .. S.H.accent
+        .. string.format(L["leaves in %s"], Graph.FormatSeconds(leaves))
+        .. "|r"
+    elseif step.wait and step.wait > 0 then
       text = text
         .. "  "
         .. S.H.muted
@@ -82,11 +100,45 @@ local function stepRows(route)
   return rows
 end
 
+-- The kinds row (R26.5): "Fastest 4 min | Safest 5 min | No flights 9 min", the kind in use
+-- accented; a kind still being planned reads "..."; a kind equal to one before it is left out.
+function W.RenderKinds(route)
+  local alts = route and route.alternatives
+  local x = 0
+  local shown = {}
+  for _, kind in ipairs(ns.Route.KINDS) do
+    local b = kindButtons[kind]
+    local alt = alts and alts[kind]
+    local same = false
+    for _, other in ipairs(shown) do
+      if alt and math.abs(other.seconds - alt.seconds) < 0.5 and #other.steps == #alt.steps then
+        same = true
+      end
+    end
+    if not alts or same then
+      b:Hide()
+    else
+      local time = alt and Graph.FormatSeconds(alt.seconds) or "..."
+      b:SetLabel(L[KIND_LABELS[kind]] .. " " .. time)
+      local col = route.kind == kind and S.C.accent or S.C.text
+      b.label:SetTextColor(col[1], col[2], col[3])
+      b:ClearAllPoints()
+      b:SetPoint("TOPLEFT", win.content, "TOPLEFT", 8 + x, -24)
+      b:Show()
+      x = x + b:GetWidth() + 4
+      if alt then
+        shown[#shown + 1] = alt
+      end
+    end
+  end
+end
+
 function W.Render()
   if not (win and win:IsShown()) then
     return
   end
   local route = ns.Route.Active()
+  W.RenderKinds(route)
   if not route then
     summary:SetText(L["No route. Right click anything with a place and choose Route to."])
     tree:SetRows({})
@@ -95,9 +147,12 @@ function W.Render()
     return
   end
   local goal = route.goal and route.goal.name or L["the target"]
-  summary:SetText(
-    string.format(L["To %s: %s, %d steps"], goal, Graph.FormatSeconds(route.seconds), #route.steps)
-  )
+  local left = Graph.FormatSeconds(Graph.Remaining(route))
+  if route.tour then -- several stops (R26.4)
+    summary:SetText(string.format(L["%s: %d stops, %s"], route.tour.name, #route.tour.stops, left))
+  else
+    summary:SetText(string.format(L["To %s: %s, %d steps"], goal, left, #route.steps))
+  end
   tree:SetRows(stepRows(route))
   clearButton:Show()
   replanButton:Show()
@@ -111,6 +166,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansRouteFrame", {
+    module = "Route", -- the options button opens this page (R27.1)
     title = L["Route"],
     width = 440,
     height = 360,
@@ -142,17 +198,34 @@ local function build()
   replanButton:SetScript("OnClick", function()
     ns.Route.Replan("button")
   end)
+  -- Home (R26.7): the way to the inn, with the hearth and every ready teleport
+  homeButton = S.button(content, L["Home"], 70, 20)
+  homeButton.tip = L["The way to your inn, with the hearthstone and every teleport you have ready."]
+  homeButton:SetPoint("RIGHT", replanButton, "LEFT", -4, 0)
+  homeButton:SetScript("OnClick", function()
+    ns.Route.Home()
+  end)
   hint = S.text(content, 10, S.C.dim)
   hint:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 8, 6)
   hint:SetText(L["Click a step to see its end on the map."])
+  for _, kind in ipairs(ns.Route.KINDS) do
+    local b = S.button(content, L[KIND_LABELS[kind]], 112, 18)
+    b.tip = L["Switch to this kind of route; it stays the default."]
+    b:SetScript("OnClick", function()
+      ns.Route.UseKind(kind)
+      W.Render()
+    end)
+    b:Hide()
+    kindButtons[kind] = b
+  end
   tree = B.UI.Tree(content, { db = db().tree, ctx = { source = "route" } })
   tree.chips:ClearAllPoints()
-  tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -26)
-  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, -26)
+  tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -46)
+  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, -46)
   tree.scroll:ClearAllPoints()
   tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
   tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 28)
-  W.win, W.tree, W.summary = win, tree, summary
+  W.win, W.tree, W.summary, W.homeButton, W.kindButtons = win, tree, summary, homeButton, kindButtons
 end
 
 function W.Open()

@@ -9,6 +9,7 @@ from bastians_build.__main__ import main
 from bastians_build.build import build, validate
 from bastians_build.config import ConfigError, load_config
 from bastians_build.files import write_text
+from bastians_build.l10n import add_l10n
 from bastians_build.model import World
 from bastians_build.sources.fixture import FixtureError, read_fixture
 
@@ -20,7 +21,7 @@ GOLDEN = ROOT / "tests" / "fixtures" / "addons" / "Bastians_Data_World" / "Gener
 def test_fixture_reader_builds_the_world():
     world = read_fixture(FIXTURE, "forever")
     assert world.build == "fixture" and world.sources == ["hand-written fixture world-mini"]
-    assert world.count("npc") == 7 and world.count("quest") == 5 and world.count("zone") == 5
+    assert world.count("npc") == 8 and world.count("quest") == 5 and world.count("zone") == 5
     assert world.get("npc", 448)["name"] == "Hogger"
     assert world.get("npc", 327).get("flags") is None  # unknown stays None
     with pytest.raises(FixtureError, match="is for forever"):
@@ -45,10 +46,16 @@ def test_build_is_deterministic_and_idempotent(tmp_path):
 
 def test_committed_golden_pack_matches_a_fresh_build(tmp_path):
     """data.md acceptance 1: the Lua tests load exactly what the generator produces."""
-    result = build(read_fixture(FIXTURE, "forever"), load_config(), tmp_path)
+    world = read_fixture(FIXTURE, "forever")
+    # the language packs (ADR 0033): QuestieDB's lookups and CMaNGOS' quest locales
+    add_l10n(world, FIXTURE.parent / "questie-l10n", FIXTURE.parent / "cmangos-locales")
+    result = build(world, load_config(), tmp_path)
     hint = (
         "regenerate with: python -m bastians_build data --client forever "
-        "--fixture tests/fixtures/world-mini --out tests/fixtures/addons"
+        "--fixture tests/fixtures/world-mini --export tests/fixtures/export-mini "
+        "--l10n tests/fixtures/questie-l10n --cmangos tests/fixtures/cmangos-locales "
+        "--out tests/fixtures/addons, then restore "
+        "Bastians_Data_Strategies/Generated/Book.lua and Bastians_Data_Market/Generated/Market.lua"
     )
     for p in result.packs:
         golden = GOLDEN.parents[2] / p.pack.addon / "Generated" / p.pack.file
@@ -60,10 +67,13 @@ def test_pack_content_follows_the_schema():
     result = build(read_fixture(FIXTURE, "forever"), load_config(), Path("unused"), write=False)
     by_name = {p.pack.name: p for p in result.packs}
     assert by_name["world"].counts == {
+        "area": 1,
+        "entrance": 1,
         "flightpath": 5,
         "node": 0,
-        "npc": 7,
+        "npc": 8,
         "object": 1,
+        "teleport": 3,
         "transport": 2,
         "zone": 5,
     }
@@ -84,7 +94,7 @@ def test_pack_content_follows_the_schema():
     )
     assert hogger["spawns"] == [[1429, 0.27, 0.86, "eq"], [1429, 0.3, 0.8, "questie"]]
     assert hogger["subname"] is None  # positional nil for an unknown field
-    assert world["index"]["npc.byZone"][1429] == [54, 198, 240, 295, 327, 448]
+    assert world["index"]["npc.byZone"][1429] == [54, 198, 240, 295, 327, 448, 8719]
     quests = pack_table(result.world, config.packs["quests"])
     assert quests["index"]["quest.byGiver"]["npc:240"] == [62, 76]
 
@@ -108,7 +118,7 @@ def test_report_lists_sizes_budgets_and_dropped_rows(tmp_path):
     build(world, load_config(), tmp_path)
     text = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "| world | Bastians_Data_World |" in text and "12288 KB" in text
-    assert "npc 7" in text and "quest.byGiver 3" in text
+    assert "npc 8" in text and "quest.byGiver 3" in text
     assert "- no spawn fits a Forever map: 1 rows: npc 999" in text
     assert "20" not in text.split("Client")[0]  # no date in the header
 

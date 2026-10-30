@@ -19,7 +19,11 @@ APPS = (
     "Bastians_Gold",
     "Bastians_Route",
     "Bastians_Strategies",
+    "Bastians_Notes",
+    "Bastians_Library",
 )
+# the Library is private until it ships: the public snapshot has none
+APPS = tuple(app for app in APPS if (ADDONS / app).is_dir())
 LOCALE_FILES = {app: ADDONS / app / "Locales" / "deDE.lua" for app in APPS}
 LITERAL_KEY = re.compile(r"""\bL\[("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')\]""")
 DIRECTIVE = re.compile(r"%[-+ #0]*\d*(?:\.\d+)?[a-zA-Z%]")
@@ -78,7 +82,8 @@ def test_the_german_file_loads_and_stays_latin1(app: str):
     path = LOCALE_FILES[app]
     assert path.is_file()
     strings = registered_strings(app)
-    assert len(strings) > 30
+    # not an empty file (the small apps carry few strings; the Library at L3 only its commands)
+    assert len(strings) >= (15 if app == "Bastians_Library" else 20)
     for key, value in strings.items():
         assert value.strip(), key
         assert all(ord(c) < 256 for c in key + value), f"outside Latin-1 in {key!r}: {value!r}"
@@ -134,7 +139,7 @@ def test_a_german_client_sees_german_load_time_labels_and_runtime_texts(wow: Wow
     # the apps' option labels are read while their files load
     expected = {
         "Quests": "Der Tracker (Meine Quests)",
-        "Map": "Die Minimap",
+        "Map": "Originale Minimap-Kacheln bei naher Ansicht",
         "Gold": "Verfügbare Spielzeit (Minuten)",
         "Route": "Zu nutzende Flugrouten",
     }
@@ -143,6 +148,11 @@ def test_a_german_client_sees_german_load_time_labels_and_runtime_texts(wow: Wow
     for name, text in expected.items():
         wow.execute(f"Bastians.UI.Hub.Open('{name}')")
         assert text in labels(wow), name
+    # the minimap's own page
+    wow.execute("Bastians.UI.Hub.Open('Map', 'minimap')")
+    assert "Bastians Minikarte statt der des Spiels (Suche, Stile, Ebenen, die Knopfbox)" in labels(
+        wow
+    )
     # Data names the kinds, the Browser groups by the English key
     d = "Bastians:GetService('data')"
     assert list(wow.eval(f"{{ {d}:Kind('object', 'mailbox') }}").values()) == [

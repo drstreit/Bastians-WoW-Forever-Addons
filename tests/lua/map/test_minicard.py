@@ -82,7 +82,9 @@ def test_a_hover_shows_the_card_beside_the_pin_and_a_cluster_keeps_the_tooltip(w
     assert wow.eval(f"{PINS}.miniCard:GetFrameStrata()") == "TOOLTIP"
     assert wow.eval(f"select(2, {PINS}.miniCard:GetPoint(1)) == {PINS}.pinPool[1]") in (True, False)
     lines = card_lines(wow)
-    assert lines[-1] == "Click to open" and any(line.endswith("yd") for line in lines)
+    # a quest sign's own card: no status words, no worth, no time
+    assert lines[-1] == "Click to open"
+    assert not any(line.endswith(("yd", "min")) or line.startswith("worth") for line in lines)
     assert wow.eval("GameTooltip:NumLines()") == 0  # the map's own tooltip is gone
     marshal.GetScript(marshal, "OnLeave")(marshal)
     assert wow.eval(f"{PINS}.miniCard:IsShown()") is False
@@ -137,4 +139,40 @@ def test_card_lines_wrap_to_three_at_most(wow: WowRuntime):
     assert wow.eval(unmeasured % "short") == 1
     assert wow.eval(unmeasured % long) == 3  # the estimate: about 44 characters a line
     assert wow.eval(f"{pins}.miniCard == nil or {pins}.miniCard.rows[1].wordWrap") is not False
+    assert wow.errors == []
+
+
+def test_a_quest_signs_card_names_the_quest_its_chain_and_every_reward(wow: WowRuntime):
+    """(R25.30): the quest name green and larger, the chain in grey, the
+    rewards money first, then reputation, then every item; not "Available", the worth, the time."""
+    boot(wow)
+    wow.execute(
+        """
+        local Logic = Bastians:GetModule('Quests').Logic
+        Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 } },
+          items = { { 2589, 2 } }, choices = { { 1185, 1 } } }
+        Logic.chain = function(qid) return { name = 'The Fargodeep Mine', pos = { [qid] = 2 },
+          quests = { 1, qid, 3 } } end
+        Bastians:InvalidateEntities("quest")
+        """
+    )
+    card = "Bastians:GetModule('Quests').Registrations.SignCard"
+    one = wow.eval(f"{card}({{ ref = 'npc:240', quests = {{ 62 }} }})")
+    assert one.titleColor == "good" and one.title == wow.eval(
+        "Bastians:GetModule('Quests').Rows.questName(62)"
+    )
+    lines = [(strip(line.text), line.color) for line in one.lines.values()]
+    assert lines[0] == ("Quest chain 'The Fargodeep Mine' 2/3", "dim")
+    assert lines[1][1] == "gold"  # the money first
+    assert lines[2] == ("+150 Faction 72", "text")
+    assert "x2" in lines[3][0] and lines[4][0].startswith("Choice:")
+    assert not any("Experience" in t or "xp" in t for t, _ in lines)
+    # several quests: the giver's name over each quest's name (green, larger)
+    two = wow.eval(f"{card}({{ ref = 'npc:240', quests = {{ 62, 76 }} }})")
+    assert two.title == "Marshal Dughan" and two.titleColor is None
+    names = [line for line in two.lines.values() if line.color == "good"]
+    assert len(names) == 2 and names[0].size == 13
+    # the map draws it as the card
+    data = wow.eval(f"{PINS}.MiniCardData({{ ref = 'npc:240', quests = {{ 62 }}, card = {card} }})")
+    assert data.nameColor == "good" and data.hint == "Click to open"
     assert wow.errors == []

@@ -91,6 +91,17 @@ local function evidence(s)
   return table.concat(parts, ", ")
 end
 
+-- ", 12 min": the travel time to a spot (W8), or "" when unknown.
+function Spots.Away(s)
+  local away = B.UI.Away("spot:" .. s.id)
+  return away and (", " .. away) or ""
+end
+
+-- The grey words of a spot's row: the evidence and the travel time there, when known.
+function Spots.Words(s)
+  return evidence(s) .. Spots.Away(s)
+end
+
 local function allSpots()
   local d = data()
   local ids = d and d:Index("spot.all") or {}
@@ -268,7 +279,7 @@ local function whereToFarmRows(ref)
     if s then
       local gph = Spots.GoldPerHour(s)
       rows[#rows + 1] = {
-        text = s.name .. "  " .. S.H.muted .. evidence(s) .. "|r",
+        text = s.name .. "  " .. S.H.muted .. Spots.Words(s) .. "|r",
         ref = "spot:" .. s.id,
         value = gph,
         valueKind = gph and "money" or nil,
@@ -282,10 +293,46 @@ end
 -- Search, actions, wiring
 -- ---------------------------------------------------------------------------------------------
 
+-- The farm spot as an activity (R26.11, route.md "Explore"): its gold per hour from the medians,
+-- worked by the hour; the items without a price counted in `unpriced`.
+function Spots.Activity(ref)
+  local _, id = B.Entity.Parse(ref)
+  local s = spot(id)
+  if not s then
+    return nil
+  end
+  local gph, unknown = Spots.GoldPerHour(s)
+  return {
+    kind = "spot",
+    gives = gph and { { kind = "copper", amount = gph, per = "hour" } } or {},
+    unpriced = unknown,
+    needs = { level = s.levelMin },
+    status = s.status,
+    src = s.src,
+  }
+end
+
+local function spotRefs()
+  local out = {}
+  for _, s in ipairs(allSpots()) do
+    out[#out + 1] = "spot:" .. tostring(s.id)
+  end
+  return out
+end
+
 function Spots.Register(mod)
   registerEntities(mod)
+  B:RegisterFacet(mod, {
+    facet = "activity",
+    types = { "spot" },
+    priority = 100,
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_DATA_LOADED" },
+    rule = Spots.Activity,
+    list = spotRefs,
+  })
   B:RegisterMapLayer(mod, {
     id = "gold.farmspots",
+    icon = "treasure", -- the layer bar shows its icon (R27.8)
     label = L["Farm spots"],
     defaultOn = true,
     minLevel = 1,
@@ -305,7 +352,7 @@ function Spots.Register(mod)
     types = { "item" },
     order = 26,
     block = { limit = 8 }, -- the dossier block (C2)
-    invalidateOn = { "BASTIANS_PRICES_UPDATED" },
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_GRAPH_TIMES" },
     build = whereToFarmRows,
     tooltip = { max = 1 },
   })
@@ -316,7 +363,7 @@ function Spots.Register(mod)
     types = { "zone" },
     order = 98,
     here = { order = 4, limit = 3, only = true },
-    invalidateOn = { "BASTIANS_PRICES_UPDATED" },
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_GRAPH_TIMES" },
     build = function(ref)
       local _, map = B.Entity.Parse(ref)
       map = tonumber(map)
@@ -341,7 +388,7 @@ function Spots.Register(mod)
         rows[#rows + 1] = {
           id = "here:spot:" .. it.s.id,
           ref = "spot:" .. it.s.id,
-          text = it.s.name .. "  " .. S.H.muted .. evidence(it.s) .. "|r",
+          text = it.s.name .. "  " .. S.H.muted .. Spots.Words(it.s) .. "|r",
         }
       end
       return rows

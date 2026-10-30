@@ -283,9 +283,12 @@ local hereDossier -- the Here entry in the list pane: the player's zone in `here
 local nav, navTree -- the navigation pane (ADR 0018 A) and its tree of entries
 local listPane, detailPane, splitter -- the list pane, the detail pane and the divider between them
 local show -- show(entry, record): the one way an entry gets on screen, defined with the facade below
-local NAV_W = 180
+local NAV_W = 180 -- the navigation's width until the player drags its edge
+local NAV_MIN, NAV_MAX = 140, 420
+local navGrip -- the navigation's right edge: drag to widen
 local LIST_MIN, DETAIL_MIN = 240, 300
 local THREE_MIN = 880 -- narrower, the navigation waits behind the Lists button (ADR 0018 E)
+local LIST_TAB_W = 18 -- the strip that slides the list out and in
 local TOOLBAR_H = 26
 -- entries { kind = "page" | "list" | "view" | "home" | "here" | "bookmarks", ref, type, id, text }
 local history, cursor = {}, 0
@@ -294,6 +297,13 @@ local shownList -- the entry the list pane shows: the newest that is not a page 
 local previewRef -- the row resting under the mouse, shown in the detail pane (ADR 0018 C)
 local hereEntry = { kind = "here" } -- the list pane's entry before any other
 local navOpen = false -- the navigation shown over the list in a narrow window
+-- The list pane slides: shut by default (the page beside the
+-- navigation), out when a category, a view or a search fills it, shut again with its tab.
+local listOpen = false
+local listFrac = 0 -- how far the list pane is out, 0..1 (animated)
+local listSlide -- { from, to, start } while it slides
+local listTab, slider
+Browser.LIST_SLIDE = 0.18 -- seconds
 local listJob
 
 local function db()
@@ -479,7 +489,7 @@ function Browser.TellApart(rows, def, d, typ, near, total)
   return out, total
 end
 
-local ROW_DIMS = 8 -- a build row: id, name, (unused), near, level, suffix, yards, ref, then the dims
+local ROW_DIMS = 8 -- a build row: id, name, unnamed, near, level, suffix, yards, ref, then the dims
 
 -- Builds the rows of a type list; `yield` between slices. Returns the list (compact arrays, every
 -- row), counts ({ near = { here, continent }, distances, default }) and the total.
@@ -556,7 +566,11 @@ function Browser.BuildList(typ, yield)
         total = total + 1
         -- the name as the pack holds it (one string, shared), the level as a number, a band or
         -- floors suffix only where one exists: the row text is composed for the rows shown
-        local name = r.name or (typ .. " " .. tostring(id))
+        -- the pack's name, else one the client gave before; rows still without one ask the client
+        -- when they are shown (Browser.ListText): a request per row of a long list would flood it
+        local name = r.name or (d.KnownName and d:KnownName(typ, id))
+        local unnamed = name == nil
+        name = name or (typ .. " " .. tostring(id))
         local suffix
         if typ == "zone" and r.levelLo and r.levelHi then -- the zone index: band rows (C9)
           suffix = "  " .. S.H.muted .. r.levelLo .. "-" .. r.levelHi .. "|r"
@@ -576,7 +590,7 @@ function Browser.BuildList(typ, yield)
           counts.distances = counts.distances + 1
         end
         local ref = def.ref and def.ref(id, r) or nil
-        local row = { id, name, false, where, r.level, suffix, dist, ref }
+        local row = { id, name, unnamed, where, r.level, suffix, dist, ref }
         for k, dim in ipairs(dims) do
           row[ROW_DIMS + k] = facetKey(dim.value(r, d, ref or (typ .. ":" .. tostring(id))))
         end
@@ -608,6 +622,7 @@ function Browser.BuildList(typ, yield)
     dims = dims,
     ids = {},
     names = {},
+    unnamed = {}, -- rows whose name is still the type and the id: asked when shown
     values = {},
     nears = {},
     levels = {},
@@ -632,6 +647,7 @@ function Browser.BuildList(typ, yield)
   end
   for i, row in ipairs(rows) do
     list.ids[i], list.names[i], list.nears[i] = row[1], row[2], row[4]
+    list.unnamed[i] = row[3] or nil
     list.levels[i], list.suffixes[i], list.dists[i] = row[5], row[6], row[7]
     if list.refs then
       list.refs[i] = row[8]
@@ -678,8 +694,55 @@ local function nearOrder(list)
   return order
 end
 
+-- The ref a list row opens.
+local function listRef(list, i)
+  return list.refs and list.refs[i] or (list.type .. ":" .. tostring(list.ids[i]))
+end
+
+Browser.NEAR_TIMED = 100 -- the rows nearest by straight line that the Nearest sort orders by time
+
+-- The Nearest order by travel time (W8): the NEAR_TIMED rows nearest by straight line (the
+-- candidates, never shown as a distance) ordered by the world graph's times from its cache, the
+-- rows without a time yet after them; the rest as they were. Asked again on every render, so
+-- BASTIANS_GRAPH_TIMES refines it. Without the graph's network the straight-line order stays.
+local function timeOrder(list, order)
+  local graph = B:GetService("graph")
+  if not (graph and graph:Ready()) then
+    return order
+  end
+  local n = math.min(#order, Browser.NEAR_TIMED)
+  local top, secs, rank = {}, {}, {}
+  for k = 1, n do
+    local i = order[k]
+    top[k], rank[i] = i, k
+    secs[i] = graph:Time(listRef(list, i))
+  end
+  table.sort(top, function(a, b)
+    local sa, sb = secs[a], secs[b]
+    if (sa ~= nil) ~= (sb ~= nil) then
+      return sa ~= nil
+    end
+    if sa ~= nil and sa ~= sb then
+      return sa < sb
+    end
+    return rank[a] < rank[b]
+  end)
+  for k = n + 1, #order do
+    top[k] = order[k]
+  end
+  return top
+end
+
 -- The text of a list row: the name, the level or the band or the floors in grey.
 function Browser.ListText(list, i)
+  if list.unnamed and list.unnamed[i] and not list.refs then
+    -- a shown row without a name: the entity asks the client (the name arrives with its load
+    -- event and is kept for the next session)
+    local name = B:Entity(list.type .. ":" .. tostring(list.ids[i])):Name()
+    if name then
+      list.names[i], list.unnamed[i] = name, nil
+    end
+  end
   local text = list.names[i]
   if list.levels[i] then
     text = text .. "  " .. S.H.muted .. tostring(list.levels[i]) .. "|r"
@@ -819,7 +882,7 @@ end
 local TYPE_GLYPH = {
   npc = "mob",
   item = "item",
-  object = "other",
+  object = "object", -- its own symbol
   node = "herb",
   zone = "zone",
   recipe = "trainer",
@@ -1297,10 +1360,9 @@ local function sortOf(entry)
   local list = entry.list
   local sort = entry.sort
   if sort == "near" then
-    return nearOrder(list),
-      function(i)
-        return list.dists[i] and B.UI.Distance(list.dists[i]) or nil
-      end
+    return timeOrder(list, nearOrder(list)), function(i)
+      return (B.UI.Away(listRef(list, i)))
+    end
   end
   local def = sort and B:GetFilter(sort)
   if not (def and def.kind == "sort") then
@@ -1329,6 +1391,28 @@ local function sortOf(entry)
     end
 end
 
+-- Whether the mouse is over the list's rows.
+function Browser.ListUnderMouse()
+  return tree ~= nil and tree.scroll:IsMouseOver() == true
+end
+
+-- The order the list shows: held while the mouse is over the list (
+-- "when you click several times, the detail tile jumps to another entry that you never clicked";
+-- the Nearest order took every new batch of travel times, so the rows moved under a resting
+-- cursor and the next click hit another row). A new list, sort or filter takes the fresh order;
+-- a held one is refreshed once the mouse has left the list (Browser.OnRowHover).
+function Browser.HoldOrder(entry, order)
+  local key = entry.sort or "name"
+  local held = entry.held
+  if held and held.list == entry.list and held.sort == key and Browser.ListUnderMouse() then
+    entry.heldStale = true
+    return held.order
+  end
+  entry.held = { list = entry.list, sort = key, order = order }
+  entry.heldStale = nil
+  return order
+end
+
 -- Shows a built list with the entry's filters (ADR 0016): the filter bar, the rows, the summary.
 function Browser.ShowList(entry)
   if not entry.list then -- nothing built (no data service): an empty list, the bar empty too
@@ -1345,6 +1429,7 @@ function Browser.ShowList(entry)
     entry.sort = nil
   end
   local order, words, pending = sortOf(entry)
+  order = Browser.HoldOrder(entry, order)
   local result = Browser.Filter(list, entry, order)
   if result.total == 0 and entry.remembered and not entry.widened then
     -- remembered choices with no rows here (another zone, a kind that is gone): All, nothing
@@ -1692,7 +1777,10 @@ function Browser.ShowView(id, args)
   if not (mod and mod:IsEnabled() and B:GetView(id)) then
     return false
   end
+  local wasShown = win ~= nil and win:IsShown()
   Browser.Show({ kind = "view", id = id, args = args or {} })
+  -- a view lives in the list pane: out with it (R25.36); sliding only in a window already open
+  Browser.SetListOpen(true, wasShown)
   return true
 end
 
@@ -1794,6 +1882,9 @@ end
 -- ---------------------------------------------------------------------------------------------
 
 local hovered -- the ref under the mouse, while the delay runs
+local lastWheel = -math.huge -- when the list was last scrolled with the mouse wheel
+Browser.WHEEL_QUIET = 0.6 -- seconds after a scroll in which passing rows start no preview
+Browser.LEAVE_DELAY = 0.15 -- seconds after leaving a row before the kept page comes back
 
 function Browser.Preview(ref)
   if previewRef == ref then
@@ -1810,12 +1901,14 @@ function Browser.Previewing()
 end
 
 -- The rows' hover hook (the list tree and the Here dossier): entering starts the delay, leaving
--- ends a preview.
+-- ends a preview. (R25.32: "scrolling a quest's text jumps to another
+-- quest"): rows passing under the cursor while the list scrolls start no preview, and a preview
+-- the mouse carries into the detail pane (to read or scroll it) stays there as the page.
 function Browser.OnRowHover(row, entering)
   if entering and row and row.ref then
     local ref = row.ref
     hovered = ref
-    if db().slim or ref == Browser.PageRef() then
+    if db().slim or ref == Browser.PageRef() or GetTime() - lastWheel < Browser.WHEEL_QUIET then
       return
     end
     mod:Coalesce("preview", S.TipDelay() or 1, function()
@@ -1825,10 +1918,36 @@ function Browser.OnRowHover(row, entering)
     end)
   else
     hovered = nil
+    local entry = shownList
+    if entry and entry.heldStale then
+      -- the order held while the mouse was over the list takes what came meanwhile
+      mod:Coalesce("held", Browser.LEAVE_DELAY, function()
+        if shownList == entry and entry.heldStale and not Browser.ListUnderMouse() then
+          entry.heldStale = nil
+          Browser.Schedule()
+        end
+      end)
+    end
     if previewRef then
-      Browser.Preview(nil)
+      mod:Coalesce("preview", Browser.LEAVE_DELAY, function()
+        if hovered or not previewRef then
+          return -- another row took over, or the preview went
+        end
+        if dossier and dossier.frame and dossier.frame:IsMouseOver() then
+          local ref = previewRef
+          previewRef = nil
+          Browser.Open(ref) -- the mouse went into the page: the preview is the page now
+        else
+          Browser.Preview(nil)
+        end
+      end)
     end
   end
+end
+
+-- The list was scrolled with the wheel (a hook on the list's scroll frame).
+function Browser.OnListWheel()
+  lastWheel = GetTime()
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -1966,9 +2085,21 @@ end
 
 -- The list pane's width: remembered in the profile, else about two fifths of what the navigation
 -- leaves, never under LIST_MIN and never so wide that the detail falls under DETAIL_MIN.
+-- The navigation's width: the player's (dragged at its right edge), else NAV_W (owner, retail
+-- 28.10.2026: "Recent" was squeezed to "Qu..." and unreadable).
+function Browser.NavWidth()
+  local w = tonumber(db().navWidth) or NAV_W
+  return math.max(NAV_MIN, math.min(NAV_MAX, w))
+end
+
+function Browser.SetNavWidth(width)
+  db().navWidth = math.max(NAV_MIN, math.min(NAV_MAX, width))
+  Browser.Layout()
+end
+
 function Browser.ListWidth()
   local total = (win and win.frame:GetWidth()) or 1000
-  local avail = total - 16 - (total >= THREE_MIN and (NAV_W + 8) or 0)
+  local avail = total - 16 - (total >= THREE_MIN and (Browser.NavWidth() + 8) or 0)
   local width = db().listWidth or math.floor(avail * 0.42)
   return math.max(LIST_MIN, math.min(width, avail - DETAIL_MIN))
 end
@@ -2014,25 +2145,103 @@ function Browser.Layout()
   else
     nav:SetPoint("TOPLEFT", content, "TOPLEFT", 6, top)
     nav:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 6, 6)
-    nav:SetWidth(NAV_W)
+    nav:SetWidth(Browser.NavWidth())
     -- over the list in a narrow window, beside it otherwise
     nav:SetFrameLevel(listPane:GetFrameLevel() + (narrow and 20 or 0))
     nav:Show()
+  end
+  if navGrip then
+    navGrip:SetShown(nav:IsShown() and not narrow)
   end
   listPane:ClearAllPoints()
   if slim then
     listPane:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -6)
     listPane:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
+    listPane:Show() -- slim is the list alone, whatever the slide (R25.36)
     splitter:Hide()
     detailPane:Hide()
   else
-    local left = narrow and 6 or (6 + NAV_W + 8)
-    listPane:SetPoint("TOPLEFT", content, "TOPLEFT", left, top)
-    listPane:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", left, 6)
-    listPane:SetWidth(Browser.ListWidth())
-    splitter:Show()
+    local left = narrow and 6 or (6 + Browser.NavWidth() + 8)
+    detailPane:ClearAllPoints()
+    listTab:ClearAllPoints()
+    if listFrac > 0 then
+      listPane:SetPoint("TOPLEFT", content, "TOPLEFT", left, top)
+      listPane:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", left, 6)
+      listPane:SetWidth(math.max(1, Browser.ListWidth() * listFrac))
+      listPane:Show()
+      splitter:Show()
+      -- the tab: a strip as high as the panes between the splitter and the page, so the grip
+      -- stays free
+      listTab:SetPoint("TOPLEFT", splitter, "TOPRIGHT", 0, 0)
+      listTab:SetPoint("BOTTOMLEFT", splitter, "BOTTOMRIGHT", 0, 0)
+    else
+      listPane:Hide()
+      splitter:Hide()
+      listTab:SetPoint("TOPLEFT", content, "TOPLEFT", left, top)
+      listTab:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", left, 6)
+    end
+    listTab:SetWidth(LIST_TAB_W)
+    detailPane:SetPoint("TOPLEFT", listTab, "TOPRIGHT", 4, 0)
+    detailPane:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
     detailPane:Show()
+    -- the suite's arrow: right slides the list out, left slides it back
+    listTab.arrow:SetRotation(listOpen and math.pi or 0)
+    listTab.tip = listOpen and L["Slide the list in"] or L["Slide the list out"]
+    listTab:Show()
   end
+  if slim then
+    listTab:Hide()
+  end
+end
+
+function Browser.IsListOpen()
+  return listOpen
+end
+
+local function finishSlide()
+  listFrac = listSlide.to
+  listSlide = nil
+  slider:SetScript("OnUpdate", nil) -- no work while nothing moves (CLAUDE.md golden rule 7)
+  Browser.Layout()
+end
+
+-- Slides the list pane out (open) or in; at once without `animate` or while the window is hidden.
+function Browser.SetListOpen(open, animate)
+  open = open and true or false
+  if open == listOpen and not listSlide then
+    return
+  end
+  listOpen = open
+  local to = open and 1 or 0
+  local appearing = open and listFrac == 0 -- the pane's content is drawn as it comes into view
+  if not (animate and win and win:IsShown() and slider) then
+    listSlide = nil
+    if slider then
+      slider:SetScript("OnUpdate", nil)
+    end
+    listFrac = to
+    Browser.Layout()
+    if appearing and win and win:IsShown() then
+      Browser.Render()
+    end
+    return
+  end
+  listSlide = { from = listFrac, to = to, start = GetTime() }
+  if appearing then
+    listFrac = 0.01
+    Browser.Layout()
+    Browser.Render()
+  end
+  slider:SetScript("OnUpdate", function()
+    local t = (GetTime() - listSlide.start) / Browser.LIST_SLIDE
+    if t >= 1 then
+      finishSlide()
+      return
+    end
+    local eased = 1 - (1 - t) * (1 - t)
+    listFrac = listSlide.from + (listSlide.to - listSlide.from) * eased
+    Browser.Layout()
+  end)
 end
 
 -- The Lists button of a narrow window: the navigation over the list, or away again.
@@ -2065,6 +2274,7 @@ end
 
 local function build(self)
   win = B.UI.Window("BastiansBrowserFrame", {
+    module = "Browser", -- the options button opens this page (R27.1)
     title = L["Browser"],
     width = 1000,
     height = 600,
@@ -2079,6 +2289,11 @@ local function build(self)
     },
     db = db().window,
     onShow = function()
+      if listSlide then
+        listSlide = nil
+        slider:SetScript("OnUpdate", nil)
+      end
+      listOpen, listFrac = false, 0 -- the window opens with the list shut (R25.36)
       Browser.Layout()
       Browser.Render()
       Browser.UpdateTracker() -- slim: the game's tracker goes (C8)
@@ -2140,22 +2355,12 @@ local function build(self)
   toolbar.forward:SetScript("OnClick", function()
     Browser.Forward()
   end)
-  toolbar.target = S.button(toolbar, L["Target"], 54, 22) -- target follow (C6)
-  toolbar.target.tip = function()
-    local text = "While on (accented), the page shows what you target in the world: click an NPC"
-      .. " or an object, and its page opens here. Never in combat, never for players. Click to"
-      .. " turn it on or off."
-    return L["Follow your target"], L[text]
-  end
-  toolbar.target:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
-  toolbar.target:SetScript("OnClick", function()
-    Browser.ToggleTarget()
-  end)
-  Browser.UpdateTarget()
-  -- the search box fills the bar between the arrows and Target; typing searches the world
+  -- ~~Target~~ (target follow, C6) left the toolbar (its use was never
+  -- clear); following the target stays a setting (followTarget, on by default)
+  -- the search box fills the bar after the arrows; typing searches the world
   search = S.search(toolbar, L["Search: a name, or a type first (npc wel)"])
   search:SetPoint("LEFT", toolbar.forward, "RIGHT", 8, 0)
-  search:SetPoint("RIGHT", toolbar.target, "LEFT", -6, 0)
+  search:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
   search:SetScript("OnTextChanged", function(box)
     local text = box:GetText() or ""
     if text == "" then
@@ -2167,6 +2372,9 @@ local function build(self)
     end
     if syncingBox then
       return -- the box follows the list pane, nobody typed
+    end
+    if text ~= "" then
+      Browser.SetListOpen(true, true) -- the results show in the list (R25.36)
     end
     local entry = shownList or Browser.ListEntry()
     if entry.kind == "home" then
@@ -2182,12 +2390,45 @@ local function build(self)
   -- the navigation (ADR 0018 A): a tree of entries, its folds remembered
   nav = CreateFrame("Frame", nil, content)
   S.panel(nav, S.C.panel)
+  -- the navigation's right edge: a grip as the list's splitter, dragging widens the navigation
+  navGrip = CreateFrame("Frame", nil, content)
+  navGrip:SetWidth(8)
+  navGrip:SetPoint("TOPLEFT", nav, "TOPRIGHT", 0, 0)
+  navGrip:SetPoint("BOTTOMLEFT", nav, "BOTTOMRIGHT", 0, 0)
+  navGrip.line = S.fill(navGrip, S.C.line)
+  navGrip.line:ClearAllPoints()
+  navGrip.line:SetPoint("TOP", 0, 0)
+  navGrip.line:SetPoint("BOTTOM", 0, 0)
+  navGrip.line:SetWidth(1)
+  navGrip:EnableMouse(true)
+  navGrip:SetScript("OnEnter", function(bar)
+    S.tint(bar.line, S.C.accent, 0.8)
+    bar.line:SetWidth(2)
+  end)
+  navGrip:SetScript("OnLeave", function(bar)
+    S.tint(bar.line, S.C.line)
+    bar.line:SetWidth(1)
+  end)
+  navGrip:SetScript("OnMouseDown", function(bar)
+    bar:SetScript("OnUpdate", function(me)
+      local x = GetCursorPosition() / (me:GetEffectiveScale() or 1)
+      local left = nav:GetLeft()
+      if left then
+        Browser.SetNavWidth(x - left - 4)
+      end
+    end)
+  end)
+  navGrip:SetScript("OnMouseUp", function(bar)
+    bar:SetScript("OnUpdate", nil) -- follows only while the button is held
+  end)
+  Browser.navGrip = navGrip
   navTree = B.UI.Tree(nav, {
     db = db().nav,
     worth = false,
     ctx = { source = "browser" },
     onClick = function(row, button, owner)
       if row.nav then
+        Browser.SetListOpen(true, true) -- a category: the list slides out and loads (R25.36)
         Browser.Navigate(row.nav)
         if navOpen then
           Browser.ToggleNav(false)
@@ -2227,6 +2468,7 @@ local function build(self)
   tree.chips:ClearAllPoints()
   tree.chips:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", -2, -4)
   tree.chips:SetPoint("TOPRIGHT", summary, "BOTTOMRIGHT", -12, -4)
+  tree.scroll:HookScript("OnMouseWheel", Browser.OnListWheel)
   tree.scroll:ClearAllPoints()
   tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
   tree.scroll:SetPoint("BOTTOMRIGHT", listPane, "BOTTOMRIGHT", -14, 0)
@@ -2284,12 +2526,42 @@ local function build(self)
     db().listWidth = listPane:GetWidth()
   end)
 
+  -- the list's tab: slides it out and in (R25.36)
+  -- as high as the panes, the arrow in its middle; hover lights the strip
+  listTab = CreateFrame("Button", nil, content)
+  listTab:SetWidth(LIST_TAB_W)
+  listTab:SetFrameLevel((splitter:GetFrameLevel() or 1) + 5)
+  S.panel(listTab, S.C.panel)
+  listTab.arrow = listTab:CreateTexture(nil, "ARTWORK")
+  listTab.arrow:SetTexture(S.ARROW)
+  listTab.arrow:SetSize(14, 14)
+  listTab.arrow:SetPoint("CENTER")
+  S.tint(listTab.arrow, S.C.accent)
+  listTab:SetScript("OnClick", function()
+    Browser.SetListOpen(not listOpen, true)
+  end)
+  listTab:SetScript("OnEnter", function(tab)
+    S.tint(tab.bg, S.C.faceHover)
+    S.setEdges(tab.edges, S.C.accent, 0.8)
+    tab.arrow:SetSize(18, 18)
+    S.TipEnter(tab)
+  end)
+  listTab:SetScript("OnLeave", function(tab)
+    S.tint(tab.bg, S.C.panel)
+    S.setEdges(tab.edges, S.C.line)
+    tab.arrow:SetSize(14, 14)
+    S.TipLeave(tab)
+  end)
+  listPane:SetClipsChildren(true) -- the rows show as the pane slides out
+  slider = CreateFrame("Frame", nil, content)
+
   -- the detail pane: the dossier of the kept page or the preview (ADR 0018)
   detailPane = CreateFrame("Frame", nil, content)
   detailPane:SetPoint("TOPLEFT", splitter, "TOPRIGHT", 4, 0)
   detailPane:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
   dossier = B.UI.Dossier(detailPane, {
     iconsAlways = true,
+    portrait = true, -- the 3D model of a creature or a wearable item
     worth = Browser.ShowWorth,
     ctx = { source = "browser" },
     buttons = Browser.BandButtons,
@@ -2303,7 +2575,8 @@ local function build(self)
       .. " game's quest tracker; Wide brings the lists and the page back."
     return L["Slim or wide"], L[text]
   end
-  toolbar.slim:SetPoint("RIGHT", win.close, "LEFT", -4, 0)
+  -- left of the window's options button
+  toolbar.slim:SetPoint("RIGHT", win.options or win.close, "LEFT", -4, 0)
   toolbar.slim:SetScript("OnClick", function()
     Browser.ToggleSlim()
   end)
@@ -2323,6 +2596,7 @@ local function build(self)
   self.win, self.tree, self.toolbar, self.summary, self.search = win, tree, toolbar, summary, search
   self.header, self.controlBar, self.dossier, self.hereDossier = header, controlBar, dossier, hereDossier
   self.nav, self.navTree, self.listPane, self.detailPane = nav, navTree, listPane, detailPane
+  self.listTab = listTab
   self.splitter = splitter
   Browser.Layout()
   if db().slim then
@@ -2350,21 +2624,21 @@ function Browser.FollowTarget()
   return Browser.Open(ref)
 end
 
--- The toolbar's Target toggle mirrors the setting (accented while on).
-function Browser.UpdateTarget()
-  local b = toolbar and toolbar.target
-  if not b then
-    return
+-- The Wowhead address of an entity: retail's site on retail, its Classic site on Forever (the
+-- Classic world, the Classic ids). nil for a type Wowhead has no page for.
+local WOWHEAD_TYPES = { quest = "quest", item = "item", npc = "npc", object = "object", spell = "spell" }
+function Browser.WowheadLink(ref)
+  local typ, id = B.Entity.Parse(ref or "")
+  local page = typ and WOWHEAD_TYPES[typ]
+  if not (page and tonumber(id)) then
+    return nil
   end
-  local on = db().followTarget
-  local c = on and S.C.accent or S.C.dim
-  b.label:SetTextColor(c[1], c[2], c[3])
-  S.setEdges(b.edges, on and S.C.accent or S.C.line, on and 0.8 or nil)
+  local site = B.Client == "forever" and "https://www.wowhead.com/classic/" or "https://www.wowhead.com/"
+  return site .. page .. "=" .. id
 end
 
 function Browser.ToggleTarget()
   db().followTarget = not db().followTarget
-  Browser.UpdateTarget()
   if db().followTarget then
     Browser.FollowTarget()
   end
@@ -2525,7 +2799,9 @@ function Browser.ShowHere()
   if not (mod and mod:IsEnabled()) then
     return false
   end
+  local wasShown = win ~= nil and win:IsShown()
   show({ kind = "here" })
+  Browser.SetListOpen(true, wasShown) -- Here lives in the list pane: out with it (R25.36)
   return true
 end
 
@@ -2700,6 +2976,23 @@ mod = B:NewModule("Browser", {
         end
       end,
     }, { priority = 100 })
+    -- the Wowhead page of a quest, item, NPC, object or spell: the game
+    -- opens no browser, so the link goes into the chat input to copy (as the book's links)
+    B:RegisterAction(self, {
+      id = "browser.wowhead",
+      label = L["Copy Wowhead link"],
+      short = L["Wowhead"],
+      icon = B.UI.IconTexture("copy"),
+      types = { "quest", "item", "npc", "object", "spell" },
+      order = 88,
+      run = function(ref)
+        local link = Browser.WowheadLink(ref)
+        if link then
+          B.Compat.OpenChat(link)
+          B:Say(L["The link is in the chat input: copy it with Ctrl+C."])
+        end
+      end,
+    })
     B:RegisterAction(self, {
       id = "browser.open",
       label = L["Open in Browser"],
@@ -2767,6 +3060,7 @@ mod = B:NewModule("Browser", {
       Browser.FollowTarget() -- the target becomes the subject (C6)
     end)
     self:On("BASTIANS_PRICES_UPDATED", Browser.Schedule)
+    self:On("BASTIANS_GRAPH_TIMES", Browser.Schedule) -- travel times on rows and the card (W8)
     self:On("BASTIANS_THEME_CHANGED", Browser.Schedule) -- the rows' colour codes (ST3)
     self:On("BASTIANS_ACTION_STATE", Browser.Schedule) -- a play button turns into stop and back
     self:On("BASTIANS_TRACKED_CHANGED", Browser.Schedule) -- the card's Track turns into Untrack

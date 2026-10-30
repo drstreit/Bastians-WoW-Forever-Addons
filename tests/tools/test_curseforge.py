@@ -10,6 +10,7 @@ from pathlib import Path
 import curseforge
 import pytest
 from check_toc import parse_toc
+from release import DEV_ONLY
 
 ROOT = Path(__file__).resolve().parents[2]
 ADDONS = ROOT / "addons"
@@ -40,7 +41,7 @@ def test_every_released_folder_belongs_to_one_project():
     released = {
         d.name
         for d in ADDONS.iterdir()
-        if d.is_dir() and d.name not in ("Bastians_Probe", "Bastians_Data_Nav")
+        if d.is_dir() and d.name not in {*DEV_ONLY, "Bastians_Data_Nav"}
     }
     assert set(folders) == released  # Nav ships no file yet (release.py skips it)
 
@@ -92,7 +93,8 @@ def test_each_clients_file_relates_only_to_what_exists_there():
     assert (slug["Spoken"], "optionalDependency") in forever
     assert all(s not in slug.values() for s, _ in retail)
     data = cfg["projects"]["Bastians_Data"]["slug"]
-    assert (data, "requiredDependency") in retail and ("tomtom", "optionalDependency") in retail
+    # TomTom is no companion since 29.10.2026 (owner): the retail suite relates to its data only
+    assert retail == {(data, "requiredDependency")}
     suite = cfg["projects"]["Bastians_Suite"]["slug"]
     assert pairs("Bastians_Data", "retail") == {(suite, "optionalDependency")}
     # every relation names its project id too, for an exact match
@@ -147,7 +149,13 @@ def test_the_plan_merges_datas_packs_and_names_what_blocks_an_upload(tmp_path: P
         "Bastians_Data_Items",
         "Bastians_Data_Quests",
         "Bastians_Data_Strategies",
+        "Bastians_Data_Text_deDE",
         "Bastians_Data_Text_enUS",
+        "Bastians_Data_Text_esES",
+        "Bastians_Data_Text_frFR",
+        "Bastians_Data_Text_koKR",
+        "Bastians_Data_Text_zhCN",
+        "Bastians_Data_Text_zhTW",
         "Bastians_Data_World",
     ]
     assert data.metadata["releaseType"] == "beta"
@@ -283,4 +291,29 @@ def test_a_file_without_relations_sends_no_relations_field(tmp_path: Path):
     (data,) = curseforge.plan(cfg, "retail", rel, {"Bastians_Data"}, "")
     assert "relations" not in data.metadata
     (suite,) = curseforge.plan(cfg, "retail", rel, {"Bastians_Suite"}, "")
-    assert suite.metadata["relations"]["projects"][0]["slug"] == "tomtom"
+    assert "relations" not in suite.metadata  # Data in review, and no companion on retail
+
+
+def test_the_read_api_has_its_own_key_and_asks_files_and_downloads(tmp_path: Path):
+    secrets = tmp_path / ".secrets"
+    secrets.write_text(
+        "API-TOKEN=abc-123\nCURSEFORGE-API-FOR-STUDIOS=$2a$10$xyz\n", encoding="utf-8"
+    )
+    assert curseforge.core_key({}, secrets) == "$2a$10$xyz"
+    assert curseforge.core_key({"CF_CORE_API_KEY": "env"}, secrets) == "env"
+    assert curseforge.api_token({}, secrets) == "abc-123"  # the upload token stays its own
+    asked = []
+
+    def transport(request):
+        asked.append((request.full_url, request.get_header("X-api-key")))
+        if request.full_url.endswith("/files/9"):
+            return json.dumps({"data": {"fileStatus": 4, "isAvailable": True}}).encode()
+        return json.dumps({"data": {"downloadCount": 17}}).encode()
+
+    assert curseforge.file_state(1762046, 9, "k", transport) == (4, True)
+    assert curseforge.download_count(1762046, "k", transport) == 17
+    assert asked == [
+        ("https://api.curseforge.com/v1/mods/1762046/files/9", "k"),
+        ("https://api.curseforge.com/v1/mods/1762046", "k"),
+    ]
+    assert 4 in curseforge.LIVE and 5 in curseforge.REFUSED and 1 not in curseforge.REFUSED

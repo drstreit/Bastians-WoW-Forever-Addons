@@ -658,12 +658,28 @@ local function addPicture(page, id)
 end
 Window.ART = ART
 
+-- The page's address on bastians.dev to copy (the game opens no browser): a back-shelf page and a
+-- tombstone have one too, the web keeps every id.
+local function webRow(id)
+  local url = Book.WebURL(id)
+  addRow(left, L["Read it on the web"] .. "  " .. S.H.accent .. L["copy the link"] .. "|r", function()
+    B.Compat.OpenChat(url)
+  end, {
+    size = 11,
+    color = S.C.dim,
+    tip = L["Puts the link into the chat input: copy it with Ctrl+C."],
+    gap = 0,
+  })
+  addText(left, (string.gsub(url, "^https://", "")), 10, S.C.dim, 0, 4)
+end
+
 local function header(page, p)
   addText(left, caps(shelfWord(p)), 10, S.C.dim, 0, 2)
   addText(left, p.name or page, 18, S.C.bright, 0, 4)
   if p.meta then
     addText(left, table.concat(p.meta, "  /  "), 11, S.C.dim)
   end
+  webRow(page)
 end
 
 -- The travellers of a rumour: channel, date, the moment in the video, the link to copy.
@@ -814,8 +830,13 @@ local function renderMill(chapter)
   return string.format(L["Rumour mill: %s"], name)
 end
 
+-- The book's own pages have pictures too: the title page Bastian dreaming at
+-- the inn, What's new the morning after, the index measuring the plinth, the bookmarks the stars
+-- over Goldshire (content/strategies/art/front). Without the picture the page starts as before.
 local function renderTitle()
-  addSpace(left, 40)
+  if not addPicture(left, "title") then
+    addSpace(left, 40)
+  end
   addText(left, caps(L["Bastian's Strategies"]), 11, S.C.dim, 0, 8)
   addText(left, L["Bastian's Gold Rumours"], 24, S.C.bright, 0, 12)
   addText(
@@ -827,6 +848,7 @@ local function renderTitle()
     16
   )
   addText(left, L["Printed in Booty Bay, on credit."], 11, S.C.dim)
+  addPicture(right, "news")
   addText(right, caps(L["What's new"]), 11, S.C.accent, 0, 6)
   local news = Window.News()
   if #news == 0 then
@@ -948,6 +970,7 @@ local function renderContents()
 end
 
 local function renderIndex()
+  addPicture(left, "index")
   addText(left, caps(L["Index"]), 11, S.C.accent, 0, 6)
   local pages = Window.Pages()
   local entries = Book.Index(pages, function(ref)
@@ -1054,6 +1077,7 @@ function Window.Search(query)
 end
 
 local function renderBookmarks()
+  addPicture(left, "bookmarks")
   addText(left, caps(L["Bookmarks"]), 11, S.C.accent, 0, 6)
   local marks = db().char.bookmarks
   if #marks == 0 then
@@ -1245,11 +1269,15 @@ end
 
 function Window.Build()
   win = B.UI.Window("BastiansStrategiesFrame", {
+    module = "Strategies", -- the options button opens this page (R27.1)
     title = L["Bastian's Gold Rumours"],
     width = 940,
     height = 640,
     minWidth = 660,
     minHeight = 420,
+    -- as large as the reader drags it
+    maxWidth = B.UI.NO_LIMIT,
+    maxHeight = B.UI.NO_LIMIT,
     db = ns.mod.db.profile.window,
     onShow = function()
       layoutPages()

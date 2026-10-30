@@ -30,6 +30,8 @@ Bastians:RegisterMapLayer(m, { id = "test.near", label = "Near", defaultOn = tru
 
 def boot(wow: WowRuntime, *addons: str) -> WowRuntime:
     wow.start(*(addons or (CORE, DATA, QUESTS, MAP)))
+    # the overlay on the game's own 140 px minimap: Bastian's minimap (test_mini.py) stays off
+    wow.execute(f"{MOD}.db.profile.miniMap = false; {MOD}.Mini.Apply()")
     wow.run_frames(10)
     wow.advance(0.3)
     return wow
@@ -72,7 +74,9 @@ def test_the_nearest_pins_sit_around_the_player_at_the_minimaps_scale(wow: WowRu
     assert pins["npc:54"].GetWidth(pins["npc:54"]) == 14
     assert pins["npc:54"].icon.GetTexture(pins["npc:54"].icon) == 1
     stats = wow.eval(f"{MM}.stats")
-    assert stats.edge == 1 and stats.shown == stats.queried
+    # the test layer's far pin at the rim, and the fixture's travel and service places beyond it
+    # (on the minimap too since 28.10.2026: "better use ours on all")
+    assert stats.edge >= 1 and stats.shown == stats.queried
     # the path: 100 yd north is 30 px, three pieces of 10 px; the leg east of it 900 yd (270 px)
     # is cut at the rim: pieces only inside 63 px of the centre (S6)
     assert 3 <= stats.pieces <= 3 + 7

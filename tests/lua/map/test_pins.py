@@ -2,6 +2,8 @@
 zoom, labels, areas, path lines, clicks, the player arrow, the layers panel, the own waypoint (loud then
 faint), the actions map.show, tomtom.waypoint and chat.way, and the right click on empty ground."""
 
+import itertools
+
 from harness import WowRuntime
 
 CORE, DATA, QUESTS, GOLD, MAP = (
@@ -116,31 +118,71 @@ def test_player_arrow_follows_position_and_facing(wow: WowRuntime):
     assert arrow.IsShown(arrow) is False
 
 
-def test_layers_panel_lists_every_layer_by_owner_and_toggles(wow: WowRuntime):
+def bar_items(wow: WowRuntime) -> list:
+    return [
+        (i.kind, i.text, i.on)
+        for i in wow.eval("Bastians:GetModule('Map').LayerBar.Items()").values()
+    ]
+
+
+def test_the_layer_bar_switches_every_layer_by_app_and_keeps_bookmarks(wow: WowRuntime):
+    """a bar over the top of the map, not a Layers button; bookmarks."""
     boot(wow, CORE, DATA, QUESTS, GOLD, MAP)
-    wow.execute(f"{PINS}.TogglePanel()")
-    panel = wow.eval(f"{PINS}.Panel()")
-    assert panel.IsShown(panel) is True
-    rows = [(r.kind, r.label.GetText(r.label)) for r in panel.rows.values() if r.IsShown(r)]
-    headers = [t for k, t in rows if k == "header"]
-    toggles = [t for k, t in rows if k == "toggle"]
-    gold = wow.made_for(GOLD)  # the farm spots layer is Gold's; no Gold on retail
-    assert headers == [*(["Gold"] if gold else []), "Map", "Quests"]
-    assert ("Farm spots" in toggles) is gold
-    assert "Quests to take" in toggles and "Waypoint" in toggles
-    soon = next(
-        r
-        for r in panel.rows.values()
-        if r.IsShown(r) and r.kind == "toggle" and r.layerID == "quests.soon"
+    BAR = "Bastians:GetModule('Map').LayerBar"
+    assert wow.eval(f"{MAP_}.toolbar.layers") is None
+    panel = wow.eval(f"{BAR}.Panel()")
+    assert panel.IsShown(panel) is True  # open by default
+    items = bar_items(wow)
+    groups = [t for k, t, _ in items if k == "gap"]  # icons only: the apps are gaps (R27.8)
+    gold = wow.made_for(GOLD)  # the farm spots layer is Gold's; no Gold on retail (24.10.2026)
+    assert groups == [*(["Gold"] if gold else []), "Map", "Quests", "Bookmarks"]
+    pills = {t: on for k, t, on in items if k == "pill"}
+    assert ("Farm spots" in pills) is gold
+    assert pills["Quests to take"] is True and pills["Quests soon (level, prerequisite)"] is False
+    # a click on a pill switches its layer
+    wow.execute(
+        f"""for _, it in ipairs({BAR}.Items()) do
+              if it.id == "quests.soon" then it.onClick("LeftButton") end
+            end"""
     )
-    assert soon.checked is False  # off by default
-    soon.GetScript(soon, "OnClick")(soon)
     assert wow.eval(f"{MOD}.db.profile.layers['quests.soon']") is True
-    assert soon.checked is True
     wow.execute(f"{PINS}.SetLayerOn('quests.objectives', false)")
     wow.execute(f"{MAP_}.Fly(0, 0, 0, 6)")
     wow.advance(0.2)
     assert wow.eval(f"{PINS}.stats.areas") == 0  # the objective areas are gone
+    # bookmarks: + keeps the view, a click flies back, a right click removes it
+    mark = wow.eval(f"{BAR}.AddBookmark()")
+    assert mark.continent == 0 and (mark.wx, mark.wy, mark.level) == (0, 0, 6)
+    assert mark.name in [i.text for i in wow.eval(f"{BAR}.BookmarkItems()").values()]
+    wow.execute(f"{MAP_}.Fly(1, 500, 500, 3)")
+    wow.execute(f"{BAR}.GoTo(1)")
+    cam = wow.eval(f"{MAP_}.Camera()")
+    assert (cam.continent, cam.wx, cam.wy, cam.level) == (0, 0, 0, 6)
+    wow.execute(f"{BAR}.RemoveBookmark(1)")
+    assert wow.eval(f"#{BAR}.Bookmarks()") == 0
+    assert any("Bookmark removed" in line for line in wow.chat)
+    # a bookmark is named when kept, renamed and removed from its right click menu
+    wow.execute(
+        f"P = {BAR}.Panel(); BOX = {BAR}.AskName(P, 'x', function(v) {BAR}.AddBookmark(v) end)"
+    )
+    wow.execute("BOX.edit:SetText('Hogger camp'); BOX.edit:GetScript('OnEnterPressed')(BOX.edit)")
+    assert wow.eval(f"{BAR}.Bookmarks()[1].name") == "Hogger camp"
+    wow.execute(f"M = {BAR}.BookmarkMenu(P, 1); M.rename:Click()")
+    wow.execute("BOX.edit:SetText('Hogger'); BOX.edit:GetScript('OnEnterPressed')(BOX.edit)")
+    assert wow.eval(f"{BAR}.Bookmarks()[1].name") == "Hogger"
+    wow.execute(f"M = {BAR}.BookmarkMenu(P, 1); M.remove:Click()")
+    assert wow.eval(f"#{BAR}.Bookmarks()") == 0
+    # a layer out of its zoom range shows its pill dimmed
+    wow.execute(f"{MAP_}.Fly(0, 0, 0, 1)")
+    dims = {i.id: i.dim for i in wow.eval(f"{BAR}.Items()").values() if i.kind == "pill"}
+    assert dims["quests.soon"] is True and dims["map.waypoint"] is False
+    # the tab slides the bar shut and open; the state is kept
+    wow.execute(f"{BAR}.Tab():Click()")
+    wow.run_frames(20)  # the slide (0.18 s)
+    assert panel.IsShown(panel) is False and wow.eval(f"{MOD}.db.profile.barOpen") is False
+    wow.execute(f"{BAR}.Tab():Click()")
+    wow.run_frames(20)  # the slide (0.18 s)
+    assert panel.IsShown(panel) is True
     assert wow.errors == []
 
 
@@ -169,7 +211,7 @@ def test_own_waypoint_is_loud_then_faint_and_the_right_click_sets_one(wow: WowRu
     assert wow.errors == []
 
 
-def test_map_show_tomtom_and_way_actions(wow: WowRuntime):
+def test_map_show_and_way_actions_and_no_tomtom(wow: WowRuntime):
     boot(wow)
     ids = [a.id for a in wow.eval("Bastians:GetActions('npc:448', { source = 'test' })").values()]
     assert "map.show" in ids and "chat.way" in ids and "tomtom.waypoint" not in ids  # no TomTom
@@ -184,14 +226,11 @@ def test_map_show_tomtom_and_way_actions(wow: WowRuntime):
     assert wow.eval(f"{WP}.Get().label") == "Hogger"
     wow.execute("Bastians:RunAction('chat.way', 'npc:448', { source = 'test' })")
     assert wow.eval("Mock.chatInput") == "/way Elwynn Forest 27.0 86.0 Hogger"
-    # with TomTom present the waypoint action appears and hands the map position over
+    # TomTom installed: still no TomTom waypoint
     wow.load_addon("TomTom")
     wow.run_frames(2)
     ids = [a.id for a in wow.eval("Bastians:GetActions('npc:448', { source = 'test' })").values()]
-    assert "tomtom.waypoint" in ids
-    wow.execute("Bastians:RunAction('tomtom.waypoint', 'npc:448', { source = 'test' })")
-    wp = wow.eval("TomTom.waypoints[1]")
-    assert (wp.map, wp.x, wp.y, wp.title) == (1429, 0.27, 0.86, "Hogger")
+    assert "tomtom.waypoint" not in ids
     assert wow.errors == []
 
 
@@ -221,7 +260,9 @@ def test_a_pin_with_one_quest_behind_it_opens_that_quest_in_the_browser(wow: Wow
     wow.execute(f"{MAP_}.Fly(0, 0, 0, 6)")
     wow.run_frames(5)  # the giver index job
     wow.advance(0.3)  # the settle and the re-query the finished index asks for
-    marshal = next(p for p in shown(wow, "pinPool") if p.pin.ref == "npc:240" and p.pin.quests)
+    marshal = next(
+        p for p in shown(wow, "pinPool") if p.pin.ref == "npc:240" and p.pin.status == "blocked"
+    )
     assert list(marshal.pin.quests.values()) == [76] and "Jasperlode" in marshal.pin.lines[1]
     marshal.GetScript(marshal, "OnClick")(marshal, "LeftButton")
     browser = "Bastians:GetModule('Browser').Browser"
@@ -259,4 +300,68 @@ def test_show_on_map_keeps_the_players_zoom_and_a_zone_opens_whole(wow: WowRunti
     assert wow.eval(f"{MAP_}.IsShown()") is True
     c = wow.eval(f"{MAP_}.Camera()")
     assert c.continent == 0 and c.level <= 5
+    assert wow.errors == []
+
+
+def test_the_bar_shows_icons_only_and_its_menus_work(wow: WowRuntime):
+    """(R27.8): icons only, the text in the tooltip; the map style and
+    the bookmarks are one icon each with a menu."""
+    boot(wow, CORE, DATA, QUESTS, MAP)
+    BAR = "Bastians:GetModule('Map').LayerBar"
+    pills = [i for i in wow.eval(f"{BAR}.Items()").values() if i.kind == "pill"]
+    # every layer names an icon the kit knows; none falls back to "other"
+    for p in pills:
+        assert wow.eval(f"Bastians.UI.IconTexture('{p.icon}') ~= nil") is True, p.id
+    assert not [p.id for p in pills if p.icon == "other"]
+    # the drawn pills carry no text: an icon, and the tooltip's title and hint
+    wow.execute(f"{BAR}.Refresh()")
+    frame = wow.eval(f"{BAR}.Panel()")
+    shown = [c for c in frame.children.values() if c.IsShown(c) and c.icon]
+    assert shown and all(c.label is None for c in shown)
+    wow.execute("C = select(2, " + BAR + ".Panel():GetChildren())")
+    title, text = wow.eval("C.tip(C)")
+    assert title and text
+    # the style menu ticks the current style and switches
+    wow.execute(f"M = {BAR}.StyleMenu({BAR}.Panel())")
+    assert wow.eval("Bastians.UI.MenuFrame():IsShown()") is True
+    # every entry with its icon in front, the chosen one on a lit row
+    rows = [b for b in wow.eval("Bastians.UI.MenuFrame().items").values() if b.IsShown(b)]
+    assert len(rows) == len(list(wow.eval(f"{BAR}.StyleItems()").values()))
+    assert all(b.label.text.startswith("|T") and "Tiles" in b.label.text for b in rows)
+    lit = [b.entry.label for b in rows if b.sel.IsShown(b.sel)]
+    assert lit == [wow.eval(f"{MAP_}.StyleTitle({MAP_}.Style())")]
+    wow.execute(
+        f"for _, e in ipairs({BAR}.StyleItems()) do if e.id == 'style:physical' then e.onClick() end end"
+    )
+    assert wow.eval(f"{MAP_}.Style()") == "physical"
+    # the bookmarks menu: keep this view, then fly back to it
+    wow.execute(f"{MAP_}.Fly(0, 0, 0, 6); {BAR}.AddBookmark('Here')")
+    ids = [i.id for i in wow.eval(f"{BAR}.BookmarkItems()").values()]
+    assert ids == ["bookmark:1", "bookmark:add", "bookmark:edit"]
+    wow.execute(f"{MAP_}.Fly(1, 500, 500, 3); {BAR}.BookmarkItems()[1].onClick()")
+    cam = wow.eval(f"{MAP_}.Camera()")
+    assert (cam.continent, cam.wx, cam.wy) == (0, 0, 0)
+    assert wow.errors == []
+
+
+def test_the_bar_slides_shut_as_it_slides_open(wow: WowRuntime):
+    """(R27.4): the bar slid open but snapped shut. The slide's time is
+    summed from capped frame steps, so a long first frame cannot swallow it; the tab changes only
+    when the panel is gone."""
+    boot(wow, CORE, DATA, MAP)
+    BAR = "Bastians:GetModule('Map').LayerBar"
+    height = f"{BAR}.Panel():GetHeight()"
+    full = wow.eval(height)
+    wow.execute(f"{BAR}.SetOpen(false)")
+    wow.run_frames(1, 0.5)  # the click's frame is a long one
+    steps = [wow.eval(height)]
+    assert steps[0] < full and steps[0] > full / 2  # one capped step, not the whole slide
+    assert wow.eval(f"{BAR}.Tab().label:GetText()") == ""  # still the open tab while it slides
+    for _ in range(10):
+        wow.run_frames(1, 1 / 60)
+        steps.append(wow.eval(height))
+    assert all(a >= b for a, b in itertools.pairwise(steps))  # it slides, it does not snap
+    wow.run_frames(20, 0.05)
+    panel = wow.eval(f"{BAR}.Panel()")
+    assert panel.IsShown(panel) is False and wow.eval(f"{BAR}.Tab().label:GetText()") == "Layers"
     assert wow.errors == []

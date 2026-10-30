@@ -1,0 +1,68 @@
+{
+ "nodes": [
+  {
+   "id": "flightpath:900",
+   "wx": 0.0,
+   "wy": 0.0,
+   "lattice": false
+  },
+  {
+   "id": "n:800:0",
+   "wx": 800.0,
+   "wy": 0.0,
+   "lattice": true
+  },
+  {
+   "id": "n:800:1000",
+   "wx": 800.0,
+   "wy": 1000.0,
+   "lattice": true
+  },
+  {
+   "id": "link:fixture-tunnel:a",
+   "wx": 0.0,
+   "wy": 1000.0,
+   "lattice": false
+  }
+ ],
+ "edges": [
+  {
+   "a": 0,
+   "b": 1,
+   "len": 800.0,
+   "swim": 0.0,
+   "cost": 800.0,
+   "pts": [
+    [
+     400.0,
+     -20.0
+    ]
+   ]
+  },
+  {
+   "a": 1,
+   "b": 2,
+   "len": 1000.0,
+   "swim": 100.0,
+   "cost": 1200.0,
+   "pts": [
+    [
+     820.0,
+     500.0
+    ]
+   ]
+  },
+  {
+   "a": 2,
+   "b": 3,
+   "len": 800.0,
+   "swim": 0.0,
+   "cost": 800.0,
+   "pts": []
+  }
+ ],
+ "dropped": [
+  "flightpath:901",
+  "link:fixture-tunnel:b"
+ ]
+}

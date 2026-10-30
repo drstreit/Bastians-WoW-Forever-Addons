@@ -119,6 +119,45 @@ def draw_ring(width: float) -> bytes:
     return _tga(_coverage(lambda x, y: inner <= (x - r) ** 2 + (y - r) ** 2 <= r * r))
 
 
+ORN_W, ORN_H = 256, 16
+
+
+def draw_ornament() -> bytes:
+    """The Azeroth skin's rule under a section title (ADR 0034): a line fading out at both ends,
+    a diamond in the middle and a dot on each side of it, white, 256 x 16."""
+    cx, cy = ORN_W / 2, ORN_H / 2
+
+    def inside(x: float, y: float) -> float:
+        if abs(x - cx) / 6.5 + abs(y - cy) / 5.5 <= 1:  # the diamond
+            return 1.0
+        for dx in (-13.0, 13.0):  # the dots
+            if (x - cx - dx) ** 2 + (y - cy) ** 2 <= 2.2**2:
+                return 1.0
+        if abs(y - cy) <= 0.75 and abs(x - cx) >= 17:  # the line, fading towards the ends
+            return max(0.0, min(1.0, (ORN_W / 2 - abs(x - cx)) / (ORN_W * 0.3)))
+        return 0.0
+
+    n = SAMPLES * SAMPLES
+    alphas = []
+    for py in range(ORN_H):
+        for px in range(ORN_W):
+            total = 0.0
+            for sy in range(SAMPLES):
+                for sx in range(SAMPLES):
+                    total += inside(px + (sx + 0.5) / SAMPLES, py + (sy + 0.5) / SAMPLES)
+            alphas.append(round(255 * total / n))
+    header = bytes(
+        [
+            *(0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            *ORN_W.to_bytes(2, "little"),
+            *ORN_H.to_bytes(2, "little"),
+            32,
+            0x28,
+        ]
+    )
+    return header + b"".join(bytes((255, 255, 255, a)) for a in alphas)
+
+
 # A corner drawn d pixels wide shows the 32 texels of a quarter: a one-pixel line needs 32 / d
 # texels. S for corners of about 4 px, M for 6 px, L for 10 px (the pills).
 RING_WIDTHS = {"RingS.tga": 8.0, "RingM.tga": 5.33, "RingL.tga": 3.2}
@@ -130,11 +169,17 @@ GLYPH_FILES = {
     for kind in glyphs.GLYPHS
 }
 
+# The tiles: Media/Tiles/<kind>.tga, the same symbols on a
+# rounded tile in their category's colour, what the icons show since (Icons.lua).
+TILE_FILES = {f"Tiles/{kind}.tga": (lambda kind=kind: glyphs.tile(kind)) for kind in glyphs.GLYPHS}
+
 FILES = {
     "Arrow.tga": draw_arrow,
     "Disc.tga": draw_disc,
+    "Ornament.tga": draw_ornament,
     **{name: (lambda w=w: draw_ring(w)) for name, w in RING_WIDTHS.items()},
     **GLYPH_FILES,
+    **TILE_FILES,
 }
 
 

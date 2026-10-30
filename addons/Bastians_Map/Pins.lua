@@ -2,12 +2,11 @@
 -- settles (Map.onSettle), pins are projected and drawn on every view change (Map.onView) from pools;
 -- grid clustering at low zoom, label priority with collision, areas with a radius, path lines, hover
 -- tooltip from the entity, left click = primary action, right click = entity menu, a cluster click
--- zooms in. The layers panel toggles every registered layer, grouped by owner.
+-- zooms in. The layer bar (LayerBar.lua) switches every registered layer.
 local _, ns = ...
 local B = Bastians
 local L = ns.L
 local S = B.UI.Style
-local Widgets = B.UI.Widgets
 local Map = ns.Map
 
 local Pins = {}
@@ -15,6 +14,7 @@ ns.Pins = Pins
 
 Pins.CLUSTER_LEVEL = 5 -- below this level pins that share a grid cell merge into a cluster
 Pins.CLUSTER_CELL = 36 -- pixels
+Pins.CLUSTER_ALPHA = 0.55 -- the cluster's disc: the map shows through
 Pins.LABEL_LEVEL = 4 -- labels from this level on
 Pins.LABEL_PRIORITY = 55 -- pins with a lower priority get no label
 Pins.MAX_PINS = 400 -- live pin frames
@@ -28,9 +28,11 @@ Pins.MAX_DASHES = 60 -- per segment; longer segments get longer dashes
 local parent, mod
 local layerPins = {} -- layerID -> array of pins (world coordinates) from the last query
 local pinPool, areaPool, linePool, labelPool = {}, {}, {}, {} -- exposed below for the tests
+local textPool = {} -- the text pins' words (zone names)
 Pins.pinPool, Pins.areaPool, Pins.linePool, Pins.labelPool = pinPool, areaPool, linePool, labelPool
+Pins.textPool = textPool
 local arrow
-Pins.stats = { pins = 0, clusters = 0, labels = 0, areas = 0, lines = 0 }
+Pins.stats = { pins = 0, clusters = 0, labels = 0, areas = 0, lines = 0, texts = 0 }
 
 local function db()
   return mod.db.profile
@@ -94,10 +96,30 @@ function Pins.MiniCardData(pin)
   if not ref then
     return nil
   end
+  -- the layer's own card (map.md "Pin cards"): { title, titleColor, lines = { { text, color,
+  -- size } } }, colours as theme tokens; the quest signs give theirs
+  if type(pin.card) == "function" then
+    local own = pin.card(pin)
+    if own then
+      return {
+        ref = ref,
+        name = own.title or pin.label,
+        nameColor = own.titleColor,
+        lines = own.lines or {},
+        layer = pin.layer,
+        hint = own.hint or L["Click to open"],
+      }
+    end
+  end
   local card = B.UI.Card(ref, { source = "map" })
   local lines = {}
   for _, line in ipairs(pin.lines or {}) do
     lines[#lines + 1] = line
+  end
+  if type(pin.info) == "function" then -- a layer's own lines, made when hovered (zone information)
+    for _, line in ipairs(pin.info() or {}) do
+      lines[#lines + 1] = line
+    end
   end
   -- a quest's rewards: up to three rows of the quest's Rewards
   -- section (money, xp, reputation or renown, the items), as the page lists them
@@ -119,12 +141,11 @@ function Pins.MiniCardData(pin)
       end
     end
   end
-  local yards = card.distance
-  if not yards and pin.wx and pin.wy then -- a quest behind a giver: the pin's own place
-    local continent, wx, wy = B.Coords.Player()
+  local away = card.away
+  if not away and pin.wx and pin.wy then -- a quest behind a giver: the pin's own place
     local cam = Map.Camera and Map.Camera() or nil
-    if continent and cam and cam.continent == continent then
-      yards = math.sqrt((pin.wx - wx) ^ 2 + (pin.wy - wy) ^ 2)
+    if cam then
+      away = B.UI.Away({ map = cam.continent, wx = pin.wx, wy = pin.wy })
     end
   end
   return {
@@ -132,7 +153,7 @@ function Pins.MiniCardData(pin)
     name = pin.label or card.name,
     words = card.status or card.summary,
     worth = card.worth and card.worth.text or nil,
-    distance = B.UI.Distance(yards),
+    distance = away,
     lines = lines,
     layer = pin.layer,
     hint = L["Click to open"],
@@ -166,7 +187,7 @@ local function miniCardFrame()
   f.name:SetPoint("RIGHT", f, "RIGHT", -8, 0)
   f.name:SetJustifyH("LEFT")
   f.rows = {}
-  for i = 1, 8 do
+  for i = 1, 16 do
     local fs = S.text(f, 11, S.C.dim)
     fs:SetPoint("RIGHT", f, "RIGHT", -8, 0)
     fs:SetJustifyH("LEFT")
@@ -186,9 +207,11 @@ end
 local function showMiniCard(frame, data)
   local f = miniCardFrame()
   f.name:SetText(data.name or "?")
+  local nc = S.C[data.nameColor or "accent"] or S.C.accent
+  f.name:SetTextColor(nc[1], nc[2], nc[3], 1)
   local y = 6 + 17
   local n = 0
-  local function line(text, color)
+  local function line(text, color, size)
     if not text or text == "" then
       return
     end
@@ -197,6 +220,7 @@ local function showMiniCard(frame, data)
     if not fs then
       return
     end
+    S.setSize(fs, size or 11)
     fs:SetText(text)
     fs:SetTextColor(color[1], color[2], color[3], 1)
     fs:ClearAllPoints()
@@ -209,7 +233,11 @@ local function showMiniCard(frame, data)
   line(data.worth and (L["worth"] .. " " .. data.worth) or nil, S.C.gold)
   line(data.distance, S.C.dim)
   for _, text in ipairs(data.lines) do
-    line(text, S.C.text)
+    if type(text) == "table" then -- a layer's own card line: { text, color (token), size }
+      line(text.text, S.C[text.color or "text"] or S.C.text, text.size)
+    else
+      line(text, S.C.text)
+    end
   end
   line(data.hint, S.C.dim)
   for i = n + 1, #f.rows do
@@ -372,19 +400,95 @@ local function lineTexture(i)
   return t
 end
 
+-- The map's words are dark in every style (the light theme text was hard
+-- to read on the maps); a text pin's ink token takes its map twin.
+local MAP_INK = { text = "mapText", dim = "mapTextDim", bright = "mapText" }
+
+-- A light rim around them (, the Burning Steppes: "can we add a white rim
+-- around it - then we have both contrast covered?"): the game's outline is black only, so the words
+-- again in the rim token, one pixel around them and behind them; no drop shadow.
+local RIM = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 }, { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
+
+local function rimmed(fs)
+  fs:SetShadowOffset(0, 0)
+  fs.rims = {}
+  for k, d in ipairs(RIM) do
+    local r = parent:CreateFontString(nil, "ARTWORK")
+    r:SetPoint("CENTER", fs, "CENTER", d[1], d[2])
+    r:SetJustifyH("CENTER")
+    r:SetShadowOffset(0, 0)
+    S.ink(r, S.C.mapTextRim)
+    fs.rims[k] = r
+  end
+  return fs
+end
+
+-- The rim takes the words' face and text and shows with them.
+local function rimSync(fs)
+  local face, size, flags = fs:GetFont()
+  local text = fs:GetText() or ""
+  local shown = fs:IsShown() and text ~= ""
+  for _, r in ipairs(fs.rims) do
+    if shown then
+      if face then
+        r:SetFont(face, size, flags)
+      end
+      r:SetText(text)
+    end
+    r:SetShown(shown)
+  end
+end
+
+local function rimHide(fs)
+  for _, r in ipairs(fs.rims or {}) do
+    r:Hide()
+  end
+end
+
 local function labelText(i)
   local fs = labelPool[i]
   if not fs then
-    fs = S.text(parent, 11, S.C.text)
+    fs = rimmed(S.text(parent, 11, S.C.mapText))
     fs:SetJustifyH("CENTER")
     labelPool[i] = fs
   end
   return fs
 end
 
+-- A text pin's words: the name, and the grey line under it (a zone's level band); a button over
+-- them gives the card when hovered and the menu on a right click, like a pin.
+local function textWords(i)
+  local fs = textPool[i]
+  if not fs then
+    fs = rimmed(S.text(parent, 14, S.C.mapText))
+    fs:SetJustifyH("CENTER")
+    fs.sub = rimmed(S.text(parent, 11, S.C.mapTextDim))
+    fs.sub:SetJustifyH("CENTER")
+    fs.hit = CreateFrame("Button", nil, parent)
+    fs.hit:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    fs.hit:SetScript("OnClick", onPinClick)
+    fs.hit:SetScript("OnEnter", showHover)
+    fs.hit:SetScript("OnLeave", Pins.LeavePin)
+    textPool[i] = fs
+  end
+  return fs
+end
+
+local function placeText(fs, sx, sy)
+  fs:ClearAllPoints()
+  fs:SetPoint("CENTER", parent, "TOPLEFT", sx, -sy)
+  fs.sub:ClearAllPoints()
+  fs.sub:SetPoint("TOP", fs, "BOTTOM", 0, -1)
+  fs.hit:ClearAllPoints()
+  fs.hit:SetPoint("TOPLEFT", fs, "TOPLEFT", -4, 2)
+  fs.hit:SetPoint("BOTTOMRIGHT", fs.sub, "BOTTOMRIGHT", 4, -2)
+  fs.hit.sx, fs.hit.sy = sx, sy
+end
+
 local function hideFrom(pool, n)
   for i = n + 1, #pool do
     pool[i]:Hide()
+    rimHide(pool[i])
   end
 end
 
@@ -456,7 +560,7 @@ function Pins.Render(cam)
   end
   local level = cam.level
   local clustering = level < Pins.CLUSTER_LEVEL
-  local cells, drawn = {}, {}
+  local cells, drawn, texts = {}, {}, {}
   local lines = 0
   for layerID, pins in pairs(layerPins) do
     local def = B:GetMapLayer(layerID)
@@ -481,6 +585,11 @@ function Pins.Render(cam)
               )
           end
           prev, prevWorld = { sx, sy }, pt
+        end
+      elseif pin.kind == "text" and pin.wx then
+        local sx, sy = cam:ToScreen(pin.wx, pin.wy)
+        if sx >= 0 and sy >= 0 and sx <= cam.width and sy <= cam.height then
+          texts[#texts + 1] = { pin = pin, sx = sx, sy = sy } -- words, never clustered
         end
       elseif pin.wx and pin.wy then
         local sx, sy = cam:ToScreen(pin.wx, pin.wy)
@@ -530,8 +639,8 @@ function Pins.Render(cam)
       clusters = clusters + 1
       f.pin = { isCluster = true, count = d.count, layer = d.layer }
       size = 22
-      f.icon:SetTexture(S.WHITE)
-      S.tint(f.icon, S.C.accent, 0.8)
+      f.icon:SetTexture(S.DISC) -- a round, see-through badge
+      S.tint(f.icon, S.C.accent, Pins.CLUSTER_ALPHA)
       f.count:SetText(tostring(d.count))
       f.count:Show()
     else
@@ -569,6 +678,7 @@ function Pins.Render(cam)
           fs:ClearAllPoints()
           fs:SetPoint("TOP", parent, "TOPLEFT", d.sx, -(d.sy + fs.below))
           fs:Show()
+          rimSync(fs)
         end
       end
     end
@@ -584,12 +694,69 @@ function Pins.Render(cam)
     end
     f:Show()
   end
+  -- the text pins, kept apart from each other and the labels, the higher priority first
+  table.sort(texts, function(a, b)
+    if (a.pin.priority or 50) ~= (b.pin.priority or 50) then
+      return (a.pin.priority or 50) > (b.pin.priority or 50)
+    end
+    return a.pin.label < b.pin.label
+  end)
+  local nTexts = 0
+  for _, t in ipairs(texts) do
+    -- a text pin may name its size, face, ink and outline (the place names, R27.6; the Blizzard
+    -- style's, ADR 0036, in Blizzard's line breaks); the box follows the size and the lines
+    local size = t.pin.size or 14
+    local longest, rows = 0, 0
+    for part in string.gmatch(t.pin.label .. "\n", "([^\n]*)\n") do
+      longest, rows = math.max(longest, #part), rows + 1
+    end
+    local w, h = longest * size * 0.57 + 8, (t.pin.sub and 16 or 4) + size * rows
+    local x1, y1 = t.sx - w / 2, t.sy - 9
+    local free = true
+    for _, rect in ipairs(labelRects) do
+      if x1 < rect[3] and x1 + w > rect[1] and y1 < rect[4] and y1 + h > rect[2] then
+        free = false
+        break
+      end
+    end
+    if free then
+      nTexts = nTexts + 1
+      labelRects[#labelRects + 1] = { x1, y1, x1 + w, y1 + h }
+      local fs = textWords(nTexts)
+      local font = t.pin.font or false
+      local flags = t.pin.outline and "OUTLINE" or ""
+      if fs.size ~= size or fs.face ~= font or fs.flags ~= flags then
+        fs:SetFont(t.pin.font or S.font(), S.size(size), flags)
+        S.fonts[fs] = not t.pin.font and size or nil -- the suite's font follows the font setting
+        fs.size, fs.face, fs.flags = size, font, flags
+      end
+      local ink = t.pin.ink or "text"
+      S.ink(fs, S.C[MAP_INK[ink] or ink] or S.C.mapText)
+      fs:SetText(t.pin.label)
+      fs.sub:SetText(t.pin.sub or "")
+      fs.pin, fs.hit.pin = t.pin, t.pin
+      placeText(fs, t.sx, t.sy)
+      fs:Show()
+      fs.sub:Show()
+      rimSync(fs)
+      rimSync(fs.sub)
+      fs.hit:Show()
+    end
+  end
+  for i = nTexts + 1, #textPool do
+    textPool[i]:Hide()
+    textPool[i].sub:Hide()
+    rimHide(textPool[i])
+    rimHide(textPool[i].sub)
+    textPool[i].hit:Hide()
+  end
   hideFrom(pinPool, pinsDrawn)
   hideFrom(areaPool, areas)
   hideFrom(labelPool, labels)
   Pins.UpdateArrow(cam)
   Pins.stats.pins, Pins.stats.clusters, Pins.stats.areas, Pins.stats.labels, Pins.stats.lines =
     pinsDrawn, clusters, areas, labels, lines
+  Pins.stats.texts = nTexts
 end
 
 -- Moves every shown pin, area, label and path piece to where it lies for the camera, from the
@@ -623,6 +790,13 @@ function Pins.Reposition(cam)
       local sx, sy = cam:ToScreen(fs.pin.wx, fs.pin.wy)
       fs:ClearAllPoints()
       fs:SetPoint("TOP", parent, "TOPLEFT", sx, -(sy + (fs.below or 9)))
+    end
+  end
+  for i = 1, Pins.stats.texts do
+    local fs = textPool[i]
+    if fs and fs.pin and fs:IsShown() then
+      local sx, sy = cam:ToScreen(fs.pin.wx, fs.pin.wy)
+      placeText(fs, sx, sy)
     end
   end
   for i = 1, Pins.stats.lines do
@@ -664,98 +838,11 @@ function Pins.Arrow()
 end
 
 -- ---------------------------------------------------------------------------------------------
--- Layers panel
--- ---------------------------------------------------------------------------------------------
-
-local panel
-
-function Pins.TogglePanel()
-  if panel and panel:IsShown() then
-    panel:Hide()
-    return
-  end
-  if not panel then
-    panel = CreateFrame("Frame", nil, Map.win.frame)
-    panel:SetFrameStrata("DIALOG")
-    panel:SetPoint("TOPRIGHT", Map.clip, "TOPRIGHT", -4, -4)
-    panel:SetWidth(220)
-    S.panel(panel, S.C.panel)
-    panel.rows = {}
-    panel.title = S.text(panel, 13, S.C.accent)
-    panel.title:SetPoint("TOPLEFT", 8, -6)
-    panel.title:SetText(L["Layers"])
-  end
-  Pins.RefreshPanel()
-  panel:Show()
-end
-
-function Pins.RefreshPanel()
-  if not panel then
-    return
-  end
-  local y = -26
-  local n = 0
-  local lastOwner
-  for _, def in ipairs(B:GetMapLayers()) do
-    local owner = def.owner.title or def.owner.name
-    if owner ~= lastOwner then
-      n = n + 1
-      local row = panel.rows[n]
-      if not row or row.kind ~= "header" then
-        row = Widgets.Header(panel, owner)
-        row.kind = "header"
-        panel.rows[n] = row
-      end
-      row:SetText(owner)
-      row:ClearAllPoints()
-      row:SetPoint("TOPLEFT", 8, y)
-      row:SetPoint("RIGHT", -8, 0)
-      row:Show()
-      y = y - 22
-      lastOwner = owner
-    end
-    n = n + 1
-    local row = panel.rows[n]
-    if not row or row.kind ~= "toggle" then
-      row = Widgets.Checkbox(panel, "", nil)
-      row.kind = "toggle"
-      panel.rows[n] = row
-    end
-    row.layerID = def.id
-    row.label:SetText(def.label or def.id)
-    row:SetChecked(Pins.IsLayerOn(def))
-    row:SetScript("OnClick", function(self)
-      self:SetChecked(not self.checked)
-      Pins.SetLayerOn(self.layerID, self.checked)
-    end)
-    row:ClearAllPoints()
-    row:SetPoint("TOPLEFT", 12, y)
-    row:SetPoint("RIGHT", -8, 0)
-    row:Show()
-    y = y - 22
-  end
-  for i = n + 1, #panel.rows do
-    panel.rows[i]:Hide()
-  end
-  panel:SetHeight(-y + 8)
-  panel.count = n
-end
-
-function Pins.Panel()
-  return panel
-end
-
--- ---------------------------------------------------------------------------------------------
 -- Wiring
 -- ---------------------------------------------------------------------------------------------
 
 table.insert(Map.onBuild, function(clip)
-  parent = clip
-  local button = S.button(Map.toolbar, L["Layers"], 60, 22)
-  button.tip = L["Which layers the map shows: quests, NPCs, nodes, routes and more."]
-  button:SetPoint("RIGHT", Map.toolbar.zoomOut, "LEFT", -8, 0)
-  button:SetScript("OnClick", Pins.TogglePanel)
-  Map.toolbar.layers = button
+  parent = clip -- the layers are switched on the layer bar (LayerBar.lua)
 end)
 table.insert(Map.onView, Pins.Render)
 table.insert(Map.onResize, Pins.Reposition)
@@ -771,7 +858,15 @@ table.insert(Map.onEnable, function(self)
       fn()
     end
   end)
-  self:On("BASTIANS_LAYER_CHANGED", function(me)
+  self:On("BASTIANS_LAYER_CHANGED", function(me, _, id, how)
+    -- "show": the owner wants it seen now (a new route): switch the layer on if it was off
+    local def = how == "show" and id and B:GetMapLayer(id)
+    if def and not Pins.IsLayerOn(def) then
+      db().layers[id] = true
+      if ns.LayerBar then
+        ns.LayerBar.LayersChanged()
+      end
+    end
     me:Coalesce("requery", 0.1, Pins.Requery)
     for _, fn in ipairs(Map.onLayerChanged) do
       fn() -- the minimap overlay (one bus handler per message and module)
@@ -789,8 +884,8 @@ table.insert(Map.onEnable, function(self)
       for _, fn in ipairs(Map.onLayerChanged) do
         fn()
       end
-      if panel and panel:IsShown() then
-        Pins.RefreshPanel()
+      if ns.LayerBar then
+        ns.LayerBar.LayersChanged()
       end
     end
   end)

@@ -15,7 +15,7 @@ local INVALIDATE_DELAY = 0.2 -- seconds after the last arrival before the entity
 -- it ("A Song for Our Future" was in the log, its name shown, and the search had never heard of
 -- it). Capped: past STORE_CAP names the oldest fifth goes (an insertion list keeps the order).
 Names.STORE_CAP = 20000
-local STORE_TYPES = { quest = true, item = true, npc = true }
+local STORE_TYPES = { quest = true, item = true, npc = true, recipe = true }
 local store -- global.names: { quest = { [id] = name }, item = {}, npc = {}, order = { "quest:1", ... } }
 local mod -- the Data module, set by Names.Attach
 
@@ -89,6 +89,8 @@ function Names.Get(typ, id)
     end
   elseif typ == "npc" then
     name = B.Compat.GetUnitNameByID(id) -- the client asks the server itself on a miss
+  elseif typ == "recipe" then
+    name = B.Compat.GetSpellName(id) -- retail's recipes come without names (28.10.2026)
   else
     return nil
   end

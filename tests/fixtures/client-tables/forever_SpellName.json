@@ -1,0 +1,14 @@
+{
+ "table": "SpellName",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 2660,
+   "Name_lang": "Rough Sharpening Stone"
+  },
+  {
+   "ID": 2018,
+   "Name_lang": "Blacksmithing"
+  }
+ ]
+}

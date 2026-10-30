@@ -75,13 +75,13 @@ def test_combat_and_the_toggle_keep_the_window_quiet(wow: WowRuntime):
     target(wow, "Creature-0-4469-0-12-54-0000ABCDEF")
     assert wow.eval(f"{BR}.Current().ref") == "zone:1429"  # in combat: ignored
     wow.set_combat(False)
-    # the toolbar toggle mirrors the setting
-    assert wow.eval(f"{MOD}.toolbar.target:IsShown()") is True
-    wow.execute(f"{MOD}.toolbar.target:Click()")
+    # the setting switches it
+    assert wow.eval(f"{MOD}.toolbar.target") is None
+    wow.execute(f"{BR}.ToggleTarget()")
     assert wow.eval(f"{MOD}.db.profile.followTarget") is False
     target(wow, "Creature-0-4469-0-12-54-0000ABCDEF")
     assert wow.eval(f"{BR}.Current().ref") == "zone:1429"  # off: ignored
-    wow.execute(f"{MOD}.toolbar.target:Click()")  # on again: the standing target is taken up
+    wow.execute(f"{BR}.ToggleTarget()")  # on again: the standing target is taken up
     assert wow.eval(f"{MOD}.db.profile.followTarget") is True
     assert wow.eval(f"{BR}.Current().ref") == "npc:54"
     assert wow.errors == []

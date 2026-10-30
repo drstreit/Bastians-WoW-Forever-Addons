@@ -4,6 +4,19 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("deDE", {
+  -- Views.lua, Quests.lua: the Library's leads in My quests
+  ["Tales"] = "Geschichten",
+  ["Click: open the journal"] = "Klick: das Tagebuch öffnen",
+  ["Show the open leads of the Library's tales (needs Bastian's Library)"] = "Die offenen Spuren der Geschichten der Bibliothek zeigen (braucht Bastian's Library)",
+
+  -- Round.lua, Window.lua: the quest round (R26.4)
+  ["%s (hand in)"] = "%s (abgeben)",
+  ["The quest round needs Bastian's Route."] = "Die Quest-Runde braucht Bastian's Route.",
+  ["No quest of the log has a place to go to."] = "Keine Quest im Log hat einen Ort, zu dem es geht.",
+  ["%d quests without a known place are left out of the round."] = "%d Quests ohne bekannten Ort bleiben aus der Runde.",
+  ["Quest round"] = "Quest-Runde",
+  ["A route through every open quest and every hand-in of the log, in the best order."] = "Eine Route durch jede offene Quest und jede Abgabe im Log, in der besten Reihenfolge.",
+
   -- Journey.lua
   ["%d min"] = "%d Min.",
   ["%d xp (%d/h)"] = "%d EP (%d/Std.)",
@@ -248,7 +261,7 @@ ns.L:Register("deDE", {
   ["No data for this entity. Is Bastian's Data installed and loaded?"] = "Keine Daten für diesen Eintrag. Ist Bastian's Data installiert und geladen?",
   ["Slim mode needs Bastian's Browser."] = "Der schmale Modus braucht Bastian's Browser.",
   ["Open Bastian's Quests"] = "Bastian's Quests öffnen",
-  ["Usage: /bq [here | log | all | attune | slim | tracker | journey | <questID>]"] = "Verwendung: /bq [here | log | all | attune | slim | tracker | journey | <questID>]",
+  ["Usage: /bq [here | log | all | attune | slim | tracker | journey | round | <questID>]"] = "Aufruf: /bq [here | log | all | attune | slim | tracker | journey | round | <Quest-ID>]",
   ["All quests"] = "Alle Quests",
   ["Attunements"] = "Einstimmungen",
 
@@ -280,4 +293,6 @@ ns.L:Register("deDE", {
   ["item"] = "Gegenstand",
   ["object"] = "Objekt",
   ["quest"] = "Quest",
+  ["Choice:"] = "Auswahl:",
+  ["Quest chain '%s' %d/%d"] = "Questreihe '%s' %d/%d",
 })

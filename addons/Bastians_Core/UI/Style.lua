@@ -1,6 +1,7 @@
 -- UI kit: flat style (core-contracts §13). The theme's surfaces, 1 px lines, one accent colour, no
--- Blizzard templates. Ported from AHSyncGuide Style.lua; the font comes from Core's profile, the
--- colours from the theme (ST3, ADR 0017), EllesmereUI is optional.
+-- Blizzard templates (but the game's window frame of the skin, ADR 0034). Ported from AHSyncGuide
+-- Style.lua; the font comes from Core's profile, the colours from the theme (ST3, ADR 0017),
+-- EllesmereUI is optional.
 local _, ns = ...
 local B = ns.B
 
@@ -11,7 +12,12 @@ ns.Style = S
 
 local WHITE = "Interface\\Buttons\\WHITE8X8"
 S.WHITE = WHITE
-S.DEFAULT_FONT = "Fonts\\ARIALN.TTF"
+-- The Asian clients (ADR 0033, 29.10.2026): ARIALN and Morpheus carry no Hangul or Han, so there
+-- the default font is the client's own (STANDARD_TEXT_FONT, set by FrameXML for its script) and
+-- the Azeroth headings stay in it.
+local CJK = { koKR = true, zhCN = true, zhTW = true }
+S.CJK = CJK[type(GetLocale) == "function" and GetLocale() or ""] or false
+S.DEFAULT_FONT = S.CJK and rawget(_G, "STANDARD_TEXT_FONT") or "Fonts\\ARIALN.TTF"
 -- The suite's own textures (tools/make_media.py): a 64x64 white arrow with a dark rim pointing
 -- east, tinted with SetVertexColor and turned with SetRotation.
 S.ARROW = "Interface\\AddOns\\Bastians_Core\\Media\\Arrow"
@@ -183,6 +189,93 @@ function S.applyFont()
   for fs, size in pairs(S.fonts) do
     fs:SetFont(path, S.size(size), "")
   end
+  for fs in pairs(S.headings) do
+    S.applyHeading(fs)
+  end
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- The skin (ADR 0034, core.md "The skin"): Modern (the flat kit) or Azeroth (Morpheus headings in
+-- gold, ornaments under section titles), the game's window frames as a switch of their own, and
+-- the content switches. The values live in Core's profile; S.Skin reads them with their defaults.
+-- ---------------------------------------------------------------------------------------------
+
+S.SKIN_DEFAULTS = {
+  skin = "modern",
+  skinFrames = false,
+  rowPortraits = true,
+  placeCuts = true,
+  diorama = true,
+  modelMotion = true,
+  pageSounds = true,
+}
+S.HEADING_FONT = "Fonts\\MORPHEUS.TTF"
+S.ORNAMENT = "Interface\\AddOns\\Bastians_Core\\Media\\Ornament"
+S.FRAME_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Border"
+
+function S.Skin(key)
+  local core = ns.core
+  local p = core and core.db and core.db.profile
+  local v = p and p[key]
+  if v == nil then
+    return S.SKIN_DEFAULTS[key]
+  end
+  return v
+end
+
+function S.Azeroth()
+  return S.Skin("skin") == "azeroth"
+end
+
+-- A heading: the kit's font at `size` in `color` (Modern), Morpheus at `azSize` in `azColor`
+-- (Azeroth); kept, so a skin, font or theme change applies at once.
+S.headings = setmetatable({}, { __mode = "k" })
+
+function S.applyHeading(fs)
+  local h = S.headings[fs]
+  if not h then
+    return
+  end
+  if S.Azeroth() then
+    fs:SetFont(S.CJK and S.font() or S.HEADING_FONT, S.size(h.azSize), "")
+    S.ink(fs, h.azColor)
+  else
+    fs:SetFont(S.font(), S.size(h.size), "")
+    S.ink(fs, h.color)
+  end
+end
+
+function S.heading(parent, size, azSize, color, azColor, layer)
+  local fs = S.text(parent, size, color, layer)
+  S.fonts[fs] = nil -- the heading keeps its own font
+  S.headings[fs] = {
+    size = size or 12,
+    azSize = azSize or size or 12,
+    color = color or S.C.text,
+    azColor = azColor or S.C.gold,
+  }
+  S.applyHeading(fs)
+  return fs
+end
+
+-- The gold ornament under a section title (Azeroth), hidden by the caller under Modern.
+function S.ornament(parent, layer)
+  local t = parent:CreateTexture(nil, layer or "BORDER")
+  t:SetTexture(S.ORNAMENT)
+  S.tint(t, S.C.gold)
+  t:SetHeight(8)
+  return t
+end
+
+-- A skin setting changed: the headings, the window frames, then every app draws again.
+function S.ApplySkin()
+  for fs in pairs(S.headings) do
+    S.applyHeading(fs)
+  end
+  if B.UI.ApplyWindowLook then
+    B.UI.ApplyWindowLook()
+  end
+  B:Fire("BASTIANS_THEME_CHANGED", S.themeId)
 end
 
 function S.hex(c)
@@ -558,6 +651,51 @@ function S.button(parent, label, width, height, accent)
   function b.SetEnabledFlat(self, on)
     self.enabledFlat = on and true or false
     self:SetAlpha(on and 1 or 0.4)
+  end
+  return b
+end
+
+-- A coloured button with a symbol:
+-- the face in a theme colour (`token`), the kind's tile left of the label; as wide as it needs
+-- unless `width` is given. Hover brightens the face.
+S.TILE_FACE_ALPHA, S.TILE_FACE_HOVER = 0.35, 0.55
+function S.tileButton(parent, label, kind, token, width, height)
+  height = height or 22
+  local b = CreateFrame("Button", nil, parent)
+  local color = S.C[token or "accent"] or S.C.accent
+  b.token = token or "accent"
+  b.face = S.roundFill(b, color, "radiusSmall")
+  S.tint(b.face, color, S.TILE_FACE_ALPHA)
+  b.edges = S.roundEdges(b, color, "radiusSmall")
+  S.setEdges(b.edges, color, 0.9)
+  local icon = kind and B.UI.IconTexture and B.UI.IconTexture(kind) or nil
+  local left = 6
+  if icon then
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetTexture(icon)
+    b.icon:SetSize(height - 6, height - 6)
+    b.icon:SetPoint("LEFT", 4, 0)
+    left = height
+  end
+  b.label = S.text(b, 12, S.C.text)
+  b.label:SetPoint("LEFT", left, 0)
+  b.label:SetJustifyH("LEFT")
+  b.label:SetText(label or "")
+  local w = b.label:GetStringWidth() or 0
+  if w == 0 then
+    w = #(label or "") * 6
+  end
+  b:SetSize(width or (left + w + 8), height)
+  b:SetScript("OnEnter", function(self)
+    S.tint(self.face, S.C[self.token] or S.C.accent, S.TILE_FACE_HOVER)
+    S.TipEnter(self)
+  end)
+  b:SetScript("OnLeave", function(self)
+    S.tint(self.face, S.C[self.token] or S.C.accent, S.TILE_FACE_ALPHA)
+    S.TipLeave(self)
+  end)
+  function b.SetLabel(self, text)
+    self.label:SetText(text)
   end
   return b
 end

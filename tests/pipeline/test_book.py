@@ -266,3 +266,17 @@ def test_a_plate_refuses_unknown_glyphs_and_tints():
     with pytest.raises(BookError, match="tint must be one of"):
         flow_plate({"nodes": [ok, {"glyph": "vendor", "title": "V", "tint": "red"}]}, "x.md")
     assert flow_plate({"nodes": [ok, {"glyph": "vendor", "title": "V", "tint": "gold"}]}, "x.md")
+
+
+def test_the_plates_box_puts_the_dots_back_on_their_map():
+    """("show a real map as background"): the plate's corners on its map
+    (fractions), so the zone's painting lies under the dots where the spawns are."""
+    world = world_with_book()
+    plate = world.get("page", "hogger-camp")["plate"]
+    fx0, fy0, fx1, fy1 = plate["box"]
+    assert 0 <= fx0 < fx1 <= 1.2 and fy0 < fy1
+    cx = sum(p[0] for p in plate["farm"]) / len(plate["farm"])
+    cy = sum(p[1] for p in plate["farm"]) / len(plate["farm"])
+    _, px, py = plate["place"]
+    # the farm's centre on the plate, through the box, is the farm's centre on the map
+    assert abs(fx0 + cx * (fx1 - fx0) - px) < 1e-3 and abs(fy0 + cy * (fy1 - fy0) - py) < 1e-3

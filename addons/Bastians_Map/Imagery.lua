@@ -1,26 +1,23 @@
 -- Imagery stage 1 (map.md, ADR 0007 fallback path): Blizzard's zone art tiles placed in world
--- coordinates through the map transforms, so Elwynn, Westfall and Duskwood join without seams, plus
--- zone borders and names as vector overlays. Pooled textures with a cap; only zones in view are drawn;
--- drawing happens on Map.onView, never per frame. Stage 2 (native minimap tiles, Map_Art) is B8.4.
+-- coordinates through the map transforms, so Elwynn, Westfall and Duskwood join without seams; no
+-- zone rectangles (29.10.2026; the zone names are the layer map.zones, Layers.lua). Pooled
+-- textures with a cap; only zones in view are drawn; drawing happens on Map.onView, never per frame.
+-- Stage 2 (native minimap tiles, Map_Art) is B8.4.
 local _, ns = ...
 local B = Bastians
-local L = ns.L
-local S = B.UI.Style
 local Map = ns.Map
 
 local Imagery = {}
 ns.Imagery = Imagery
 
 Imagery.MAX_TEXTURES = 300 -- live art textures (map.md budget)
-Imagery.LABEL_MIN_LEVEL = 1 -- zone names from this level on
-Imagery.BORDER_MIN_LEVEL = 0.5
 local MAX_DEPTH = 2 -- continent, zones, cities
+local UI_MAP_ZONE = 3 -- Enum.UIMapType.Zone: retail lists caves (5), dungeons (4) and orphans (6) too
 
 local parent -- the clip frame
-local pool, linePool, labelPool = {}, {}, {} -- exposed below for the tests
-Imagery.pool, Imagery.linePool, Imagery.labelPool = pool, linePool, labelPool
+local pool = {} -- exposed below for the tests
+Imagery.pool = pool
 local zonesByContinent = {} -- continent -> array of { map, name, depth, x1, y1, x2, y2, tiles }
-local zoneInfo = {} -- map -> { lo, hi } from Data when it has the zone
 
 -- ---------------------------------------------------------------------------------------------
 -- Geometry: which maps exist on a continent, where they lie in world yards, and their art tiles
@@ -36,7 +33,7 @@ local function worldRect(map)
 end
 
 -- The art tiles of a map: file id and the map-fraction rectangle each one covers, with the texture
--- coordinates of partly used edge tiles.
+-- coordinates of partly used edge tiles; then the art layer (its size and largest scale).
 local function tilesFor(map)
   local tiles = {}
   if type(C_Map.GetMapArtLayers) ~= "function" or type(C_Map.GetMapArtLayerTextures) ~= "function" then
@@ -66,7 +63,7 @@ local function tilesFor(map)
       }
     end
   end
-  return tiles
+  return tiles, info
 end
 
 local function mapName(map)
@@ -78,28 +75,32 @@ local function mapName(map)
   return info and info.name or ("map " .. map)
 end
 
--- Every map with art under the continent map, continent first, then zones, then cities.
+-- Every map with art under the continent map, continent first, then zones, then cities; `mapType`
+-- from the client (nil when it gives none).
 function Imagery.Zones(continent)
   local cached = zonesByContinent[continent]
   if cached then
     return cached
   end
   local list = {}
-  local root = B.Coords.CONTINENT_MAPS[continent]
-  local function add(map, depth)
+  local root = B.Coords.ContinentMap(continent) -- 13 on retail, 1415 on Forever (R28.4)
+  local function add(map, depth, mapType)
     local c, x1, y1, x2, y2 = worldRect(map)
     if c ~= continent then
       return false
     end
+    local tiles, layer = tilesFor(map)
     list[#list + 1] = {
       map = map,
       depth = depth,
+      mapType = mapType,
       name = mapName(map),
       x1 = x1,
       y1 = y1,
       x2 = x2,
       y2 = y2,
-      tiles = tilesFor(map),
+      tiles = tiles,
+      layer = layer,
     }
     return true
   end
@@ -110,7 +111,7 @@ function Imagery.Zones(continent)
         return
       end
       for _, child in ipairs(C_Map.GetMapChildrenInfo(parentMap) or {}) do
-        if add(child.mapID, depth) then
+        if add(child.mapID, depth, child.mapType) then
           walk(child.mapID, depth + 1)
         end
       end
@@ -123,25 +124,14 @@ function Imagery.Zones(continent)
     end
     return a.map < b.map
   end)
-  zonesByContinent[continent] = list
+  if #list > 0 then
+    zonesByContinent[continent] = list -- none found is asked again: the transforms may come later
+  end
   return list
 end
 
 function Imagery.Reset()
   zonesByContinent = {}
-  zoneInfo = {}
-end
-
-local function levelRange(map)
-  local cached = zoneInfo[map]
-  if cached ~= nil then
-    return cached or nil
-  end
-  local d = B:GetService("data")
-  local z = d and d:Get("zone", map)
-  local range = z and z.levelLo and z.levelHi and { lo = z.levelLo, hi = z.levelHi } or false
-  zoneInfo[map] = range
-  return range or nil
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -157,48 +147,6 @@ local function texture(i)
   return t
 end
 
-local function line(i)
-  local t = linePool[i]
-  if not t then
-    t = parent:CreateTexture(nil, "BORDER")
-    t:SetTexture(S.WHITE)
-    S.tint(t, S.C.grid)
-    linePool[i] = t
-  end
-  return t
-end
-
-local function label(i)
-  local f = labelPool[i]
-  if not f then
-    f = CreateFrame("Frame", nil, parent)
-    f:SetSize(120, 16)
-    f.text = S.text(f, 12, S.C.text)
-    f.text:SetPoint("CENTER")
-    f.text:SetJustifyH("CENTER")
-    f:EnableMouse(true)
-    f:SetScript("OnEnter", function(self)
-      if not (GameTooltip and self.map) then
-        return
-      end
-      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-      GameTooltip:AddLine(self.name or "", 1, 1, 1)
-      local range = levelRange(self.map)
-      if range then
-        S.TipLine(GameTooltip, L["Level"] .. " " .. range.lo .. "-" .. range.hi, "tipDim")
-      end
-      GameTooltip:Show()
-    end)
-    f:SetScript("OnLeave", function()
-      if GameTooltip then
-        GameTooltip:Hide()
-      end
-    end)
-    labelPool[i] = f
-  end
-  return f
-end
-
 local function place(region, sx1, sy1, sx2, sy2)
   region:ClearAllPoints()
   region:SetPoint("TOPLEFT", parent, "TOPLEFT", sx1, -sy1)
@@ -206,29 +154,16 @@ local function place(region, sx1, sy1, sx2, sy2)
   region:Show()
 end
 
--- One edge of a zone's screen rectangle as a 1 px line: 1 top, 2 bottom, 3 left, 4 right.
-local function placeEdge(t, sx1, sy1, sx2, sy2)
-  local edge = t.edge
-  if edge == 1 then
-    place(t, sx1, sy1, sx2, sy1 + 1)
-  elseif edge == 2 then
-    place(t, sx1, sy2 - 1, sx2, sy2)
-  elseif edge == 3 then
-    place(t, sx1, sy1, sx1 + 1, sy2)
-  else
-    place(t, sx2 - 1, sy1, sx2, sy2)
-  end
-end
-
-local function placeLabel(f, sx1, sy1, sx2, sy2)
-  f:ClearAllPoints()
-  f:SetPoint("CENTER", parent, "TOPLEFT", (sx1 + sx2) / 2, -(sy1 + sy2) / 2)
-  f:Show()
-end
-
 -- ---------------------------------------------------------------------------------------------
 -- Drawing
 -- ---------------------------------------------------------------------------------------------
+
+-- A zone or a city of the continent: its art. Caves, dungeons and the orphan maps
+-- retail lists under a zone are not (Fargodeep Mine drawn over Elwynn,
+-- their rectangles everywhere, a dungeon's parchment in the continent painting).
+function Imagery.IsZone(z)
+  return z.depth >= 1 and (z.mapType == nil or z.mapType == UI_MAP_ZONE)
+end
 
 local function intersects(cam, z)
   local x1, y1, x2, y2 = cam:Bounds()
@@ -242,7 +177,7 @@ local function screenRect(cam, wx1, wy1, wx2, wy2)
   return ax, ay, bx, by
 end
 
-Imagery.stats = { textures = 0, zones = 0, labels = 0 }
+Imagery.stats = { textures = 0, zones = 0 }
 
 -- The maps whose art intersects the view: { map, name, depth, tiles, w, h } in screen pixels, for
 -- `/bmap stats`.
@@ -264,90 +199,101 @@ function Imagery.Drawn(cam)
   return out
 end
 
+-- The draw sublevel of a map's art: the continent lowest, then the zones, then the cities; the zone
+-- and the city under the view's centre above their neighbours, whose rectangles overlap theirs. All
+-- below Map Art's overview (1) and the native tiles (2).
+function Imagery.Sublevel(z, cam)
+  if z.depth == 0 then
+    return -4
+  end
+  local inside = cam.wx >= z.x1 and cam.wx <= z.x2 and cam.wy >= z.y1 and cam.wy <= z.y2
+  return (z.depth == 1 and -3 or -1) + (inside and 1 or 0)
+end
+
+-- One art tile of map `z` (its map-fraction rectangle fx1..fy2) as pool texture `used + 1` when it
+-- lies in view; returns the new count. Map fractions to world yards through the map's transform
+-- (affine: two corners suffice).
+local function drawArt(used, cam, z, fx1, fy1, fx2, fy2, file, tcRight, tcBottom, sub)
+  if used >= Imagery.MAX_TEXTURES then
+    return used
+  end
+  local _, ax, ay = B.Coords.ToWorld(z.map, fx1, fy1)
+  local _, bx, by = B.Coords.ToWorld(z.map, fx2, fy2)
+  if not (ax and bx) then
+    return used
+  end
+  local sx1, sy1, sx2, sy2 =
+    screenRect(cam, math.min(ax, bx), math.min(ay, by), math.max(ax, bx), math.max(ay, by))
+  if sx2 < 0 or sy2 < 0 or sx1 > cam.width or sy1 > cam.height then
+    return used
+  end
+  used = used + 1
+  local t = texture(used)
+  if t.file ~= file or t.tcRight ~= tcRight or t.tcBottom ~= tcBottom then
+    t:SetTexture(file)
+    t:SetTexCoord(0, tcRight, 0, tcBottom)
+    t.file, t.tcRight, t.tcBottom = file, tcRight, tcBottom
+  end
+  if t.sub ~= sub then
+    t:SetDrawLayer("BACKGROUND", sub)
+    t.sub = sub
+  end
+  t.rect = { math.min(ax, bx), math.min(ay, by), math.max(ax, bx), math.max(ay, by) }
+  place(t, sx1, sy1, sx2, sy2)
+  return used
+end
+
+local function hideFrom(used)
+  for i = used + 1, #pool do
+    pool[i]:Hide()
+  end
+end
+
 function Imagery.Render(cam)
   if not parent then
     return
   end
-  local used, lines, labels, zonesDrawn = 0, 0, 0, 0
-  local level = cam.level
+  local style = Map.Style()
+  local used, zonesDrawn = 0, 0
+  -- the physical map: every zone's art under the ground tiles; the baked styles (ADR 0027, the
+  -- Blizzard one of ADR 0036) draw no painting here. No zone rectangles in any style (owner, retail
+  -- 29.10.2026: "remove them"; they were the paintings' frames, not the zones' borders)
+  local ours = style ~= "physical"
   for _, z in ipairs(Imagery.Zones(cam.continent)) do
-    if intersects(cam, z) then
+    if (z.depth == 0 or Imagery.IsZone(z)) and intersects(cam, z) then
       zonesDrawn = zonesDrawn + 1
-      for _, tile in ipairs(z.tiles) do
-        if used >= Imagery.MAX_TEXTURES then
-          break
-        end
-        -- the tile's map-fraction rectangle in world yards (affine: corners suffice)
-        local _, ax, ay = B.Coords.ToWorld(z.map, tile.fx1, tile.fy1)
-        local _, bx, by = B.Coords.ToWorld(z.map, tile.fx2, tile.fy2)
-        if ax and bx then
-          local sx1, sy1, sx2, sy2 =
-            screenRect(cam, math.min(ax, bx), math.min(ay, by), math.max(ax, bx), math.max(ay, by))
-          if sx2 >= 0 and sy2 >= 0 and sx1 <= cam.width and sy1 <= cam.height then
-            used = used + 1
-            local t = texture(used)
-            if t.file ~= tile.file then
-              t:SetTexture(tile.file)
-              t:SetTexCoord(0, tile.tcRight, 0, tile.tcBottom)
-              t.file = tile.file
-            end
-            t.rect = { math.min(ax, bx), math.min(ay, by), math.max(ax, bx), math.max(ay, by) }
-            place(t, sx1, sy1, sx2, sy2)
-          end
-        end
-      end
-      if z.depth >= 1 then
-        local sx1, sy1, sx2, sy2 = screenRect(cam, z.x1, z.y1, z.x2, z.y2)
-        if level >= Imagery.BORDER_MIN_LEVEL then
-          for edge = 1, 4 do
-            local t = line(lines + edge)
-            t.zone, t.edge = z, edge
-            placeEdge(t, sx1, sy1, sx2, sy2)
-          end
-          lines = lines + 4
-        end
-        if level >= Imagery.LABEL_MIN_LEVEL and z.depth == 1 then
-          labels = labels + 1
-          local f = label(labels)
-          f.map, f.name, f.zone = z.map, z.name, z
-          f.text:SetText(z.name)
-          placeLabel(f, sx1, sy1, sx2, sy2)
+      local sub = Imagery.Sublevel(z, cam)
+      if not ours then
+        for _, tile in ipairs(z.tiles) do
+          used = drawArt(
+            used,
+            cam,
+            z,
+            tile.fx1,
+            tile.fy1,
+            tile.fx2,
+            tile.fy2,
+            tile.file,
+            tile.tcRight,
+            tile.tcBottom,
+            sub
+          )
         end
       end
     end
   end
-  for i = used + 1, #pool do
-    pool[i]:Hide()
-  end
-  for i = lines + 1, #linePool do
-    linePool[i]:Hide()
-  end
-  for i = labels + 1, #labelPool do
-    labelPool[i]:Hide()
-  end
-  Imagery.stats.textures, Imagery.stats.zones, Imagery.stats.labels = used, zonesDrawn, labels
+  hideFrom(used)
+  Imagery.stats.textures, Imagery.stats.zones = used, zonesDrawn
   Imagery.stats.pool = #pool
 end
 
 -- Moves what is shown to where it lies for the camera, no texture is set or loaded (a resize in
--- progress): art tiles from their world rectangle, borders and names from their zone.
+-- progress): art tiles from their world rectangle.
 function Imagery.Reposition(cam)
   for i = 1, Imagery.stats.textures do
     local t = pool[i]
     if t and t.rect and t:IsShown() then
       place(t, screenRect(cam, t.rect[1], t.rect[2], t.rect[3], t.rect[4]))
-    end
-  end
-  for _, t in ipairs(linePool) do
-    if t.zone and t:IsShown() then
-      local z = t.zone
-      placeEdge(t, screenRect(cam, z.x1, z.y1, z.x2, z.y2))
-    end
-  end
-  for _, f in ipairs(labelPool) do
-    if f.zone and f:IsShown() then
-      local z = f.zone
-      placeLabel(f, screenRect(cam, z.x1, z.y1, z.x2, z.y2))
     end
   end
 end
@@ -363,6 +309,9 @@ table.insert(Map.onResize, Imagery.Reposition)
 table.insert(Map.onEnable, function(self)
   self:On("BASTIANS_DATA_LOADED", function()
     Imagery.Reset() -- new transforms or zone names
+    if ns.Layers then
+      ns.Layers.Reset() -- the zones of the map's own layers (Layers.lua)
+    end
     Map.ViewChanged()
   end)
 end)

@@ -76,8 +76,9 @@ WANTED: dict[str, tuple[str, ...]] = {
         "NpcFlags",
         "TrainerTemplateId",
         "Rank",
+        "Faction",  # a FactionTemplate id: the client's table says side and hostility
     ),
-    "creature": ("guid", "id", "map", "position_x", "position_y", "position_z"),
+    "creature": ("guid", "id", "map", "position_x", "position_y", "position_z", "spawndist"),
     "gameobject_template": ("entry", "type", "name"),
     "gameobject": ("guid", "id", "map", "position_x", "position_y", "position_z"),
     "npc_vendor": ("entry", "item", "maxcount", "incrtime"),
@@ -272,6 +273,7 @@ class SpawnRow:
     position_x: float  # world yards
     position_y: float
     position_z: float | None
+    spawndist: float | None = None  # yards the creature roams around its spawn (W5: area runs)
 
 
 @dataclass(frozen=True)
@@ -478,6 +480,7 @@ def spawn_rows(tables: dict[str, list[dict[str, Any]]]) -> list[SpawnRow]:
                     position_x=float(r["position_x"]),
                     position_y=float(r["position_y"]),
                     position_z=None if r.get("position_z") is None else float(r["position_z"]),
+                    spawndist=None if r.get("spawndist") in (None, "") else float(r["spawndist"]),
                 )
             )
     return out

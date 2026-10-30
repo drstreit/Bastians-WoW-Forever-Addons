@@ -25,6 +25,9 @@ def test_entity_refs_parse_and_build(app: WowRuntime):
     assert app.eval("Bastians.Entity.Parse('npc:448')") == ("npc", 448)
     assert app.eval("Bastians.Entity.Parse('node:herb-2')") == ("node", "herb-2")
     assert app.eval("Bastians.Entity.Parse('nonsense')") is None
+    assert app.eval("Bastians.Entity.Parse('gatherplus.route:7')") == ("gatherplus.route", 7)
+    assert app.eval("Bastians.Entity.Parse('entrance:36-1')") == ("entrance", "36-1")
+    assert app.eval("Bastians.Entity.Parse('npc.:1')") is None
     assert app.eval("Bastians.Entity.Make('quest', 176)") == "quest:176"
 
 
@@ -415,3 +418,164 @@ def test_detail_section_cache_keeps_the_newest_refs_only(app: WowRuntime):
     assert app.eval("builds") == 9  # the oldest went and is built again
     app.execute("Bastians.SECTION_CACHE_MAX = 64")
     assert app.errors == []
+
+
+def test_places_are_world_positions_derived_from_locations(app: WowRuntime):
+    """ADR 0026, W5: Places() converts the locations through Coords.ToWorld and keeps the map
+    fractions for drawing; a map without a transform keeps ui, x, y and has no world position."""
+    app.execute(
+        NEW_MODULE % "Prov"
+        + """
+        Bastians:RegisterEntityType(m, { type = "npc", priority = 100,
+          locations = function(id) return {
+            { map = 1429, x = 0.25, y = 0.5, src = "classic", wz = 56.1, kind = "spawn" },
+            { map = 999, x = 0.4, y = 0.6, src = "questie" },
+          } end })
+        Bastians:RegisterLocationFilter(m, { id = "first", types = { "npc" },
+          filter = function(ref, points) return { points[1] } end })
+        """
+    )
+    places = list(app.eval("Bastians:Entity('npc:448'):Places()").values())
+    assert len(places) == 1
+    p = places[0]
+    assert (p.map, p.wx, p.wy, p.wz) == (0, 0, 100, 56.1)
+    assert (p.ui, p.x, p.y, p.src, p.kind) == (1429, 0.25, 0.5, "classic", "spawn")
+    every = list(app.eval("Bastians:Entity('npc:448'):AllPlaces()").values())
+    assert len(every) == 2
+    unplaced = every[1]
+    assert (unplaced.map, unplaced.wx, unplaced.wy, unplaced.wz) == (None, None, None, None)
+    assert (unplaced.ui, unplaced.x, unplaced.y) == (999, 0.4, 0.6)
+
+
+def test_places_are_cached_until_the_entities_are_invalidated(app: WowRuntime):
+    app.execute(
+        NEW_MODULE % "Prov"
+        + """
+        where = 0.25
+        Bastians:RegisterEntityType(m, { type = "npc", priority = 100,
+          locations = function(id) return { { map = 1429, x = where, y = 0.5, src = "data" } } end })
+        """
+    )
+    assert (
+        app.eval("Bastians:Entity('npc:448'):Places() == Bastians:Entity('npc:448'):Places()")
+        is True
+    )
+    app.execute("where = 0.5; Bastians:InvalidateEntities('npc')")
+    assert app.eval("Bastians:Entity('npc:448'):Places()[1].x") == 0.5
+    assert app.eval("Bastians:Entity('npc:1'):Places()[1].wx") == 0
+
+
+def test_facets_answer_by_priority_and_type_and_cache_per_generation(app: WowRuntime):
+    """ADR 0026: RegisterFacet; the first table answer by priority wins, nil passes on."""
+    watch_registry(app)
+    app.execute(
+        NEW_MODULE % "Prov"
+        + """
+        calls = 0
+        Bastians:RegisterFacet(m, { facet = "poi", types = { "npc" }, priority = 100,
+          invalidateOn = { "TEST_POI" },
+          rule = function(ref) calls = calls + 1
+            if ref == "npc:1" then return { roles = { "rest.inn" } } end end })
+        local low = Bastians:NewModule("Low", { addon = "Bastians_TestApp" })
+        Bastians:RegisterFacet(low, { facet = "poi", types = "*", priority = 10,
+          rule = function(ref) return { roles = { "fallback" } } end })
+        """
+    )
+    assert list(app.eval("Bastians:Entity('npc:1'):Facet('poi').roles").values()) == ["rest.inn"]
+    assert list(app.eval("Bastians:Entity('npc:2'):Facet('poi').roles").values()) == ["fallback"]
+    assert list(app.eval("Bastians:Entity('quest:5'):Facet('poi').roles").values()) == ["fallback"]
+    assert app.eval("Bastians:Entity('npc:1'):Facet('activity')") is None
+    assert "facet:poi:true" in events(app)
+    calls = app.eval("calls")
+    app.eval("Bastians:Entity('npc:1'):Facet('poi')")
+    assert app.eval("calls") == calls  # cached
+    app.execute("Bastians:Fire('TEST_POI')")
+    app.eval("Bastians:Entity('npc:1'):Facet('poi')")
+    assert app.eval("calls") == calls + 1  # the message bumped the facet's generation
+    app.execute("Bastians:InvalidateFacet(nil)")
+    app.eval("Bastians:Entity('npc:1'):Facet('poi')")
+    assert app.eval("calls") == calls + 2
+    assert app.eval("Bastians:HasFacet('poi', 'npc')") is True
+    app.execute("Bastians:GetModule('Low'):Disable()")
+    assert app.eval("Bastians:Entity('npc:2'):Facet('poi')") is None
+    assert "facet:poi:false" in events(app)
+
+
+def test_worth_is_the_worth_facet(app: WowRuntime):
+    app.execute(
+        NEW_MODULE % "Prov"
+        + """
+        Bastians:RegisterWorth(m, { types = { "item" },
+          worth = function(ref) return { text = "1s", copper = 100 } end })
+        """
+    )
+    assert app.eval("Bastians:Entity('item:1'):Facet('worth').copper") == 100
+    assert app.eval("Bastians:Entity('item:1'):Worth().text") == "1s"
+    assert app.eval("Bastians:HasFacet('worth', 'item')") is True
+    assert app.eval("Bastians:HasWorth('npc')") is False
+
+
+EXTENSION = """
+local ext = Bastians:NewModule("GatherPlus", { addon = "Bastians_TestApp" })
+ok = Bastians:RegisterGraphExtension(ext, {
+  ns = "gatherplus", version = 2,
+  types = { route = {
+    name = function(id) return "Herb round " .. id end,
+    places = function(id) return { { map = 0, wx = 0, wy = 100, ui = 1429, src = "gatherplus" } } end,
+  } },
+  edges = { visits = { from = "gatherplus.route", to = "node" } },
+  facets = {
+    { facet = "activity", types = { "gatherplus.route" }, rule = function(ref) return { takes = 600 } end },
+    { facet = "gatherplus.score", types = "*", rule = function(ref) return { score = 3 } end },
+  },
+  profiles = { avoidHorde = function(way, character) return nil end },
+})
+"""
+
+
+def test_a_graph_extension_adds_types_facets_and_its_namespace(app: WowRuntime):
+    """ADR 0026, core-contracts §4: an extension's types are entity types under its namespace,
+    its facet rules join the registry, the rest waits for Data's graph in GraphExtensions()."""
+    watch_registry(app)
+    app.execute(EXTENSION)
+    assert app.eval("ok") is True
+    assert "graph:gatherplus:true" in events(app)
+    route = "Bastians:Entity('gatherplus.route:7')"
+    assert app.eval(f"{route}:Type()") == "gatherplus.route"
+    assert app.eval(f"{route}:Name()") == "Herb round 7"
+    # world places from the provider; map places for drawing derived from them
+    assert app.eval(f"{route}:AllPlaces()[1].wy") == 100
+    loc = app.eval(f"{route}:Locations()[1]")
+    assert loc.map == 1429 and abs(loc.x - 0.25) < 1e-6 and abs(loc.y - 0.5) < 1e-6
+    assert app.eval(f"{route}:Facet('activity').takes") == 600
+    assert app.eval("Bastians:Entity('npc:1'):Facet('gatherplus.score').score") == 3
+    ext = app.eval("Bastians:GraphExtensions().gatherplus")
+    assert ext.version == 2 and ext.edges.visits.to == "node"
+    app.execute("Bastians:GetModule('GatherPlus'):Disable()")
+    assert app.eval("Bastians:GraphExtensions().gatherplus") is None
+    assert app.eval("Bastians:HasEntityType('gatherplus.route')") is False
+    assert app.eval("Bastians:Entity('npc:1'):Facet('gatherplus.score')") is None
+    assert "graph:gatherplus:false" in events(app)
+
+
+def test_a_taken_or_bad_namespace_is_refused(app: WowRuntime):
+    app.execute(EXTENSION)
+    app.execute(
+        NEW_MODULE % "Second" + "second = Bastians:RegisterGraphExtension(m, { ns = 'gatherplus' })"
+    )
+    assert app.eval("second") is False
+    warns = [e.text for e in app.eval("Bastians:GetLog()").values() if e.level == "warn"]
+    assert any("graph extension namespace gatherplus is taken" in w for w in warns)
+    for n, bad in enumerate(("'Gather'", "'gather.plus'", "nil")):
+        err = app.eval(
+            f"select(2, pcall(Bastians.RegisterGraphExtension, Bastians, "
+            f"Bastians:NewModule('Bad{n}', {{ addon = 'Bastians_TestApp' }}), "
+            f"{{ ns = {bad} }}))"
+        )
+        assert "RegisterGraphExtension" in str(err), bad
+    err = app.eval(
+        "select(2, pcall(Bastians.RegisterGraphExtension, Bastians, "
+        "Bastians:NewModule('Thief', { addon = 'Bastians_TestApp' }), "
+        "{ ns = 'thief', facets = { { facet = 'gatherplus.score', rule = function() end } } }))"
+    )
+    assert "neither ours nor under thief" in str(err)

@@ -89,6 +89,7 @@ local function build()
   p.tracker = p.tracker or {}
   local fresh = p.tracker.pos == nil
   win = B.UI.Window("BastiansTrackerFrame", {
+    module = "Quests", -- the options button opens this page (R27.1)
     title = L["My quests"],
     width = DEFAULT_W,
     height = DEFAULT_H,
@@ -123,7 +124,9 @@ local function build()
     end
   end
   win.lock = S.button(win.head, L["Lock"], 54, 20)
-  win.lock:SetPoint("RIGHT", win.close, "LEFT", -4, 0)
+  -- left of the window's options button (R27.1) when it has one, else of the close button
+  win.lock:SetPoint("RIGHT", win.options or win.close, "LEFT", -4, 0)
+  win.title:SetPoint("RIGHT", win.lock, "LEFT", -4, 0)
   win.lock:SetScript("OnClick", Tracker.ToggleLock)
   win.lock.tip = function()
     local text = "Locked: the frame cannot be moved or resized. Click to switch;"
@@ -217,6 +220,7 @@ function Tracker.Toggle()
   end
   db().trackerFrame = not Tracker.Enabled()
   Tracker.Apply()
+  mod:Fire("BASTIANS_SETTING_CHANGED", mod.name, "trackerFrame", db().trackerFrame) -- the lead card
   return db().trackerFrame
 end
 

@@ -1,0 +1,18 @@
+{
+ "table": "QuestPOIBlob",
+ "build": "1.60.1.70685",
+ "rows": [
+  {
+   "ID": 10,
+   "QuestID": 76,
+   "UiMapID": 1429,
+   "ObjectiveIndex": 0
+  },
+  {
+   "ID": 11,
+   "QuestID": 76,
+   "UiMapID": 1429,
+   "ObjectiveIndex": -1
+  }
+ ]
+}

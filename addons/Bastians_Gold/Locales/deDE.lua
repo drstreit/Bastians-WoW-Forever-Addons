@@ -20,6 +20,11 @@ ns.L:Register("deDE", {
   ["AH %s after the cut, no vendor value"] = "AH %s nach Abzug, kein Händlerwert",
   [", slow (%.1f a day)"] = ", langsam (%.1f pro Tag)",
   ["Item"] = "Gegenstand",
+  -- the signals as things (W10 step 2)
+  ["Sell %s"] = "%s verkaufen",
+  ["Craft %s"] = "%s herstellen",
+  ["Farm %s"] = "%s farmen",
+  ["Avoid %s"] = "%s meiden",
 
   -- Capture.lua
   ["the listing arrived empty; nothing saved"] = "die Liste kam leer an; nichts gespeichert",

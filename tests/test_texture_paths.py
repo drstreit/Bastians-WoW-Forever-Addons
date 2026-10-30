@@ -9,6 +9,8 @@ it, because the source no longer holds a backslash at all.
 import re
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 # a quoted string starting with a texture root directly followed by a letter: the separator is gone
 LOST = re.compile(r"[\"'](Interface|World|Textures)(?=[A-Za-z])")
@@ -71,11 +73,37 @@ def test_every_own_texture_exists_and_matches_its_generator():
     assert len(kinds) >= 30
     assert any(rel == "Glyphs/" for _, _, rel in prefixes)
     for _, addon, rel in prefixes:
+        if addon == "Bastians_Library":
+            continue  # the book's own media: test_the_book_media_is_drawn_and_used
         for kind in kinds:
             assert (ROOT / "addons" / addon / "Media" / rel / f"{kind}.tga").exists(), kind
             assert f"{rel}{kind}.tga" in make_media.FILES, kind
     check = subprocess.run(
         [sys.executable, str(ROOT / "tools" / "make_media.py"), "--check"],
+        capture_output=True,
+        text=True,
+    )
+    assert check.returncode == 0, check.stdout
+
+
+@pytest.mark.skipif(
+    not (ROOT / "addons" / "Bastians_Library").is_dir(),
+    reason="the Library is private until it ships",
+)
+def test_the_book_media_is_drawn_and_used():
+    """The Library's book art (tools/make_book_media.py, library.md 10.1): every MEDIA .. "Name" the
+    reader draws is a file that ships, and the files are what the script draws."""
+    import subprocess
+    import sys
+
+    used = set()
+    for path in sorted((ROOT / "addons" / "Bastians_Library").glob("*.lua")):
+        used |= set(re.findall(r'MEDIA \.\. "(\w+)"', path.read_text(encoding="utf-8")))
+    assert {"Paper", "Leather", "Seal", "Ribbon"} <= used
+    media = ROOT / "addons" / "Bastians_Library" / "Media"
+    assert sorted(n for n in used if not (media / f"{n}.tga").is_file()) == []
+    check = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "make_book_media.py"), "--check"],
         capture_output=True,
         text=True,
     )

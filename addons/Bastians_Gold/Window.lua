@@ -34,29 +34,13 @@ local function view()
   return db().view or "today"
 end
 
-local function data()
-  return B:GetService("data")
-end
-
 local function prices()
   return B:GetService("prices")
 end
 
 -- The signals of the player's market from the Market pack, as records with their ids.
 local function marketSignals()
-  local d, service = data(), prices()
-  local market = service and service:Market() or nil
-  if not (d and market and d:PackLoaded("market")) then
-    return nil
-  end
-  local out = {}
-  for _, key in ipairs(d:Index("signal.byMarket", market.id) or {}) do
-    local s = d:Get("signal", key)
-    if s then
-      out[#out + 1] = s
-    end
-  end
-  return out
+  return ns.Signals.Market()
 end
 
 -- The context of the Today filters: capital, time, professions, now.
@@ -238,7 +222,12 @@ local function spotRows()
     rows[#rows + 1] = {
       id = "spot:" .. s.id,
       ref = "spot:" .. s.id,
-      text = s.name .. "  " .. S.H.muted .. (B:Entity("spot:" .. s.id):Summary() or "") .. "|r",
+      text = s.name
+        .. "  "
+        .. S.H.muted
+        .. (B:Entity("spot:" .. s.id):Summary() or "")
+        .. Spots.Away(s)
+        .. "|r",
       value = gph,
       valueKind = gph and "money" or nil,
       children = B:GetDetailSections("spot:" .. s.id)[1] and B:GetDetailSections("spot:" .. s.id)[1].rows
@@ -381,6 +370,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansGoldFrame", {
+    module = "Gold", -- the options button opens this page (R27.1)
     title = L["Gold"],
     width = 520,
     height = 480,
@@ -470,6 +460,7 @@ end
 function W.Register(self)
   mod = self
   self:On("BASTIANS_DATA_LOADED", W.Schedule)
+  self:On("BASTIANS_GRAPH_TIMES", W.Schedule) -- the spots' travel times (W8)
   self:On("BASTIANS_THEME_CHANGED", W.Schedule) -- the colour codes of the rows (ST3)
   self:RegisterEvent("PLAYER_MONEY", function()
     ns.Income.OnMoney() -- the day's income first (R9; one handler per event per module)

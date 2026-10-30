@@ -85,6 +85,7 @@ local mod = B:NewModule("Gold", {
     ns.Prices.Register(self)
     ns.Sections.Register(self)
     ns.Spots.Register(self)
+    ns.Signals.Register(self) -- the signals as things and activities (W10 step 2)
     ns.Window.Register(self)
   end,
   OnDisable = function()

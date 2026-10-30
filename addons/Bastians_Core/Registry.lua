@@ -55,12 +55,16 @@ function Entity.Make(entityType, id)
   return entityType .. ":" .. tostring(id)
 end
 
--- "npc:448" -> "npc", 448 ; "node:herb-2" -> "node", "herb-2" ; anything else -> nil
+-- "npc:448" -> "npc", 448 ; "node:herb-2" -> "node", "herb-2" ; an extension's type carries its
+-- namespace (ADR 0026): "gatherplus.route:7" -> "gatherplus.route", 7 ; anything else -> nil
 function Entity.Parse(ref)
   if type(ref) ~= "string" then
     return nil
   end
   local entityType, id = string.match(ref, "^([%l%d_]+):(.+)$")
+  if not entityType then
+    entityType, id = string.match(ref, "^([%l%d_]+%.[%l%d_]+):(.+)$")
+  end
   if not entityType then
     return nil
   end
@@ -179,6 +183,25 @@ function B:RegisterLocationFilter(owner, def)
   end)
 end
 
+-- Map places for drawing from a provider's world places (ADR 0026: an extension answers `places`):
+-- the map that holds the point best, its fractions; a place no map holds is left out.
+local function toLocations(places)
+  local out, coords = {}, B.Coords
+  for _, p in ipairs(places) do
+    if coords and p.map and p.wx and p.wy then
+      local ui = p.ui or coords.BestMap(p.map, p.wx, p.wy)
+      local x, y
+      if ui then
+        x, y = coords.ToMap(p.map, p.wx, p.wy, ui)
+      end
+      if x and y then
+        out[#out + 1] = { map = ui, x = x, y = y, wz = p.wz, r = p.r, kind = p.kind, src = p.src }
+      end
+    end
+  end
+  return out
+end
+
 -- Every place of the entity, merged from the providers in priority order, unfiltered.
 function Entity:AllLocations()
   if self.gen ~= generation then
@@ -193,13 +216,16 @@ function Entity:AllLocations()
   local list = providers[self.type]
   if list then
     for _, p in ipairs(list) do
+      local ok, points
       if p.locations then
-        local ok, points =
-          safecall(p.owner, label(p.locations, "entity " .. self.type .. " locations"), self.id)
-        if ok and type(points) == "table" then
-          for _, point in ipairs(points) do
-            merged[#merged + 1] = point
-          end
+        ok, points = safecall(p.owner, label(p.locations, "entity " .. self.type .. " locations"), self.id)
+      elseif p.places then
+        ok, points = safecall(p.owner, label(p.places, "entity " .. self.type .. " places"), self.id)
+        points = ok and type(points) == "table" and toLocations(points) or nil
+      end
+      if ok and type(points) == "table" then
+        for _, point in ipairs(points) do
+          merged[#merged + 1] = point
         end
       end
     end
@@ -229,48 +255,138 @@ function Entity:Locations()
   return points
 end
 
+-- Places (ADR 0026, core-contracts §4): world positions
+-- { map, wx, wy, wz, r, ui, x, y, kind, src }, `map` the Map.db2 id. W5 builds the interface over
+-- today's storage: a place is a location converted through Coords.ToWorld; `ui, x, y` stay for
+-- drawing. A location whose map has no transform (an instance floor) keeps `ui, x, y` with
+-- `map, wx, wy` nil. The packs move to world positions in W8.
+local function toPlaces(points)
+  local out = {}
+  local coords = B.Coords
+  for _, p in ipairs(points) do
+    local map, wx, wy
+    if coords and p.map and p.x and p.y then
+      map, wx, wy = coords.ToWorld(p.map, p.x, p.y)
+    end
+    out[#out + 1] = {
+      map = map,
+      wx = wx,
+      wy = wy,
+      wz = p.wz,
+      r = p.r,
+      ui = p.map,
+      x = p.x,
+      y = p.y,
+      kind = p.kind,
+      src = p.src,
+    }
+  end
+  return out
+end
+
+-- Every place of the entity, unfiltered.
+function Entity:AllPlaces()
+  local all = self:AllLocations()
+  local cached = self.values.allPlaces
+  if cached then
+    return cached
+  end
+  cached = toPlaces(all)
+  self.values.allPlaces = cached
+  return cached
+end
+
+-- The places that matter now: Locations() (through the location filters) as places.
+function Entity:Places()
+  local points = self:Locations()
+  local cached = self.values.places
+  if cached then
+    return cached
+  end
+  cached = toPlaces(points)
+  self.values.places = cached
+  return cached
+end
+
 -- ---------------------------------------------------------------------------------------------
--- Worth (§4, C3): what an entity is worth, in words and numbers, from the app that knows
+-- Facets (§4, ADR 0026): computed views on any entity: poi, activity, worth, an extension's own
 -- ---------------------------------------------------------------------------------------------
 
-local worthDefs = {} -- array of defs, highest priority first
-local worthGeneration = 0 -- bumped by the defs' invalidateOn messages
-local worthInvalidators = {} -- message -> true once subscribed
+local facetDefs = {} -- facet -> array of defs, highest priority first
+local facetGeneration = {} -- facet -> generation, bumped by registrations and invalidateOn messages
+local facetInvalidators = {} -- message -> { [facet] = true }, subscribed once per message
 
--- Bastians:RegisterWorth(owner, { types = { "quest" } | "*", priority = 50,
---   worth = function(ref) -> { text, copper, xp } | nil, invalidateOn = { messages } })
--- The first provider (by priority) with a table answer wins; nil means "no worth line". Answers
--- are cached per entity generation and per worth generation (the invalidateOn messages bump it).
-function B:RegisterWorth(owner, def)
-  require_(def, "types", "RegisterWorth")
-  require_(def, "worth", "RegisterWorth")
+local function bumpFacet(facet)
+  facetGeneration[facet] = (facetGeneration[facet] or 0) + 1
+end
+
+-- Bastians:RegisterFacet(owner, { facet = "poi", types = { "npc" } | "*", priority = 50,
+--   rule = function(ref) -> table | nil, invalidateOn = { messages },
+--   list = function(ctx) -> { refs } (optional, R26.11: the things worth asking about now) })
+-- The first rule (by priority) with a table answer wins; nil means the entity has no such facet.
+-- Answers are cached per entity generation and per facet generation.
+function B:RegisterFacet(owner, def)
+  require_(def, "facet", "RegisterFacet")
+  require_(def, "types", "RegisterFacet")
+  require_(def, "rule", "RegisterFacet")
   def.owner = owner
   def.priority = def.priority or 50
-  worthDefs[#worthDefs + 1] = def
-  table.sort(worthDefs, function(a, b)
+  local facet = def.facet
+  local list = facetDefs[facet] or {}
+  facetDefs[facet] = list
+  list[#list + 1] = def
+  table.sort(list, function(a, b)
     return a.priority > b.priority
   end)
-  worthGeneration = worthGeneration + 1
+  bumpFacet(facet)
   for _, msg in ipairs(def.invalidateOn or {}) do
-    if not worthInvalidators[msg] then
-      worthInvalidators[msg] = true
+    local facets = facetInvalidators[msg]
+    if not facets then
+      facets = {}
+      facetInvalidators[msg] = facets
       ns.on(msg, function()
-        worthGeneration = worthGeneration + 1
+        for f in pairs(facets) do
+          bumpFacet(f)
+        end
       end)
     end
+    facets[facet] = true
   end
+  changed("facet", facet, true)
   track(owner, function()
-    for i = #worthDefs, 1, -1 do
-      if worthDefs[i] == def then
-        table.remove(worthDefs, i)
+    for i = #list, 1, -1 do
+      if list[i] == def then
+        table.remove(list, i)
       end
     end
-    worthGeneration = worthGeneration + 1
+    bumpFacet(facet)
+    changed("facet", facet, false)
   end)
 end
 
-function B:HasWorth(entityType)
-  for _, def in ipairs(worthDefs) do
+-- The refs the facet's rules offer through their `list` (R26.11), each once, in rule order; a
+-- failing list is logged and left out.
+function B:FacetCandidates(facet, ctx)
+  local out, seen = {}, {}
+  for _, def in ipairs(facetDefs[facet] or {}) do
+    if def.list then
+      local ok, refs = safecall(def.owner, label(def.list, facet .. " list"), ctx)
+      if ok and type(refs) == "table" then
+        for _, ref in ipairs(refs) do
+          if type(ref) == "string" and not seen[ref] then
+            seen[ref] = true
+            out[#out + 1] = ref
+          end
+        end
+      end
+    end
+  end
+  return out
+end
+
+-- Whether a rule for the facet covers the type.
+function B:HasFacet(facet, entityType)
+  for _, def in ipairs(facetDefs[facet] or {}) do
     if hasType(def, entityType) then
       return true
     end
@@ -278,33 +394,140 @@ function B:HasWorth(entityType)
   return false
 end
 
--- Drops every cached worth (a price source changed outside the registered messages).
-function B:InvalidateWorth()
-  worthGeneration = worthGeneration + 1
+-- Drops the cached answers of one facet, or of every facet with nil.
+function B:InvalidateFacet(facet)
+  if facet then
+    bumpFacet(facet)
+    return
+  end
+  for f in pairs(facetDefs) do
+    bumpFacet(f)
+  end
 end
 
--- { text, copper, xp } or nil; cached until the entity or the worth generation moves.
-function Entity:Worth()
-  if self.worthGen ~= worthGeneration or self.worthEntityGen ~= generation then
-    self.worthValue = nil
-    self.worthGen, self.worthEntityGen = worthGeneration, generation
+-- The facet's table or nil; cached until the entity or the facet generation moves.
+function Entity:Facet(facet)
+  if self.facetEntityGen ~= generation then
+    self.facetValues, self.facetGens = {}, {}
+    self.facetEntityGen = generation
   end
-  local cached = self.worthValue
-  if cached ~= nil then
-    return cached or nil
+  local gen = facetGeneration[facet] or 0
+  if self.facetGens[facet] == gen then
+    return self.facetValues[facet] or nil
   end
   local result
-  for _, def in ipairs(worthDefs) do
+  for _, def in ipairs(facetDefs[facet] or {}) do
     if hasType(def, self.type) then
-      local ok, answer = safecall(def.owner, label(def.worth, "worth"), self.ref)
+      local ok, answer = safecall(def.owner, label(def.rule, facet), self.ref)
       if ok and type(answer) == "table" then
         result = answer
         break
       end
     end
   end
-  self.worthValue = result or false
+  self.facetValues[facet] = result or false
+  self.facetGens[facet] = gen
   return result
+end
+
+-- Worth (§4, C3) is the facet "worth": { text, copper, xp }. The calls of C3 stay as its names.
+-- Bastians:RegisterWorth(owner, { types, priority, worth = function(ref) -> table | nil,
+--   invalidateOn }) is RegisterFacet with facet = "worth" and rule = worth.
+function B:RegisterWorth(owner, def)
+  require_(def, "types", "RegisterWorth")
+  require_(def, "worth", "RegisterWorth")
+  def.facet, def.rule = "worth", def.worth
+  B:RegisterFacet(owner, def)
+end
+
+function B:HasWorth(entityType)
+  return B:HasFacet("worth", entityType)
+end
+
+-- Drops every cached worth (a price source changed outside the registered messages).
+function B:InvalidateWorth()
+  B:InvalidateFacet("worth")
+end
+
+-- { text, copper, xp } or nil.
+function Entity:Worth()
+  return self:Facet("worth")
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Graph extensions (§4, ADR 0026): another addon's node types, edge types, facet rules, cost
+-- profiles and annotations under one namespace. Data's graph reads them through GraphExtensions().
+-- ---------------------------------------------------------------------------------------------
+
+local extensions = {} -- ns -> def
+local OUR_FACETS = { poi = true, activity = true, worth = true }
+
+-- Bastians:RegisterGraphExtension(owner, { ns, version, types = { [name] = { name, icon, summary,
+--   places, locations, fields, priority } }, edges = { [name] = { from, to, props } },
+--   facets = { { facet, types, rule, priority, invalidateOn } }, profiles = { [name] = fn },
+--   annotate = fn }) -> true, or false when the namespace is taken (a log line says so).
+function B:RegisterGraphExtension(owner, def)
+  require_(def, "ns", "RegisterGraphExtension")
+  local name = def.ns
+  if type(name) ~= "string" or not name:match("^[a-z][a-z0-9]*$") then
+    error(("RegisterGraphExtension: ns %q must be lowercase letters and digits"):format(tostring(name)), 2)
+  end
+  if extensions[name] then
+    B:Log(owner, "warn", "graph extension namespace %s is taken; not registered", name)
+    return false
+  end
+  for _, f in ipairs(def.facets or {}) do
+    local facet = f.facet
+    if type(facet) ~= "string" or not (OUR_FACETS[facet] or facet:sub(1, #name + 1) == name .. ".") then
+      error(
+        ("RegisterGraphExtension: facet %q is neither ours nor under %s."):format(tostring(facet), name),
+        2
+      )
+    end
+  end
+  def.owner = owner
+  def.version = def.version or 1
+  extensions[name] = def
+  local typeNames = {}
+  for typ in pairs(def.types or {}) do
+    typeNames[#typeNames + 1] = typ
+  end
+  table.sort(typeNames)
+  for _, typ in ipairs(typeNames) do
+    local t = def.types[typ]
+    B:RegisterEntityType(owner, {
+      type = name .. "." .. typ,
+      priority = t.priority or 50,
+      name = t.name,
+      icon = t.icon,
+      summary = t.summary,
+      locations = t.locations,
+      places = t.places,
+      fields = t.fields,
+    })
+  end
+  for _, f in ipairs(def.facets or {}) do
+    B:RegisterFacet(owner, {
+      facet = f.facet,
+      types = f.types or "*",
+      priority = f.priority or 20, -- below ours (Data's poi rule is 100)
+      rule = f.rule,
+      invalidateOn = f.invalidateOn,
+    })
+  end
+  changed("graph", name, true)
+  track(owner, function()
+    if extensions[name] == def then
+      extensions[name] = nil
+      changed("graph", name, false)
+    end
+  end)
+  return true
+end
+
+-- ns -> def of every registered extension; read only (Data's graph).
+function B:GraphExtensions()
+  return extensions
 end
 
 local function facade(ref)
@@ -950,6 +1173,9 @@ B.SEARCH_TYPES = {
   objects = "object",
   zone = "zone",
   zones = "zone",
+  -- not "area": "Area 52" is a place's name
+  subzone = "area",
+  subzones = "area",
   node = "node",
   nodes = "node",
   herb = "node",
@@ -1056,7 +1282,19 @@ end
 -- Services (§11): one active provider per name, the enabled one with the highest priority
 -- ---------------------------------------------------------------------------------------------
 
-B.SERVICES = { data = true, prices = true, travel = true, progress = true, views = true } -- §11
+-- the service table of §11
+B.SERVICES = {
+  data = true,
+  prices = true,
+  travel = true,
+  progress = true,
+  views = true,
+  graph = true,
+  route = true,
+  notes = true,
+  facts = true,
+  library = true,
+}
 local services = {} -- name -> array of { owner, impl, priority }
 local active = {} -- name -> impl
 

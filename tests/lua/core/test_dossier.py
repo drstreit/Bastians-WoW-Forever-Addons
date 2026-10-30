@@ -132,13 +132,18 @@ def test_distance_to_the_nearest_place_on_the_players_continent(app: WowRuntime)
     assert app.eval("Bastians.UI.Distance(103.2)") == "103 yd"
     assert app.eval("Bastians.UI.Distance(1234)") == "1.2 k yd"
     assert app.eval("Bastians.UI.Distance(nil)") is None
+    assert app.eval("Bastians.UI.Duration(3)") == "< 1 min"
+    assert app.eval("Bastians.UI.Duration(42)") == "1 min"
+    assert app.eval("Bastians.UI.Duration(150)") == "3 min"
+    assert app.eval("Bastians.UI.Duration(3900)") == "1 h 05"
+    assert app.eval("Bastians.UI.Duration(nil)") is None
 
 
 def test_the_data_splits_sections_into_band_blocks_and_links(app: WowRuntime):
     app.execute(WORLD)
     data = app.eval("Bastians.UI.DossierData('npc:448', nil, { source = 'test' })")
     assert data.card.name == "Hogger" and data.card.status == "Alive and angry"
-    assert data.card.distance == 68
+    assert data.card.away == "68 yd"  # no graph network here: the straight line stands in
     assert [b.id for b in data.blocks.values()] == [
         "t.overview",
         "t.quests",
@@ -152,8 +157,8 @@ def test_the_data_splits_sections_into_band_blocks_and_links(app: WowRuntime):
     assert app.eval("Bastians.UI.DossierUtil.columns(420)") == 2
     assert app.eval("Bastians.UI.DossierUtil.columns(680)") == 3
     status = "Bastians.UI.DossierUtil.statusLine(%s)"
-    assert strip(app.eval(status % "{ status = 'Done', distance = 50 }")) == "Done  50 yd"
-    assert app.eval(status % "{ distance = 50 }") == "50 yd"
+    assert strip(app.eval(status % "{ status = 'Done', away = '3 min' }")) == "Done  3 min"
+    assert app.eval(status % "{ away = '3 min' }") == "3 min"
     assert app.eval(status % "{ status = 'Done' }") == "Done"
     assert app.eval(status % "{}") is None
 
@@ -312,7 +317,8 @@ def test_flat_tree_mode_has_no_fold_markers_and_opens_every_branch(core: WowRunt
     assert core.eval("tree.bar:IsShown()") is False and core.eval("tree.chips:IsShown()") is False
     assert core.eval("(select(4, tree.pool[2]:GetPoint(1)))") == 8  # a small step for children
     assert core.eval("(select(4, tree.pool[1].text:GetPoint(1)))") == 3  # no room kept for a marker
-    assert core.eval("(select(4, tree.pool[2].text:GetPoint(1)))") == 18  # icon, then the text
+    # the NPC's face (16 px, the skin's row portraits, ADR 0034), then the text
+    assert core.eval("(select(4, tree.pool[2].text:GetPoint(1)))") == 22
     assert core.errors == []
 
 

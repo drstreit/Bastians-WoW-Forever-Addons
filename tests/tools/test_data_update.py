@@ -50,6 +50,9 @@ def fake_build(extra: dict[str, list[str]] | None = None):
             "-- GENERATED\n-- 2 maps on 1 continent, 2 exact; forever; from the fixture\n",
             encoding="utf-8",
         )
+        (transforms / "Downloads.lua").write_text(  # the build's stub (build.py)
+            "-- GENERATED\n-- no download counts in this forever build\n", encoding="utf-8"
+        )
 
     return build
 
@@ -325,3 +328,99 @@ def test_the_pictures_come_from_the_export_else_from_the_approved_local_set(tmp_
     assert data_update.art_folder(export, local) == folder / "art"  # the export wins
     assert data_update.art_folder(None, tmp_path / "none") is None
     assert data_update.art_folder(None) is None  # the tests' .local points at an empty folder
+
+
+CONFIG = {"projects": {"Bastians_Suite": {"id": 1}, "Bastians_Data": {"id": 2}}}
+
+
+def test_the_download_counts_ride_along_outside_the_editions_hash(tmp_path: Path):
+    def transport(request):
+        count = 30 if request.full_url.endswith("/1") else 40
+        return json.dumps({"data": {"downloadCount": count}}).encode()
+
+    counts = data_update.downloads(CONFIG, transport, key="k", today="2026-10-29")
+    assert counts == {"at": "2026-10-29", "suite": 30, "data": 40}
+
+    def down(request):  # unknown is not zero: no answer, no counts
+        raise data_update.urllib.error.URLError("offline")
+
+    assert data_update.downloads(CONFIG, down, key="k") is None
+    packs = tmp_path / "packs"
+    fake_build()(inputs(tmp_path), packs)
+    folders = ["Bastians_Data", "Bastians_Data_World"]
+    before = data_update.data_hash(packs, folders, tmp_path / "none")
+    path = data_update.write_downloads(packs, counts)
+    text = path.read_text(encoding="utf-8")
+    assert "for forever" in text  # release.py's client mark
+    assert '"Data.RegisterDownloads", { at = "2026-10-29", suite = 30, data = 40 }' in text
+    assert data_update.data_hash(packs, folders, tmp_path / "none") == before
+    data_update.write_downloads(packs, None)  # no counts: what the build wrote stays
+    assert path.read_text(encoding="utf-8") == text
+
+
+def test_confirm_waits_for_curseforge_and_tells_live_refused_and_pending():
+    def answering(*states):
+        queue = list(states)
+
+        def transport(request):
+            status, available = queue.pop(0) if len(queue) > 1 else queue[0]
+            return json.dumps({"data": {"fileStatus": status, "isAvailable": available}}).encode()
+
+        return transport
+
+    slept = []
+    kw = {"config": CONFIG, "key": "k", "sleep": slept.append, "wait_s": 90, "step_s": 30}
+    state, words = data_update.confirm(9, transport=answering((1, False), (4, True)), **kw)
+    assert (state, words) == ("live", "approved and live") and slept == [30]
+    state, words = data_update.confirm(9, transport=answering((5, False)), **kw)
+    assert state == "refused" and "rejected" in words
+    slept.clear()
+    state, words = data_update.confirm(9, transport=answering((3, False)), **kw)
+    assert state == "pending" and "under review after 2 min" in words and slept == [30, 30, 30]
+    assert data_update.confirm(9, config=CONFIG, key="", transport=None)[0] == "unknown"
+
+    # The read API answers 404 until CurseForge approved the file (30.10.2026, the first run of
+    # the check): the run keeps asking, then says pending; any other HTTP error is "not checked".
+    def not_listed_then(*states):
+        """404 on the first call, then `states`; 404 forever without any."""
+        live = answering(*states) if states else None
+        calls = []
+
+        def transport(request):
+            calls.append(request)
+            if live is None or len(calls) == 1:
+                raise data_update.urllib.error.HTTPError(
+                    request.full_url, 404, "Not Found", {}, None
+                )
+            return live(request)
+
+        return transport
+
+    slept.clear()
+    state, words = data_update.confirm(9, transport=not_listed_then((4, True)), **kw)
+    assert (state, words) == ("live", "approved and live") and slept == [30]
+    slept.clear()
+    state, words = data_update.confirm(9, transport=not_listed_then(), **kw)
+    assert state == "pending" and "not yet listed" in words and "after 2 min" in words
+    assert slept == [30, 30, 30]
+
+    def forbidden(request):
+        raise data_update.urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, None)
+
+    assert data_update.confirm(9, transport=forbidden, **kw) == (
+        "unknown",
+        "not checked: CurseForge did not answer (HTTP Error 403: Forbidden)",
+    )
+
+
+def test_what_curseforge_said_is_kept_with_the_edition(tmp_path: Path):
+    ledger = tmp_path / "editions.json"
+    data_update.write_ledger(ledger, {"editions": [{"file_id": 9, "sent": True}, {"file_id": 8}]})
+    data_update.mark_status(ledger, 9, "pending")
+    assert data_update.read_ledger(ledger)["editions"][0] == {
+        "file_id": 9,
+        "sent": True,
+        "curseforge": "pending",
+    }
+    data_update.mark_status(ledger, 9, "live")
+    assert data_update.read_ledger(ledger)["editions"][0]["live"] is True

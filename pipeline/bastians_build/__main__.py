@@ -6,6 +6,8 @@ data   --client forever|retail [--addons <AddOns>] [--cmangos <dir>] [--probe <d
        [--taxi <TaxiNodes.json>] [--transports <toml>]
        [--dumps <folder> [--dump-prefix beta]]  clientdump UiMap/UiMapAssignment/TaxiNodes:
                                              map transform table from the client (no probe dump)
+       [--navmesh <folder>]                  the subzones from the navmesh area blocks and the
+                                             dumps' AreaTable (default <dumps>/navmesh_<client>)
        builds the data packs, plus Bastians_Data/Generated/MapTransforms.lua from a probe dump
 data   --client forever --fixture <dir>      the same from the hand-written fixture world (tests)
        [--export <dir>]                      plus Bastians_Data_Market from an AHSync export (B10.2)
@@ -24,11 +26,16 @@ mapart --client forever|retail --tiles <dir> [--overview <dir>] [--maps <Map.jso
        with --overview the stitched cells (<Map>_overview.json, clientdump overview) go into
        Bastians_Map_Art/Generated/ (Tiles/*.blp and Overview.lua)
 nav                                          later backlog item (B9)
+tales  <slug>... | --all [--source content/tales] [--out addons]
+       compiles each tale into its addon and refuses it with every problem (library.md 8.1)
+tales  --catalogue [--check]                 Bastians_Library/Catalogue.lua from
+                                             pipeline/config/tales_catalogue.toml
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -40,7 +47,17 @@ from bastians_build.build import build
 from bastians_build.candidates import candidates, write_report
 from bastians_build.canon import build_world
 from bastians_build.config import CLIENTS, CONFIG_DIR, ConfigError, load_config
+from bastians_build.corrections import (
+    apply_corrections,
+    captured_links,
+    captured_ride_waits,
+    captured_taxi_times,
+    read_corrections,
+)
+from bastians_build.emit import emit_pack
+from bastians_build.files import write_text
 from bastians_build.groundtruth import GroundTruthError, compare, read_truth, summary
+from bastians_build.l10n import add_l10n
 from bastians_build.load import SourcePaths, load_sources
 from bastians_build.mapart import (
     MapArtError,
@@ -51,15 +68,35 @@ from bastians_build.mapart import (
 )
 from bastians_build.market import add_market
 from bastians_build.mill import add_mill
+from bastians_build.nav import (
+    NavError,
+    emit_nav,
+    load_links,
+    nav_nodes,
+    nav_pack,
+    read_graphs,
+    stub,
+)
+from bastians_build.navnet import (
+    NavnetError,
+    danger_points,
+    graph_records,
+    read_levels,
+    read_taxi_rows,
+    taxi_rows,
+    tdb_danger,
+)
 from bastians_build.overview import install_overview
+from bastians_build.places import PlacesError, add_entrances, add_teleports, read_places
 from bastians_build.probetruth import check_probe
+from bastians_build.sources import client_tables
 from bastians_build.sources.ahsync_export import ExportError, read_export
 from bastians_build.sources.clientdump import ClientDumpError
 from bastians_build.sources.fixture import FixtureError, read_fixture
 from bastians_build.sources.probe import read_probe_dump, transform_table
 from bastians_build.themes import OUT as THEMES_OUT
 from bastians_build.themes import ThemeError, build_themes
-from bastians_build.transports import TransportError, add_transports
+from bastians_build.transports import TransportError, add_transports, read_transports
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -87,6 +124,12 @@ def build_parser() -> argparse.ArgumentParser:
         )
         p.add_argument(
             "--dump-prefix", default="beta", help="file prefix in --dumps (default beta)"
+        )
+        p.add_argument(
+            "--navmesh",
+            type=Path,
+            help='folder with clientdump\'s <Map>.navmesh files: the subzones (data.md "Areas"; '
+            "default <dumps>/navmesh_<client>, needs --dumps for the AreaTable)",
         )
         p.add_argument(
             "--ground-truth",
@@ -124,11 +167,29 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument(
             "--transports",
             type=Path,
-            help="transports TOML (default: pipeline/config/transports_<client>.toml; "
+            help="a TOML with [[transport]] rows (default: the places table, "
+            "pipeline/config/places_<client>.toml; "
             "the fixture world carries its own)",
         )
         p.add_argument(
+            "--tdb",
+            type=Path,
+            help="TrinityCore's retail world dump TDB_full_world_*.sql (sources.md; needs --dumps "
+            "with the client's FactionTemplate and ContentTuning)",
+        )
+        p.add_argument(
+            "--places",
+            type=Path,
+            help="our places table (default: pipeline/config/places_<client>.toml; ADR 0026)",
+        )
+        p.add_argument(
             "--no-eq-spawns", action="store_true", help="skip Everything Quests objective spots"
+        )
+        p.add_argument(
+            "--l10n",
+            type=Path,
+            help="QuestieDB's l10n lookups, <locale>/lookup*.lua (tools/fetch_questie_l10n.py): "
+            'the packs text_deDE, text_frFR, text_esES (data.md "Game data in other languages")',
         )
         p.add_argument(
             "--out", type=Path, default=Path("addons"), help="output root (default: addons)"
@@ -166,9 +227,91 @@ def build_parser() -> argparse.ArgumentParser:
         help="folder with clientdump overview output (<Map>_overview.json and the cell textures) "
         "for Bastians_Map_Art",
     )
+    p = sub.add_parser("nav", help="the walk network pack from tools/nav_build.py's graphs")
+    p.add_argument("--client", required=True, choices=CLIENTS)
+    p.add_argument(
+        "--graphs",
+        type=Path,
+        help="folder with <continent>.json and meta.json (default: .local/out/nav_<client>); "
+        "without graphs Nav.lua is a stub",
+    )
+    p.add_argument(
+        "--nodes",
+        type=Path,
+        help="the data build's nodes (default: build/nav-nodes-<client>.json)",
+    )
+    p.add_argument(
+        "--links", type=Path, help="connectors (default: pipeline/config/nav_<client>.toml)"
+    )
+    p.add_argument(
+        "--navnet",
+        type=Path,
+        help="folder with the local levels <continent>.json of clientdump navnet "
+        "(default: .local/out/navnet_<client>; ADR 0026)",
+    )
+    p.add_argument(
+        "--corrections",
+        type=Path,
+        help="what the mesh gets wrong: lifts, links, forbidden ground "
+        "(default: pipeline/config/nav_corrections_<client>.toml)",
+    )
+    p.add_argument(
+        "--captures",
+        type=Path,
+        help="the players' captured walks (tools/capture_import.py; "
+        "default: data/captures/<client>)",
+    )
+    p.add_argument(
+        "--agree", type=int, default=2, help="captures that must hold a walk for it to be a link"
+    )
+    p.add_argument("--out", type=Path, default=Path("addons"), help="output root (default: addons)")
     p = sub.add_parser("themes", help="compile the theme TOML files into Core's Themes.lua")
     p.add_argument("--check", action="store_true", help="exit 1 when Themes.lua is not current")
+    p = sub.add_parser("tales", help="compile the Library's tales or its catalogue (library.md 8)")
+    p.add_argument("slugs", nargs="*", help="tale folders under --source")
+    p.add_argument("--all", action="store_true", help="every tale under --source")
+    p.add_argument("--source", type=Path, help="default content/tales")
+    p.add_argument("--out", type=Path, default=Path("addons"), help="output root (default: addons)")
+    p.add_argument("--catalogue", action="store_true", help="compile Catalogue.lua instead")
+    p.add_argument("--check", action="store_true", help="with --catalogue: exit 1 when not current")
     return parser
+
+
+def run_tales(args: argparse.Namespace) -> int:
+    # the Library's compiler loads only for its command: the public snapshot has no Library
+    #
+    from bastians_build.tales import (
+        CATALOGUE_LUA,
+        CONTENT_DIR,
+        TaleError,
+        build_catalogue,
+        build_tale,
+        tale_folders,
+    )
+    from bastians_build.tales import advice as tale_advice
+
+    args.source = args.source or CONTENT_DIR
+    if args.catalogue:
+        current = build_catalogue(check=args.check)
+        if args.check:
+            print(f"{'current' if current else 'differs'}: {CATALOGUE_LUA}")
+            return 0 if current else 1
+        print(f"written: {CATALOGUE_LUA}")
+        return 0
+    folders = tale_folders(args.source) if args.all else [args.source / s for s in args.slugs]
+    if not folders:
+        print("error: name a tale or pass --all", file=sys.stderr)
+        return 2
+    failed = 0
+    for folder in folders:
+        try:
+            print(f"written: {build_tale(folder, args.out)}")
+            for path, message in tale_advice(folder):
+                print(f"advice: {folder.name}: {path}: {message}")
+        except (TaleError, OSError) as err:
+            print(f"error: {err}", file=sys.stderr)
+            failed += 1
+    return 2 if failed else 0
 
 
 def run_themes(args: argparse.Namespace) -> int:
@@ -229,12 +372,101 @@ def run_mapart(args: argparse.Namespace) -> int:
     return 0
 
 
+def report_ride_waits(captures_dir: Path, places_file: Path) -> None:
+    """The captured dock waits per transport against half its loop: a report, never the pack
+    (corrections.captured_ride_waits)."""
+    waits = captured_ride_waits(captures_dir)
+    if not waits:
+        return
+    cycles: dict[str, int] = {}
+    if places_file.is_file():
+        try:
+            cycles = {
+                f"transport:{t['id']}": t["cycle"]
+                for t in read_transports(places_file)
+                if t["cycle"]
+            }
+        except TransportError as err:
+            print(f"nav captures: {err}", file=sys.stderr)
+    for ref, (median, n, files) in waits.items():
+        cycle = cycles.get(ref)
+        against = f", half the loop is {cycle // 2} s" if cycle else ", no loop in the places table"
+        print(f"nav captures: {ref} waits {median} s (median of {n} in {files} captures){against}")
+
+
+def run_nav(args: argparse.Namespace) -> int:
+    """Bastians_Data_Nav/Generated/Nav.lua from the graphs, or the stub when there are none."""
+    graphs_dir = args.graphs or Path(".local") / "out" / f"nav_{args.client}"
+    nodes_path = args.nodes or Path("build") / f"nav-nodes-{args.client}.json"
+    links_path = args.links or CONFIG_DIR / f"nav_{args.client}.toml"
+    navnet_dir = args.navnet or Path(".local") / "out" / f"navnet_{args.client}"
+    corrections_path = args.corrections or CONFIG_DIR / f"nav_corrections_{args.client}.toml"
+    target = args.out / "Bastians_Data_Nav" / "Generated" / "Nav.lua"
+    try:
+        graphs, build_id = read_graphs(graphs_dir) if graphs_dir.is_dir() else ({}, None)
+        levels = read_levels(navnet_dir) if navnet_dir.is_dir() else {}
+        if not graphs and not levels:
+            write_text(target, stub(args.client))
+            print(f"nav: no graphs in {graphs_dir}, no levels in {navnet_dir}, wrote the stub")
+            return 0
+        given = json.loads(nodes_path.read_text(encoding="utf-8")) if nodes_path.is_file() else []
+        if levels:
+            # the world graph's network (ADR 0026): the record `graph` per continent
+            report = nodes_path.parent
+            danger_path = report / f"nav-danger-{args.client}.json"
+            taxi_path = report / f"nav-taxi-{args.client}.json"
+            danger = (
+                json.loads(danger_path.read_text(encoding="utf-8"))
+                if danger_path.is_file()
+                else None
+            )
+            taxi = read_taxi_rows(taxi_path) if taxi_path.is_file() else []
+            known = {int(n["id"].split(":")[1]) for n in given if n["id"].startswith("flightpath:")}
+            table = read_corrections(corrections_path)
+            captures_dir = args.captures or (Path("data") / "captures" / args.client)
+            for link in captured_links(captures_dir, args.agree):
+                table.links.append(link)
+                print(f"nav captures: {link.name} ({link.verified}) on continent {link.continent}")
+            for continent, level in sorted(levels.items()):
+                for line in apply_corrections(level, table):
+                    print(f"nav corrections {continent}: {line}")
+            taxi_times = captured_taxi_times(captures_dir, args.agree)
+            for (a, b), seconds in taxi_times.items():
+                print(f"nav captures: flight {a} > {b} takes {seconds} s")
+            report_ride_waits(captures_dir, CONFIG_DIR / f"places_{args.client}.toml")
+            records = graph_records(levels, danger, taxi, known or None, taxi_times or None)
+            build_id = build_id or next(iter(levels.values())).build
+            pack = nav_pack(graphs, given, load_links(links_path), args.client, build_id)
+            pack["graph"] = records
+            pack["sources"] = [*pack["sources"], "client collision mesh (clientdump navnet)"]
+            counts = "; ".join(
+                f"{c}: {len(lv.waypoints)} waypoints, {len(lv.ways)} ways"
+                for c, lv in sorted(levels.items())
+            )
+            text = emit_pack(
+                "nav", pack, comment=f"pack nav for {args.client}, build {build_id}; {counts}"
+            )
+        else:
+            text = emit_nav(graphs, given, load_links(links_path), args.client, build_id or "?")
+    except (NavError, NavnetError, OSError, ValueError) as err:
+        print(f"error: {err}", file=sys.stderr)
+        return 2
+    changed = write_text(target, text)
+    size = len(text.encode("utf-8")) // 1024
+    print(f"nav: {target} ({size} KB, {'changed' if changed else 'unchanged'})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "mapart":
         return run_mapart(args)
     if args.command == "themes":
         return run_themes(args)
+    if args.command == "tales":
+        return run_tales(args)
+    if args.command == "nav":
+        return run_nav(args)
     try:
         config = load_config(args.config)
         transforms = None
@@ -252,6 +484,8 @@ def main(argv: list[str] | None = None) -> int:
                 taxi=args.taxi,
                 dumps=args.dumps,
                 dump_prefix=args.dump_prefix,
+                tdb=args.tdb,
+                navmesh=args.navmesh,
             )
             sources = load_sources(args.client, paths, eq_spawns=not args.no_eq_spawns)
             world = build_world(sources)
@@ -264,11 +498,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             if attunements.is_file():
                 add_attunements(world, attunements)
-            transports_file = args.transports or (
-                (args.config or CONFIG_DIR / "build.toml").parent / f"transports_{args.client}.toml"
+            places_file = args.places or (
+                (args.config or CONFIG_DIR / "build.toml").parent / f"places_{args.client}.toml"
             )
+            transports_file = args.transports or places_file
             if transports_file.is_file():
                 add_transports(world, transports_file, sources.transforms or None)
+            if places_file.is_file():
+                tables = read_places(places_file)
+                add_entrances(world, tables["entrance"], sources.transforms or None)
+                add_teleports(world, tables["teleport"])
         else:
             print(
                 "error: give --fixture, or --addons / --cmangos / --probe / --taxi / --dumps",
@@ -278,6 +517,20 @@ def main(argv: list[str] | None = None) -> int:
         export = read_export(args.export) if args.export else None
         if export:
             add_market(world, export, config.market)
+        # the client's own item names in every installed text language (ADR 0035); Forever only:
+        # the retail client names its items in its own language at runtime, and the names of every
+        # referred item made each retail language pack 10.8 MB (29.10.2026)
+        client_names = (
+            client_tables.localized_names(args.dumps, args.client)
+            if args.dumps and args.client == "forever"
+            else {}
+        )
+        if args.l10n or args.tdb or client_names:
+            # the game data in other languages (data.md, ADR 0033): QuestieDB's l10n lookups and
+            # CMaNGOS' quest locales (German, Chinese) for Forever, TDB's locale tables for retail
+            added = add_l10n(world, args.l10n, args.cmangos, args.tdb, client_names)
+            for locale, n in added.items():
+                print(f"l10n {locale}: {n} records")
         checks = compare(world, read_truth(args.ground_truth)) if args.ground_truth else None
         probe_truth = None
         if args.probe:
@@ -322,6 +575,21 @@ def main(argv: list[str] | None = None) -> int:
             continent_names=continent_names,
             probe_truth=probe_truth,
         )
+        if args.command != "check" and not args.fixture:
+            # the walk network's nodes for tools/nav_build.py (ADR 0025)
+            nodes_path = args.report_dir / f"nav-nodes-{world.client}.json"
+            write_text(nodes_path, json.dumps(nav_nodes(world), indent=1, sort_keys=True) + "\n")
+            # the world graph's network (ADR 0026, W3b): danger points and the taxi paths
+            danger_path = args.report_dir / f"nav-danger-{world.client}.json"
+            danger = danger_points(world, transforms)
+            extra = tdb_danger(sources.tdb)  # retail: the hostile spawns stay out of the pack
+            danger["hostile"] += extra["hostile"]
+            danger["guards"] += extra["guards"]
+            write_text(danger_path, json.dumps(danger, sort_keys=True) + "\n")
+            if sources.taxi_paths:
+                taxi_path = args.report_dir / f"nav-taxi-{world.client}.json"
+                rows = taxi_rows(sources.taxi_paths)
+                write_text(taxi_path, json.dumps(rows, indent=0, sort_keys=True) + "\n")
     except (
         AttunementError,
         BookError,
@@ -331,6 +599,7 @@ def main(argv: list[str] | None = None) -> int:
         ExportError,
         FixtureError,
         GroundTruthError,
+        PlacesError,
         TransportError,
         OSError,
         ValueError,

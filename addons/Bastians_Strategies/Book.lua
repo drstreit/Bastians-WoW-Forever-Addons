@@ -394,3 +394,16 @@ function Book.Moment(link)
   end
   return string.format("%d:%02d", math.floor(t / 60), t % 60)
 end
+
+-- The book on the web (ADR 0023): every page id has a permanent address on bastians.dev, the same
+-- one tools/diary_site.py writes (its URL; a test holds the two together).
+Book.WEB = "https://bastians.dev/wow/my-gold-diary/"
+
+-- The page's address on the web: the id as it is (ids are file names, lower case and dashes);
+-- without an id the diary's front page.
+function Book.WebURL(id)
+  if not id or id == "" then
+    return Book.WEB
+  end
+  return Book.WEB .. id .. "/"
+end

@@ -194,7 +194,10 @@ function Tiles.Visible(continent, wx1, wy1, wx2, wy2, margin)
 end
 
 -- ---------------------------------------------------------------------------------------------
--- Tile layers: a layer is { live = { key -> texture }, free = { textures }, stats, sublevel, blend }.
+-- Tile layers: a layer is { live = { key -> texture }, free = { textures }, stats, sublevel, blend },
+-- optionally `parent` (the frame it draws on: the minimap's view, Mini.lua; else the map's clip)
+-- and `mask` (a mask texture every texture of the layer takes: the round minimap). A tile may
+-- carry `tc = { right, bottom }` for a partly used edge tile (Blizzard's paintings).
 -- Tiles itself is the native layer; Overview.lua (Bastians_Map_Art cells) is another one.
 -- ---------------------------------------------------------------------------------------------
 
@@ -245,14 +248,15 @@ local function placeTile(t, cam, tile)
   local sx1, sy1 = cam:ToScreen(tile.x2, tile.y2) -- north-west corner: top-left on the screen
   local sx2, sy2 = cam:ToScreen(tile.x1, tile.y1)
   t:ClearAllPoints()
-  t:SetPoint("TOPLEFT", parent, "TOPLEFT", sx1, -sy1)
+  t:SetPoint("TOPLEFT", t:GetParent() or parent, "TOPLEFT", sx1, -sy1)
   t:SetSize(math.max(1, sx2 - sx1) + Tiles.OVERLAP, math.max(1, sy2 - sy1) + Tiles.OVERLAP)
 end
 
 -- Draws the first `cap` entries of `wanted` ({ key, file, path, x1, y1, x2, y2 } in world yards,
 -- nearest first): a tile in view keeps its texture across pans, the rest go back to the pool.
 function Tiles.Draw(layer, cam, wanted, cap)
-  if not parent then
+  local host = layer.parent or parent
+  if not host then
     return
   end
   if layer.continent ~= cam.continent then
@@ -275,16 +279,32 @@ function Tiles.Draw(layer, cam, wanted, cap)
   for i = 1, n do
     local tile = wanted[i]
     local t = layer.live[tile.key]
+    if t and (t.path ~= tile.path or t.fileId ~= tile.file) then
+      -- the same position, another picture (a new map style): the file follows; keys are only
+      -- positions, so a kept texture showed the old style until a zoom brought new keys, and the far
+      -- and near cells could show two styles
+      Tiles.SetFile(t, tile)
+      t.path, t.fileId = tile.path, tile.file
+      t:SetTexCoord(0, tile.tc and tile.tc[1] or 1, 0, tile.tc and tile.tc[2] or 1)
+      if tile.mask or t.maskPath then
+        t.maskPath = B.Compat.AddMask(t, tile.mask) and tile.mask or nil
+      end
+    end
     if not t then
       t = table.remove(layer.free)
       if not t then
-        t = parent:CreateTexture(nil, "BACKGROUND", nil, layer.sublevel) -- above the zone art (sublevel 0)
+        t = host:CreateTexture(nil, "BACKGROUND", nil, layer.sublevel) -- above the zone art (sublevel 0)
         if layer.blend then
           t:SetBlendMode(layer.blend)
         end
+        if layer.mask and t.AddMaskTexture then
+          t:AddMaskTexture(layer.mask)
+          t.layerMask = layer.mask
+        end
       end
       Tiles.SetFile(t, tile)
-      t:SetTexCoord(0, 1, 0, 1)
+      t.path, t.fileId = tile.path, tile.file
+      t:SetTexCoord(0, tile.tc and tile.tc[1] or 1, 0, tile.tc and tile.tc[2] or 1)
       t.tile = tile.key
       layer.live[tile.key] = t
       if tile.mask or t.maskPath then
@@ -300,6 +320,28 @@ function Tiles.Draw(layer, cam, wanted, cap)
   end
   layer.stats.shown, layer.stats.wanted = shown, #wanted
   layer.stats.skipped = #wanted - shown
+end
+
+-- Gives every texture of the layer, live or pooled, the mask (nil: none): the minimap's shape.
+function Tiles.SetLayerMask(layer, mask)
+  layer.mask = mask
+  local function apply(t)
+    if t.layerMask ~= mask and t.AddMaskTexture then
+      if t.layerMask then
+        t:RemoveMaskTexture(t.layerMask)
+      end
+      if mask then
+        t:AddMaskTexture(mask)
+      end
+      t.layerMask = mask
+    end
+  end
+  for _, t in pairs(layer.live) do
+    apply(t)
+  end
+  for _, t in ipairs(layer.free) do
+    apply(t)
+  end
 end
 
 -- Moves the live textures of the layer to where their tiles lie for the camera, nothing else: what
@@ -366,7 +408,12 @@ function Tiles.Render(cam)
   if not parent then
     return
   end
-  if not Tiles.Enabled() or cam.level < Tiles.MIN_LEVEL or Tiles.Needed(cam) > Tiles.MAX_TEXTURES then
+  if
+    not Tiles.Enabled()
+    or Map.Style() ~= "physical"
+    or cam.level < Tiles.MIN_LEVEL
+    or Tiles.Needed(cam) > Tiles.MAX_TEXTURES
+  then
     Tiles.Clear(Tiles)
     return
   end

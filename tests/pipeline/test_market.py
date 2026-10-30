@@ -141,7 +141,17 @@ def test_market_pack_is_optional_and_the_golden_matches(tmp_path):
     world = read_fixture(WORLD, "forever")
     result = build(world, config, tmp_path)
     assert all(p.pack.name != "market" for p in result.packs)
-    assert result.skipped == ["market", "book"]  # the Strategies book is optional too
+    # the Strategies book and the language packs (ADR 0033) are optional too
+    assert result.skipped == [
+        "market",
+        "book",
+        "text_deDE",
+        "text_frFR",
+        "text_esES",
+        "text_koKR",
+        "text_zhCN",
+        "text_zhTW",
+    ]
     # the client still finds the file its TOC lists: a stub that registers nothing (21.10.2026)
     stub = (tmp_path / "Bastians_Data_Market" / "Generated" / "Market.lua").read_text(
         encoding="utf-8"

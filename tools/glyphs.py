@@ -536,12 +536,51 @@ def _leather() -> Shape:  # a stretched hide
     return cut(polygon(pts), circle(32, 31, 3))
 
 
+def _chain() -> Shape:  # a quest chain: two links, one through the other
+    a = cut(capsule(17, 40, 31, 26, 9), capsule(17, 40, 31, 26, 4.5))
+    b = cut(capsule(33, 38, 47, 24, 9), capsule(33, 38, 47, 24, 4.5))
+    return union(cut(a, b, gap=2.4), b)
+
+
+def _object() -> Shape:  # a game object: a crate with a brace
+    frame = cut(box(9, 9, 55, 55, 4), box(15, 15, 49, 49, 1))
+    brace = intersect(capsule(15, 49, 49, 15, 4), box(14, 14, 50, 50))
+    return union(frame, brace)
+
+
+def _grave() -> Shape:  # a gravestone with a cross on a mound: the place of death (R26.8)
+    stone = union(box(17, 24, 47, 52, 2), circle(32, 24, 15))
+    cross = union(box(29.5, 15, 34.5, 42, 1), box(23, 22, 41, 27, 1))
+    return union(cut(stone, cross), box(9, 52, 55, 58, 3))
+
+
+def _note() -> Shape:  # a sheet with a folded corner and three lines: Bastian's Notes
+    sheet = polygon([(14, 6), (40, 6), (52, 18), (52, 58), (14, 58)])
+    fold = polygon([(40, 6), (40, 18), (52, 18)])
+    lines = [capsule(21, y, 45, y, 1.6) for y in (28, 38, 48)]
+    return union(cut(sheet, fold, *lines), fold)
+
+
+def _buttons() -> Shape:  # four round buttons in a frame: the minimap buttons' box (28.10.2026)
+    frame = cut(box(6, 6, 58, 58, 9), box(11, 11, 53, 53, 6))
+    dots = [circle(x, y, 8.5) for x, y in ((23, 23), (41, 23), (23, 41), (41, 41))]
+    return union(frame, *dots)
+
+
 def _ledger() -> Shape:  # a closed book with a coin on its cover: Bastian's Gold Rumours
     cover = box(12, 6, 54, 58, 5)
     spine = box(12, 6, 20, 58, 3)
     book = cut(cover, capsule(20.5, 9, 20.5, 55, 1.0))
     coin = cut(circle(38, 32, 10), ring(38, 32, 6, 2.0))
     return union(cut(book, circle(38, 32, 10), gap=2.2), coin, spine)
+
+
+def _tale() -> Shape:  # a closed book, its ribbon hanging out below: Bastian's Library (28.10.2026)
+    cover = box(12, 7, 52, 50, 5)
+    book = cut(cover, capsule(20.5, 10, 20.5, 47, 1.0), box(26, 16, 46, 26, 2), gap=0)
+    title = cut(box(26, 16, 46, 26, 2), box(29, 19, 43, 23, 1))
+    ribbon = polygon([(36, 46), (44, 46), (44, 57), (40, 53), (36, 57)])
+    return union(cut(book, box(34, 44, 46, 52), gap=0), title, ribbon)
 
 
 GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
@@ -588,7 +627,125 @@ GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "arrow": (_arrow, "the next step (the book's flow plates)"),
     "leather": (_leather, "leather, a hide (the book's plates)"),
     "ledger": (_ledger, "Bastian's Strategies, the book"),
+    "tale": (_tale, "Bastian's Library, a tale's journal (new, 28.10.2026)"),
+    "chain": (_chain, "a quest chain (new, 25.10.2026)"),
+    "object": (_object, "a game object (new, 25.10.2026)"),
+    "grave": (_grave, "the place of death, the corpse (new, 26.10.2026)"),
+    "note": (_note, "a note, Bastian's Notes (new, 26.10.2026)"),
+    "buttons": (_buttons, "the box of the minimap buttons (new, 28.10.2026)"),
 }
+
+# ---------------------------------------------------------------------------------------------
+# The tiles: every symbol in the style of the addon icons, a
+# rounded tile in its category's colour (a dark fill, a bright edge) with the white symbol. The
+# colours are baked: an inline icon in text has one texture, so the theme cannot tint a tile.
+# ---------------------------------------------------------------------------------------------
+
+TILE_SCALE = 0.66  # the symbol's size on the tile
+TILE_EDGE = 3.0  # pixels of the bright edge
+
+# category colours (0..1), close to the addon icons: quests gold, map green, route blue, ...
+_GOLD, _AMBER = (0.93, 0.72, 0.18), (0.96, 0.55, 0.20)
+_GREEN, _RED, _GREY = (0.36, 0.78, 0.42), (0.86, 0.32, 0.30), (0.55, 0.58, 0.60)
+_BLUE, _TEAL, _PURPLE = (0.40, 0.74, 0.95), (0.30, 0.78, 0.72), (0.66, 0.50, 0.92)
+_BROWN, _PINK = (0.82, 0.56, 0.30), (0.88, 0.45, 0.58)
+TILE_COLOR: dict[str, tuple[float, float, float]] = {
+    "quest": _GOLD,
+    "questActive": _GOLD,
+    "chain": _AMBER,
+    "done": _GREEN,
+    "waiting": _GREY,
+    "never": _RED,
+    **{
+        k: _RED
+        for k in ("mob", "mob_claw", "mob_dagger", "mob_bow", "mob_staff", "mob_axe", "mob_mace")
+    },
+    "rare": _PURPLE,
+    "herb": _GREEN,
+    "mine": _BROWN,
+    "treasure": _BROWN,
+    "object": _BROWN,
+    "fish": _BLUE,
+    "zone": _GREEN,
+    "route": _BLUE,
+    "waypoint": _BLUE,
+    "spot": _BLUE,
+    "flight": _BLUE,
+    **{k: _TEAL for k in ("trainer", "vendor", "service", "innkeeper", "repair")},
+    "banker": _GOLD,
+    "auctioneer": _GOLD,
+    "gold": _GOLD,
+    "item": _PURPLE,
+    "ledger": _PINK,
+    "tale": _BROWN,
+    "leather": _BROWN,
+    "grave": _GREY,
+    "note": _AMBER,
+    "buttons": _TEAL,
+}
+
+
+def tile(kind: str) -> bytes:
+    """The kind's tile as a 32-bit TGA (BGRA, rows from the top), SIZE x SIZE."""
+    make, _ = GLYPHS[kind]
+    symbol = make()
+    r, g, b = TILE_COLOR.get(kind, _GREY)
+    s = TILE_SCALE
+    outer = box(2, 2, SIZE - 2, SIZE - 2, 12)
+    inner = box(
+        2 + TILE_EDGE, 2 + TILE_EDGE, SIZE - 2 - TILE_EDGE, SIZE - 2 - TILE_EDGE, 12 - TILE_EDGE
+    )
+    centre = SIZE / 2
+
+    def sym(x: float, y: float) -> float:
+        return symbol(centre + (x - centre) / s, centre + (y - centre) / s) * s
+
+    fill = (r * 0.32 + 0.04, g * 0.32 + 0.04, b * 0.32 + 0.04)
+    edge = (r, g, b)
+
+    def colour_at(x: float, y: float) -> tuple[float, float, float, float]:
+        if outer(x, y) >= 0:
+            return 0.0, 0.0, 0.0, 0.0
+        d = sym(x, y)
+        if d < 0:
+            return 1.0, 1.0, 1.0, 1.0  # the symbol
+        if d < 1.5:
+            return 0.0, 0.0, 0.0, 1.0  # its dark rim
+        if inner(x, y) >= 0:
+            return edge[0], edge[1], edge[2], 1.0
+        return fill[0], fill[1], fill[2], 1.0
+
+    n = SAMPLES * SAMPLES
+    body = bytearray()
+    for py in range(SIZE):
+        for px in range(SIZE):
+            cx, cy = px + 0.5, py + 0.5
+            near = abs(outer(cx, cy)) < 1.5 or abs(inner(cx, cy)) < 1.5 or -1.5 < sym(cx, cy) < 3.0
+            if near:
+                acc = [0.0, 0.0, 0.0, 0.0]
+                for sy, sx in itertools.product(range(SAMPLES), range(SAMPLES)):
+                    c = colour_at(px + (sx + 0.5) / SAMPLES, py + (sy + 0.5) / SAMPLES)
+                    for k in range(3):
+                        acc[k] += c[k] * c[3]
+                    acc[3] += c[3]
+                a = acc[3] / n
+                rgb = [acc[k] / acc[3] if acc[3] else 0.0 for k in range(3)]
+            else:
+                c = colour_at(cx, cy)
+                rgb, a = list(c[:3]), c[3]
+            body += bytes(
+                (round(rgb[2] * 255), round(rgb[1] * 255), round(rgb[0] * 255), round(a * 255))
+            )
+    header = bytes(
+        [
+            *(0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            *SIZE.to_bytes(2, "little"),
+            *SIZE.to_bytes(2, "little"),
+            32,
+            0x28,
+        ]
+    )
+    return header + bytes(body)
 
 
 def draw(kind: str) -> list[tuple[int, int]]:

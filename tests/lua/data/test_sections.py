@@ -34,10 +34,10 @@ def test_vendor_section_shows_unit_prices_and_stacks(wow: WowRuntime):
     assert corina["data.zone"]["def"].link == "zone"  # the zone link (C2)
     zone = list(corina["data.zone"].rows.values())
     assert (zone[0].ref, strip(zone[0].text)) == ("zone:1429", "Elwynn Forest")
-    rows = list(corina["data.vendor"].rows.values())
-    assert strip(rows[0].text) == "Linen Cloth x20" and rows[0].ref == "item:2589"
-    assert (rows[0].value, rows[0].valueKind, rows[0].note) == (13, "money", None)  # 260 / 20
-    assert strip(rows[1].text) == "Blood Saber (limited)" and rows[1].value == 1000
+    rows = list(corina["data.vendor"].rows.values())  # by name, a to z
+    assert strip(rows[0].text) == "Blood Saber (limited)" and rows[0].value == 1000
+    assert strip(rows[1].text) == "Linen Cloth x20" and rows[1].ref == "item:2589"
+    assert (rows[1].value, rows[1].valueKind, rows[1].note) == (13, "money", None)  # 260 / 20
     assert wow.eval("Bastians:Entity('npc:54'):Summary()") == "Level 15, Elwynn Forest"
 
 
@@ -133,4 +133,33 @@ def test_a_quests_flag_list_becomes_one_overview_line_and_the_page_draws_on(wow:
     wow.execute("Bastians:GetModule('Browser').Browser.Open('quest:176')")
     texts = page_rows(wow, "Bastians:GetModule('Browser').dossier")
     assert "Rewards" in texts  # the page goes on after the Overview
+    assert wow.errors == []
+
+
+def test_a_world_drop_shows_its_level_band(wow: WowRuntime):
+    """ "World drop: creatures level 20-25" (the pack's `worldDrop`:
+    lowest level, highest level, droppers); a plain hyphen, the game fonts lack the dash."""
+    boot(wow)
+    wow.execute("Bastians:GetService('data'):Get('item', 1185).worldDrop = { 20, 25, 312 }")
+    wow.execute("Bastians:InvalidateEntities(nil)")
+    rows = list(sections(wow, "item:1185")["data.sources"].rows.values())
+    world = next(r for r in rows if strip(r.text).startswith("World drop"))
+    assert strip(world.text) == "World drop: creatures level 20-25"
+    assert world.note == "312 creatures"
+    # without a band (only objects drop it): the words alone
+    wow.execute("Bastians:GetService('data'):Get('item', 1185).worldDrop = { nil, nil, 40 }")
+    wow.execute("Bastians:InvalidateEntities(nil)")
+    rows = list(sections(wow, "item:1185")["data.sources"].rows.values())
+    assert any(strip(r.text) == "World drop" for r in rows)
+    assert wow.errors == []
+
+
+def test_an_item_shows_its_picture_before_the_client_has_cached_it(wow: WowRuntime):
+    """Sells showed placeholder squares that turned into the item once
+    clicked. The icon comes from the client's item table (Compat.ItemIcon), no server wait."""
+    boot(wow)
+    wow.execute("Mock.items[2589].icon = 132889; C_Item.GetItemInfo = function() return nil end")
+    wow.execute("Bastians:InvalidateEntities(nil)")
+    assert wow.eval("Bastians.Compat.ItemIcon(2589)") == 132889
+    assert wow.eval("Bastians:Entity('item:2589'):Icon()") == 132889
     assert wow.errors == []

@@ -7,8 +7,14 @@ B.deferred[#B.deferred + 1] = {
   "Data.RegisterPack",
   "world",
   {
+    area = {
+      [18] = [=[{ "Crystal Lake", 1429, 0, 40, -40, 221.7, 139, { { 1429, 0.6, 0.4, "client" } }, "client" }]=],
+    },
     build = "fixture",
     client = "forever",
+    entrance = {
+      ["36-1"] = [=[{ "Deadmines", nil, 36, 10, 1436, 0, -11208.7, 1675.9, 24.6, { { 1436, 0.42, 0.72, "places", 24.6 } }, nil, nil, "places" }]=],
+    },
     flightpath = {
       [2] = [=[{ "Stormwind, Elwynn", "A", 0, 200, 200, { { 1453, 0.5, 0.5, "client" } }, "client" }]=],
       [4] = [=[{ "Sentinel Hill, Westfall", "A", 0, -700, 500, nil, "client" }]=],
@@ -17,14 +23,20 @@ B.deferred[#B.deferred + 1] = {
       [80] = [=[{ "Ratchet, The Barrens", "both", 1, -894.59, -3773.01, nil, "client" }]=],
     },
     index = {
+      ["area.byZone"] = {
+        [1429] = { 18 },
+      },
       ["area.toMap"] = {
         [12] = 1429,
         [87] = 1429,
         [1519] = 1453,
       },
+      ["entrance.byZone"] = {
+        [1436] = { "36-1" },
+      },
       ["node.byZone"] = {},
       ["npc.byZone"] = {
-        [1429] = { 54, 198, 240, 295, 327, 448 },
+        [1429] = { 54, 198, 240, 295, 327, 448, 8719 },
         [1436] = { 234 },
       },
       ["object.byZone"] = {
@@ -32,6 +44,12 @@ B.deferred[#B.deferred + 1] = {
       },
     },
     names = {
+      area = {
+        [18] = "Crystal Lake",
+      },
+      entrance = {
+        ["36-1"] = "Deadmines",
+      },
       flightpath = {
         [2] = "Stormwind, Elwynn",
         [4] = "Sentinel Hill, Westfall",
@@ -47,9 +65,15 @@ B.deferred[#B.deferred + 1] = {
         [295] = "Innkeeper Farley",
         [327] = "Goldtooth",
         [448] = "Hogger",
+        [8719] = "Auctioneer Fitch",
       },
       object = {
         [1734] = "Wanted Poster",
+      },
+      teleport = {
+        ["mage-stormwind"] = "Stormwind",
+        ["ripper-everlook"] = "Everlook",
+        ["shaman-astral-recall"] = "Astral Recall",
       },
       transport = {
         ["boat-elwynn-ratchet"] = "Elwynn - Ratchet ferry",
@@ -70,13 +94,19 @@ B.deferred[#B.deferred + 1] = {
       [234] = [=[{ "Gryan Stoutmantle", nil, 20, nil, 1436, "questgiver", nil, { { 1436, 0.56, 0.47, "eq" } }, nil, nil, nil, nil, "forever" }]=],
       [240] = [=[{ "Marshal Dughan", "Marshal", 10, nil, 1429, "questgiver", nil, { { 1429, 0.42, 0.65, "eq" } }, nil, nil, nil, nil, "forever" }]=],
       [295] = [=[{ "Innkeeper Farley", "Innkeeper", 6, nil, 1429, "innkeeper", nil, { { 1429, 0.43, 0.66, "eq" } }, nil, nil, nil, nil, "forever" }]=],
-      [327] = [=[{ "Goldtooth", nil, 8, nil, 1429, nil, nil, { { 1429, 0.38, 0.82, "classic" } }, nil, nil, nil, nil, "classic" }]=],
+      [327] = [=[{ "Goldtooth", nil, 8, nil, 1429, nil, nil, { { 1429, 0.38, 0.82, "classic", 41.3 } }, nil, nil, nil, nil, "classic" }]=],
       [448] = [=[{ "Hogger", nil, 11, nil, 1429, "elite", nil, { { 1429, 0.27, 0.86, "eq" }, { 1429, 0.3, 0.8, "questie" } }, nil, nil, { { 2589, 45.5 }, { 1185, 3.2 } }, nil, "classic" }]=],
+      [8719] = [=[{ "Auctioneer Fitch", "Auctioneer", 30, nil, 1429, "auctioneer", nil, { { 1429, 0.425, 0.645, "eq" } }, nil, nil, nil, nil, "forever" }]=],
     },
     object = {
       [1734] = [=[{ "Wanted Poster", "quest object", 1429, { { 1429, 0.42, 0.66, "eq" } }, nil, nil, "forever" }]=],
     },
     schema = {
+      area = { "name", "zone", "continent", "wx", "wy", "r", "chunks", "spawns", "src" },
+      entrance = {
+        "name", "label", "instance", "level", "zone", "continent", "wx", "wy", "wz", "spawns", "verified",
+        "note", "src",
+      },
       flightpath = { "name", "faction", "continent", "wx", "wy", "spawns", "src" },
       node = { "name", "kind", "profession", "skill", "item", "icon", "spawns", "src" },
       npc = {
@@ -84,12 +114,24 @@ B.deferred[#B.deferred + 1] = {
         "loot", "lootSrc", "src",
       },
       object = { "name", "kind", "zone", "spawns", "loot", "lootSrc", "src" },
-      transport = { "name", "kind", "faction", "stops", "world", "ride", "cycle", "verified", "note", "spawns", "src" },
+      teleport = {
+        "name", "kind", "spell", "item", "faction", "class", "reagent", "hearth", "continent", "wx", "wy",
+        "wz", "cast", "verified", "note", "src",
+      },
+      transport = {
+        "name", "kind", "faction", "stops", "world", "ride", "cycle", "verified", "note", "spawns", "src",
+        "departs", "dock",
+      },
       zone = { "name", "parent", "continent", "levelLo", "levelHi", "levelMed", "questsA", "questsH", "mapType" },
     },
-    sources = { "hand-written fixture world-mini" },
+    sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
+    teleport = {
+      ["mage-stormwind"] = [=[{ "Stormwind", "spell", 3561, nil, "A", 8, 17031, nil, 0, 100, -50, 11, 10, nil, nil, "places" }]=],
+      ["ripper-everlook"] = [=[{ "Everlook", "item", nil, 18984, nil, nil, nil, nil, 1, 6755.3, -4658.1, 724.8, 10, nil, nil, "places" }]=],
+      ["shaman-astral-recall"] = [=[{ "Astral Recall", "spell", 556, nil, nil, 7, nil, true, nil, nil, nil, nil, 10, nil, nil, "places" }]=],
+    },
     transport = {
-      ["boat-elwynn-ratchet"] = [=[{ "Elwynn - Ratchet ferry", "boat", "both", { { 1429, 0.9, 0.9, "Elwynn dock" }, { 1413, 0.639, 0.386, "Ratchet dock" } }, { { 0, -160, -160 }, { 1, -900, -3770 } }, 120, 480, false, "fixture", { { 1429, 0.9, 0.9, "config" }, { 1413, 0.639, 0.386, "config" } }, "assumed" }]=],
+      ["boat-elwynn-ratchet"] = [=[{ "Elwynn - Ratchet ferry", "boat", "both", { { 1429, 0.9, 0.9, "Elwynn dock" }, { 1413, 0.639, 0.386, "Ratchet dock" } }, { { 0, -160, -160 }, { 1, -900, -3770 } }, 120, 480, false, "fixture", { { 1429, 0.9, 0.9, "config" }, { 1413, 0.639, 0.386, "config" } }, "assumed", { 60, 240 }, 60 }]=],
       ["tram-goldshire-stormwind"] = [=[{ "Goldshire - Stormwind tram", "tram", "Alliance", { { 1429, 0.5, 0.5, "Goldshire tram" }, { 1453, 0.5, 0.5, "Stormwind tram" } }, { { 0, 0, 0 }, { 0, 200, 200 } }, 10, 60, true, nil, { { 1429, 0.5, 0.5, "config" }, { 1453, 0.5, 0.5, "config" } }, "measured" }]=],
     },
     version = "0.1.0",

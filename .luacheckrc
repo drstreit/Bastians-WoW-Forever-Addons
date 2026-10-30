@@ -27,6 +27,9 @@ globals = {
   "SLASH_BASTIANSROUTE1",
   "SLASH_BASTIANSROUTE1",
   "SLASH_BASTIANSPROBE1",
+  "SLASH_BASTIANSNOTES1",
+  "SLASH_BASTIANSTALESPIKE1",
+  "SLASH_BASTIANSLIBRARY1",
   "BastiansCoreDB",
   "BastiansCoreCharDB",
   "BastiansDataDB",
@@ -44,6 +47,9 @@ globals = {
   "BastiansRouteCharDB",
   "BastiansStrategiesDB",
   "BastiansStrategiesCharDB",
+  "BastiansNotesDB",
+  "BastiansLibraryDB",
+  "BastiansLibraryCharDB",
   "BastiansProbeDB",
 }
 
@@ -76,6 +82,18 @@ local handwritten_globals = {
   -- Legacy FrameXML globals that Blizzard's API documentation does not list. Called only from
   -- addons/Bastians_Core/Compat/ and Bastians_Probe (core-contracts §10); apps use the Compat wrappers.
   "GetNumTrainerServices",
+  -- the fact layer (library.md §4): called only from Compat/Shared.lua and the probe
+  "ItemTextGetItem",
+  "ItemTextGetText",
+  "ItemTextGetPage",
+  "DoEmote",
+  "CombatLogGetCurrentEventInfo",
+  "IsFishingLoot",
+  "GetLootSourceInfo",
+  "GetNumLootItems",
+  "GetLootSlotInfo",
+  "GetLootSlotLink",
+  "UnitAura",
   "GetTrainerServiceInfo",
   "GetTrainerServiceCost",
   "GetTrainerServiceSkillReq",
@@ -111,8 +129,14 @@ local handwritten_globals = {
 }
 
 exclude_files = { "addons/**/Generated/**", "addons/**/Libs/**" } -- generated packs and vendored libraries
--- The German strings are one `["English key"] = "German text"` per line; a string cannot be wrapped.
+-- The translations are one `["English key"] = "text"` per line; a string cannot be wrapped
+-- (German, and French and Spanish since ADR 0033).
 files["addons/*/Locales/deDE.lua"] = { max_line_length = false }
+files["addons/*/Locales/frFR.lua"] = { max_line_length = false }
+files["addons/*/Locales/esES.lua"] = { max_line_length = false }
+files["addons/*/Locales/koKR.lua"] = { max_line_length = false }
+files["addons/*/Locales/zhCN.lua"] = { max_line_length = false }
+files["addons/*/Locales/zhTW.lua"] = { max_line_length = false }
 -- What's new (ADR 0021): an entry's text is one sentence for players, written by
 -- tools/suite_release.py; a string cannot be wrapped either.
 files["addons/*/News.lua"] = { max_line_length = false }

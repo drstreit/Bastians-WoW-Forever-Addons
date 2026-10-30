@@ -1,5 +1,5 @@
-"""Readers for `tools/clientdump db2` JSON (client-extraction.md): TaxiNodes, UiMap and
-UiMapAssignment.
+"""Readers for `tools/clientdump db2` JSON (client-extraction.md): TaxiNodes, TaxiPath with
+TaxiPathNode, UiMap, UiMapAssignment and AreaTable.
 
 The dump is ``{"table": "TaxiNodes", "build": "...", "rows": [ {...}, ... ]}``. A row's ``Pos``
 is the world position ``[X, Y, Z]`` with X growing north and Y growing west (coordinates.md:
@@ -13,7 +13,9 @@ carries none.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
+from itertools import pairwise
 from pathlib import Path
 
 from bastians_build.sources.probe import Transform
@@ -40,6 +42,7 @@ class TaxiNode:
     continent: int
     wx: float
     wy: float
+    wz: float | None = None  # height (yards): the walk network tells ground from a building by it
 
 
 @dataclass
@@ -94,11 +97,88 @@ def read_taxi_nodes(path: Path, continents=None) -> TaxiDump:
             dropped.append((node_id, name, "no position"))
             continue
         nodes.append(
-            TaxiNode(node_id, name, faction, int(continent), round(pos[0], 2), round(pos[1], 2))
+            TaxiNode(
+                node_id,
+                name,
+                faction,
+                int(continent),
+                round(pos[0], 2),
+                round(pos[1], 2),
+                round(pos[2], 2) if len(pos) > 2 and isinstance(pos[2], int | float) else None,
+            )
         )
     nodes.sort(key=lambda n: n.id)
     build = data.get("build")
     return TaxiDump(str(build) if build else None, nodes, dropped)
+
+
+# --- TaxiPath and TaxiPathNode (ADR 0026, world-graph.md §6.3) ---------------------------------
+
+# Forever's taxis fly at one speed: the two flights measured on 21.10.2026 (route.md, Ironforge to
+# Stormwind 211 s, back 260 s) over their TaxiPath lengths (6,310 and 7,757 yards) give 29.9 and
+# 29.8 yards a second (measured 25.10.2026 on the 1.60.1.70532 tables).
+TAXI_SPEED = 29.85
+
+
+@dataclass(frozen=True)
+class TaxiPath:
+    """One direct flight between two taxi nodes, as the client flies it (TaxiPathNode points)."""
+
+    id: int
+    from_node: int
+    to_node: int
+    cost: int | None  # copper, from TaxiPath.Cost
+    continent: int | None  # None when the points change continent (a ride through a portal)
+    points: tuple[tuple[float, float, float], ...]  # world yards, in flight order
+    length: float  # yards along the points (3D), the jumps between continents left out
+
+
+def _table_rows(path: Path, table: str) -> list[dict]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as err:
+        raise ClientDumpError(f"{path}: not JSON ({err})") from err
+    if not isinstance(data, dict) or data.get("table") != table:
+        raise ClientDumpError(f"{path}: expected a clientdump {table} dump")
+    rows = data.get("rows")
+    if isinstance(rows, dict):
+        rows = list(rows.values())
+    if not isinstance(rows, list):
+        raise ClientDumpError(f"{path}: rows missing")
+    return rows
+
+
+def read_taxi_paths(paths_json: Path, nodes_json: Path) -> list[TaxiPath]:
+    """Every TaxiPath with its points in order and its length; sorted by id. A path without
+    points is kept with length 0 and no continent (the build reports it)."""
+    points: dict[int, list[tuple[int, int, tuple[float, float, float]]]] = {}
+    for row in _table_rows(nodes_json, "TaxiPathNode"):
+        loc = row.get("Loc")
+        if not (isinstance(loc, list) and len(loc) == 3):
+            raise ClientDumpError(f"{nodes_json}: a row has no Loc: {row!r}")
+        pid, index = int(row["PathID"]), int(row["NodeIndex"])
+        xyz = (round(float(loc[0]), 2), round(float(loc[1]), 2), round(float(loc[2]), 2))
+        points.setdefault(pid, []).append((index, int(row["ContinentID"]), xyz))
+    out = []
+    for row in _table_rows(paths_json, "TaxiPath"):
+        pid = int(row["ID"])
+        pts = sorted(points.get(pid, []))
+        continents = {c for _, c, _ in pts}
+        length = sum(math.dist(a[2], b[2]) for a, b in pairwise(pts) if a[1] == b[1])
+        cost = row.get("Cost")
+        out.append(
+            TaxiPath(
+                pid,
+                int(row["FromTaxiNode"]),
+                int(row["ToTaxiNode"]),
+                int(cost) if isinstance(cost, int) else None,
+                continents.pop() if len(continents) == 1 else None,
+                tuple(p[2] for p in pts),
+                round(length, 1),
+            )
+        )
+    out.sort(key=lambda p: p.id)
+    return out
 
 
 # --- UiMap and UiMapAssignment ---------------------------------------------------------------
@@ -123,6 +203,17 @@ class Assignment:
     max_y: float
     ui_min: tuple[float, float]
     ui_max: tuple[float, float]
+    area_id: int = 0  # the AreaTable id the assignment draws (0 = none)
+
+
+@dataclass(frozen=True)
+class AreaRow:
+    """One AreaTable row: a zone (`parent` 0) or a subzone of its parent area."""
+
+    id: int
+    name: str
+    parent: int
+    continent: int
 
 
 def _rows(path: Path, table: str) -> list[dict]:
@@ -172,7 +263,24 @@ def read_ui_map_assignments(path: Path) -> list[Assignment]:
                 max_y=float(region[4]),
                 ui_min=(float(ui_min[0]), float(ui_min[1])),
                 ui_max=(float(ui_max[0]), float(ui_max[1])),
+                area_id=int(row.get("AreaID") or 0),
             )
+        )
+    return out
+
+
+def read_area_table(path: Path) -> dict[int, AreaRow]:
+    """AreaTable: id -> name (`AreaName_lang`), parent area and continent (data.md "Areas")."""
+    out: dict[int, AreaRow] = {}
+    for row in _rows(path, "AreaTable"):
+        area_id = row.get("ID")
+        if not isinstance(area_id, int):
+            raise ClientDumpError(f"{path}: an AreaTable row has no integer ID: {row!r}")
+        out[area_id] = AreaRow(
+            area_id,
+            str(row.get("AreaName_lang") or "").strip(),
+            int(row.get("ParentAreaID") or 0),
+            int(row.get("ContinentID") if row.get("ContinentID") is not None else -1),
         )
     return out
 
