@@ -69,9 +69,8 @@ local function applyLock()
     win.grip:Show()
   end
   if win.lock then
-    win.lock.label:SetText(locked and L["Locked"] or L["Lock"])
-    local c = locked and S.C.accent or S.C.text
-    win.lock.label:SetTextColor(c[1], c[2], c[3])
+    win.lock.spec.label = locked and L["Locked"] or L["Lock"]
+    win.lock:SetOn(locked) -- the look draws the state (ADR 0046)
   end
 end
 
@@ -123,7 +122,7 @@ local function build()
       win.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -220)
     end
   end
-  win.lock = S.button(win.head, L["Lock"], 54, 20)
+  win.lock = S.action(win.head, { icon = "lock", label = L["Lock"], row = true })
   -- left of the window's options button (R27.1) when it has one, else of the close button
   win.lock:SetPoint("RIGHT", win.options or win.close, "LEFT", -4, 0)
   win.title:SetPoint("RIGHT", win.lock, "LEFT", -4, 0)

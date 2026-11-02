@@ -128,6 +128,11 @@ ns.L:Register("deDE", {
   ["Route"] = "Route",
   ["Plan a route there."] = "Eine Route dorthin planen.",
   ["No matches."] = "Keine Treffer.",
+  -- Mini.lua: the minimap's search (L4)
+  ["Note"] = "Notiz",
+  ["Bookmark"] = "Lesezeichen",
+  ["The minimap finds NPCs, quests, zones and your notes."] = "Die Minikarte findet NPCs, Quests, Gebiete und deine Notizen.",
+  ["No known place of the quest giver for %s."] = "Kein bekannter Ort des Questgebers für %s.",
   ["Search the world ..."] = "Die Welt durchsuchen ...",
 
   -- Tiles.lua
@@ -206,4 +211,39 @@ ns.L:Register("deDE", {
   ["A frame around the minimap"] = "Ein Rahmen um die Minikarte",
   ["Options of this window"] = "Optionen dieses Fensters",
   ["Ctrl+click: put a button on the map, or back into the box."] = "Strg+Klick: einen Knopf auf die Karte legen, oder zurück in die Box.",
+  -- owner round 5 (31.10.2026): the monster areas
+  ["Monsters"] = "Monster",
+  -- 31.10.2026: the dungeon doors' own layer
+  ["Dungeons and raids"] = "Dungeons und Schlachtzüge",
+  -- 31.10.2026: how a button moves between the box and the minimap's border
+  ["Ctrl+click: back into the button box. Drag: along the minimap's border."] = "Strg+Klick: zurück in die Knopfbox. Ziehen: am Rand der Minikarte entlang.",
+  ["Ctrl+click: onto the minimap's border."] = "Strg+Klick: an den Rand der Minikarte.",
+  ["Ctrl+click a button here: it moves onto the minimap's border."] = "Strg+Klick auf einen Knopf hier: er wandert an den Rand der Minikarte.",
+  ["Ctrl+click it on the border: it comes back into this box."] = "Strg+Klick am Rand: er kommt zurück in diese Box.",
+  ["Drag it on the border: it moves along the border."] = "Am Rand ziehen: er wandert am Rand entlang.",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s, %s",
+  ["Click: the map. Right click: centre on you."] = "Klick: die Karte. Rechtsklick: auf dich zentrieren.",
+  ["No waypoint. Right click a place on the map to set one."] = "Kein Wegpunkt. Rechtsklick auf einen Ort der Karte setzt einen.",
+
+  -- Timers.lua (02.11.2026)
+  ["Timers"] = "Zeitnehmer",
+  ["Stopwatch"] = "Stoppuhr",
+  ["Countdown"] = "Countdown",
+  ["Start"] = "Start",
+  ["Pause"] = "Pause",
+  ["Reset"] = "Zurücksetzen",
+  ["Done"] = "Fertig",
+  ["Name"] = "Name",
+  ["How long: 5m, 1:30, 90s, 2h"] = "Wie lange: 5m, 1:30, 90s, 2h",
+  ["Add a stopwatch"] = "Stoppuhr hinzufügen",
+  ["Add a countdown"] = "Countdown hinzufügen",
+  ["No timers yet. Add a stopwatch or a countdown below."] = "Noch keine Zeitnehmer. Füge unten eine Stoppuhr oder einen Countdown hinzu.",
+  ["%s is up."] = "%s ist abgelaufen.",
+  ["%s: %s left"] = "%s: noch %s",
+  ["%d running"] = "%d laufen",
+  ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "Stoppuhren und Countdowns, so viele du willst. Ein leuchtender Knopf: ein Countdown ist abgelaufen.",
+  ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "Diese Zeit konnte ich nicht lesen. Versuche 5m, 1:30, 90s oder 2h.",
 })

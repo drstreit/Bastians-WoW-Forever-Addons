@@ -42,6 +42,9 @@ local function render(tooltip, info)
     local row = rows[i]
     local value = B.UI.FormatValue(row.value, row.valueKind)
     local text = (row.icon and B.UI.InlineTexture(row.icon, 12) or "") .. (row.text or "")
+    if value and row.valueKind == "money" and ref:match("^item:") and B.UI.Welcome then
+      B.UI.Welcome.Mark("worth") -- the Scholar's first five minutes: an item with its price line
+    end
     if value then
       tooltip:AddDoubleLine(
         text,

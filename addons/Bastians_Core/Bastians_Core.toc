@@ -2,8 +2,23 @@
 ## Title: Bastian's Core
 ## IconTexture: Interface\AddOns\Bastians_Core\Icon
 ## Notes: Module system, message bus, registries, settings hub and UI kit for the Bastian's suite.
+## Notes-koKR: Bastian's 애드온 모음의 모듈 시스템, 메시지 버스, 레지스트리, 설정 허브와 UI 키트.
+## Notes-zhCN: Bastian's 插件合集的模块系统、消息总线、注册表、设置中心和界面工具包。
+## Notes-zhTW: Bastian's 插件合集的模組系統、訊息匯流排、註冊表、設定中心與介面工具包。
+## Notes-deDE: Modulsystem, Nachrichtenbus, Register, Einstellungszentrale und UI-Baukasten der Bastian's Suite.
+## Notes-frFR: Système de modules, bus de messages, registres, centre de réglages et kit d'interface de la suite de Bastian.
+## Notes-esES: Sistema de módulos, bus de mensajes, registros, centro de ajustes y kit de interfaz de la suite de Bastian.
+## Notes-esMX: Sistema de módulos, bus de mensajes, registros, centro de ajustes y kit de interfaz de la suite de Bastian.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB
@@ -30,14 +45,19 @@ Compat\Shared.lua
 Compat\Modern.lua
 Compat\Forever.lua
 Compat\Retail.lua
+Compat\Msp.lua
 Registry.lua
 Coords.lua
+Query.lua
+TextKeys.lua
 Comm.lua
 Facts.lua
 UI\Themes.lua
 UI\Style.lua
 UI\Money.lua
 UI\Icons.lua
+UI\Look.lua
+UI\Ring.lua
 UI\Scenery.lua
 UI\Window.lua
 UI\FilterBar.lua
@@ -55,3 +75,8 @@ UI\Hub.lua
 UI\Welcome.lua
 UI\Omnibox.lua
 UI\Launcher.lua
+UI\Screen.lua
+Feeds.lua
+API.lua
+Bags.lua
+UI\Ellesmere.lua

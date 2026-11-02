@@ -72,7 +72,18 @@ def test_table_counts(tables):
         "reference_loot_template": 5,
         "item_template": 9,
         "spell_template": 28,
+        "disenchant_loot_template": 4,  # lists 1 and 21 (31.10.2026)
     }
+
+
+def test_disenchant_lists_and_the_items_that_name_them(tables):
+    lists = cmangos.disenchant_lists(tables)
+    # uncommon armour: Strange Dust at 80 %, the essence shares the rest of the group
+    assert lists[1] == [[10940, 80.0, 1, 2], [10938, 20.0, 1, 2]]
+    assert lists[21] == [[10938, 80.0, 1, 2], [10940, 20.0, 1, 2]]  # uncommon weapons
+    items = {it.id: it.disenchant_id for it in cmangos.item_rows(tables)}
+    assert items[6085] == 1 and items[6215] == 21
+    assert items[2589] is None  # Linen Cloth: not disenchantable
 
 
 def test_quests(tables):

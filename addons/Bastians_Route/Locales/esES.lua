@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 local strings = {
+  -- plan-second-wave.md S6 (01.11.2026)
+  ["Route home"] = "Ruta a casa",
   -- Arrow.lua
   ["Next step"] = "Siguiente paso",
   ["position unknown"] = "posición desconocida",
@@ -152,6 +154,13 @@ local strings = {
   ["Hearth"] = "Piedra de hogar",
   ["to"] = "a",
   ["approx"] = "aprox.",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s, %s",
+  ["Click: the steps. Right click: clear the route."] = "Clic: los pasos. Clic derecho: borrar la ruta.",
+  ["and %d more"] = "y %d más",
+
+  -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
+  ["Next: %s"] = "Siguiente: %s",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

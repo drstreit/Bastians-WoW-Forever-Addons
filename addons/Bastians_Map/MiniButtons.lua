@@ -27,6 +27,7 @@ MB.SKIP = {
   "^BastiansMinimapOverlay",
   "^BastiansMiniMap",
   "^BastiansMinimapButton$", -- the suite's button: the minimap's badge stands in for it
+  "^LibDBIcon10_Bastians$", -- the same, made by LibDBIcon when another addon loaded it (ADR 0043)
   "^HandyNotes", -- map pins, not buttons
   "^GatherMatePin",
   "^QuestieFrame",
@@ -75,9 +76,11 @@ function MB.Scan()
     table.sort(names)
     for _, name in ipairs(names) do
       local b = lib.objects[name]
-      if type(b) == "table" and not seen[b] then
+      if type(b) == "table" and not seen[b] and name ~= "Bastians" then -- the badge stands in for it
         seen[b] = true
-        local label = b.dataObject and (b.dataObject.label or b.dataObject.text) or nil
+        local label = name:find("^Bastian's ") and name -- ours: "Bastian's Quests", not "Quests"
+          or b.dataObject and (b.dataObject.label or b.dataObject.text)
+          or nil
         out[#out + 1] = { frame = b, name = label or name, ldb = true }
       end
     end
@@ -119,7 +122,46 @@ function MB.Scan()
   return out
 end
 
--- The name in the title bar while the mouse is on a button.
+-- How a button moves ("when hovering over the minimap button collector
+-- window, a hint should be shown how to move buttons between that window and the minimap
+-- border"): the words for a button in the box or on the rim.
+function MB.MoveHint(entry)
+  if MB.Home(entry) == "map" then
+    return L["Ctrl+click: back into the button box. Drag: along the minimap's border."]
+  end
+  return L["Ctrl+click: onto the minimap's border."]
+end
+
+-- The hint under the button's own tooltip, or a tooltip of ours with its name when it has none.
+local function showMoveHint(self)
+  local entry = self.bastiansBoxEntry
+  if not (entry and GameTooltip and MB.Enabled()) then
+    return
+  end
+  if not (GameTooltip:IsOwned(self) and GameTooltip:IsShown()) then
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    S.TipLine(GameTooltip, self.bastiansBoxName or "?", "tipText")
+  end
+  S.TipLine(GameTooltip, MB.MoveHint(entry), "tipDim", true)
+  GameTooltip:Show()
+end
+MB.ShowMoveHint = showMoveHint
+
+-- The box's own tooltip: how buttons go out to the border and back.
+local function showBoxHint(frame)
+  if not GameTooltip then
+    return
+  end
+  GameTooltip:SetOwner(frame, "ANCHOR_TOP")
+  S.TipLine(GameTooltip, L["Minimap buttons"], "tipText")
+  S.TipLine(GameTooltip, L["Ctrl+click a button here: it moves onto the minimap's border."], "tipDim", true)
+  S.TipLine(GameTooltip, L["Ctrl+click it on the border: it comes back into this box."], "tipDim", true)
+  S.TipLine(GameTooltip, L["Drag it on the border: it moves along the border."], "tipDim", true)
+  GameTooltip:Show()
+end
+MB.ShowBoxHint = showBoxHint
+
+-- The name in the title bar while the mouse is on a button, the move hint in its tooltip.
 local function hook(entry)
   local f = entry.frame
   if f.bastiansBoxHooked then
@@ -132,6 +174,7 @@ local function hook(entry)
     if win and self:GetParent() == win.grid then
       win:SetTitle(self.bastiansBoxName or "?")
     end
+    showMoveHint(self) -- in the box and on the rim alike
   end)
   f:HookScript("OnLeave", function(self)
     if win and self:GetParent() == win.grid then
@@ -165,6 +208,13 @@ local function build()
   win.hint:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", -MB.GAP, 3)
   win.hint:SetJustifyH("LEFT")
   win.hint:SetText(L["Ctrl+click: put a button on the map, or back into the box."])
+  -- the whole box explains it on hover too
+  win.frame:HookScript("OnEnter", showBoxHint)
+  win.frame:HookScript("OnLeave", function(frame)
+    if GameTooltip and GameTooltip:IsOwned(frame) then
+      GameTooltip:Hide()
+    end
+  end)
   -- a live filter by name on top
   win.filter = S.search(win.content, L["Filter the buttons by name"])
   win.filter:SetPoint("TOPLEFT", win.content, "TOPLEFT", MB.GAP, -2)
@@ -442,12 +492,13 @@ function MB.Layout()
   if not win then
     return
   end
-  -- the live filter by name: the others stay hidden until it clears
-  local needle = string.lower(win.filter and win.filter:GetText() or "")
+  -- the live filter by name: the others stay hidden until it clears;
+  -- the suite's search syntax (ADR 0045)
+  local q = B.Query.Compile(win.filter and win.filter:GetText() or "")
   local list = {}
   for _, entry in ipairs(homed("box")) do
     unwrapDrag(entry)
-    if needle == "" or string.find(string.lower(entry.name or ""), needle, 1, true) then
+    if q:Match(entry.name or "") then
       list[#list + 1] = entry
     else
       entry.frame:Hide()
@@ -467,9 +518,10 @@ function MB.Layout()
   local gridHeight = MB.GAP + rows * (MB.SIZE + MB.GAP)
   local shown = MB.GAP + math.min(rows, MB.MAX_ROWS) * (MB.SIZE + MB.GAP)
   win.grid:SetSize(math.max(1, win.scroll:GetWidth() or 100), gridHeight)
-  -- the chrome: the header and the frame's inset top and bottom (the game's frames, ADR 0034)
-  local inset = win.framed and win.FRAME_INSET or 1
-  win.frame:SetHeight(30 + 2 * inset + MB.FILTER_H + shown + MB.HINT_H + 4)
+  -- the chrome: the header and the frame's insets (the game's frames, ADR 0034; its own windows
+  -- since 31.10.2026: Window:Insets)
+  local top, _, bottom = win:Insets()
+  win.frame:SetHeight(top + bottom + MB.FILTER_H + shown + MB.HINT_H + 4)
   win.bar.SetTotal(gridHeight)
   MB.cols, MB.rows = cols, rows
 end
@@ -630,6 +682,16 @@ function MB.Open(anchor)
       win:Hide()
     end
   end)
+end
+
+-- The box closed at once (the minimap went away under it).
+function MB.Close()
+  if watcher then
+    watcher:SetScript("OnUpdate", nil)
+  end
+  if win then
+    win:Hide()
+  end
 end
 
 function MB.Window()

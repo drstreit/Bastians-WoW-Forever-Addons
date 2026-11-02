@@ -8,10 +8,14 @@ namespace ClientDump;
 /// <summary>Serves DB2 bytes out of the client instead of a folder on disk.</summary>
 sealed class ClientDbcProvider(Client client, string defsDir, string? fdidOverride) : IDBCProvider
 {
+    /// <summary>The bytes of the last table served, as the client decoded them (for --raw-out).</summary>
+    public byte[]? LastBytes { get; private set; }
+
     public Stream StreamForTableName(string tableName, string build)
     {
         var fdid = fdidOverride != null ? uint.Parse(fdidOverride) : ResolveFdid(tableName);
-        return new MemoryStream(client.ReadFdid(fdid));
+        LastBytes = client.ReadFdid(fdid);
+        return new MemoryStream(LastBytes);
     }
 
     uint ResolveFdid(string table)
@@ -31,6 +35,18 @@ sealed class ClientDbcProvider(Client client, string defsDir, string? fdidOverri
     }
 }
 
+/// <summary>Serves one .db2 file from disk (a raw copy written with --raw-out): no client, no archives.</summary>
+sealed class FileDbcProvider(string path) : IDBCProvider
+{
+    public Stream StreamForTableName(string tableName, string build) => File.OpenRead(path);
+}
+
+/// <summary>How `db2` reads and what it adds (ADR 0039). Db2File reads a raw copy instead of the client and then
+/// needs Build; Keys loads the client's own decryption keys first (client reads only: a raw copy holds what the
+/// keys known at copy time decrypted).</summary>
+sealed record DumpOptions(string? Db2File = null, string? Build = null, string? RawOut = null, string? Hotfixes = null,
+    bool Keys = true);
+
 static class Db2
 {
     public static IDBCDStorage Load(Client client, string defsDir, string table, string? fdid = null)
@@ -39,9 +55,26 @@ static class Db2
         return dbcd.Load(table, client.BuildString);
     }
 
-    public static void Dump(Client client, string defsDir, string table, string outFile, string? fdid)
+    public static void Dump(Client? client, string defsDir, string table, string outFile, string? fdid, DumpOptions o)
     {
-        var storage = Load(client, defsDir, table, fdid);
+        var build = client?.BuildString ?? o.Build ?? throw new ArgumentException("--build is required with --db2-file");
+        DBCD.IO.HotfixReader? reader = null;
+        HotfixCacheInfo? info = null;
+        if (o.Hotfixes != null) (reader, info) = Hotfix.Open(o.Hotfixes, build);
+        int? keys = client != null && o.Keys ? Hotfix.LoadClientKeys(client, defsDir, reader) : null;
+
+        IDBCDStorage storage;
+        if (client != null)
+        {
+            var provider = new ClientDbcProvider(client, defsDir, fdid);
+            storage = new DBCD.DBCD(provider, new FilesystemDBDProvider(defsDir)).Load(table, build);
+            if (o.RawOut != null) WriteAtomic(o.RawOut, provider.LastBytes!);
+        }
+        else
+            storage = new DBCD.DBCD(new FileDbcProvider(o.Db2File!), new FilesystemDBDProvider(defsDir)).Load(table, build);
+        var fromFiles = storage.Count;
+        var stats = reader != null ? Hotfix.Apply(storage, reader) : null;
+
         var columns = storage.AvailableColumns;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outFile))!);
         var tmp = outFile + ".tmp";
@@ -50,7 +83,23 @@ static class Db2
         {
             w.WriteStartObject();
             w.WriteString("table", table);
-            w.WriteString("build", client.BuildString);
+            w.WriteString("build", build);
+            w.WriteString("source", client != null ? "client" : "db2-file");
+            if (keys != null) w.WriteNumber("keys", keys.Value);
+            if (info != null && stats != null)
+            {
+                w.WriteStartObject("hotfixes");
+                w.WriteNumber("build", info.Build);
+                w.WriteNumber("highestPush", info.HighestPush);
+                w.WriteNumber("entries", info.Entries);
+                w.WriteString("sha256", info.Sha256);
+                w.WriteNumber("rowsFromFiles", fromFiles);
+                w.WriteNumber("added", stats.Added);
+                w.WriteNumber("replaced", stats.Replaced);
+                w.WriteNumber("deletesIgnored", stats.DeletesIgnored);
+                w.WriteNumber("deletesApplied", stats.DeletesApplied);
+                w.WriteEndObject();
+            }
             w.WriteNumber("rowCount", storage.Count);
             w.WriteStartArray("columns");
             foreach (var c in columns) w.WriteStringValue(c);
@@ -71,7 +120,18 @@ static class Db2
             w.WriteEndObject();
         }
         File.Move(tmp, outFile, true);
-        Console.WriteLine($"{table}: {storage.Count} rows, {columns.Length} columns -> {outFile}");
+        var extra = (keys != null ? $", {keys} keys" : "")
+            + (stats != null ? $", hotfixes push {info!.HighestPush}: +{stats.Added} ~{stats.Replaced}"
+                + $" deletes ignored {stats.DeletesIgnored} applied {stats.DeletesApplied}" : "");
+        Console.WriteLine($"{table}: {storage.Count} rows, {columns.Length} columns{extra} -> {outFile}");
+    }
+
+    static void WriteAtomic(string path, byte[] bytes)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        var tmp = path + ".tmp";
+        File.WriteAllBytes(tmp, bytes);
+        File.Move(tmp, path, true);
     }
 
     static void WriteValue(Utf8JsonWriter w, object? v)

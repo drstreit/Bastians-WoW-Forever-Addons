@@ -11,10 +11,10 @@ ns.L:Register("koKR", {
   ["Open in the book"] = "책에서 열기",
   ["Read"] = "읽기",
   ["In the book"] = "책 안에",
-  ["In Bastian's book"] = "Bastian's 책 안에",
-  ["Bastian's Gold Rumours"] = "Bastian's 골드 소문",
+  ["In Bastian's book"] = "바스티안의 책 안에",
+  ["Bastian's Gold Rumours"] = "바스티안의 골드 소문",
   ["the book"] = "책",
-  ["Rumours (Bastian's book)"] = "소문 (Bastian's 책)",
+  ["Rumours (Bastian's book)"] = "소문 (바스티안의 책)",
   ["Strategies is disabled"] = "Strategies가 비활성화되었습니다",
 
   -- Plate.lua
@@ -52,7 +52,7 @@ ns.L:Register("koKR", {
   ["%s: %s"] = "%s: %s",
   ["percent at the vendor"] = "퍼센트 (상인)",
   ["Your note on this page (kept for every character)"] = "이 페이지의 내 메모 (모든 캐릭터에 저장)",
-  ["Bastian's verdict"] = "Bastian의 평가",
+  ["Bastian's verdict"] = "바스티안의 평가",
   ["What it pays on your market"] = "내 시장에서의 수익",
   ["Today on your market"] = "오늘의 내 시장",
   ["At the vendor"] = "상인에게서",
@@ -77,7 +77,7 @@ ns.L:Register("koKR", {
   ["told by %d channels"] = "%d개 채널에서 전해짐",
   ["Rumour mill: %s"] = "소문 방앗간: %s",
   ["Rumour mill: %d rumours I have not tried yet"] = "소문 방앗간: 아직 해 보지 않은 소문 %d개",
-  ["Bastian's Strategies"] = "Bastian's Strategies",
+  ["Bastian's Strategies"] = "바스티안의 공략",
   ["Every way to get rich I was ever told about, written down by a man who is still not rich"] = "제가 들어 본 모든 부자 되는 방법, 아직 부자가 아닌 사람이 적었습니다",
   ["Printed in Booty Bay, on credit."] = "외상으로 가젯잔에서 인쇄했습니다.",
   ["What's new"] = "새로운 소식",
@@ -129,4 +129,8 @@ ns.L:Register("koKR", {
   ["%d updated pages"] = "업데이트된 페이지 %d개",
   ["%d more changes"] = "변경 %d건 더",
   ["Route there"] = "그곳으로 경로",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d new"] = "새 항목 %d개",
+  ["%d pages"] = "%d쪽",
+  ["Click: the book. Right click: its settings."] = "클릭: 책. 오른쪽 클릭: 설정.",
 })

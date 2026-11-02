@@ -62,6 +62,7 @@ def test_open_lands_on_the_home_with_here_views_and_chips(wow: WowRuntime):
         "Dungeons",
         "Farm spots",
         "Items",
+        "Mobs",
         "NPCs",
         "Nodes",
         "Objects",
@@ -77,9 +78,8 @@ def test_open_lands_on_the_home_with_here_views_and_chips(wow: WowRuntime):
     assert nav_rows(wow)[0] == ("nav:here", "Here: Elwynn Forest")
     assert band(wow, f"{MOD}.dossier")["name"] == "Elwynn Forest"
     quests = texts.index("Quests")
-    assert texts[quests + 1 : quests + 4] == [
+    assert texts[quests + 1 : quests + 3] == [  # All quests: the Quests list (31.10.2026)
         "My quests  2 in the log",
-        "All quests",
         "Attunements",
     ]
     assert "Bookmarks" not in texts and "Recent" not in texts  # nothing yet

@@ -156,7 +156,13 @@ def load_documentation_tables(docs_dir: Path) -> list:
     """Run every documentation file in a Lua 5.1 runtime and collect the system tables."""
     from lupa.lua51 import LuaRuntime
 
-    lua = LuaRuntime(unpack_returned_tuples=True)
+    # Blizzard's documentation files from GitHub run here: no files, processes or Python for them
+    # (the same list as pipeline/bastians_build/sources/luatable.py UNSAFE, 02.11.2026)
+    lua = LuaRuntime(unpack_returned_tuples=True, register_eval=False, register_builtins=False)
+    lua.execute(
+        "for _, n in ipairs({ 'os', 'io', 'debug', 'package', 'require', 'module', 'dofile', "
+        "'loadfile', 'load', 'python' }) do _G[n] = nil end"
+    )
     lua.execute(
         """
         COLLECTED = {}

@@ -503,6 +503,23 @@ local function registerActions(mod)
       mod:Fire("BASTIANS_QUESTS_CHANGED", { id }, { hidden = true })
     end,
   })
+  -- Gestures' "Toggle the tracker" (plan-second-wave.md S6), offered to the ring only
+  B:RegisterAction(mod, {
+    id = "quests.tracker",
+    label = L["Toggle the tracker"],
+    icon = B.UI.IconTexture("track"),
+    types = "*",
+    order = 90,
+    when = function(_, ctx)
+      return ctx ~= nil and ctx.source == "gestures"
+    end,
+    active = function()
+      return ns.Tracker.IsShown()
+    end,
+    run = function()
+      ns.Tracker.Toggle()
+    end,
+  })
   B:RegisterRowTag(mod, {
     id = "quests.hidden",
     types = { "quest" },
@@ -606,17 +623,17 @@ local CATEGORY = {
   [7] = "Not for this character",
 }
 
--- A Play button on a quest row when Spoken has a line for it (Quests.Spoken registers quests.voice
--- with `has`; ADR 0013: no play symbol where no line exists).
+-- A Play button on a quest row when Spoken has a line for it (Bastian's Voice registers voice.play
+-- with `has`, voice.md; ADR 0013: no play symbol where no line exists).
 local function voiceButton(ref)
-  local voice = B:GetAction("quests.voice")
+  local voice = B:GetAction("voice.play")
   if not voice or (voice.has and not voice.has(ref)) then
     return nil
   end
   return {
     label = ">",
     onClick = function(row)
-      B:RunAction("quests.voice", row.ref or ref, { source = "browser" })
+      B:RunAction("voice.play", row.ref or ref, { source = "browser" })
     end,
   }
 end
@@ -720,40 +737,40 @@ local function chainRows(id)
   if not ch then
     return nil
   end
-  local rows = {}
-  -- where to start: the first quest of the
-  -- chain the player can act on now, else the first one not done
-  local start
+  -- the progress chain: numbered steps with their state, "you are
+  -- here" on the step to act on (before: a flat list under "Continue the chain with")
+  local steps = {}
   for _, qid in ipairs(ch.quests) do
-    local st = Logic.status(qid, s)
-    if st == "available" or st == "log" then
-      start = qid
-      break
-    end
+    steps[#steps + 1] = { kind = "quest", id = qid }
   end
-  if not start then
-    for _, qid in ipairs(ch.quests) do
-      if Logic.status(qid, s) ~= "done" then
-        start = qid
-        break
-      end
-    end
-  end
-  if start then
-    local row = R.quest(start, s, { zone = true, where = "start-here" })
-    row.text = R.COLOR.grey .. L["Continue the chain with"] .. ":|r " .. row.text
-    rows[#rows + 1] = row
-  else
-    rows[#rows + 1] = { kind = "para", text = R.COLOR.grey .. L["The whole chain is done."] .. "|r" }
-  end
-  for _, qid in ipairs(ch.quests) do
-    local row = R.quest(qid, s, { zone = true, map = Logic.startMap(Logic.quest(id)) })
-    if qid == id then
-      row.color = B.UI.Style.C.accent
-    end
-    rows[#rows + 1] = row
-  end
+  local rows = R.progress(steps, s, nil, { map = Logic.startMap(Logic.quest(id)), key = "chain:" .. id })
   return rows
+end
+
+-- The attunement of a dungeon (data.md "Dungeons", DG2b): the list whose `instance` is the
+-- dungeon, as a progress chain with the bags and the reputation of this character.
+local function dungeonAttunementRows(ref)
+  local _, id = B.Entity.Parse(ref)
+  local s = State.ForLogic()
+  for _, a in ipairs(Logic.attunements(State.facts.faction)) do
+    if a.instance == id then
+      local steps = {}
+      for _, step in ipairs(a.steps or {}) do
+        steps[#steps + 1] = { kind = step[1], id = step[2], label = step[3], standing = step[4] }
+      end
+      local rows = R.progress(steps, s, {
+        hasItem = function(itemID)
+          return B.Compat.GetItemCount(itemID) > 0
+        end,
+        rep = B.Compat.GetReputation,
+      }, { key = "datt:" .. id })
+      if not a.verified then
+        rows[1].text = rows[1].text .. "  " .. R.COLOR.orange .. L["unverified"] .. "|r"
+      end
+      return rows
+    end
+  end
+  return nil
 end
 
 -- The quest's givers or hand-in NPCs and objects, each with its zone ("NPC
@@ -1278,6 +1295,16 @@ local function registerSections(mod)
     },
   })
   B:RegisterDetailSection(mod, {
+    id = "quests.attunement",
+    title = L["Attunement"],
+    types = { "dungeon" },
+    order = 23,
+    block = { wide = true, limit = 20 },
+    invalidateOn = INVALIDATE,
+    cache = false, -- the bags and the reputation change without a quest event
+    build = dungeonAttunementRows,
+  })
+  B:RegisterDetailSection(mod, {
     id = "quests.needed",
     title = L["Needed for quests"],
     types = { "item" },
@@ -1429,11 +1456,12 @@ local function registerSearch(mod)
     id = "quests.text",
     label = L["Quest texts"],
     priority = 40,
-    search = function(query, limit, yield)
+    search = function(query, limit, yield, q)
       local d = data()
       if not d or #query < 3 then
         return {}
       end
+      q = q or B.Query.Compile(query) -- the suite's search syntax (ADR 0045)
       if not d:PackLoaded("text") then
         return {
           {
@@ -1455,7 +1483,7 @@ local function registerSearch(mod)
         local t = d:Get("questText", qid)
         if t then
           local hay = string.lower((t.details or "") .. " " .. (t.objectives or ""))
-          if string.find(hay, query, 1, true) then
+          if q:MatchLower(hay) then
             out[#out + 1] =
               { ref = "quest:" .. qid, label = R.questName(qid), score = 0.5, note = L["quest text"] }
             if #out >= (limit or 50) then
@@ -1485,10 +1513,80 @@ function Reg.InvalidateZone()
   zoneGen = zoneGen + 1
 end
 
+-- The zone of a zone page, or of an area page the zone the area lies in (owner, retail
+-- 31.10.2026: "the subzone ... I would expect the same information as in the main zone").
 local function zoneMap(ref)
   local typ, id = B.Entity.Parse(ref)
+  if typ == "area" then
+    local d = data()
+    return d and d.AreaScope and d:AreaScope(id) or nil
+  end
   return typ == "zone" and tonumber(id) or nil
 end
+
+-- An area page's test of map points (Data's AreaScope), nil on a zone page.
+local function areaTest(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local d = typ == "area" and data()
+  if not (d and d.AreaScope) then
+    return nil
+  end
+  local _, inside = d:AreaScope(id)
+  return inside
+end
+
+-- The zone's rows that lie in the area: a giver's row by its point, a quest by its givers' or
+-- takers' places, a row without either by the rows under it.
+local function questIn(qid, inside)
+  local q = Logic.quest(qid)
+  if not q then
+    return false
+  end
+  for _, places in ipairs({ q.startPlaces or {}, q.endPlaces or {} }) do
+    for _, p in ipairs(places) do
+      if inside(p[1], p[2], p[3]) then
+        return true
+      end
+    end
+  end
+  local d = data() -- a record without places: where its givers and takers stand
+  for _, refs in ipairs({ q.starts or {}, q.ends or {} }) do
+    for _, ref in ipairs(refs) do
+      for _, s in ipairs(d and type(ref) == "string" and d:Spawns(ref) or {}) do
+        if inside(s.map, s.x, s.y) then
+          return true
+        end
+      end
+    end
+  end
+  return false
+end
+local function inArea(rows, inside)
+  local out = {}
+  for _, row in ipairs(rows) do
+    if row.map and row.x and row.y then
+      if inside(row.map, row.x, row.y) then
+        out[#out + 1] = row
+      end
+    elseif row.qid then
+      if questIn(row.qid, inside) then
+        out[#out + 1] = row
+      end
+    elseif row.children then
+      local kids = inArea(row.children, inside)
+      if #kids > 0 then
+        local copy = {}
+        for k, v in pairs(row) do
+          copy[k] = v
+        end
+        copy.children = kids
+        out[#out + 1] = copy
+      end
+    end
+  end
+  return out
+end
+Reg.InArea = inArea
 
 local function zoneData(map)
   local c = zoneCache[map]
@@ -1587,12 +1685,16 @@ local function registerZoneSections(mod)
   B:RegisterDetailSection(mod, {
     id = "quests.zone.todo",
     title = countTitle("To do here"),
-    types = { "zone" },
+    types = { "zone", "area" },
     order = 2,
     invalidateOn = ZONE_INVALIDATE,
     build = function(ref)
       local map = zoneMap(ref)
       local here = map and zoneData(map).here
+      local inside = areaTest(ref)
+      if here and inside then
+        here = inArea(here, inside)
+      end
       if not (here and #here > 0) then
         return nil
       end
@@ -1621,7 +1723,7 @@ local function registerZoneSections(mod)
     B:RegisterDetailSection(mod, {
       id = "quests.zone." .. key,
       title = countTitle(title),
-      types = { "zone" },
+      types = { "zone", "area" },
       order = order,
       collapsed = folded or nil,
       invalidateOn = ZONE_INVALIDATE,
@@ -1634,6 +1736,14 @@ local function registerZoneSections(mod)
         local root = c.byKey[key]
         if not (root and root.children and #root.children > 0) then
           return nil
+        end
+        local inside = areaTest(ref)
+        if inside then
+          local rows = inArea(root.children, inside)
+          if #rows == 0 then
+            return nil
+          end
+          return rows
         end
         local rows = {}
         for i, row in ipairs(root.children) do
@@ -1841,6 +1951,7 @@ local function registerLists(mod)
     label = "Quest chains",
     glyph = "chain", -- not the quest's "!"
     facet = "level",
+    chips = true, -- several level bands at once
     ids = Logic.chainRoots,
     record = function(root)
       local c = Logic.chain(root, State.ForLogic())
@@ -1864,6 +1975,58 @@ local function registerLists(mod)
     end,
     ref = function(_, r)
       return "quest:" .. r.first
+    end,
+  })
+  -- The Quests list's Status and Type ("All quests does not load ...
+  -- whats the difference to the normal quest list"): the All quests view's two filters on the
+  -- Browser's one quest list, which then covers the view (`coveredBy`, Window.lua).
+  local statusState, statusGen
+  local function stateNow()
+    local gen = B:FilterGeneration("quests.status")
+    if statusGen ~= gen then
+      statusState, statusGen = State.ForLogic(), gen
+    end
+    return statusState
+  end
+  local statusOrder = {}
+  for i, key in ipairs(V.STATUS) do
+    statusOrder[key] = i
+  end
+  B:RegisterFilter(mod, {
+    id = "quests.status",
+    kind = "facet",
+    types = { "quest" },
+    label = L["Status"],
+    chips = true,
+    value = function(ref)
+      local qid = questID(ref)
+      local q = qid and Logic.quest(qid)
+      if not q then
+        return nil
+      end
+      local state = stateNow()
+      return V.statusKey(Logic.status(qid, state), q, state)
+    end,
+    labels = function(key)
+      return L[V.STATUS_LABEL[key] or key]
+    end,
+    order = function(key)
+      return statusOrder[key] or 100
+    end,
+    invalidateOn = { "BASTIANS_QUESTS_CHANGED" }, -- a hand-in, an accepted quest, a level
+  })
+  B:RegisterFilter(mod, {
+    id = "quests.kind",
+    kind = "facet",
+    types = { "quest" },
+    label = L["Type"],
+    value = function(ref)
+      local qid = questID(ref)
+      local q = qid and Logic.quest(qid)
+      return q and V.KindsOf(q) or nil
+    end,
+    labels = function(key)
+      return L[key]
     end,
   })
 end

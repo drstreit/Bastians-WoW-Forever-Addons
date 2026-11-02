@@ -170,7 +170,9 @@ def test_my_quests_is_one_click_in_the_navigation(wow: WowRuntime):
         "nav:view:quests.log",
         "My quests  2 in the log",
     )
-    assert ("nav:view:quests.all", "All quests") in rows  # the other views under their group
+    assert ("nav:view:quests.attune", "Attunements") in rows  # the other views under their group
+    # All quests is the Quests list with its Status and Type filters
+    assert not any(r[0] == "nav:view:quests.all" for r in rows)
     nav_click(wow, "nav:view:quests.log")
     assert wow.eval(f"{BR}.Current().kind") == "view"
     assert wow.eval(f"{BR}.Current().id") == "quests.log"

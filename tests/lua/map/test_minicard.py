@@ -88,6 +88,15 @@ def test_a_hover_shows_the_card_beside_the_pin_and_a_cluster_keeps_the_tooltip(w
     assert wow.eval("GameTooltip:NumLines()") == 0  # the map's own tooltip is gone
     marshal.GetScript(marshal, "OnLeave")(marshal)
     assert wow.eval(f"{PINS}.miniCard:IsShown()") is False
+    # a pin hidden or recycled under the mouse fires no OnLeave: the card goes with it (owner,
+    # retail 02.11.2026: "the hover window stays open and cannot be closed anymore")
+    marshal.GetScript(marshal, "OnEnter")(marshal)
+    assert wow.eval(f"{PINS}.miniCard:IsShown()") is True
+    wow.execute("BastiansMapFrame:Hide()")
+    wow.run_frames(2)
+    assert wow.eval(f"{PINS}.miniCard:IsShown()") is False
+    wow.execute("BastiansMapFrame:Show()")
+    wow.advance(0.2)
     # a cluster: the tooltip says how many pins, no card
     wow.execute(f"{MAP_}.Fly(0, 0, 0, 2)")
     wow.advance(0.2)

@@ -197,6 +197,18 @@ local function miniCardFrame()
     fs:Hide()
     f.rows[i] = fs
   end
+  -- the card goes with its pin: a pin hidden or recycled under the mouse fires no OnLeave (owner,
+  -- retail 02.11.2026: "when I close the minimap the hover window stays open and cannot be
+  -- closed"); the check runs only while the card shows
+  f:SetScript("OnUpdate", function(self)
+    local owner = self.owner
+    if not (owner and owner.pin and owner:IsVisible()) then
+      self:Hide()
+    end
+  end)
+  f:SetScript("OnHide", function(self)
+    self.owner = nil
+  end)
   f:Hide()
   miniCard = f
   Pins.miniCard = f
@@ -248,6 +260,7 @@ local function showMiniCard(frame, data)
   f:ClearAllPoints()
   f:SetPoint("BOTTOMLEFT", frame, "TOPRIGHT", 4, 0)
   f.ref = data.ref
+  f.owner = frame
   f:Show()
 end
 

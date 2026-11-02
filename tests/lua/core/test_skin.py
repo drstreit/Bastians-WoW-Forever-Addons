@@ -85,15 +85,21 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
     end = next(i for i in range(start + 1, len(labels)) if labels[i][0] == "header")
     keys = [x[2] for x in labels[start + 1 : end]]
     assert keys == [
-        None,  # Use the full WoW look (30.10.2026)
-        None,  # Use the Modern look
-        "skin",
+        None,  # Use the WoW look
+        None,  # Use the Modern look (the Azeroth row went with ADR 0046)
+        "preset",
+        "newPreset",  # Save as new preset
+        None,  # Delete this preset
+        "gameFrames",  # the game's own windows and insets
         "skinFrames",
         "theme",
         "font",
+        "headingFont",
         "fontScale",
         "windowColor",
         "windowAlpha",
+        "gameButtons",
+        "ornaments",
         "rowPortraits",
         "placeCuts",
         "diorama",
@@ -102,30 +108,25 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
     ]
     assert "Windows" not in [x[1] for x in labels]  # folded into the section
     profile = core.eval(PROFILE)
-    assert profile.skin == "modern" and profile.skinFrames is True  # the frames are standard
+    assert profile.preset == "modern-dark" and profile.skinFrames is True  # the frames are standard
     for key in ("rowPortraits", "placeCuts", "diorama", "modelMotion", "pageSounds"):
         assert profile[key] is True, key
     assert core.errors == []
 
 
-def test_the_azeroth_skin_sets_the_headings_in_morpheus_and_gold(core: WowRuntime):
+def test_the_heading_font_is_a_setting_of_its_own(core: WowRuntime):
+    """ADR 0038: window titles, page names and section titles take `headingFont` (nil: the text
+    font) in the title bar's colour; Morpheus and the like draw at the heading's bigger size."""
     core.execute("W = Bastians.UI.Window('SkinTestFrame', { title = 'T' }); W:Show()")
-    font = core.eval("(W.title:GetFont())")
+    font, size = core.eval("W.title:GetFont()")[:2]
     assert font != "Fonts\\MORPHEUS.TTF"
-    core.execute(
-        """seen = {}
-        local m = Bastians:NewModule("SkinWatch", { addon = "Bastians_Core" })
-        m:On("BASTIANS_THEME_CHANGED", function() seen[#seen + 1] = 1 end)"""
-    )
-    set_option(core, "skin", "'azeroth'")
+    set_option(core, "headingFont", "'Fonts\\\\MORPHEUS.TTF'")
     assert core.eval("(W.title:GetFont())") == "Fonts\\MORPHEUS.TTF"
-    assert core.eval("{ W.title:GetTextColor() }")[1] == core.eval(f"{S}.C.gold[1]")
-    assert core.eval(f"{PROFILE}.skinFrames") is True  # the frames follow the skin
-    seen = list(core.eval("seen").values())
-    assert len(seen) >= 1  # every app draws again
-    set_option(core, "skin", "'modern'")
+    assert core.eval("(select(2, W.title:GetFont()))") > size
+    assert core.eval("{ W.title:GetTextColor() }")[1] == core.eval(f"{S}.C.headerText[1]")
+    set_option(core, "headingFont", "nil")
     assert core.eval("(W.title:GetFont())") == font
-    assert core.eval(f"{PROFILE}.skinFrames") is False
+    assert core.eval(f"{PROFILE}.preset") == "modern-dark"  # set_option fires no message: no Custom
     assert core.errors == []
 
 
@@ -140,19 +141,19 @@ def test_the_games_window_frames_are_a_switch_of_their_own(core: WowRuntime):
     assert core.eval("W.border:IsShown()") is False
     assert core.eval("(select(4, W.head:GetPoint(1)))") == 1
     assert core.eval("W.frame.edges:IsShown()") is True
-    assert core.eval(f"{S}.Azeroth()") is False  # the skin did not change
+    assert core.eval(f"{S}.Ornaments()") is False  # the other settings did not change
     set_option(core, "skinFrames", "true")
     assert core.eval("W.border:IsShown()") is True
     assert core.errors == []
 
 
-def test_azeroth_section_titles_keep_their_case_over_an_ornament(app: WowRuntime):
+def test_section_titles_keep_their_case_over_an_ornament(app: WowRuntime):
     host(app)
     app.execute(TABLES)
     app.execute("dossier:SetSubject('npc:448')")
     bf = block(app, "LOOT")
     assert bf.line.IsShown(bf.line) is True and bf.orn.IsShown(bf.orn) is False
-    set_option(app, "skin", "'azeroth'")
+    set_option(app, "ornaments", "true")
     app.execute("dossier:Refresh()")
     bf = block(app, "Loot")
     assert bf is not None and bf.orn.IsShown(bf.orn) is True and bf.line.IsShown(bf.line) is False
@@ -393,38 +394,24 @@ def test_a_page_sounds_as_it_opens(wow: WowRuntime):
 QUEST = 62  # The Fargodeep Mine, from Marshal Dughan
 
 
-def test_the_blizzard_skin_takes_the_frames_the_gold_scheme_and_the_games_type(core: WowRuntime):
-    """ "a style that closely reflects Blizzard style across the whole suite": the
-    third skin sets the frames, the Blizzard gold scheme and Friz Quadrata (all free to change
-    after), headings in the kit's type in gold, and dresses every kit button in the game's own
-    button textures; Modern takes the textures off again."""
+def test_a_floor_plate_lays_its_tiles_and_pins_out_by_the_width(core: WowRuntime):
+    """DG2 (data.md "Dungeons"): the pure layout of a dungeon floor: the plate's height from the
+    floor's aspect (never taller than wide), the tiles scaled from floor pixels, the bosses and the
+    door as pins in plate pixels."""
     core.execute(
-        "W = Bastians.UI.Window('BlizzTestFrame', { title = 'T' }); W:Show() "
-        "Btn = Bastians.UI.Style.button(W.content, 'Go', 80, 20)"
+        """floor = { w = 1000, h = 500, tiles = { { 205041, -100, 0, 500, 500, 2 }, { 211425, 500, 250, 250, 250, 0 } },
+          bosses = { { 1, 20, 50, "Boss" } }, door = { 90, 10 } }
+        H, T, P = Bastians.UI.Scenery.FloorLayout(floor, 400)
+        tall = { w = 100, h = 300 }
+        H2 = Bastians.UI.Scenery.FloorLayout(tall, 400)"""
     )
-    assert core.eval("Btn:GetNormalTexture()") in (None, "")
-    set_option(core, "skin", "'blizzard'")
-    profile = core.eval(PROFILE)
-    assert profile.skin == "blizzard" and profile.skinFrames is True
-    assert profile.theme == "blizzard" and profile.font == "Fonts\\FRIZQT__.TTF"
-    assert core.eval(f"{S}.ThemeId()") == "blizzard"
-    assert core.eval("(W.title:GetFont())") == "Fonts\\FRIZQT__.TTF"  # the kit's type, not Morpheus
-    assert core.eval("{ W.title:GetTextColor() }")[1] == core.eval(f"{S}.C.gold[1]")
-    assert core.eval("W.border:IsShown()") is True
-    assert core.eval("W.frame.bg:IsShown()") is False  # the game's dialog ground under the border
-    assert core.eval("Btn:GetNormalTexture()") == "Interface\\Buttons\\UI-Panel-Button-Up"
-    assert core.eval("Btn.face:IsShown()") is False
-    # a button made under the skin is dressed at once
-    core.execute("Btn2 = Bastians.UI.Style.button(W.content, 'Go', 80, 20)")
-    assert core.eval("Btn2:GetNormalTexture()") == "Interface\\Buttons\\UI-Panel-Button-Up"
-    set_option(core, "skin", "'modern'")
-    assert core.eval("Btn:GetNormalTexture()") == "" and core.eval("Btn.face:IsShown()") is True
-    assert core.eval(f"{PROFILE}.skinFrames") is False
-    assert core.eval(f"{PROFILE}.theme") == "blizzard"  # the scheme stays the player's choice
-    # the two buttons do the same as the select: the one-click WoW look is the full set
-    core.execute("Bastians.UI.Settings.ChooseSkin(Bastians:GetModule('Core'), 'blizzard')")
-    assert core.eval(f"{PROFILE}.skin") == "blizzard" and core.eval(f"{PROFILE}.skinFrames") is True
-    assert core.eval("W.frame.bg:IsShown()") is False
-    core.execute("Bastians.UI.Settings.ChooseSkin(Bastians:GetModule('Core'), 'modern')")
-    assert core.eval(f"{PROFILE}.skin") == "modern" and core.eval("W.frame.bg:IsShown()") is True
+    assert core.eval("H") == 200  # 400 wide, the floor's aspect 0.5
+    assert core.eval("H2") == 400  # capped at square
+    tiles = [list(t.values()) for t in core.eval("T").values()]
+    assert tiles == [[205041, -40, 0, 200, 200, 2], [211425, 200, 100, 100, 100, 0]]
+    pins = [list(p.values()) for p in core.eval("P").values()]
+    assert pins == [[80, 100, "1", "boss", "Boss"], [360, 20, "", "door"]]
+    assert core.eval(
+        "Bastians.UI.Scenery.FloorsHeight({ { floor = floor }, { floor = tall } }, 400)"
+    ) == (200 + 16 + 6 + 400 + 16 + 6)
     assert core.errors == []

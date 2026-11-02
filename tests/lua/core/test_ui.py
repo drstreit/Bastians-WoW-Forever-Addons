@@ -317,7 +317,7 @@ def test_tree_rows_show_action_icons_on_hover_and_on_the_focused_row(core: WowRu
           icon = "Interface\\Icons\\INV_Misc_Map_01",
           when = function(ref) return ref ~= "npc:1" end,
           run = function(ref, ctx) ran[#ran + 1] = "locate " .. ref end })
-        Bastians:RegisterAction(m, { id = "quests.voice", label = "Play the voice line", types = { "quest" },
+        Bastians:RegisterAction(m, { id = "voice.play", label = "Play the voice line", types = { "quest" },
           order = 80, has = function(ref) return ref == "quest:2" end,
           when = function(ref) return ref == "quest:2" end,
           active = function(ref) return playing == ref end,
@@ -343,7 +343,7 @@ def test_tree_rows_show_action_icons_on_hover_and_on_the_focused_row(core: WowRu
     core.execute("tree.pool[2]:GetScript('OnEnter')(tree.pool[2])")
     assert [b.action.id for b in core.eval("tree.pool[2].icons").values() if b.IsShown(b)] == [
         "map.show",
-        "quests.voice",
+        "voice.play",
         "browser.open",
     ]
     core.execute("tree.pool[3]:GetScript('OnEnter')(tree.pool[3])")
@@ -630,7 +630,7 @@ def test_row_tags_mark_and_dim_rows(core: WowRuntime):
         and core.eval("Bastians:RowTag('npc:2')") is None
     )
     assert core.eval("Bastians:RowTag('item:1')") is None
-    assert core.eval("tree.pool[1].text:GetText()") == "One|cff808080  (odd)|r"
+    assert core.eval("tree.pool[1].text:GetText()") == "One|cff858585  (odd)|r"
     assert core.eval("tree.pool[2].text:GetText()") == "Two"
     assert core.errors == []
 

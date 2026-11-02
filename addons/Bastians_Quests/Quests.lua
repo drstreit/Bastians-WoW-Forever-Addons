@@ -76,7 +76,7 @@ local mod = B:NewModule("Quests", {
   title = L["Quests"],
   apiVersion = 1,
   data = { "quests", "world", "items" }, -- items: reward and quest item names
-  optional = { "QuestieDB", "Spoken_Quests" },
+  optional = { "QuestieDB" }, -- the Spoken bridge is Bastian's Voice's since 01.11.2026 (voice.md)
   defaults = {
     profile = {
       window = {},
@@ -98,7 +98,9 @@ local mod = B:NewModule("Quests", {
       timeEvent = 2, -- minutes per event or exploration
       timeDelivery = 1, -- minutes for a quest without objectives
     },
-    char = { flightPaths = {}, hidden = {} }, -- hidden: the quests hidden from Do here (R3)
+    -- hidden: the quests hidden from Do here (R3); chainNext: [next quest id] = the quest handed in,
+    -- the chains the character follows after a hand-in (the log's "Next in chain" entries)
+    char = { flightPaths = {}, hidden = {}, chainNext = {} },
   },
   options = {
     { type = "header", label = L["The tracker (My quests)"] },
@@ -193,6 +195,7 @@ local mod = B:NewModule("Quests", {
     ns.Tracker.Register(self) -- the log view in its own frame (R6)
     ns.Registrations.Register(self)
     ns.Journey.Register(self) -- the journey per zone and session (S3)
+    ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
     self:RegisterEvent("QUEST_LOG_UPDATE", scheduleRefresh)
     self:RegisterEvent("QUEST_ACCEPTED", function(mod, _, a, b)
       local id = tonumber(b) or tonumber(a) -- retail: questID; Classic shape: questLogIndex, questID
@@ -211,6 +214,7 @@ local mod = B:NewModule("Quests", {
     self:RegisterEvent("QUEST_TURNED_IN", function(mod, _, questID)
       ns.State.MarkDone(questID)
       ns.Journey.OnQuest(questID)
+      mod.FollowChain(questID)
       scheduleRefresh(mod)
     end)
     self:RegisterEvent("PLAYER_LEVEL_UP", function(mod, _, level)
@@ -271,3 +275,33 @@ mod.Rows = ns.Rows -- the row builders (Rows.lua)
 mod.Views = ns.Views -- the view builders (Views.lua)
 mod.Recommend = ns.Recommend -- scoring and the next-area planner (Recommend.lua)
 mod.Window = ns.Window -- the window (Window.lua)
+
+-- A hand-in: the chain's next quest becomes a "Next in chain" entry of the log until it is taken
+-- ("grayed out as long as not active, then when I close the prior quest
+-- it gets activated and the next greyed out quest will be shown"). The handed-in quest's own
+-- entry leaves the follow list.
+function mod.FollowChain(questID)
+  local follow = mod.db and mod.db.char and mod.db.char.chainNext
+  if not follow then
+    return
+  end
+  follow[questID] = nil
+  local nextID = ns.Logic.nextInChain(questID, ns.State.ForLogic())
+  if nextID and not ns.State.IsQuestDone(nextID) then
+    follow[nextID] = questID
+  end
+end
+
+-- The chains the character follows, without the entries that are in the log or done by now.
+function mod.FollowedChains()
+  local follow = mod.db and mod.db.char and mod.db.char.chainNext
+  if not follow then
+    return nil
+  end
+  for nextID in pairs(follow) do
+    if ns.State.IsInLog(nextID) or ns.State.IsQuestDone(nextID) then
+      follow[nextID] = nil
+    end
+  end
+  return follow
+end

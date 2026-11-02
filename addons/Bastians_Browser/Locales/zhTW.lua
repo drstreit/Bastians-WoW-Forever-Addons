@@ -33,6 +33,13 @@ ns.L:Register("zhTW", {
   ["All"] = "全部",
   ["Where the rows are: in your zone, on your continent, or everywhere."] = "列的範圍：在你的區域、在你的大陸，或是全部。",
   ["Sort"] = "排序",
+  ["Groups"] = "分組",
+  ["By zone"] = "按區域",
+  ["None"] = "無",
+  ["Nearest first, the rows under their zone's name."] = "最近的優先，各行列在其區域名稱之下。",
+  ["Elsewhere"] = "其他地方",
+  ["Loading %d of %d ..."] = "正在載入 %d / %d ...",
+  ["%d loaded"] = "已載入 %d",
   ["The order of the rows."] = "列的順序。",
   ["No entries. Is the data pack loaded?"] = "沒有條目。資料包是否已載入？",
   ["Nothing matches these filters. The x on a filter clears it."] = "沒有符合這些篩選條件的項目。按篩選上的 x 可清除。",
@@ -47,7 +54,7 @@ ns.L:Register("zhTW", {
   ["Search and lists of every kind."] = "搜尋與各類型的列表。",
 
   -- the toolbar and the window
-  ["Browser"] = "Browser",
+  ["Browser"] = "瀏覽器",
   ["Back"] = "返回",
   ["The page before. Also: hold the right mouse button and drag to the left."] = "上一頁。也可以：按住滑鼠右鍵並向左拖曳。",
   ["Forward"] = "前進",
@@ -68,8 +75,12 @@ ns.L:Register("zhTW", {
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "在列上顯示任務與物品的價值（獎勵、價格）",
   ["Follow the target: an NPC or object you target becomes the subject"] = "跟隨目標：你選取的 NPC 或世界物件會成為主題",
   ["Hide the game's objective tracker in slim mode"] = "在精簡模式下隱藏遊戲的任務目標追蹤清單",
-  ["Open in Browser"] = "在 Browser 中開啟",
-  ["Right click: open in the Browser"] = "右鍵點擊：在 Browser 中開啟",
+  ["Preview a row in the page pane"] = "在頁面窗格中預覽一行",
+  ["While Shift is held"] = "按住 Shift 時",
+  ["On every hover"] = "每次懸停時",
+  ["Never"] = "從不",
+  ["Open in Browser"] = "在瀏覽器中開啟",
+  ["Right click: open in the Browser"] = "右鍵點擊：在瀏覽器中開啟",
 
   -- list types (Browser.LISTS and registered lists)
   ["NPCs"] = "NPC",
@@ -236,4 +247,12 @@ ns.L:Register("zhTW", {
   ["The link is in the chat input: copy it with Ctrl+C."] = "連結已在聊天輸入框中：請用 Ctrl+C 複製。",
   ["Slide the list in"] = "滑入列表",
   ["Slide the list out"] = "滑出列表",
+  -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
+  ["Mobs"] = "怪物",
+  ["Filter"] = "篩選",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["Click: the Browser. Right click: the bookmarks."] = "點擊：瀏覽器。右鍵點擊：書籤。",
+  ["Everything the suite knows: quests, NPCs, items, places."] = "套件所知的一切：任務、NPC、物品、地點。",
 })

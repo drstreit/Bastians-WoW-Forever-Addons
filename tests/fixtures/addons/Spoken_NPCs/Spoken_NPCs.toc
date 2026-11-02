@@ -1,0 +1,6 @@
+## Interface: 16001, 120105
+## Title: Spoken NPCs (test double)
+## Notes: Fixture: the bosses' creature ids and stories, as Spoken NPCs keeps them in globals.
+## Dependencies: Spoken
+
+Data.lua

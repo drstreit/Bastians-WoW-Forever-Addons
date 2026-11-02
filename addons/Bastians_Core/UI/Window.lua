@@ -124,6 +124,9 @@ local function draggable(region, win)
   region:EnableMouse(true)
   region:RegisterForDrag("LeftButton")
   region:SetScript("OnDragStart", function()
+    if win.db.locked then
+      return -- locked in place
+    end
     if win.dock then
       win:Undock() -- dragging a docked window away undocks it
     end
@@ -139,17 +142,20 @@ local function draggable(region, win)
 end
 
 -- opts: { title, width, height, minWidth, minHeight, maxWidth, maxHeight, db (table for pos and size),
---         onShow(win), onHide(win), onResize(win), escape (default true) }
+--         onShow(win), onHide(win), onResize(win), escape (default true), onTop (above every
+--         other window, Window.TOP_STRATA) }
 function B.UI.Window(name, opts)
   opts = opts or {}
   local db = opts.db or {}
   local frame = CreateFrame("Frame", name, UIParent)
   local win = setmetatable({ frame = frame, name = name, db = db, opts = opts }, Window)
+  -- a window of its own palette (the settings, always the WoW look): its widgets ask it (S.Tok)
+  frame.palette = opts.palette
 
   local size = db.size or { opts.width or DEFAULTS.width, opts.height or DEFAULTS.height }
   frame:SetSize(size[1], size[2])
   frame:SetFrameStrata(Window.STRATA)
-  frame:SetToplevel(true)
+  frame:SetToplevel(not opts.onTop) -- a window on top never climbs over the tooltips and menus
   frame:SetClampedToScreen(true)
   frame:SetMovable(true)
   frame:SetResizable(true)
@@ -172,7 +178,9 @@ function B.UI.Window(name, opts)
     end
   end)
   frame:SetScript("OnMouseDown", function(self)
-    self:Raise()
+    if not opts.onTop then
+      self:Raise()
+    end
   end)
   -- onResize(win, sizing): `sizing` is true while the grip is held and false for the final call
   -- after the mouse is up. The client fires OnSizeChanged per frame while sizing; the content
@@ -197,39 +205,58 @@ function B.UI.Window(name, opts)
   draggable(head, win)
   win.head = head
 
-  win.title = S.heading(head, 15, 17, S.C.text, S.C.gold) -- Morpheus under the Azeroth skin
+  win.title = S.heading(head, 15, 17, S.C.headerText) -- the heading font; gold on the Azeroth bar
   win.title:SetPoint("LEFT", 10, 0)
   win.title:SetPoint("RIGHT", -34, 0)
   win.title:SetWordWrap(false) -- a title never breaks into two lines
   win.title:SetText(opts.title or name)
 
-  win.close = S.button(head, "x", 22, 20)
-  win.close.tip = L["Close (Escape)"]
+  -- the header's actions (ADR 0046: declared, the look draws the pictogram and the text)
+  win.close = S.action(head, {
+    icon = "close",
+    label = L["Close"],
+    tip = L["Close (Escape)"],
+    row = true,
+    onClick = function()
+      frame:Hide()
+    end,
+  })
   win.close:SetPoint("RIGHT", -6, 0)
-  win.close:SetScript("OnClick", function()
-    frame:Hide()
-  end)
 
   -- the window's options, straight to its app's page of the settings (,
   -- R27.1): `opts.module` names the app, `opts.page` one of its own pages (core-contracts §8)
   if opts.module then
-    local b = CreateFrame("Button", nil, head)
-    b:SetSize(20, 20)
+    local b = S.action(head, {
+      icon = "settings",
+      label = L["Options"],
+      tip = L["Options of this window"],
+      row = true,
+      onClick = function()
+        if B.UI.Hub then
+          B.UI.Hub.Open(opts.module, opts.page)
+        end
+      end,
+    })
     b:SetPoint("RIGHT", win.close, "LEFT", -4, 0)
-    b.icon = b:CreateTexture(nil, "ARTWORK")
-    b.icon:SetAllPoints()
-    B.UI.PaintIcon(b.icon, B.UI.IconTexture("settings"))
-    b.tip = L["Options of this window"]
-    b:SetScript("OnEnter", S.TipEnter)
-    b:SetScript("OnLeave", S.TipLeave)
-    b:SetScript("OnClick", function()
-      if B.UI.Hub then
-        B.UI.Hub.Open(opts.module, opts.page)
-      end
-    end)
     win.options = b
-    win.title:SetPoint("RIGHT", -58, 0)
   end
+
+  -- the lock ("an option to lock the chat window in place", per
+  -- window): `opts.lockable` shows it left of the options; locked, the window neither moves
+  -- nor sizes, and `db.locked` keeps it so
+  if opts.lockable then
+    local b = S.action(head, {
+      icon = "lock",
+      label = L["Lock"],
+      row = true,
+      onClick = function()
+        win:SetLocked(not win.db.locked)
+      end,
+    })
+    b:SetPoint("RIGHT", win.options or win.close, "LEFT", -4, 0)
+    win.lock = b
+  end
+  win.title:SetPoint("RIGHT", win.lock or win.options or win.close, "LEFT", -8, 0)
 
   -- content area: apps anchor their widgets here
   local content = CreateFrame("Frame", nil, frame)
@@ -251,6 +278,14 @@ function B.UI.Window(name, opts)
     -- a docked window keeps its partner's height: the grip changes its width only, and the
     -- pair stays docked
     local d = win.dock
+    -- a window still at the screen's centre (never moved) is anchored at its top left first: the
+    -- client sizes a centre-anchored frame from both sides and it jumped (owner, retail
+    -- 02.11.2026: "the window jumps to a large size, then can be scaled")
+    local left, top = frame:GetLeft(), frame:GetTop()
+    if not d and not win.full and left and top and frame:GetPoint(1) ~= "TOPLEFT" then
+      frame:ClearAllPoints()
+      frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+    end
     frame:StartSizing(d and (d.side == "left" and "LEFT" or "RIGHT") or "BOTTOMRIGHT")
   end)
   grip:SetScript("OnMouseUp", function()
@@ -263,6 +298,9 @@ function B.UI.Window(name, opts)
     win:SizeFollowers(false) -- the followers' final full refresh
   end)
   win.grip = grip
+  if opts.lockable then
+    win:SetLocked(db.locked == true)
+  end
   if opts.gestures then
     watchGestures(win, opts.gestures)
   end
@@ -359,6 +397,21 @@ function Window:FitDocked()
     lead:SetPoint("TOPLEFT", UIParent, "TOPLEFT", left + fitLeft - pairLeft, top - UIParent:GetHeight())
   end
   d.with:SavePlace()
+end
+
+-- Locked: the header does not drag, the grip hides, the pin shows it (`opts.lockable` windows).
+function Window:SetLocked(on)
+  self.db.locked = on and true or nil
+  if self.grip then
+    self.grip:SetShown(not on)
+  end
+  if self.lock then
+    self.lock.spec.on = on and true or nil
+    self.lock:SetLabel(on and L["Locked"] or L["Lock"])
+    self.lock.tip = on and L["Locked in place: click to free the window"]
+      or L["Lock the window in place (no move, no resize)"]
+  end
+  return on
 end
 
 -- The content refresh after a size change: at once when `sizing` is false, else at most once per
@@ -586,8 +639,18 @@ end
 -- Above other addons' windows, which sit on DIALOG or below (some covered the
 -- map), and above the world map when it is drawn full screen; tooltips and menus stay above us.
 Window.STRATA = "FULLSCREEN_DIALOG"
+-- `opts.onTop` ("the route window should be a high layer on top of all
+-- others"): the strata of the tooltips and menus, at its lowest level and never raised, so they
+-- still come over it (the menus raise themselves; the kit's tooltip too, S.TipEnter), while every
+-- other window, the game's dialogs and the full-screen map stay under it.
+Window.TOP_STRATA = "TOOLTIP"
 
 function Window:PlaceStrata()
+  if self.opts.onTop then
+    self.frame:SetFrameStrata(Window.TOP_STRATA)
+    self.frame:SetFrameLevel(1)
+    return
+  end
   self.frame:SetFrameStrata(Window.STRATA)
   self.frame:Raise()
 end
@@ -601,15 +664,107 @@ function Window:ApplyLook()
   local app = self.opts.module and ns.modules[self.opts.module]
   local own = app and app.db and app.db.profile or nil
   local c = own and own.windowColor or (core and core.windowColor)
-  local color = S.C.bg
+  local color = S.Tok(self.frame, "bg")
   if type(c) == "table" and tonumber(c[1]) and tonumber(c[2]) and tonumber(c[3]) then
     color = c
   end
   local alpha = own and tonumber(own.windowAlpha) or (core and tonumber(core.windowAlpha)) or 100
-  if self.frame.bg then
-    S.tint(self.frame.bg, color, math.max(0.2, math.min(1, alpha / 100)))
+  local a = math.max(0.2, math.min(1, alpha / 100))
+  local cap = S.LookGroundAlpha and S.LookGroundAlpha() or nil -- Glass: 75 % at most (ADR 0046)
+  if cap then
+    a = math.min(a, cap / 100)
   end
+  if self.frame.bg then
+    S.tint(self.frame.bg, color, a)
+  end
+  -- the game's grounds follow the opacity too: the rock of its window, the marble or parchment
+  -- of its insets
+  S.insetAlpha = a
   self:ApplyFrame()
+  if self.chrome and self.chrome.Bg then
+    self.chrome.Bg:SetAlpha(a)
+  end
+end
+
+-- The game's own window behind ours (, "a clearly skinned style according
+-- to Blizzard examples"): the client's PortraitFrameTemplate with its metal frame, rock ground,
+-- the title in its bar, its red close button and the app's icon as the round portrait; our header
+-- moves into the band beside the portrait, the content below it.
+Window.CHROME_TOP = 56 -- the title bar and the band beside the portrait
+Window.CHROME_SIDE = 6
+Window.PORTRAIT_X = 58 -- the band starts right of the portrait
+function Window:PortraitIcon()
+  if self.opts.portrait then
+    return self.opts.portrait
+  end
+  local app = self.opts.module and ns.modules[self.opts.module]
+  local addon = app and app.addon or "Bastians_Core"
+  return "Interface\\AddOns\\" .. addon .. "\\Icon"
+end
+
+function Window:Chrome()
+  if self.chrome == nil then
+    local chrome = B.Compat.NewGameWindow(self.frame)
+    self.chrome = chrome or false
+    if chrome then
+      chrome:SetAllPoints(self.frame)
+      chrome:SetFrameLevel(self.frame:GetFrameLevel() or 1)
+      chrome.CloseButton:SetScript("OnClick", function()
+        -- the app's own close where it set one (Bastian's Chat: the tabs go back to the main
+        -- window; the red button only hid the window)
+        local own = self.close:GetScript("OnClick")
+        if own then
+          own(self.close)
+        else
+          self:Hide()
+        end
+      end)
+      chrome:SetPortraitToAsset(self:PortraitIcon())
+      chrome:SetTitle(self.title:GetText() or "")
+    end
+  end
+  return self.chrome or nil
+end
+
+-- The insets around the content, for windows that size themselves to it: top (header included),
+-- side, bottom in px.
+function Window:Insets()
+  if self.gameFramed then
+    return Window.CHROME_TOP, Window.CHROME_SIDE, Window.CHROME_SIDE
+  end
+  local inset = self.framed and Window.FRAME_INSET or 1
+  return HEADER_H + inset, inset, inset
+end
+
+function Window:ApplyChrome()
+  local on = (self.opts.gameFrames or S.GameFrames()) and self:Chrome() ~= nil
+  if self.chrome then
+    self.chrome:SetShown(on)
+  end
+  if self.gameFramed == on then
+    return on
+  end
+  self.gameFramed = on
+  local head, frame = self.head, self.frame
+  head:ClearAllPoints()
+  self.content:ClearAllPoints()
+  if on then
+    head:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.PORTRAIT_X, -22)
+    head:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -Window.CHROME_SIDE, -22)
+    self.content:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.CHROME_SIDE, -Window.CHROME_TOP)
+    self.content:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -Window.CHROME_SIDE, Window.CHROME_SIDE)
+  else
+    head:SetPoint("TOPLEFT", 1, -1)
+    head:SetPoint("TOPRIGHT", -1, -1)
+    self.content:SetPoint("TOPLEFT", head, "BOTTOMLEFT", 0, 0)
+    self.content:SetPoint("BOTTOMRIGHT", -1, 1)
+    self.framed = nil -- ApplyFrame places them again
+  end
+  head:SetHeight(on and 32 or HEADER_H)
+  for _, part in ipairs({ frame.bg, frame.edges, head.bg, self.title, self.close }) do
+    S.showPart(part, not on)
+  end
+  return on
 end
 
 -- The game's window frame (the skin's `skinFrames`, ADR 0034): the dialog border over the window's
@@ -617,6 +772,12 @@ end
 -- the client's backdrop the window keeps its flat look.
 Window.FRAME_INSET = 9
 function Window:ApplyFrame()
+  if self:ApplyChrome() then
+    if self.border then
+      self.border:Hide()
+    end
+    return
+  end
   local on = S.Skin("skinFrames") == true
   local border = self.border
   if on and not border then
@@ -629,27 +790,13 @@ function Window:ApplyFrame()
   end
   on = on and border ~= nil
   if border then
-    -- the Blizzard skin paints the
-    -- game's dialog background under the border and hides the flat ground; the other skins keep
-    -- the flat ground (and its colour and opacity) inside the border
-    local blizzard = S.Blizzard()
-    if border.blizzard ~= blizzard then
-      border.blizzard = blizzard
-      border:SetBackdrop(blizzard and {
-        bgFile = S.FRAME_BG,
-        edgeFile = S.FRAME_BORDER,
-        edgeSize = 32,
-        insets = S.FRAME_INSETS,
-      } or { edgeFile = S.FRAME_BORDER, edgeSize = 32 })
+    -- the flat ground (the theme's colour and opacity) stays inside the border under every preset
+    -- (ADR 0038: the Azeroth scheme's ground is the quest frame's parchment)
+    if not border.dressed then
+      border.dressed = true
+      border:SetBackdrop({ edgeFile = S.FRAME_BORDER, edgeSize = 32 })
     end
     border:SetShown(on)
-    if self.frame.bg then
-      if on and blizzard then
-        self.frame.bg:Hide()
-      else
-        self.frame.bg:Show()
-      end
-    end
   end
   if self.framed == on then
     return
@@ -679,6 +826,9 @@ end
 
 function Window:SetTitle(text)
   self.title:SetText(text)
+  if self.chrome then
+    self.chrome:SetTitle(text or "")
+  end
 end
 function Window:Show()
   self.frame:Show()

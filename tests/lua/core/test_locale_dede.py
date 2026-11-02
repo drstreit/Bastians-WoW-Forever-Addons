@@ -20,6 +20,11 @@ APPS = (
     "Bastians_Route",
     "Bastians_Strategies",
     "Bastians_Notes",
+    "Bastians_Alts",
+    "Bastians_Helpers",
+    "Bastians_Voice",
+    "Bastians_Gestures",
+    "Bastians_Campfire",
     "Bastians_Library",
 )
 # the Library is private until it ships: the public snapshot has none

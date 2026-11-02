@@ -3,6 +3,7 @@
 -- levels, the typical resource nodes, a lore link when Spoken's places are installed), and the
 -- points of interest by the `poi` facet's role groups (travel, services, vendors, trainers,
 -- crafting, resource nodes), queried for the view's rectangle from the zones that overlap it.
+-- The dungeons and raids at their doors, switched on when one of them is focused or shown.
 -- An NPC with several places in view (one who walks about) is one pin and a faint line through
 -- its places, not a pin per place.
 local _, ns = ...
@@ -65,12 +66,8 @@ end
 
 -- --- zone information ---------------------------------------------------------------------------
 
--- The lore of a zone in Spoken's places (Spoken_Places, `SpokenZones:ShowLoreFor(uiMapID)`;
--- assumed from its source 25.10.2026, not checked in game), or nil without it.
-function Layers.SpokenLore()
-  local zones = rawget(_G, "SpokenZones")
-  return type(zones) == "table" and type(zones.ShowLoreFor) == "function" and zones or nil
-end
+-- The lore of a zone in Spoken's places is Bastian's Voice's `voice.play` since 01.11.2026
+-- (voice.md); the old `SpokenZones:ShowLoreFor` belonged to Spoken before 3.0 and is gone.
 
 -- Whether LoreForever is loaded (it has no public calls; its /lore command opens it).
 function Layers.LoreForever()
@@ -130,9 +127,8 @@ function Layers.ZoneInfo(ui)
       lines[#lines + 1] = L["Resources:"] .. " " .. table.concat(names, ", ")
     end
   end
-  if Layers.SpokenLore() then
-    lines[#lines + 1] = L["Lore: right click, Zone lore (Spoken)"]
-  elseif Layers.LoreForever() then
+  -- the zone's lore in Spoken: Voice's Play button on the card (voice.md), no line needed here
+  if Layers.LoreForever() then
     lines[#lines + 1] = L["Lore: type /lore (LoreForever)"]
   end
   infos[ui] = lines
@@ -178,7 +174,6 @@ local ROLE_ICON = {
   ["travel.dock"] = "route",
   ["travel.portal"] = "open",
   ["travel.meetingstone"] = "other",
-  ["travel.entrance"] = "zone",
   ["rest.inn"] = "innkeeper",
   ["rest.stable"] = "service",
   ["money.bank"] = "banker",
@@ -276,6 +271,17 @@ local function poiQuery(types, prefixes, fallbackIcon, priority)
         paths[#paths + 1] = { kind = "path", points = points, color = S.C.dim, width = 1, style = "dashed" }
       end
       local name = B:Entity(ref):Name()
+      if role and string.sub(role, 1, 7) == "trainer" then
+        -- what the trainer trains, from its subname ("Alchemy Trainer"; 
+        -- "I see the trainer names - but not what they train")
+        local rec = d:Get("npc", id)
+        local words = type(rec) == "table"
+          and type(rec.subname) == "string"
+          and rec.subname:match("^(.-)%s+[Tt]rainer$")
+        if words and words ~= "" and name then
+          name = name .. " (" .. words .. ")"
+        end
+      end
       for _, p in ipairs(list) do
         pins[#pins + 1] = {
           radius = p.r and p.r >= Layers.AREA_MIN_YARDS and p.r or nil, -- where it roams (W5)
@@ -322,6 +328,161 @@ local function poiQuery(types, prefixes, fallbackIcon, priority)
   end
 end
 
+-- --- monsters ---------------------------------------------------------------------------------
+
+-- Monsters ("I dont have a mob filter in the map - can we do that as
+-- regions for all mobs? clickable to open the browser for that mob"): every monster of the zones
+-- in view as soft regions where it stands, tinted by its level against the character's; one region
+-- per group of its places that lie together (each within MOB_LINK yards of another), as wide as
+-- the group and where it roams. The pin in a region's middle opens the monster's page (the pins'
+-- left click: the Browser when it is there), its card names it.
+Layers.MOB_LINK = 60 -- yards
+Layers.MOB_MIN_RADIUS = 20 -- yards: a lone place's region
+
+-- Groups of places that lie together (single link); each { wx, wy, r }. Pure.
+function Layers.MobRegions(places, link)
+  link = link or Layers.MOB_LINK
+  local regions, taken = {}, {}
+  for i = 1, #places do
+    if not taken[i] then
+      taken[i] = true
+      local group = { places[i] }
+      local k = 1
+      while k <= #group do
+        local a = group[k]
+        for j = 1, #places do
+          local b = places[j]
+          if not taken[j] and (a.wx - b.wx) ^ 2 + (a.wy - b.wy) ^ 2 <= link * link then
+            taken[j] = true
+            group[#group + 1] = b
+          end
+        end
+        k = k + 1
+      end
+      local cx, cy = 0, 0
+      for _, p in ipairs(group) do
+        cx, cy = cx + p.wx, cy + p.wy
+      end
+      cx, cy = cx / #group, cy / #group
+      local r = Layers.MOB_MIN_RADIUS
+      for _, p in ipairs(group) do
+        r = math.max(r, math.sqrt((p.wx - cx) ^ 2 + (p.wy - cy) ^ 2) + (p.r or 0))
+      end
+      regions[#regions + 1] = { wx = cx, wy = cy, r = r, n = #group }
+    end
+  end
+  return regions
+end
+
+local function monsterPins(view)
+  local d = data()
+  if view.minimap or not (d and d.IsMonster and d:Index("npc.byZone")) then
+    return {} -- regions would cover the minimap
+  end
+  local _, _, playerLevel = B.Compat.GetPlayerXP()
+  local pins, seen = {}, {}
+  local cx, cy = (view.x1 + view.x2) / 2, (view.y1 + view.y2) / 2
+  for _, rect in ipairs(Layers.ZoneRects(view.continent)) do
+    if overlaps(rect, view) then
+      for id in d:ByZone("npc", rect.ui) do
+        local r = not seen[id] and d:Get("npc", id)
+        seen[id] = true
+        if r and d:IsMonster(r) then
+          local ref = "npc:" .. id
+          local here = {}
+          for _, p in ipairs(B:Entity(ref):Places()) do
+            if p.map == view.continent and p.wx and inside(p, view) then
+              here[#here + 1] = p
+            end
+          end
+          local token = S.LevelToken(r.level, playerLevel)
+          local level = r.level
+            and (r.levelMax and r.levelMax ~= r.level and (r.level .. "-" .. r.levelMax) or r.level)
+          local label = (r.name or ref) .. (level and ("  " .. level) or "")
+          for _, region in ipairs(Layers.MobRegions(here)) do
+            pins[#pins + 1] = {
+              ref = ref,
+              wx = region.wx,
+              wy = region.wy,
+              radius = region.r,
+              icon = B.UI.IconTexture("mob"),
+              color = token and S.C[token] or nil,
+              label = label,
+              priority = 30,
+              d = (region.wx - cx) ^ 2 + (region.wy - cy) ^ 2,
+            }
+          end
+        end
+      end
+    end
+  end
+  if #pins > Layers.MAX_PINS then
+    table.sort(pins, function(a, b)
+      if a.d ~= b.d then
+        return a.d < b.d
+      end
+      return a.ref < b.ref
+    end)
+    for i = #pins, Layers.MAX_PINS + 1, -1 do
+      pins[i] = nil
+    end
+  end
+  return pins
+end
+Layers.MonsterPins = monsterPins
+
+-- --- dungeons ---------------------------------------------------------------------------------
+
+-- Dungeons and raids ("when I click in the browser on a dungeon, I expect
+-- to see it - so switch on the dungeon layer automatically"): a pin at every door of the zones in
+-- view, named after its dungeon and opening the dungeon's page (and ringed when the dungeon is
+-- focused); a door of an instance without a dungeon record keeps its own name and page.
+local function dungeonPins(view)
+  local d = data()
+  if not d or not d:Index("entrance.byZone") then
+    return {}
+  end
+  local seen, pins = {}, {}
+  for _, r in ipairs(Layers.ZoneRects(view.continent)) do
+    if overlaps(r, view) then
+      for id in d:ByZone("entrance", r.ui) do
+        local door = "entrance:" .. id
+        if not seen[door] then
+          seen[door] = true
+          local rec = d:Get("entrance", id)
+          local instance = rec and rec.instance
+          local ref = instance and d:Get("dungeon", instance) and ("dungeon:" .. instance) or door
+          for _, p in ipairs(B:Entity(door):Places()) do
+            if p.map == view.continent and p.wx and inside(p, view) then
+              pins[#pins + 1] = {
+                ref = ref,
+                wx = p.wx,
+                wy = p.wy,
+                icon = B.UI.IconTexture("keep"),
+                label = B:Entity(ref):Name(),
+                priority = 55,
+              }
+            end
+          end
+        end
+      end
+    end
+  end
+  return pins
+end
+
+-- The entity types a layer of ours draws when that layer is switched off would hide them: a
+-- focused dungeon (a click in the Browser) or "Show on map" switches the layer on.
+Layers.SHOWS = { dungeon = "map.dungeons", entrance = "map.dungeons" }
+
+function Layers.Reveal(ref)
+  local typ = type(ref) == "string" and B.Entity.Parse(ref)
+  local id = typ and Layers.SHOWS[typ]
+  if id then
+    B:Fire("BASTIANS_LAYER_CHANGED", id, "show") -- Pins.lua switches it on and queries again
+  end
+end
+
 -- The layers, in the order of the bar (map.md's table). a layer that
 -- vanishes when zooming out confuses, so they start low and cluster there.
 Layers.DEFS = {
@@ -339,7 +500,15 @@ Layers.DEFS = {
     label = "Travel",
     on = true,
     min = 1,
-    query = poiQuery({ "npc", "object", "flightpath", "transport", "entrance" }, { "travel" }, "flight", 60),
+    query = poiQuery({ "npc", "object", "flightpath", "transport" }, { "travel" }, "flight", 60),
+  },
+  {
+    id = "map.dungeons", -- the doors left Travel for a layer of their own (31.10.2026)
+    icon = "keep",
+    label = "Dungeons and raids",
+    on = true,
+    min = 1,
+    query = dungeonPins,
   },
   {
     id = "map.services",
@@ -381,6 +550,14 @@ Layers.DEFS = {
     min = 2,
     query = poiQuery({ "node", "object" }, { "gather" }, "herb", 35),
   },
+  {
+    id = "map.monsters",
+    icon = "mob",
+    label = "Monsters",
+    on = false,
+    min = 2,
+    query = monsterPins,
+  },
 }
 
 table.insert(Map.onEnable, function(self)
@@ -395,23 +572,9 @@ table.insert(Map.onEnable, function(self)
       query = def.query,
     })
   end
-  -- a zone's lore in Spoken's places, in the zone's menu and on its page (only with Spoken)
-  B:RegisterAction(self, {
-    id = "map.lore",
-    label = L["Zone lore (Spoken)"],
-    types = { "zone" },
-    order = 40,
-    when = function()
-      return Layers.SpokenLore() ~= nil
-    end,
-    run = function(ref)
-      local _, id = B.Entity.Parse(ref)
-      local zones = Layers.SpokenLore()
-      if zones and tonumber(id) then
-        zones:ShowLoreFor(tonumber(id))
-      end
-    end,
-  })
+  -- a focused dungeon or door switches its layer on ("when I click in the
+  -- browser on a dungeon, I expect to see it"); the zone lore moved to Bastian's Voice (B7.10)
+  table.insert(Map.onFocus, Layers.Reveal)
 end)
 
 -- New zones or transforms (Imagery.lua's BASTIANS_DATA_LOADED handler calls this: one bus handler

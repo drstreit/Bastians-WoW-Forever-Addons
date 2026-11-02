@@ -57,7 +57,11 @@ local function mergedDefaults(mod)
       out[scope][k] = v
     end
   end
-  out.profile.enabled = true -- the module switch (core-contracts §2)
+  -- the module switch (core-contracts §2): on unless the module declares `enabled = false` in its
+  -- profile defaults (Voice.Talk, 01.11.2026: a part that starts switched off)
+  if out.profile.enabled == nil then
+    out.profile.enabled = true
+  end
   return out
 end
 
@@ -253,13 +257,46 @@ function B:GetProfile()
   return DB.CurrentProfile()
 end
 
+-- Whether any module holds a profile of that name.
+function DB.HasProfile(name)
+  for _, mod in ipairs(ns.moduleList) do
+    local profiles = mod.db and mod.db.sv and mod.db.sv.profiles
+    if type(profiles) == "table" and profiles[name] ~= nil then
+      return true
+    end
+  end
+  return false
+end
+
 -- Switches every module to the profile: enabled modules are disabled, re-pointed and enabled again.
-function B:SetProfile(name)
+local function deepCopy(t)
+  if type(t) ~= "table" then
+    return t
+  end
+  local out = {}
+  for k, v in pairs(t) do
+    out[k] = deepCopy(v)
+  end
+  return out
+end
+
+-- `copy`: a profile that does not exist yet starts as a copy of the current one in every module
+--.
+function B:SetProfile(name, copy)
   if type(name) ~= "string" or name == "" then
     error("SetProfile: a profile name is required", 2)
   end
   if name == DB.CurrentProfile() then
     return
+  end
+  if copy and not DB.HasProfile(name) then
+    local from = DB.CurrentProfile()
+    for _, mod in ipairs(ns.moduleList) do
+      local profiles = mod.db and not mod.parent and mod.db.sv and mod.db.sv.profiles
+      if type(profiles) == "table" and type(profiles[from]) == "table" then
+        profiles[name] = deepCopy(profiles[from])
+      end
+    end
   end
   local wasEnabled = {}
   for _, mod in ipairs(ns.moduleList) do

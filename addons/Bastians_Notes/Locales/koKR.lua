@@ -25,7 +25,8 @@ ns.L:Register("koKR", {
   ["Never"] = "안 함",
   ["When near"] = "근처에 갔을 때",
   ["When I target it"] = "대상으로 지정했을 때",
-  ["Keep"] = "저장",
+  ["Save"] = "저장",
+  ["(right click: open it)"] = "(우클릭: 열기)",
   ["Cancel"] = "취소",
   ["Remove"] = "삭제",
   ["A note needs a title."] = "메모에는 제목이 필요합니다.",
@@ -83,4 +84,11 @@ ns.L:Register("koKR", {
   ["Send to my group"] = "파티에 보내기",
   ["No place to send."] = "보낼 장소가 없습니다.",
   ["Bookmark: a click shows it on the map, a right click renames it"] = "책갈피: 클릭하면 지도에 표시하고, 오른쪽 클릭하면 이름을 바꿉니다",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d notes"] = "메모 %d개",
+  ["%d notes, %d reminders"] = "메모 %d개, 알림 %d개",
+  ["Click: the lists. Right click: a note here."] = "클릭: 목록. 오른쪽 클릭: 여기에 메모.",
+  ["Near here:"] = "이 근처:",
+  ["No notes near here."] = "이 근처에 메모가 없습니다.",
+  ["and %d more"] = "외 %d개",
 })

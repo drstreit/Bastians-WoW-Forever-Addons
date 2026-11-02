@@ -25,7 +25,8 @@ ns.L:Register("frFR", {
   ["Never"] = "Jamais",
   ["When near"] = "À proximité",
   ["When I target it"] = "Quand je le cible",
-  ["Keep"] = "Garder",
+  ["Save"] = "Enregistrer",
+  ["(right click: open it)"] = "(clic droit : ouvrir)",
   ["Cancel"] = "Annuler",
   ["Remove"] = "Retirer",
   ["A note needs a title."] = "Une note a besoin d'un titre.",
@@ -83,4 +84,11 @@ ns.L:Register("frFR", {
   ["Send to my group"] = "Envoyer à mon groupe",
   ["No place to send."] = "Aucun lieu à envoyer.",
   ["Bookmark: a click shows it on the map, a right click renames it"] = "Signet : un clic l'affiche sur la carte, un clic droit le renomme",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d notes"] = "%d notes",
+  ["%d notes, %d reminders"] = "%d notes, %d rappels",
+  ["Click: the lists. Right click: a note here."] = "Clic : les listes. Clic droit : une note ici.",
+  ["Near here:"] = "Près d'ici :",
+  ["No notes near here."] = "Aucune note près d'ici.",
+  ["and %d more"] = "et %d de plus",
 })

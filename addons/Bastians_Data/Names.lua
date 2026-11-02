@@ -101,6 +101,18 @@ function Names.Get(typ, id)
   return name
 end
 
+-- Asks the client once per session for an item's whole data (its tooltip lines, not only the
+-- name the store may know already); the load event invalidates the entities as for a name.
+local wanted = {}
+function Names.Want(id)
+  local k = key("item", id)
+  if type(id) ~= "number" or wanted[k] or Names.requested[k] then
+    return
+  end
+  wanted[k] = true
+  Names.requested[k] = B.Compat.RequestItemData(id)
+end
+
 local function onLoaded(typ)
   return function(_, _, id, success)
     local k = key(typ, id)

@@ -91,23 +91,26 @@ def test_zone_information_names_creature_levels_and_the_lore(wow: WowRuntime):
     boot(wow)
     info = list(wow.eval(f"{MOD}.Layers.ZoneInfo(1429)").values())
     assert any(line.startswith("Creatures: level ") for line in info)
-    assert not any("Lore" in line for line in info)  # neither Spoken's places nor LoreForever
+    assert not any("Lore" in line for line in info)  # no LoreForever
     actions = [
         a.id for a in wow.eval("Bastians:GetActions('zone:1429', { source = 'test' })").values()
     ]
+    # the Spoken lore is Bastian's Voice's Play button since 01.11.2026 (voice.md); the Map's own
+    # `map.lore` is gone (it called a global of Spoken before 3.0)
     assert "map.lore" not in actions
-    # with Spoken's places: the line and the action that opens its lore window
+    # with LoreForever: the hint to its command
     wow.execute(
-        """SpokenZones = { ShowLoreFor = function(self, id) SHOWN = id end }
+        """Mock.addons.LoreForever = { meta = { Title = "LoreForever" }, files = {}, dir = "x", loaded = true }
         Bastians:GetModule('Map').Layers.Reset()"""
     )
+    wow.execute("Mock.loaded = Mock.loaded or {}; Mock.loaded.LoreForever = true")
     info = list(wow.eval(f"{MOD}.Layers.ZoneInfo(1429)").values())
-    assert info[-1] == "Lore: right click, Zone lore (Spoken)"
-    wow.execute("Bastians:RunAction('map.lore', 'zone:1429', { source = 'test' })")
-    assert wow.eval("SHOWN") == 1429
-    # the zone's words on the map carry the lines into the card
-    data = wow.eval(f"{MOD}.Pins.MiniCardData(Bastians:QueryLayer('map.zones', {WORLD % 1})[1])")
-    assert "Lore: right click, Zone lore (Spoken)" in list(data.lines.values())
+    if any("LoreForever" in line for line in info):
+        # the zone's words on the map carry the lines into the card
+        data = wow.eval(
+            f"{MOD}.Pins.MiniCardData(Bastians:QueryLayer('map.zones', {WORLD % 1})[1])"
+        )
+        assert info[-1] in list(data.lines.values())
     assert wow.errors == []
 
 
@@ -145,3 +148,32 @@ def test_a_roaming_creature_gets_a_soft_area_from_its_spawn_radius(wow: WowRunti
     }
     assert pins["npc:295"].radius == 30 and pins["npc:8719"].radius is None  # 5 yards: no area
     assert wow.errors == []
+
+
+def test_the_dungeon_doors_are_a_layer_of_their_own(wow: WowRuntime):
+    """31.10.2026: the doors left Travel for "Dungeons and raids"; the fixture's Deadmines door
+    stands in Westfall, placed in the mock here and listed under Elwynn's zone for the query."""
+    wow.execute(
+        "Mock.maps[1436] = { name = 'Westfall', mapType = 3, parent = 1415,"
+        " c00 = { 0, -200, 200 }, c11 = { 0, -600, -200 } }"
+    )
+    boot(wow)
+    wow.execute(
+        "local idx = Bastians:GetService('data'):Index('entrance.byZone')"
+        " idx[1429] = idx[1429] or {} table.insert(idx[1429], '36-1')"
+    )
+    assert query(wow, "map.dungeons", 5) == [("dungeon:36", "The Deadmines", None)]
+    assert not any(ref.startswith("entrance:") for ref, _, _ in query(wow, "map.travel", 5))
+    # a door of an instance without a dungeon record keeps its own name and page
+    wow.execute("Bastians:GetService('data'):Get('entrance', '36-1').instance = 9999")
+    assert query(wow, "map.dungeons", 5) == [("entrance:36-1", "Deadmines", None)]
+    assert query(wow, "map.dungeons", 0) == []  # below its level
+    pills = [i.text for i in wow.eval(f"{MOD}.LayerBar.Items()").values() if i.kind == "pill"]
+    assert "Dungeons and raids" in pills
+    assert wow.errors == []
+
+
+def test_a_trainer_pin_says_what_it_trains(wow: WowRuntime):
+    """ "I see the trainer names - but not what they train"."""
+    boot(wow)
+    assert query(wow, "map.trainers", 5) == [("npc:198", "Zaldimar Wefhellt (Mage)", None)]

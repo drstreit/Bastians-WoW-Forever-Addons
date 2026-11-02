@@ -10,6 +10,8 @@
 -- them the same way); indoors is told from the two zoom cvars as HereBeDragons does.
 -- A host other than the game's minimap (MM.SetHost: Bastian's minimap drawing one of our styles,
 -- Mini.lua) gives its own centre, scale, size and shape; north stays up there.
+-- The minimap search's mark (MM.SetMark, map.md "The minimap search", L4) is one more pin above
+-- the layers' pins, drawn at any distance (on the rim when far) and also with the layers off.
 local _, ns = ...
 local B = Bastians
 local S = B.UI.Style
@@ -24,6 +26,9 @@ MM.TICK = 0.1 -- seconds between two pin moves
 MM.PIN_SIZE = 14
 MM.EDGE_SIZE = 10
 MM.EDGE_INSET = 7 -- pixels the rim pins keep from the minimap's edge
+MM.MARK_SIZE = 20 -- the search's mark, on a disc MARK_RING pixels wider
+MM.MARK_RING = 8
+MM.MARK_SAME = 2 -- yards: a layer pin of the marked entity this close is the mark's double
 MM.PIECE = 10 -- pixels of one line piece of a path; a piece is drawn when its middle is inside the rim
 MM.MAX_PIECES = 80
 -- Yards across the minimap per zoom step (0 = farthest), outdoors and indoors.
@@ -40,10 +45,12 @@ MM.pieces = pieces
 local pins = {} -- the nearest pins of the last query, with their world coordinates
 local paths = {} -- the path pins of the last query (points in world yards)
 local center -- { continent, wx, wy } of the last query
+local mark -- the search's mark: { ref, continent, wx, wy, icon, color, label, card } or nil
 local host -- nil: the game's minimap; else { frame, Center(), Scale(), Half(), Shape() }
 local indoors = false
 local elapsed = 0
 local moving, turning, ticking = false, false, false
+local byKey = false -- hidden by the clear-screen key (MM.HideByKey)
 MM.stats = { shown = 0, edge = 0, queried = 0, pieces = 0 }
 
 local function db()
@@ -176,6 +183,11 @@ local function pinButton(i)
     f.arrow:SetSize(MM.EDGE_SIZE + 4, MM.EDGE_SIZE + 4)
     f.arrow:SetPoint("CENTER")
     f.arrow:Hide()
+    f.ring = f:CreateTexture(nil, "BORDER") -- the mark's disc (S.DISC in the accent)
+    f.ring:SetTexture(S.DISC)
+    S.tint(f.ring, S.C.accent, 0.55)
+    f.ring:SetPoint("CENTER")
+    f.ring:Hide()
     f.icon = f:CreateTexture(nil, "ARTWORK")
     f.icon:SetAllPoints()
     f:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -298,6 +310,8 @@ function MM.Reposition()
     if pin.color then
       S.tint(f.icon, pin.color, 1)
     end
+    f:SetFrameLevel((frame:GetFrameLevel() or 0) + (pin.isMark and 3 or 1)) -- the mark on top
+    f.ring:SetShown(pin.isMark == true and not onEdge)
     if onEdge then
       edge = edge + 1
       f:SetSize(MM.EDGE_SIZE, MM.EDGE_SIZE)
@@ -308,7 +322,9 @@ function MM.Reposition()
       S.tint(f.arrow, c, 0.9)
       f.arrow:Show()
     else
-      f:SetSize(MM.PIN_SIZE, MM.PIN_SIZE)
+      local size = pin.isMark and MM.MARK_SIZE or MM.PIN_SIZE
+      f:SetSize(size, size)
+      f.ring:SetSize(size + MM.MARK_RING, size + MM.MARK_RING)
       f:SetAlpha(1)
       f.arrow:Hide()
     end
@@ -322,12 +338,44 @@ function MM.Reposition()
   MM.stats.shown, MM.stats.edge, MM.stats.pieces = #pins, edge, drawn
 end
 
--- Ask every enabled layer for the pins around the player, keep the nearest N.
+-- The mark as a pin of the overlay.
+local function markPin(px, py)
+  local dx, dy = mark.wx - px, mark.wy - py
+  return {
+    ref = mark.ref,
+    wx = mark.wx,
+    wy = mark.wy,
+    icon = mark.icon,
+    color = mark.color,
+    label = mark.label,
+    card = mark.card,
+    isMark = true,
+    distance = math.sqrt(dx * dx + dy * dy),
+  }
+end
+
+-- Whether a layer's pin is the mark's double (the same entity on the same spot).
+local function isMarked(pin)
+  if not (mark and pin.ref and pin.ref == mark.ref) then
+    return false
+  end
+  local dx, dy = pin.wx - mark.wx, pin.wy - mark.wy
+  return dx * dx + dy * dy <= MM.MARK_SAME * MM.MARK_SAME
+end
+
+-- Ask every enabled layer for the pins around the player, keep the nearest N; the mark first.
 function MM.Query()
   pins = {}
   paths = {}
   center = nil
-  if not (enabled() and frame) then
+  if not frame or byKey then
+    return -- hidden by the key: nothing drawn until the key brings it back
+  end
+  local on = enabled()
+  if not (on or mark) then
+    hideFrom(0)
+    hidePiecesFrom(0)
+    frame:Hide()
     return
   end
   local continent, px, py = viewCenter()
@@ -349,7 +397,7 @@ function MM.Query()
     minimap = true,
   }
   local found = {}
-  for _, def in ipairs(B:GetMapLayers()) do
+  for _, def in ipairs(on and B:GetMapLayers() or {}) do
     if ns.Pins.IsLayerOn(def) then
       for _, pin in ipairs(B:QueryLayer(def.id, view)) do
         if pin.kind == "path" and pin.points and #pin.points >= 2 then
@@ -357,7 +405,7 @@ function MM.Query()
         elseif pin.wx and pin.wy and pin.kind ~= "path" and pin.ref then
           local dx, dy = pin.wx - px, pin.wy - py
           pin.distance = math.sqrt(dx * dx + dy * dy)
-          if pin.distance <= r then
+          if pin.distance <= r and not isMarked(pin) then
             found[#found + 1] = pin
           end
         end
@@ -370,9 +418,12 @@ function MM.Query()
     end
     return tostring(a.ref) < tostring(b.ref)
   end)
+  if mark and mark.continent == continent then
+    pins[1] = markPin(px, py)
+  end
   local max = db().minimapMax or 20
   for i = 1, math.min(max, #found) do
-    pins[i] = found[i]
+    pins[#pins + 1] = found[i]
   end
   MM.stats.queried = #found
   frame:Show()
@@ -452,6 +503,26 @@ local function build()
   MM.frame = frame
 end
 
+-- The minimap search's mark (Mini.lua): { ref, continent, wx, wy, icon, color, label, card }, or
+-- nil to clear it. Drawn at once, with or without the layers on the minimap.
+function MM.SetMark(m)
+  if not (mod and mod:IsEnabled()) then
+    mark = nil
+    return
+  end
+  mark = m
+  if m and not frame then
+    build()
+  end
+  if frame then
+    MM.Query()
+  end
+end
+
+function MM.Mark()
+  return mark
+end
+
 -- Puts the overlay on a host (nil: back on the game's minimap) and asks the layers again.
 function MM.SetHost(newHost)
   host = newHost
@@ -467,6 +538,31 @@ end
 
 function MM.Host()
   return host
+end
+
+-- The clear-screen key (plan-round4 F1, BASTIANS_SUITE_HIDDEN; plan-launch-review R5.6,
+-- 01.11.2026): the pins, their rim arrows and the path pieces go with the suite, on the game's
+-- minimap and on Bastian's (the host); no ticks, no queries while hidden. The key's return asks the
+-- layers again; the setting switched off stays off.
+function MM.HideByKey(hidden)
+  if hidden then
+    byKey = true
+    hideFrom(0)
+    hidePiecesFrom(0)
+    stopTicks()
+    pins, paths, center = {}, {}, nil
+    MM.stats.shown, MM.stats.edge, MM.stats.pieces = 0, 0, 0
+    if frame then
+      frame:Hide()
+    end
+  elseif byKey then
+    byKey = false
+    MM.Query()
+  end
+end
+
+function MM.HiddenByKey()
+  return byKey
 end
 
 -- The setting decides: on builds the frame once and queries, off hides everything.
@@ -487,6 +583,9 @@ function MM.Apply()
     MM.stats.shown, MM.stats.edge, MM.stats.queried, MM.stats.pieces = 0, 0, 0, 0
     stopTicks()
     frame:Hide()
+    if mark then
+      MM.Query() -- the search's mark stays without the layers
+    end
   end
 end
 
@@ -525,6 +624,9 @@ table.insert(Map.onEnable, function(self)
     MM.Reposition()
     MM.StartTicks()
   end)
+  -- enabled while the key hides the suite: hidden until the key comes back
+  local Screen = B.UI.Screen
+  byKey = Screen ~= nil and Screen.Hidden ~= nil and Screen.Hidden() and Screen.Hides("Map") or false
   MM.Apply()
 end)
 -- once at load, not per enable (the Map runs these lists from its one handler per event)
@@ -539,7 +641,9 @@ table.insert(Map.onSetting, function(key)
   end
 end)
 table.insert(Map.onLayerChanged, MM.Schedule)
+table.insert(Map.onSuiteHidden, MM.HideByKey)
 table.insert(Map.onDisable, function()
+  mark = nil
   if frame then
     hideFrom(0)
     hidePiecesFrom(0)

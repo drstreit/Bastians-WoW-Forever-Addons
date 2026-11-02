@@ -1,5 +1,5 @@
 <Bindings>
-  <Binding name="BASTIANS_MAP" category="ADDONS">
+  <Binding name="BASTIANS_MAP" header="BASTIANS_MAP" category="ADDONS">
     Bastians:GetModule("Map").Map.Toggle()
   </Binding>
 </Bindings>

@@ -13,6 +13,7 @@ Every ``parse_*`` takes the file text and does no I/O; ``read_*`` read a file.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -295,7 +296,10 @@ def parse_quests(text: str) -> list[QuestRow]:
 @dataclass(frozen=True)
 class DungeonBoss:
     order: int  # the client's order inside the instance, from 1
-    npc_id: int
+    # ForeverDB's boss number: the client's encounter id, NOT a creature id (02.11.2026: Onyxia is
+    # 1084, her creature 10184; Shadowfang Keep's 2748 is the creature Archaedas). The creature
+    # comes from Loot.lua (BossCreatures) or by name (canon._boss_creature).
+    number: int
     name: str
 
 
@@ -323,7 +327,7 @@ class DungeonRow:
 
 def parse_dungeons(text: str) -> list[DungeonRow]:
     """``ns.dungeons = {[map] = {n, kind, size, lv = "lo:hi:req", ent, zone, boss =
-    "order:npc:name|...", loot = "item:order:label ...", q = "id id", guide}}`` (the header of
+    "order:number:name|...", loot = "item:order:label ...", q = "id id", guide}}`` (the header of
     ForeverDB's Dungeons.lua, 0.44.0). `ent` and `guide` are ForeverDB's own, not read."""
     out = []
     for map_id, raw in sorted_items(run_text(text, "Dungeons.lua").dungeons):
@@ -508,6 +512,147 @@ def read_quests(path: Path) -> list[QuestRow]:
 
 def read_dungeons(path: Path) -> list[DungeonRow]:
     return parse_dungeons(_read(path))
+
+
+# ---------------------------------------------------------------- The bosses' creatures
+
+
+@dataclass(frozen=True)
+class BossCreatures:
+    """Loot.lua's bosses with their creature ids (02.11.2026): Dungeons.lua's boss numbers are not
+    creature ids (Shadowfang Keep's 2748 is the creature Archaedas, Dalaran's 3298 Gabrielle
+    Chase), Loot.lua names the creature where ForeverDB knows it."""
+
+    npcs: dict[int, dict[str, int]]  # instance id -> the boss's name, lower case -> creature id
+    forever: frozenset[int]  # the instances only Forever has (`forever = true`)
+
+
+_LOOT_INSTANCE = re.compile(r"^\s*\{ id = (\d+), name = ")
+_LOOT_BOSS = re.compile(r'^\s*\{ npc = (\d+), name = "((?:[^"\\]|\\.)*)"')
+
+
+def parse_boss_creatures(text: str) -> BossCreatures:
+    npcs: dict[int, dict[str, int]] = {}
+    forever: set[int] = set()
+    current: int | None = None
+    for line in text.splitlines():
+        m = _LOOT_INSTANCE.match(line)
+        if m:
+            current = int(m.group(1))
+            if "forever = true" in line:
+                forever.add(current)
+            continue
+        m = _LOOT_BOSS.match(line)
+        if m and current is not None:
+            npcs.setdefault(current, {})[m.group(2).replace('\\"', '"').lower()] = int(m.group(1))
+    return BossCreatures(npcs=npcs, forever=frozenset(forever))
+
+
+def read_boss_creatures(path: Path) -> BossCreatures:
+    return parse_boss_creatures(_read(path))
+
+
+# ---------------------------------------------------------------- Dungeon maps
+
+
+@dataclass(frozen=True)
+class FloorTile:
+    fdid: int  # the client's minimap tile, by file data id
+    x: int  # floor pixels, from the floor's top left (may be negative: the tile is cropped)
+    y: int
+    w: int
+    h: int
+    q: int  # quarter turns the tile is drawn with
+
+
+@dataclass(frozen=True)
+class DungeonFloor:
+    name: str
+    width: int  # floor pixels
+    height: int
+    tiles: tuple[FloorTile, ...]  # empty when the client's file could not be read (ForeverDB `why`)
+    # the floor's place in the world (`s` pixels per yard, `x`/`y` the world point of the floor's
+    # top left corner, `z` its height band): a spot in percent of the floor becomes a world point
+    # as wx = x0 - py / scale, wy = y0 - px / scale (checked 30.10.2026: Targorr the Dread's
+    # Classic spawn 159.6, 1.3 from ForeverDB's spot 49.88 %, 30.11 % of the Stockade's floor)
+    scale: float | None = None
+    x0: float | None = None
+    y0: float | None = None
+    z_lo: float | None = None
+    z_hi: float | None = None
+
+    def world_point(self, x_pct: float, y_pct: float) -> tuple[float, float] | None:
+        if not (self.scale and self.x0 is not None and self.y0 is not None):
+            return None
+        px, py = x_pct / 100 * self.width, y_pct / 100 * self.height
+        return self.x0 - py / self.scale, self.y0 - px / self.scale
+
+    @property
+    def z_mid(self) -> float | None:
+        if self.z_lo is None or self.z_hi is None:
+            return None
+        return (self.z_lo + self.z_hi) / 2
+
+
+@dataclass(frozen=True)
+class DungeonMapRow:
+    id: int  # the instance's Map.db2 id
+    floors: tuple[DungeonFloor, ...]
+    boss_spots: tuple[tuple[int, int, float, float], ...]  # order, floor (from 1), x %, y %
+    door: tuple[int, float, float] | None  # floor, x %, y % of the entrance
+    why: str | None  # ForeverDB's note when a map is missing
+
+
+def parse_dungeon_maps(text: str) -> list[DungeonMapRow]:
+    """``ns.dungeonMaps = {[map] = {floors = {{n, w, h, s, x, y, z, t = "fdid:x:y:w:h:q ..."}},
+    boss = "order:floor:x:y ...", ent = "floor:x:y", why = text}}`` (the header of ForeverDB's
+    DungeonMaps.lua, 0.44.0); `s`, `x`, `y`, `z` place the floor in the world (DungeonFloor)."""
+    out = []
+    for map_id, raw in sorted_items(run_text(text, "DungeonMaps.lua").dungeonMaps):
+        rec = to_python(raw)
+        floors = []
+        for f in (
+            (rec.get("floors") or {}).values()
+            if isinstance(rec.get("floors"), dict)
+            else (rec.get("floors") or [])
+        ):
+            tiles = []
+            for part in str(f.get("t") or "").split():
+                fdid, x, y, w, h, q = (int(v) for v in part.split(":"))
+                tiles.append(FloorTile(fdid, x, y, w, h, q))
+            z_lo = z_hi = None
+            if f.get("z"):
+                lo, _, hi = str(f["z"]).partition(":")
+                z_lo, z_hi = float(lo), float(hi or lo)
+            floors.append(
+                DungeonFloor(
+                    str(f.get("n") or ""),
+                    int(f["w"]),
+                    int(f["h"]),
+                    tuple(tiles),
+                    float(f["s"]) if f.get("s") is not None else None,
+                    float(f["x"]) if f.get("x") is not None else None,
+                    float(f["y"]) if f.get("y") is not None else None,
+                    z_lo,
+                    z_hi,
+                )
+            )
+        bosses = []
+        for part in str(rec.get("boss") or "").split():
+            order, floor, x, y = part.split(":")
+            bosses.append((int(order), int(floor), float(x), float(y)))
+        door = None
+        if rec.get("ent"):
+            floor, x, y = str(rec["ent"]).split(":")
+            door = (int(floor), float(x), float(y))
+        out.append(
+            DungeonMapRow(int(map_id), tuple(floors), tuple(bosses), door, rec.get("why") or None)
+        )
+    return out
+
+
+def read_dungeon_maps(path: Path) -> list[DungeonMapRow]:
+    return parse_dungeon_maps(_read(path))
 
 
 def read_items(path: Path) -> list[ItemFacts]:

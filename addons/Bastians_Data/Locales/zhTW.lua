@@ -16,6 +16,10 @@ ns.L:Register("zhTW", {
   ["Item level"] = "物品等級",
   ["Requires level"] = "需要等級",
   ["Instance entrance"] = "副本入口",
+  ["Map"] = "地圖",
+  ["Floor %d"] = "第 %d 層",
+  ["Click: enlarge"] = "點擊：放大",
+  ["%d bosses have no place on these maps yet"] = "%d 個首領在這些地圖上還沒有位置",
   ["Dungeon"] = "地城",
   ["Raid"] = "團隊副本",
   ["Bosses"] = "首領",
@@ -47,6 +51,10 @@ ns.L:Register("zhTW", {
   ["Locations"] = "位置",
   ["Sells"] = "販售",
   ["Teaches"] = "教導",
+  ["teaches %d"] = "傳授 %d 項",
+  ["Known by: %s"] = "已學會：%s",
+  ["you"] = "你",
+  ["Not known by any of your characters"] = "你的角色都未學會",
   ["Drops"] = "掉落",
   ["Sources"] = "來源",
   ["Reagents"] = "材料",
@@ -163,4 +171,10 @@ ns.L:Register("zhTW", {
   ["World drop"] = "世界掉落",
   ["creatures level %s"] = "等級 %s 的生物",
   ["%d creatures"] = "%d 隻生物",
+  -- owner round 5 (31.10.2026): an item's lines and recipes
+  ["Stats"] = "屬性",
+  ["Used in recipes"] = "用於配方",
+  -- 31.10.2026: what an item disenchants into
+  ["Disenchants into"] = "分解獲得",
+  ["Disenchant"] = "分解",
 })

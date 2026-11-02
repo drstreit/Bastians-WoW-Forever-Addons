@@ -19,7 +19,8 @@ local TAB_TIPS = {
   price = L["The price of an item: auction house, vendor, history."],
   bags = L["What to sell, post or keep from your bags."],
 }
-local TAB_W = 100
+-- the tabs' pictograms (ADR 0046): income, farm spots, the price of an item, the bags
+local TAB_ICONS = { today = "gold", spots = "spot", price = "ledger", bags = "item" }
 local RENDER_DELAY = 0.05
 
 local mod, win, tree, summary, hint
@@ -57,10 +58,7 @@ end
 
 local function setTabs()
   for _, b in ipairs(tabs) do
-    local on = b.view == view()
-    local c = on and S.C.accent or S.C.dim
-    b.label:SetTextColor(c[1], c[2], c[3])
-    S.setEdges(b.edges, on and S.C.accent or S.C.line, on and 0.8 or nil)
+    b:SetOn(b.view == view()) -- the look draws the chosen tab (ADR 0046)
   end
 end
 
@@ -390,7 +388,7 @@ local function build()
   local content = win.content
   local x = 6
   for i, t in ipairs(TABS) do
-    local b = S.button(content, L[t[2]], TAB_W, 22)
+    local b = S.action(content, { icon = TAB_ICONS[t[1]], label = L[t[2]], boxed = true })
     b.tip = TAB_TIPS[t[1]]
     b:SetPoint("TOPLEFT", content, "TOPLEFT", x, -6)
     b.view = t[1]
@@ -398,7 +396,7 @@ local function build()
       W.Open(t[1])
     end)
     tabs[i] = b
-    x = x + TAB_W + 4
+    x = x + b:GetWidth() + 4
   end
   summary = S.text(content, 11, S.C.dim)
   summary:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -34)

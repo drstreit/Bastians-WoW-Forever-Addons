@@ -16,6 +16,7 @@ local RENDER_DELAY = 0.05
 local mod, win, tree, summary, hint, clearButton, replanButton, homeButton
 local kindButtons = {} -- kind -> button (R26.5)
 local KIND_LABELS = { fastest = "Fastest", safe = "Safest", nocost = "No flights" }
+local KIND_ICONS = { fastest = "arrow", safe = "keep", nocost = "gold" } -- their pictograms (ADR 0046)
 
 local function db()
   return mod.db.profile
@@ -119,9 +120,8 @@ function W.RenderKinds(route)
       b:Hide()
     else
       local time = alt and Graph.FormatSeconds(alt.seconds) or "..."
-      b:SetLabel(L[KIND_LABELS[kind]] .. " " .. time)
-      local col = route.kind == kind and S.C.accent or S.C.text
-      b.label:SetTextColor(col[1], col[2], col[3])
+      b.spec.label = L[KIND_LABELS[kind]] .. " " .. time
+      b:SetOn(route.kind == kind) -- the look draws the kind in use (ADR 0046)
       b:ClearAllPoints()
       b:SetPoint("TOPLEFT", win.content, "TOPLEFT", 8 + x, -24)
       b:Show()
@@ -171,6 +171,7 @@ local function build()
     width = 440,
     height = 360,
     db = db().window,
+    onTop = true, -- over every other window
     onShow = function()
       W.Render()
     end,
@@ -186,20 +187,20 @@ local function build()
   summary:SetPoint("TOPRIGHT", content, "TOPRIGHT", -8, -8)
   summary:SetHeight(14)
   summary:SetJustifyH("LEFT")
-  clearButton = S.button(content, L["Clear"], 70, 20)
+  clearButton = S.action(content, { icon = "clear", label = L["Clear"], boxed = true })
   clearButton.tip = L["Clear the route."]
   clearButton:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -8, 4)
   clearButton:SetScript("OnClick", function()
     ns.Route.Clear()
   end)
-  replanButton = S.button(content, L["Replan"], 70, 20)
+  replanButton = S.action(content, { icon = "route", label = L["Replan"], boxed = true })
   replanButton.tip = L["Plan the route again from where you stand."]
   replanButton:SetPoint("RIGHT", clearButton, "LEFT", -4, 0)
   replanButton:SetScript("OnClick", function()
     ns.Route.Replan("button")
   end)
   -- Home (R26.7): the way to the inn, with the hearth and every ready teleport
-  homeButton = S.button(content, L["Home"], 70, 20)
+  homeButton = S.action(content, { icon = "innkeeper", label = L["Home"], boxed = true })
   homeButton.tip = L["The way to your inn, with the hearthstone and every teleport you have ready."]
   homeButton:SetPoint("RIGHT", replanButton, "LEFT", -4, 0)
   homeButton:SetScript("OnClick", function()
@@ -209,7 +210,8 @@ local function build()
   hint:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 8, 6)
   hint:SetText(L["Click a step to see its end on the map."])
   for _, kind in ipairs(ns.Route.KINDS) do
-    local b = S.button(content, L[KIND_LABELS[kind]], 112, 18)
+    local b =
+      S.action(content, { icon = KIND_ICONS[kind], label = L[KIND_LABELS[kind]], row = true, boxed = true })
     b.tip = L["Switch to this kind of route; it stays the default."]
     b:SetScript("OnClick", function()
       ns.Route.UseKind(kind)

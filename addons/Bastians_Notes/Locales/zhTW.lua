@@ -25,7 +25,8 @@ ns.L:Register("zhTW", {
   ["Never"] = "從不",
   ["When near"] = "靠近時",
   ["When I target it"] = "選取它時",
-  ["Keep"] = "保存",
+  ["Save"] = "保存",
+  ["(right click: open it)"] = "（右鍵：開啟）",
   ["Cancel"] = "取消",
   ["Remove"] = "移除",
   ["A note needs a title."] = "筆記需要標題。",
@@ -83,4 +84,11 @@ ns.L:Register("zhTW", {
   ["Send to my group"] = "傳送給我的隊伍",
   ["No place to send."] = "沒有可傳送的地點。",
   ["Bookmark: a click shows it on the map, a right click renames it"] = "書籤：點擊可在地圖上顯示，右鍵點擊可重新命名",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d notes"] = "%d 條筆記",
+  ["%d notes, %d reminders"] = "%d 條筆記，%d 個提醒",
+  ["Click: the lists. Right click: a note here."] = "點擊：清單。右鍵點擊：在此記筆記。",
+  ["Near here:"] = "附近：",
+  ["No notes near here."] = "附近沒有筆記。",
+  ["and %d more"] = "還有 %d 個",
 })

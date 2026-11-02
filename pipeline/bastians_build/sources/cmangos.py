@@ -87,6 +87,8 @@ WANTED: dict[str, tuple[str, ...]] = {
     "creature_loot_template": _LOOT_COLUMNS,
     "gameobject_loot_template": _LOOT_COLUMNS,
     "reference_loot_template": _LOOT_COLUMNS,
+    # what an item disenchants into: item_template.DisenchantID names the list
+    "disenchant_loot_template": _LOOT_COLUMNS,
     "item_template": (
         "entry",
         "name",
@@ -98,6 +100,7 @@ WANTED: dict[str, tuple[str, ...]] = {
         "BuyPrice",
         "SellPrice",
         "stackable",
+        "DisenchantID",
     ),
     "spell_template": (
         "Id",
@@ -288,6 +291,7 @@ class ItemRow:
     buy_price: int | None  # copper, for the vendor stack (BuyCount)
     sell_price: int | None  # copper, per item
     stackable: int | None
+    disenchant_id: int | None = None  # the disenchant_loot_template entry, None: not disenchantable
 
 
 def _text(value: Any) -> str | None:
@@ -499,6 +503,28 @@ def item_rows(tables: dict[str, list[dict[str, Any]]]) -> list[ItemRow]:
             buy_price=r.get("BuyPrice"),
             sell_price=r.get("SellPrice"),
             stackable=r.get("stackable"),
+            disenchant_id=_nz(r.get("DisenchantID")),
         )
         for r in tables.get("item_template", [])
     ]
+
+
+def disenchant_lists(tables: dict[str, list[dict[str, Any]]]) -> dict[int, list[list[Any]]]:
+    """Each disenchant list (``disenchant_loot_template`` entry): ``[item, percent, min, max]``
+    rows, the likeliest first. In a group one material comes, and members without a chance share
+    what the others leave (uncommon armour of list 1: Strange Dust 80 %, Lesser Magic Essence the
+    other 20 %)."""
+    by_entry: dict[int, list[dict[str, Any]]] = {}
+    for r in tables.get("disenchant_loot_template", []):
+        by_entry.setdefault(int(r["entry"]), []).append(r)
+    out: dict[int, list[list[Any]]] = {}
+    for entry in sorted(by_entry):
+        rows = []
+        for r, chance in _group_chances(by_entry[entry]):
+            minc = int(r["mincountOrRef"] or 0)
+            if minc < 0:
+                continue  # a reference: none in the classic lists
+            rows.append([int(r["item"]), round(chance, 4), minc or None, _nz(r.get("maxcount"))])
+        rows.sort(key=lambda x: (-x[1], x[0]))
+        out[entry] = rows
+    return out

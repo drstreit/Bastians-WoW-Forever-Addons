@@ -1,0 +1,8 @@
+<Bindings>
+  <Binding name="BASTIANS_GESTURES_RING" header="BASTIANS_GESTURES" category="ADDONS" runOnUp="true">
+    Bastians:GetModule("Gestures").Ring.Key(keystate)
+  </Binding>
+  <Binding name="BASTIANS_GESTURES_NEXT" category="ADDONS">
+    Bastians:GetModule("Gestures").Ring.Cycle(1)
+  </Binding>
+</Bindings>

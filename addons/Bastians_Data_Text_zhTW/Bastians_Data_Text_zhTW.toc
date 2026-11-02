@@ -1,9 +1,24 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Data: Text (zhTW)
+## Title-koKR: Bastian's Data: 텍스트 (중국어 번체)
+## Title-zhCN: Bastian's Data: 文字（繁体中文）
+## Title-zhTW: Bastian's Data: 文字（繁體中文）
+## Title-deDE: Bastian's Data: Text (traditionelles Chinesisch)
+## Title-frFR: Bastian's Data: Texte (chinois traditionnel)
+## Title-esES: Bastian's Data: Texto (chino tradicional)
+## Title-esMX: Bastian's Data: Texto (chino tradicional)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_zhTW\Icon
-## Notes: Generated names and quest objectives in Traditional Chinese; builds its tables only on a Traditional Chinese client.
+## Notes: Generated names and quest texts in Traditional Chinese; builds its tables only on a Traditional Chinese client.
+## Notes-koKR: 생성된 중국어 번체 이름과 퀘스트 텍스트; 중국어 번체 클라이언트에서만 테이블을 만듭니다.
+## Notes-zhCN: 生成的繁体中文名称和任务文本；只在繁体中文客户端上建立数据表。
+## Notes-zhTW: 生成的繁體中文名稱與任務文字；只在繁體中文用戶端上建立資料表。
+## Notes-deDE: Erzeugte Namen und Questtexte auf traditionellem Chinesisch; baut seine Tabellen nur auf einem Client in traditionellem Chinesisch.
+## Notes-frFR: Noms et textes de quêtes en chinois traditionnel générés ; ne construit ses tables que sur un client en chinois traditionnel.
+## Notes-esES: Nombres y textos de misiones en chino tradicional generados; solo construye sus tablas en un cliente en chino tradicional.
+## Notes-esMX: Nombres y textos de misiones en chino tradicional generados; solo construye sus tablas en un cliente en chino tradicional.
+## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

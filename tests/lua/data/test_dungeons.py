@@ -94,4 +94,165 @@ def test_quests_lists_the_dungeons_quests(wow: WowRuntime):
     # grouped: a status header row with the quests it holds as its children
     assert [r.kind for r in rows] == ["section"]
     assert [c.ref for c in rows[0].children.values()] == ["quest:62"]
+    # the dungeon's attunement as a progress chain (DG2b): the list whose instance is the dungeon
+    att = [
+        re.sub(r"\|c[0-9a-fA-F]{8}", "", strip(r.text)).replace("|r", "")
+        for r in sections(wow, "dungeon:36")["quests.attunement"].rows.values()
+    ]
+    assert att[0] == "Step 1 of 3. Next: The Fargodeep Mine" and att[1].endswith("<- you are here")
+    assert len(att) == 4
+    assert wow.errors == []
+
+
+def test_the_dungeon_page_has_its_floors_with_the_boss_pins_and_the_door(wow: WowRuntime):
+    """DG2c: one row
+    per floor with the client's map (retail's UiMap id, the art files' prefix and grid for the
+    Forever client), the bosses of that floor by number, name and ref, the door; a floor without
+    any map says so when drawn. The dossier draws the rows as plates (Scenery mode "floors")."""
+    boot(wow)
+    rows = list(sections(wow, "dungeon:36")["data.floors"].rows.values())
+    assert [r.text for r in rows] == ["The Deadmines 1", "The Deadmines 2"]
+    one = rows[0].floor
+    assert (one.w, one.h, one.uiMap, one.art, one.cols, one.rows) == (
+        1002,
+        668,
+        291,
+        "interface/worldmap/thedeadmines/thedeadmines1_",
+        4,
+        3,
+    )
+    assert one.tiles is None and one.dungeon == "The Deadmines"
+    bosses = [list(b.values()) for b in one.bosses.values()]
+    assert bosses == [[1, 38.59, 60.88, "Rhahk'Zor", "npc:644"]]
+    assert one.door is None and one.note is None  # every boss has its floor
+    two = rows[1].floor
+    assert (two.uiMap, two.art) == (292, None)
+    assert [list(b.values()) for b in two.bosses.values()] == [
+        [2, 50.0, 50.0, "Edwin VanCleef", "npc:639"]
+    ]
+    assert list(two.door.values()) == [60.22, 84.32]
+    # the block is drawn as floor plates: the dossier asks Scenery for the block's mode
+    mode = wow.eval(
+        "(function() for _, s in ipairs(Bastians:GetDetailSections('dungeon:36')) do "
+        "if s.id == 'data.floors' then return Bastians.UI.Scenery.BlockMode(s) end end end)()"
+    )
+    assert mode == "floors"
+    assert wow.errors == []
+
+
+def test_a_floor_plate_draws_the_art_files_its_pins_open_the_boss_and_a_click_enlarges(
+    wow: WowRuntime,
+):
+    """DG2c: without retail's UiMap art (the mock, the Forever client) the plate lays the art
+    files' 4 x 3 tiles by name; a boss pin is a button that reports the boss to the dossier
+    (its ref), a click on the plate opens the floor enlarged in the suite's floor window with
+    the dungeon's floors as tabs."""
+    boot(wow)
+    wow.execute(
+        """local rows = {}
+        for _, s in ipairs(Bastians:GetDetailSections('dungeon:36')) do
+          if s.id == 'data.floors' then for _, r in ipairs(s.rows) do rows[#rows + 1] = r end end
+        end
+        FloorRows = rows
+        Clicks = {}
+        Host = { opts = {}, RowClick = function(_, row, button) Clicks[#Clicks + 1] = { row.ref, button } end }
+        BF = CreateFrame('Frame', nil, UIParent)
+        Bastians.UI.Scenery.RenderCells(BF, 'floors', rows, 501, 0, Host)"""
+    )
+    assert wow.eval("#BF.cells") == 2
+    assert (
+        wow.eval("BF.cells[1].art[1]:GetTexture()")
+        == "interface/worldmap/thedeadmines/thedeadmines1_1"
+    )
+    assert (
+        wow.eval("BF.cells[1].art[12]:GetTexture()")
+        == "interface/worldmap/thedeadmines/thedeadmines1_12"
+    )
+    assert wow.eval("BF.cells[1].art[12]:IsShown()") is True
+    assert wow.eval("BF.cells[1].art[13]") is None
+    assert round(wow.eval("BF.cells[1].cut:GetHeight()")) == 334  # 501 wide, 1002 x 668
+    assert wow.eval("BF.cells[1].pins[1].label:GetText()") == "1"
+    assert wow.eval("BF.cells[1].pins[1].name") == "Rhahk'Zor"
+    wow.execute("BF.cells[1].pins[1]:Click('LeftButton')")
+    assert [list(c.values()) for c in wow.eval("Clicks").values()] == [["npc:644", "LeftButton"]]
+    # the second floor: no art file names, no retail art on the mock: the bare plate says so
+    assert "(the client has no map of this floor)" in wow.eval("BF.cells[2].caption:GetText()")
+    assert wow.eval("BF.cells[2].pins[2].name") is None  # the door: no tooltip, no click
+    # the plate enlarges
+    wow.execute("BF.cells[2]:Click('LeftButton')")
+    assert wow.eval("Bastians.UI.Scenery.FloorWindow():IsShown()") is True
+    assert wow.eval("BastiansFloorFrame:GetName()") == "BastiansFloorFrame"
+    title = wow.eval("Bastians.UI.Scenery.FloorWindow().title:GetText()")
+    assert title == "The Deadmines: The Deadmines 2"
+    wow.execute("Bastians.UI.Scenery.FloorWindow():Hide()")
+    assert wow.errors == []
+
+
+def test_a_hand_drawn_floor_credits_its_artist_under_the_plate_and_in_the_window(
+    wow: WowRuntime,
+):
+    """ADR 0048 ("clearly state this with a thank you, directly under the
+    maps, with a link to his site"): a floor drawn by an artist (`by`) names the artist in the
+    plate's caption; the enlarged floor thanks the artist and holds the address in a box to copy,
+    which undoes a change; a floor of the client shows neither."""
+    boot(wow)
+    wow.execute(
+        """local rows = {}
+        for _, s in ipairs(Bastians:GetDetailSections('dungeon:36')) do
+          if s.id == 'data.floors' then for _, r in ipairs(s.rows) do rows[#rows + 1] = r end end
+        end
+        rows[1].floor.by = 'santiago'
+        Host = { opts = {}, RowClick = function() end }
+        BF = CreateFrame('Frame', nil, UIParent)
+        Bastians.UI.Scenery.RenderCells(BF, 'floors', rows, 501, 0, Host)"""
+    )
+    assert wow.eval("BF.cells[1].caption:GetText()") == "The Deadmines 1  -  Map by Santiago Reyes"
+    assert "Map by" not in wow.eval("BF.cells[2].caption:GetText()")
+    wow.execute("BF.cells[1]:Click('LeftButton')")
+    win = "Bastians.UI.Scenery.FloorWindow()"
+    assert wow.eval(f"{win}:IsShown()") is True
+    assert wow.eval(f"{win}.credit:IsShown()") is True
+    assert wow.eval(f"{win}.credit:GetText()") == (
+        "Map by Santiago Reyes (Atlas of Azeroth: Forever), used with kind permission. Thank you!"
+    )
+    assert wow.eval(f"{win}.link:IsShown()") is True
+    assert wow.eval(f"{win}.link:GetText()") == "https://www.artstation.com/sr433_20"
+    # the floor tabs carry their names,
+    # and the title names the dungeon once when the floor is named after it
+    tabs = [strip(t.label.GetText(t.label)) for t in wow.eval(f"{win}.floor.tabs").values()]
+    assert tabs[:2] == ["The Deadmines 1", "The Deadmines 2"]
+    assert wow.eval(f"{win}.title:GetText()") == "The Deadmines: The Deadmines 1"
+    wow.execute(
+        f"local r = {win}.floor.rows[1]; r.text = r.floor.dungeon; "
+        f"Bastians.UI.Scenery.OpenFloor({win}.floor.rows, 1, Host)"
+    )
+    assert wow.eval(f"{win}.title:GetText()") == "The Deadmines"
+    wow.execute(f"{win}.floor.rows[1].text = 'The Deadmines 1'")
+    # the address stays what it is
+    wow.execute(f"local b = {win}.link; b:SetText('x'); b:GetScript('OnTextChanged')(b, true)")
+    assert wow.eval(f"{win}.link:GetText()") == "https://www.artstation.com/sr433_20"
+    # the client's own floor: no credit
+    wow.execute("Bastians.UI.Scenery.OpenFloor(BF.cells[1].rows, 2, Host)")
+    assert wow.eval(f"{win}.credit:IsShown()") is False
+    assert wow.eval(f"{win}.link:IsShown()") is False
+    wow.execute(f"{win}:Hide()")
+    assert wow.errors == []
+
+
+def test_a_boss_without_a_known_creature_is_its_name_alone(wow: WowRuntime):
+    """02.11.2026: ForeverDB's boss numbers are encounter ids; a boss whose creature nothing names
+    comes without one (`{order, nil, name}`): the page lists it by name without a link, its loot
+    note and its pin say its name, and nothing errors."""
+    boot(wow)
+    wow.execute(
+        """local pack = Bastians.Data.packs.world
+        local raw = pack.dungeon[36]
+        pack.dungeon[36] = raw:gsub('{ 2, 639, "Edwin VanCleef" }',
+          '{ 2, 639, "Edwin VanCleef" }, { 3, nil, "Mr. Smite" }')
+        assert(pack.dungeon[36] ~= raw, 'the fixture row changed shape')"""
+    )
+    rows = list(sections(wow, "dungeon:36")["data.bosses"].rows.values())
+    smite = rows[-1]
+    assert (smite.text, smite.ref, smite.value) == ("Mr. Smite", None, 3)
+    assert rows[0].ref == "npc:644"
     assert wow.errors == []

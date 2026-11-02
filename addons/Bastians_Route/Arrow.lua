@@ -26,6 +26,7 @@ Arrow.COLORS = { ahead = S.C.good, side = S.C.gold, behind = S.C.bad } -- the th
 
 local mod, frame
 local moving, turning, ticking = false, false, false
+local byKey = false -- hidden by the clear-screen key (Arrow.HideByKey)
 local elapsed = 0
 
 local function db()
@@ -227,7 +228,7 @@ function Arrow.Update()
   if not mod then
     return
   end
-  local t = db().arrow ~= false and mod:IsEnabled() and Arrow.Target() or nil
+  local t = db().arrow ~= false and mod:IsEnabled() and not byKey and Arrow.Target() or nil
   if not t then
     if frame then
       stopTicks()
@@ -249,6 +250,27 @@ function Arrow.IsShown()
   return frame ~= nil and frame:IsShown()
 end
 
+-- The clear-screen key (plan-round4 F1, BASTIANS_SUITE_HIDDEN; plan-launch-review R5.6,
+-- 01.11.2026): the arrow goes with the suite, no ticks while hidden; the key's return shows it
+-- again when a route still runs and the arrow is switched on. The minimap's path is the Map's
+-- (route.path layer, its overlay follows the key itself).
+function Arrow.HideByKey(hidden)
+  if hidden then
+    byKey = true
+    if frame then
+      stopTicks()
+      frame:Hide()
+    end
+  elseif byKey then
+    byKey = false
+    Arrow.Update()
+  end
+end
+
+function Arrow.HiddenByKey()
+  return byKey
+end
+
 function Arrow.Register(self)
   mod = self
   moving, turning = false, false
@@ -267,6 +289,9 @@ function Arrow.Register(self)
   self:RegisterEvent("PLAYER_STOPPED_TURNING", function()
     turning = false
   end)
+  -- enabled while the key hides the suite: hidden until the key comes back
+  local Screen = B.UI.Screen
+  byKey = Screen ~= nil and Screen.Hidden ~= nil and Screen.Hidden() and Screen.Hides("Route") or false
   Arrow.Update()
 end
 

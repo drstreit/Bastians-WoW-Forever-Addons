@@ -7,6 +7,7 @@ from harness import WowRuntime
 from pages import (
     band,
     band_buttons,
+    chip,
     click_ref,
     menu,
     nav_click,
@@ -15,6 +16,9 @@ from pages import (
     page_rows,
     pick,
     pills,
+)
+from pages import (
+    chips as bar_chips,
 )
 
 CORE, DATA, QUESTS, GOLD, BROWSER = (
@@ -64,6 +68,11 @@ def subject(wow: WowRuntime) -> str:
 def chips(wow: WowRuntime) -> list[str]:
     """The filter bar's pills (ADR 0016)."""
     return pills(wow, TREE)
+
+
+def service_chips(wow: WowRuntime) -> list[tuple]:
+    """The Service chips (ADR 0038): (label, count, on)."""
+    return bar_chips(wow, TREE)
 
 
 def test_entity_page_has_header_actions_and_sections_in_order(wow: WowRuntime):
@@ -143,11 +152,11 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     assert flat(wow) == ["Building the list ..."]
     wow.run_frames(5)
     assert title(wow) == "NPCs"
-    assert flat(wow) == [  # the list opens on the player's zone (C9): Westfall's Gryan is not here
+    # the list opens on the player's zone (C9): Westfall's Gryan is not here; Hogger and
+    # Goldtooth are in the Mobs list since owner round 5 (31.10.2026)
+    assert flat(wow) == [
         "Auctioneer Fitch  30",  # the fixture auctioneer (W10 step 2)
         "Corina Steele  15",
-        "Goldtooth  8",
-        "Hogger  11",
         "Innkeeper Farley  6",
         "Marshal Dughan  10",
         "Zaldimar Wefhellt  30",
@@ -158,6 +167,7 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
         "Dungeons",  # data.md "Dungeons" (30.10.2026)
         "Farm spots",
         "Items",
+        "Mobs",  # owner round 5 (31.10.2026): the monsters apart from the NPCs
         "NPCs",
         "Nodes",
         "Objects",
@@ -170,26 +180,28 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     assert wow.eval(f"{MOD}.navTree.selectedID") == "nav:list:npc"
     # one filter bar (ADR 0016): a pill per dimension, the counts inside the dropdowns, given the
     # other filters (Here: Westfall's quest giver is not counted)
-    assert chips(wow) == ["Where: Here", "Service: All", "Rank: All", "Level: All", "Sort: Name"]
-    assert menu(wow, TREE, "where") == ["All  10", "Here  7", "Continent  8"]
-    assert menu(wow, TREE, "service") == [
-        "All  7",
-        "Auctioneer  1",
-        "Innkeeper  1",
-        "Quest giver  1",
-        "Trainer  1",
-        "Vendor  1",
-        "No service  2",  # Hogger (elite, no service) and Goldtooth
+    # the Service dimension is chips with the counts on them since ADR 0038 (30.10.2026)
+    # every NPC left is of normal rank: one key alone is no pill
+    assert chips(wow) == ["Where: Here", "Level: All", "Sort: Name"]
+    assert menu(wow, TREE, "where") == ["All  6", "Here  5", "Continent  6"]
+    assert service_chips(wow) == [
+        ("All", 5, True),
+        ("Auctioneer", 1, False),
+        ("Innkeeper", 1, False),
+        ("Quest giver", 1, False),
+        ("Trainer", 1, False),
+        ("Vendor", 1, False),
     ]
-    assert menu(wow, TREE, "rank") == ["All  7", "Normal  6", "Elite  1"]
-    assert menu(wow, TREE, "level") == ["All  7", "1-10  3", "11-20  2", "21-30  2"]
-    assert strip(wow.eval(f"{MOD}.summary:GetText()")) == "7 of 7 shown"
-    pick(wow, TREE, "service", "Quest giver")  # quest givers, within the zone
+    assert menu(wow, TREE, "level") == ["All  5", "1-10  2", "11-20  1", "21-30  2"]
+    assert strip(wow.eval(f"{MOD}.summary:GetText()")) == "5 of 5 shown"
+    chip(wow, "Quest giver")  # quest givers, within the zone
     assert flat(wow) == ["Marshal Dughan  10"]
     assert menu(wow, TREE, "where") == ["All  2", "Here  1", "Continent  2"]  # filters combine
     pick(wow, TREE, "where", "Continent")  # Continent: Westfall's giver too
     assert flat(wow) == ["Gryan Stoutmantle  20", "Marshal Dughan  10"]
-    assert chips(wow)[:2] == ["Where: Continent", "Service: Quest giver"]
+    assert chips(wow)[0] == "Where: Continent" and [c for c in service_chips(wow) if c[2]] == [
+        ("Quest giver", 2, True)
+    ]
     nav_click(wow, "nav:list:zone")  # another list from the navigation
     wow.run_frames(5)
     assert title(wow) == "Zones" and any(r.startswith("Elwynn Forest") for r in flat(wow))

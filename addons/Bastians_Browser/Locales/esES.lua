@@ -33,6 +33,13 @@ local strings = {
   ["All"] = "Todo",
   ["Where the rows are: in your zone, on your continent, or everywhere."] = "Dónde están las filas: en tu zona, en tu continente o en todas partes.",
   ["Sort"] = "Ordenar",
+  ["Groups"] = "Grupos",
+  ["By zone"] = "Por zona",
+  ["None"] = "Ninguno",
+  ["Nearest first, the rows under their zone's name."] = "Los más cercanos primero, las filas bajo el nombre de su zona.",
+  ["Elsewhere"] = "En otra parte",
+  ["Loading %d of %d ..."] = "Cargando %d de %d ...",
+  ["%d loaded"] = "%d cargados",
   ["The order of the rows."] = "El orden de las filas.",
   ["No entries. Is the data pack loaded?"] = "No hay entradas. ¿Está cargado el paquete de datos?",
   ["Nothing matches these filters. The x on a filter clears it."] = "Nada coincide con estos filtros. La x de un filtro lo borra.",
@@ -68,6 +75,10 @@ local strings = {
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "Mostrar lo que valen las misiones y los objetos (recompensas, precios) en las filas",
   ["Follow the target: an NPC or object you target becomes the subject"] = "Seguir al objetivo: un PNJ u objeto que fijas como objetivo pasa a ser el tema",
   ["Hide the game's objective tracker in slim mode"] = "Ocultar el rastreador de objetivos del juego en modo estrecho",
+  ["Preview a row in the page pane"] = "Vista previa de una fila en el panel de la página",
+  ["While Shift is held"] = "Mientras se mantiene Mayús",
+  ["On every hover"] = "Al pasar el ratón",
+  ["Never"] = "Nunca",
   ["Open in Browser"] = "Abrir en el navegador",
   ["Right click: open in the Browser"] = "Clic derecho: abrir en el navegador",
 
@@ -236,6 +247,14 @@ local strings = {
   ["The link is in the chat input: copy it with Ctrl+C."] = "El enlace está en la entrada del chat: cópialo con Ctrl+C.",
   ["Slide the list in"] = "Plegar la lista",
   ["Slide the list out"] = "Desplegar la lista",
+  -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
+  ["Mobs"] = "Monstruos",
+  ["Filter"] = "Filtrar",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["Click: the Browser. Right click: the bookmarks."] = "Clic: el navegador. Clic derecho: los marcadores.",
+  ["Everything the suite knows: quests, NPCs, items, places."] = "Todo lo que sabe la suite: misiones, PNJ, objetos, lugares.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

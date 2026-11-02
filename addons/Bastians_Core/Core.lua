@@ -215,6 +215,7 @@ for _, name in ipairs({
   "BASTIANS_TALE_CHAPTER",
   "BASTIANS_TALE_SHOW",
   "BASTIANS_TALE_CHANGED",
+  "BASTIANS_NOTICE",
 }) do
   B:DeclareMessage(name)
 end

@@ -1,0 +1,43 @@
+## Interface: 16001
+## Title: Bastian's Campfire
+## IconTexture: Interface\AddOns\Bastians_Campfire\Icon
+## Notes: The campfire: a card while a fire is near, a camp ring, share the fire with your group and guild, a planner of every camp feature.
+## Notes-koKR: 모닥불: 불 근처에서 보이는 카드, 캠프 링, 파티 및 길드와 모닥불 공유, 모든 캠프 시설의 플래너.
+## Notes-zhCN: 篝火：靠近篝火时显示的卡片、营地环、与队伍和公会分享篝火、所有营地设施的规划器。
+## Notes-zhTW: 營火：靠近營火時顯示的卡片、營地環、與隊伍和公會分享營火、所有營地設施的規劃器。
+## Notes-deDE: Das Lagerfeuer: eine Karte, solange ein Feuer nah ist, ein Lagerring, das Feuer mit Gruppe und Gilde teilen, ein Planer jeder Lagereinrichtung.
+## Notes-frFR: Le feu de camp : une carte quand un feu est proche, un anneau de camp, partager le feu avec le groupe et la guilde, un planificateur de chaque élément du camp.
+## Notes-esES: La hoguera: una tarjeta cuando hay un fuego cerca, un anillo de campamento, compartir la hoguera con el grupo y la hermandad, un planificador de cada elemento del campamento.
+## Notes-esMX: La hoguera: una tarjeta cuando hay un fuego cerca, un anillo de campamento, compartir la hoguera con el grupo y la hermandad, un planificador de cada elemento del campamento.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
+## Author: Bastian
+## Version: 1.3.0
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## OptionalDeps: Bastians_Data, Bastians_Map, Bastians_Voice, Bastians_Gestures, Bastians_Alts
+## SavedVariables: BastiansCampfireDB
+## SavedVariablesPerCharacter: BastiansCampfireCharDB
+
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+News.lua
+Data\Camp.lua
+Model.lua
+Watch.lua
+Card.lua
+Beacon.lua
+CampRing.lua
+Planner.lua
+Feed.lua
+Campfire.lua

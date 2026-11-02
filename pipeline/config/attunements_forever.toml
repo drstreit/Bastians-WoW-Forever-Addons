@@ -7,6 +7,7 @@
 
 [[attunement]]
 id = "onyxia-alliance"
+instance = 249
 name = "Onyxia's Lair"
 faction = "Alliance"
 verified = false
@@ -29,6 +30,7 @@ steps = [
 
 [[attunement]]
 id = "onyxia-horde"
+instance = 249
 name = "Onyxia's Lair"
 faction = "Horde"
 verified = false
@@ -49,6 +51,7 @@ steps = [
 
 [[attunement]]
 id = "molten-core"
+instance = 409
 name = "Molten Core"
 faction = "both"
 verified = false
@@ -59,6 +62,7 @@ steps = [
 
 [[attunement]]
 id = "blackwing-lair"
+instance = 469
 name = "Blackwing Lair"
 faction = "both"
 verified = false
@@ -69,6 +73,7 @@ steps = [
 
 [[attunement]]
 id = "ubrs-key"
+instance = 229
 name = "Upper Blackrock Spire (Seal of Ascension)"
 faction = "both"
 verified = false
@@ -81,6 +86,7 @@ steps = [
 
 [[attunement]]
 id = "scholomance-key"
+instance = 289
 name = "Scholomance (Skeleton Key)"
 faction = "both"
 verified = false
@@ -96,6 +102,7 @@ steps = [
 
 [[attunement]]
 id = "naxxramas"
+instance = 533
 name = "Naxxramas"
 faction = "both"
 verified = false

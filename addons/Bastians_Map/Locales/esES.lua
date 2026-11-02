@@ -127,6 +127,11 @@ local strings = {
   ["Route"] = "Ruta",
   ["Plan a route there."] = "Planificar una ruta hasta allí.",
   ["No matches."] = "Sin resultados.",
+  -- Mini.lua: the minimap's search (L4)
+  ["Note"] = "Nota",
+  ["Bookmark"] = "Marcador",
+  ["The minimap finds NPCs, quests, zones and your notes."] = "El minimapa encuentra PNJ, misiones, zonas y tus notas.",
+  ["No known place of the quest giver for %s."] = "No se conoce el lugar del dador de misiones de %s.",
   ["Search the world ..."] = "Explorar el mundo ...",
 
   -- Tiles.lua
@@ -205,6 +210,41 @@ local strings = {
   ["A frame around the minimap"] = "Un marco alrededor del minimapa",
   ["Options of this window"] = "Opciones de esta ventana",
   ["Ctrl+click: put a button on the map, or back into the box."] = "Ctrl+clic: poner un botón en el mapa, o devolverlo a la caja.",
+  -- owner round 5 (31.10.2026): the monster areas
+  ["Monsters"] = "Monstruos",
+  -- 31.10.2026: the dungeon doors' own layer
+  ["Dungeons and raids"] = "Calabozos y bandas",
+  -- 31.10.2026: how a button moves between the box and the minimap's border
+  ["Ctrl+click: back into the button box. Drag: along the minimap's border."] = "Ctrl+clic: de vuelta a la caja de botones. Arrastrar: a lo largo del borde del minimapa.",
+  ["Ctrl+click: onto the minimap's border."] = "Ctrl+clic: al borde del minimapa.",
+  ["Ctrl+click a button here: it moves onto the minimap's border."] = "Ctrl+clic en un botón aquí: pasa al borde del minimapa.",
+  ["Ctrl+click it on the border: it comes back into this box."] = "Ctrl+clic en el borde: vuelve a esta caja.",
+  ["Drag it on the border: it moves along the border."] = "Arrastrar en el borde: se mueve a lo largo del borde.",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s, %s",
+  ["Click: the map. Right click: centre on you."] = "Clic: el mapa. Clic derecho: centrar en ti.",
+  ["No waypoint. Right click a place on the map to set one."] = "Sin punto de ruta. Clic derecho en un lugar del mapa para fijar uno.",
+
+  -- Timers.lua (02.11.2026)
+  ["Timers"] = "Temporizadores",
+  ["Stopwatch"] = "Cronómetro",
+  ["Countdown"] = "Cuenta atrás",
+  ["Start"] = "Iniciar",
+  ["Pause"] = "Pausa",
+  ["Reset"] = "Reiniciar",
+  ["Done"] = "Terminado",
+  ["Name"] = "Nombre",
+  ["How long: 5m, 1:30, 90s, 2h"] = "Cuánto: 5m, 1:30, 90s, 2h",
+  ["Add a stopwatch"] = "Añadir un cronómetro",
+  ["Add a countdown"] = "Añadir una cuenta atrás",
+  ["No timers yet. Add a stopwatch or a countdown below."] = "Aún no hay temporizadores. Añade un cronómetro o una cuenta atrás abajo.",
+  ["%s is up."] = "%s ha terminado.",
+  ["%s: %s left"] = "%s: quedan %s",
+  ["%d running"] = "%d en marcha",
+  ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "Cronómetros y cuentas atrás, tantos como quieras. Un botón iluminado: una cuenta atrás ha terminado.",
+  ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "No pude leer ese tiempo. Prueba 5m, 1:30, 90s o 2h.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

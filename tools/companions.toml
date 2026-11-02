@@ -1,0 +1,93 @@
+# The companion addons the suite reads or sits beside (tools/companion_watch.py, plan-second-wave.md
+# S4, 01.11.2026). `required`: the suite depends on it, a change heads the daily report and a
+# missing or too old copy writes .local/companions/ALERT.md. `min` mirrors B.TESTED_WITH in Core's
+# Settings.lua. `bridge`: our files that read the addon; a changed surface prints "review ...".
+# The folders are read from the clients' Interface/AddOns ([companions] in .local/install.toml).
+
+[[companion]]
+folder = "Spoken"
+required = true
+min = "3.7.0"
+api = { file = "API.lua", var = "Spoken.API_VERSION", value = 1 }
+bridge = ["addons/Bastians_Voice/Bridge.lua", "addons/Bastians_Voice/SpokenData.lua"]
+about = "The player and queue of Spoken (rusty-key): quests, places, readables and bosses speak through it; the Orbiter is a source of its player."
+
+[[companion]]
+folder = "Spoken_Quests"
+bridge = ["addons/Bastians_Voice/SpokenData.lua"]
+about = "Spoken's quest and gossip voices; the quests source the Orbiter stops and queries."
+
+[[companion]]
+folder = "Spoken_Places"
+bridge = ["addons/Bastians_Voice/SpokenData.lua"]
+about = "Spoken's zone and area lore, autoplay on discovery, the Compendium's found list."
+
+[[companion]]
+folder = "Spoken_Readables"
+bridge = ["addons/Bastians_Voice/SpokenData.lua"]
+about = "Spoken's books, letters and plaques, read page by page."
+
+[[companion]]
+folder = "Spoken_Bosses"
+bridge = ["addons/Bastians_Voice/SpokenData.lua"]
+about = "Spoken's boss stories (new in 3.7.0): SpokenBossCreatures and SpokenBossStories."
+
+[[companion]]
+folder = "SpokenPlacesAudio"
+about = "The Places voice pack (was SpokenZonesAudio)."
+
+[[companion]]
+folder = "SpokenReadablesAudio"
+about = "The Readables voice pack (was SpokenBooksAudio)."
+
+[[companion]]
+folder = "SpokenBossesAudio"
+about = "The boss stories' voice pack."
+
+[[companion]]
+folder = "SpokenPlayers"
+about = "Text to speech for the players' chat in race voices (plan-second-wave.md S2: Chat never reads chat aloud, the Orbiter's words hold while a line plays)."
+
+[[companion]]
+folder = "ForeverDB"
+about = "ForeverDB (GPL-3.0): vendors, trainers, dungeons; a pipeline source (docs/data/sources.md)."
+
+[[companion]]
+folder = "QuestieDB"
+about = "QuestieDB: a second source of NPC and object spawns (companion of Quests)."
+
+[[companion]]
+folder = "EverythingQuests"
+about = "Everything Quests (MIT): the quests pack's source."
+
+[[companion]]
+folder = "TomTom"
+about = "TomTom: its arrow and waypoints are used when present (Route, Map)."
+
+[[companion]]
+folder = "DialogueUI"
+about = "DialogueUI: Spoken draws into its art when installed; the Orbiter's conversation hides the game's windows."
+
+[[companion]]
+folder = "totalRP3"
+about = "Total RP 3: the msp library for roleplay names (plan-second-wave.md S8)."
+
+[[companion]]
+folder = "MyRolePlay"
+about = "MyRolePlay: the msp library for roleplay names (S8)."
+
+[[companion]]
+folder = "HappyCamper"
+about = "Happy Camper (All Rights Reserved): shared camps, the finder; watched for its message prefixes (S5 interop)."
+
+[[companion]]
+folder = "Campfire"
+about = "CampfirePin (All Rights Reserved): fires by the Campfire Nearby buff; watched for its prefixes (S5)."
+
+[[companion]]
+folder = "CampfireTooltips"
+about = "Campfire Tooltips (GPLv3): the camp placements' data (S5's source, credited)."
+
+[[companion]]
+folder = "KerzoCampingSync"
+about = "Kerzo Camping Sync (All Rights Reserved): party buff sync (S5)."

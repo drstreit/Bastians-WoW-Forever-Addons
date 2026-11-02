@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("frFR", {
+  -- plan-second-wave.md S6 (01.11.2026)
+  ["Toggle the tracker"] = "Afficher ou masquer le suivi",
   -- Views.lua, Quests.lua: the Library's leads in My quests
   ["Tales"] = "Récits",
   ["Click: open the journal"] = "Clic : ouvrir le journal",
@@ -106,6 +108,21 @@ ns.L:Register("frFR", {
   ["Target of"] = "Cible de",
   ["Starts quests"] = "Débute des quêtes",
   ["Ends quests"] = "Termine des quêtes",
+  ["Step %d of %d. Next: %s"] = "Étape %d sur %d. Ensuite : %s",
+  ["Nothing of it is for this character."] = "Rien de cela n'est pour ce personnage.",
+  ["available now"] = "disponible maintenant",
+  ["in your log"] = "dans votre journal",
+  ["needs level %d"] = "niveau %d requis",
+  ["needs a profession skill"] = "une compétence de métier requise",
+  ["needs reputation"] = "réputation requise",
+  ["replaced by another quest"] = "remplacée par une autre quête",
+  ["not for this character"] = "pas pour ce personnage",
+  ["after step %d"] = "après l'étape %d",
+  ["needs %s"] = "requiert %s",
+  ["<- you are here"] = "<- vous êtes ici",
+  ["in your bags"] = "dans vos sacs",
+  ["not in your bags"] = "pas dans vos sacs",
+  ["Attunement"] = "Accès",
   ["Dungeon quests"] = "Quêtes de donjon",
   ["Needed for quests"] = "Nécessaire pour des quêtes",
   ["Status"] = "Statut",
@@ -198,6 +215,8 @@ ns.L:Register("frFR", {
   ["(no quest text)"] = "(aucun texte de quête)",
   ["Use quest item"] = "Utiliser l'objet de quête",
   ["Hand in here"] = "Rendre ici",
+  ["next in chain"] = "suite de la série",
+  ["Next in chain"] = "Suite de la série",
   ["Objectives here"] = "Objectifs ici",
   ["Elsewhere"] = "Ailleurs",
   ["Complete, hand in elsewhere"] = "Terminée, à rendre ailleurs",
@@ -295,4 +314,17 @@ ns.L:Register("frFR", {
   ["quest"] = "quête",
   ["Choice:"] = "Choix :",
   ["Quest chain '%s' %d/%d"] = "Chaîne de quêtes '%s' %d/%d",
+  -- owner round 5 (31.10.2026): the Quests list's Type filter
+  ["Type"] = "Type",
+  ["Normal"] = "Normale",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d in the log"] = "%d dans le journal",
+  ["%d in the log, %d ready"] = "%d dans le journal, %d prêtes",
+  ["Click: the quests. Right click: the tracker."] = "Clic : les quêtes. Clic droit : le suivi.",
+  ["Next here: "] = "Ensuite ici : ",
+  ["Ready to turn in:"] = "Prêtes à rendre :",
+  ["This session here: "] = "Cette session ici : ",
+  ["and %d more"] = "et %d de plus",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: quest items"] = "Bastian's : objets de quête",
 })

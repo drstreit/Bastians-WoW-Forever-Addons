@@ -25,7 +25,8 @@ ns.L:Register("zhCN", {
   ["Never"] = "从不",
   ["When near"] = "靠近时",
   ["When I target it"] = "选中它时",
-  ["Keep"] = "保存",
+  ["Save"] = "保存",
+  ["(right click: open it)"] = "（右键：打开）",
   ["Cancel"] = "取消",
   ["Remove"] = "删除",
   ["A note needs a title."] = "笔记需要一个标题。",
@@ -83,4 +84,11 @@ ns.L:Register("zhCN", {
   ["Send to my group"] = "发给我的队伍",
   ["No place to send."] = "没有可发送的地点。",
   ["Bookmark: a click shows it on the map, a right click renames it"] = "书签: 左键点击在地图上显示,右键点击重命名",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d notes"] = "%d 条笔记",
+  ["%d notes, %d reminders"] = "%d 条笔记，%d 个提醒",
+  ["Click: the lists. Right click: a note here."] = "点击: 列表。右键: 在此记笔记。",
+  ["Near here:"] = "附近:",
+  ["No notes near here."] = "附近没有笔记。",
+  ["and %d more"] = "还有 %d 个",
 })

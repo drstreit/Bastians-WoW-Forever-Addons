@@ -5,6 +5,7 @@
 -- arrow keys (and Tab) move the selection, Enter takes it; a choice clears the box (owner,
 -- retail 25.10.2026). Search.New makes one more box with its own list for another target: the
 -- minimap's bar jumps the minimap; the map's box is Search itself.
+-- The minimap's box narrows what it offers through the hooks below.
 local _, ns = ...
 local B = Bastians
 local L = ns.L
@@ -36,7 +37,14 @@ local function routeAvailable(ref)
 end
 
 -- Fills `inst` with one search box on `parent` and its result list: inst.box, inst.list,
--- inst.results, inst.selected, inst:Run(text), inst:Move(delta). `onChoose(ref)` takes a result.
+-- inst.results, inst.selected, inst:Run(text), inst:Move(delta). `onChoose(ref, result)` takes a
+-- result. Hooks a caller may set on `inst` before (the minimap's box, map.md "The minimap search";
+-- the map's own box sets none):
+--   inst.keep(result) -> result or nil: the results it keeps, maybe as a new table
+--   inst.extra(query, types) -> results of its own (the bookmarks), listed first
+--   inst.blocked(types) -> a line shown instead of searching (a type word it cannot show), or nil
+--   inst.onRun(query), inst.onEscape(): a new search starts, Esc in the box
+-- A result without a ref is taken when it carries a `point` ({ continent, wx, wy }).
 function Search.New(inst, parent, hint, onChoose)
   local box, list, handle
   local rows = {}
@@ -60,9 +68,9 @@ function Search.New(inst, parent, hint, onChoose)
     end
   end
 
-  local function choose(ref)
+  local function choose(res)
     finishChoice()
-    onChoose(ref)
+    onChoose(res.ref, res)
   end
 
   local function routeTo(ref)
@@ -85,7 +93,7 @@ function Search.New(inst, parent, hint, onChoose)
     r.label:SetPoint("LEFT", 8, 0)
     r.label:SetPoint("RIGHT", -64, 0)
     r.label:SetJustifyH("LEFT")
-    r.route = S.button(r, L["Route"], 54, ROW_H - 2)
+    r.route = S.action(r, { icon = "route", label = L["Route"], row = true, boxed = true })
     r.route.tip = L["Plan a route there."]
     r.route:SetPoint("RIGHT", -2, 0)
     r.route:SetScript("OnClick", function()
@@ -98,8 +106,8 @@ function Search.New(inst, parent, hint, onChoose)
       me.hl:Hide()
     end)
     r:SetScript("OnClick", function(me)
-      if me.ref then
-        choose(me.ref)
+      if me.res and (me.ref or me.res.point) then
+        choose(me.res)
       end
     end)
     rows[i] = r
@@ -109,7 +117,7 @@ function Search.New(inst, parent, hint, onChoose)
   -- Highlights the selected row (the arrow keys) or none.
   local function markSelected()
     for i, r in ipairs(rows) do
-      if i == inst.selected and r:IsShown() and r.ref then
+      if i == inst.selected and r:IsShown() and (r.ref or (r.res and r.res.point)) then
         r.hl:Show()
       elseif not r:IsMouseOver() then
         r.hl:Hide()
@@ -127,7 +135,8 @@ function Search.New(inst, parent, hint, onChoose)
     markSelected()
   end
 
-  local function showResults(results)
+  -- The results in the list; `empty` is the line when there are none (default "No matches.").
+  local function showResults(results, empty)
     inst.results = results
     inst.selected = 0
     local n = math.min(#results, Search.LIMIT)
@@ -135,9 +144,10 @@ function Search.New(inst, parent, hint, onChoose)
       local r = row(i)
       local res = results[i]
       local entityType = B.Entity.Parse(res.ref)
-      r.ref = res.ref
-      r.label:SetText((res.label or res.ref) .. "  " .. S.H.muted .. L[entityType or "?"] .. "|r")
-      r.route:SetShown(routeAvailable(res.ref))
+      r.ref, r.res = res.ref, res
+      local kind = res.kindLabel or L[entityType or "?"]
+      r.label:SetText((res.label or res.ref) .. "  " .. S.H.muted .. kind .. "|r")
+      r.route:SetShown(res.ref ~= nil and routeAvailable(res.ref))
       r:ClearAllPoints()
       r:SetPoint("TOPLEFT", 1, -(1 + (i - 1) * ROW_H))
       r:SetPoint("RIGHT", -1, 0)
@@ -148,8 +158,8 @@ function Search.New(inst, parent, hint, onChoose)
     end
     if n == 0 then
       local r = row(1)
-      r.ref = nil
-      r.label:SetText(S.H.muted .. L["No matches."] .. "|r")
+      r.ref, r.res = nil, nil
+      r.label:SetText(S.H.muted .. (empty or L["No matches."]) .. "|r")
       r.route:Hide()
       r:ClearAllPoints()
       r:SetPoint("TOPLEFT", 1, -1)
@@ -174,7 +184,32 @@ function Search.New(inst, parent, hint, onChoose)
       closeList()
       return
     end
+    if inst.onRun then
+      inst.onRun(query)
+    end
+    local note = inst.blocked and inst.blocked(types)
+    if note then
+      showResults({}, note)
+      return
+    end
+    local own = inst.extra and inst.extra(query, types) or {}
     handle = B:Search(query, { limit = Search.LIMIT, types = types }, function(results, done)
+      if inst.keep or #own > 0 then
+        local out = {}
+        for _, res in ipairs(own) do
+          out[#out + 1] = res
+        end
+        for _, res in ipairs(results) do
+          local kept = res
+          if inst.keep then
+            kept = inst.keep(res)
+          end
+          if kept then
+            out[#out + 1] = kept
+          end
+        end
+        results = out
+      end
       if done or #results > 0 then
         showResults(results)
       end
@@ -182,6 +217,7 @@ function Search.New(inst, parent, hint, onChoose)
   end
 
   box = S.search(parent, hint)
+  box.queryFields = L["type (npc, item, quest, zone, ...)"] -- the world search's (ADR 0045)
   box:SetScript("OnTextChanged", function(me)
     local text = me:GetText() or ""
     if text == "" then
@@ -197,11 +233,14 @@ function Search.New(inst, parent, hint, onChoose)
     me:SetText("")
     me:ClearFocus()
     closeList()
+    if inst.onEscape then
+      inst.onEscape()
+    end
   end)
   box:SetScript("OnEnterPressed", function()
     local chosen = inst.results[inst.selected > 0 and inst.selected or 1]
     if chosen then
-      choose(chosen.ref)
+      choose(chosen)
     end
   end)
   if box.SetAltArrowKeyMode then

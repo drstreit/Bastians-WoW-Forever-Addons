@@ -1,0 +1,149 @@
+# Night: near-black with soft white text and a cold cyan accent (plan-round4 H3, 01.11.2026); dim at
+# about 4.9:1, the kind tiles a step darker than Dark teal's, no pure white. The Modern renderer.
+id = "night"
+name = "Night"
+order = 5
+
+[colors]
+# surfaces
+bg = "#0b0d10f2"        # window ground
+panel = "#12151afa"     # buttons, fields, menus
+header = "#0e1014"      # title bars, the dossier's band
+line = "#c9d4e01f"      # 1 px edges
+hover = "#c9d4e026"     # a row under the mouse
+press = "#c9d4e021"     # a pressed row
+faceHover = "#1b1f26"   # a button's face under the mouse
+track = "#c9d4e00c"     # scroll and slider tracks
+rule = "#c9d4e030"      # a rule row
+divider = "#c9d4e016"   # between two-line rows
+# text
+text = "#e2e6eb"
+dim = "#8f99a6"         # secondary words, hints
+muted = "#848e9b"       # grey words after a name
+bright = "#f1f4f8"      # the strongest text (objectives, zone names)
+mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
+mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
+mapTextRim = "#eef2f6d9"  # the light rim around the map's words (dark ground)
+# accent and states
+accent = "#3cc7e8"
+wayWanderer = "#e6a25a"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
+wayScholar = "#5cb4f0"     # the welcome: the Scholar's picture frame (cool)
+gold = "#e6c35a"        # worth, money, available quests
+on = "#5fd37a"          # an icon that is switched on
+good = "#5fd37a"        # verified, ahead
+bad = "#ef6b6b"         # refuted, behind, a loss
+warn = "#f0a24a"
+neutral = "#aab3bf"     # unverified
+rare = "#c084fc"        # rare creatures
+water = "#7cb8f5"       # fish, flight
+# the six note colours of Bastian's Notes (notes.md, J)
+note1 = "#e6c35a"
+note2 = "#7fd49f"
+note3 = "#6fcbee"
+note4 = "#c084fc"
+note5 = "#f0a24a"
+note6 = "#ef6b6b"
+# outside our windows (Blizzard's dark chat and tooltips: keep these light in every theme)
+chat = "#66ccff"
+chatEmote = "#f0aa7d"   # emote lines in the chat, a soft amber on the night (L5)
+tipText = "#f1f4f8"
+tipDim = "#c9d1da"
+tipGold = "#ffd100"
+# quest difficulty (the game's own scale)
+diffRed = "#ff2020"
+diffOrange = "#ff8040"
+diffYellow = "#ffff00"
+diffGreen = "#40c040"
+diffGrey = "#858585"
+# money letters
+coinGold = "#e6c35a"
+coinSilver = "#c3c8d1"
+coinCopper = "#e8a76a"
+# the map
+sea = "#5b6472"          # under the art where no cell lies
+path = "#3cc7e8e6"       # the route's line
+waypoint = "#e2e6eb99"   # a quiet waypoint pin
+waypointLoud = "#f0dd5a" # the waypoint just set
+grid = "#c9d4e040"       # the debug grid of the imagery
+# the Library's book (library.md 10.1): the same paper and ink in every theme, a book keeps its
+# paper. The paper colours multiply the drawn paper (white: as drawn); night darkens it.
+bookPaper = "#ffffff"
+bookInk = "#2a1c10"
+bookInkSoft = "#6b5538"
+bookRubric = "#8f2716"
+bookGold = "#e0bd72"
+bookSepia = "#d8b98a"
+bookCover = "#ffffff"
+bookPaperNight = "#4a4d5a"
+bookInkNight = "#efe3c8"
+bookInkSoftNight = "#b7a98d"
+bookRubricNight = "#f08f74"
+# the reading settings (library.md 10.2): the backgrounds, inks and highlights a reader picks, the
+# same in every theme; a test measures the contrast of every pair
+# the drawn paper's mean colour (Media/Paper.tga, a test keeps it true): the contrast is
+# measured against it
+bookPaperTone = "#e3d3b0"
+bookBgWhite = "#fbfaf6"
+bookBgCream = "#f3e9d2"
+bookBgGrey = "#d4d4d0"
+bookBgGreen = "#cde6cf"
+bookBgBlack = "#121212"
+bookInkBlack = "#141414"
+bookInkBlue = "#16306a"
+bookInkWhite = "#f2efe8"
+bookInkAmber = "#ffc871"
+bookBlue = "#1f4fa3"
+bookBlueNight = "#9cc2ff"
+
+# round 4 (ADR 0038): colour by meaning. Services (on tiles, chips, badges and counts, never on names),
+# the entity types, depth (the void behind the panes, a raised card, its light edge, the inner
+# highlight), and the title bar's words.
+svcVendor = "#e6c35a"
+svcQuest = "#f0dd5a"
+svcTrainer = "#7cb8f5"
+svcInn = "#c084fc"
+svcFlight = "#5dd6e0"
+svcRepair = "#b9ab94"
+svcFriendly = "#5fd37a"
+svcHostile = "#ef6b6b"
+typeNpc = "#5fd37a"
+typeItem = "#7cb8f5"
+typeQuest = "#f0dd5a"
+typeObject = "#d9a66c"
+typeNode = "#5dd6e0"
+typeZone = "#97cf84"
+typeRecipe = "#f0a24a"
+typeSpot = "#e6c35a"
+typeChain = "#c084fc"
+typeHere = "#3cc7e8"
+void = "#05060899"
+card = "#c9d4e009"
+cardEdge = "#c9d4e014"
+inset = "#c9d4e00c"
+headerText = "#e2e6eb"
+
+# the kind tiles' eight groups (ADR 0046): value, hostile, place, nature, people, special, goods, other
+tileGold = "#8a6618"
+tileRed = "#8a3832"
+tileTeal = "#1a7570"
+tileGreen = "#35733a"
+tileBlue = "#315c97"
+tilePurple = "#593e8c"
+tileBrown = "#664b26"
+tileGrey = "#4c555e"
+
+[shape]
+radius = 6       # windows, blocks, menus
+radiusSmall = 4  # buttons, pills, fields
+
+# the widget set's sizes in px, the ground's alpha in % (ADR 0046, one look per theme)
+[geometry]
+action = 26
+actionRow = 22
+pill = 26
+tab = 26
+row = 28
+tile = 18
+tileBig = 26
+gap = 6
+groundAlpha = 88

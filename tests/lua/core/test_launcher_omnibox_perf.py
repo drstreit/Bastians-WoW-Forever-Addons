@@ -82,15 +82,17 @@ def test_omnibox_searches_and_opens_results(wow: WowRuntime):
     )  # the mock has no anchor layout
     wow.run_frames(10)
     rows = wow.eval("Bastians.UI.Omnibox.tree.flat")
-    assert [r.text for r in rows.values()] == [
-        "Hogger",
-        'Wanted: "Hogger"',
-        "Load quest texts to search them",  # the Quests provider's offer (core-contracts 7a), last
+    # grouped by type under a section row each (ADR 0038), the Quests provider's offer last
+    assert [(r.kind, r.text) for r in rows.values() if r.kind != "section"] == [
+        (None, "Hogger"),
+        (None, 'Wanted: "Hogger"'),
+        (None, "Load quest texts to search them"),  # the offer (core-contracts 7a), last
     ]
-    assert rows[1].ref == "npc:448" and rows[1].note == "npc"
-    assert rows[3].ref is None
+    assert [r.kind for r in rows.values()] == ["section", None, "section", None, None]
+    assert rows[2].ref == "npc:448" and rows[2].note == "npc"
+    assert rows[5].ref is None
     assert wow.eval("Bastians.UI.Omnibox.status:GetText()") == "3 results"
-    wow.execute("Bastians.UI.Omnibox.tree.pool[1]:Click('LeftButton')")
+    wow.execute("Bastians.UI.Omnibox.tree.pool[2]:Click('LeftButton')")
     assert wow.eval("BastiansBrowserFrame:IsShown()") is True
     # the page shows in the detail pane (ADR 0018)
     assert wow.eval("Bastians:GetModule('Browser').dossier.band.name:GetText()").startswith(
@@ -105,10 +107,12 @@ def test_omnibox_searches_and_opens_results(wow: WowRuntime):
     ]
     wow.slash("/bs farley")
     wow.run_frames(10)
-    assert [r.text for r in wow.eval("Bastians.UI.Omnibox.tree.flat").values()] == [
+    rows = wow.eval("Bastians.UI.Omnibox.tree.flat")
+    assert [r.text for r in rows.values() if r.kind != "section"] == [
         "Innkeeper Farley",
         "Load quest texts to search them",
     ]
+    assert rows[1].kind == "section"  # the type's title above the result (ADR 0038)
     assert wow.errors == []
 
 
@@ -124,7 +128,9 @@ def test_omnibox_without_browser_opens_the_entity_menu(wow: WowRuntime):
         """
     )
     wow.run_frames(10)
-    wow.execute("Bastians.UI.Omnibox.tree.pool[1]:Click('LeftButton')")
+    wow.execute(
+        "Bastians.UI.Omnibox.tree.pool[2]:Click('LeftButton')"
+    )  # the first row under its type
     assert wow.eval("Bastians.UI.EntityMenuFrame():IsShown()") is True
 
 

@@ -1,9 +1,24 @@
 ## Interface: 16001
 ## Title: Bastian's Data: Strategies
+## Title-koKR: Bastian's Data: 전략
+## Title-zhCN: Bastian's Data: 策略
+## Title-zhTW: Bastian's Data: 策略
+## Title-deDE: Bastian's Data: Strategien
+## Title-frFR: Bastian's Data: Stratégies
+## Title-esES: Bastian's Data: Estrategias
+## Title-esMX: Bastian's Data: Estrategias
 ## IconTexture: Interface\AddOns\Bastians_Data_Strategies\Icon
 ## Notes: Generated Strategies book: the pages, the rumours they rest on and What's new (loads with Bastian's Strategies).
+## Notes-koKR: 생성된 전략 책: 페이지, 그 바탕이 된 소문, 새 소식 (Bastian's Strategies와 함께 불러옴).
+## Notes-zhCN: 生成的策略之书：书页、它们依据的传闻和更新内容（随 Bastian's Strategies 加载）。
+## Notes-zhTW: 生成的策略之書：書頁、它們依據的傳聞與更新內容（隨 Bastian's Strategies 載入）。
+## Notes-deDE: Erzeugtes Strategiebuch: die Seiten, die Gerüchte dahinter und die Neuigkeiten (lädt mit Bastian's Strategies).
+## Notes-frFR: Livre de stratégies généré : les pages, les rumeurs sur lesquelles elles reposent et les nouveautés (chargé avec Bastian's Strategies).
+## Notes-esES: Libro de estrategias generado: las páginas, los rumores en que se basan y las novedades (se carga con Bastian's Strategies).
+## Notes-esMX: Libro de estrategias generado: las páginas, los rumores en que se basan y las novedades (se carga con Bastian's Strategies).
+## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

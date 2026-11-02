@@ -30,7 +30,7 @@ from pathlib import Path
 
 from lupa import lua51
 
-from bastians_build.sources.luatable import LuaDataError, to_python
+from bastians_build.sources.luatable import LuaDataError, safe_runtime, to_python
 
 FLAVORS = ("Standard", "Camelot")
 HORDE, ALLIANCE = 1, 2
@@ -523,9 +523,7 @@ def read_allthethings(att_dir: Path, flavor: str = "Standard") -> AllTheThings:
     categories = sorted((db / "Categories").glob("*.lua"))
     if not categories:
         raise AllTheThingsError(f"no data files under {db / 'Categories'}")
-    lua = lua51.LuaRuntime(
-        unpack_returned_tuples=True, register_eval=False, register_builtins=False
-    )
+    lua = safe_runtime()  # other people's files: no files, processes or Python (luatable)
     lua.execute(SANDBOX)
     app = lua.globals().app
     for path in categories:

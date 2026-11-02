@@ -162,3 +162,43 @@ def test_the_arrow_is_coloured_by_the_heading(wow: WowRuntime):
         tuple(list(wow.eval(f"{A}.COLORS.{k}").values())[:3]) for k in ("ahead", "side", "behind")
     )
     assert wow.errors == []
+
+
+def test_the_clear_screen_key_hides_the_arrow_and_brings_it_back(wow: WowRuntime):
+    """plan-launch-review R5.6 (01.11.2026): the arrow follows BASTIANS_SUITE_HIDDEN, no ticks
+    while hidden, a route change keeps it hidden; the page's tick for Route is honoured; the arrow
+    switched off by hand stays off after the key's return."""
+    boot(wow)
+    screen = "Bastians.UI.Screen"
+    wow.execute(f"{R}.To('npc:448')")
+    assert wow.eval(f"{A}.IsShown()") is True
+    assert wow.eval(f"{screen}.Toggle()") is True  # the key: hidden
+    assert wow.eval(f"{A}.IsShown()") is False and wow.eval(f"{A}.HiddenByKey()") is True
+    wow.fire("PLAYER_STARTED_MOVING")
+    assert wow.eval(f"{A}.Ticking()") is False
+    wow.fire("PLAYER_STOPPED_MOVING")
+    wow.execute(f"{A}.Update()")  # every route change (a step) asks again: still hidden
+    wow.advance(1.1)
+    assert wow.eval(f"{A}.IsShown()") is False
+    assert wow.eval(f"{screen}.Toggle()") is True  # back
+    assert wow.eval(f"{A}.IsShown()") is True and wow.eval(f"{A}.HiddenByKey()") is False
+    # the route ended while hidden: nothing to come back
+    wow.execute(f"{screen}.Toggle()")
+    wow.execute(f"{R}.Clear()")
+    wow.execute(f"{screen}.Toggle()")
+    assert wow.eval(f"{A}.IsShown()") is False
+    # unticked on the page "Hidden by the key": the key leaves the arrow alone
+    wow.execute(f"{R}.To('npc:448')")
+    wow.execute("Bastians:GetModule('Core').db.profile.screen_Route = false")
+    wow.execute(f"{screen}.Toggle()")
+    assert wow.eval(f"{A}.IsShown()") is True
+    wow.execute(f"{screen}.Toggle()")
+    wow.execute("Bastians:GetModule('Core').db.profile.screen_Route = nil")
+    # the arrow switched off by hand: the key's return leaves it off
+    wow.execute(f"{MOD}.db.profile.arrow = false")
+    wow.execute("Bastians:Fire('BASTIANS_SETTING_CHANGED', 'Route', 'arrow', false)")
+    assert wow.eval(f"{A}.IsShown()") is False
+    wow.execute(f"{screen}.Toggle()")
+    wow.execute(f"{screen}.Toggle()")
+    assert wow.eval(f"{A}.IsShown()") is False
+    assert wow.errors == []

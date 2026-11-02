@@ -1,4 +1,4 @@
--- Test double of Spoken Quests 3.5: the VoiceOver environment internals the Quests bridge reaches
+-- Test double of Spoken Quests 3.5: the VoiceOver environment internals the Voice bridge reaches
 -- for (DataModules:PrepareSound, Player:PlayNow, Enums.SoundEvent). Quest 999 has no voice line.
 VoiceOver = {
   DataModules = {
@@ -8,6 +8,7 @@ VoiceOver = {
         return false
       end
       sound.path = "Interface\\AddOns\\SpokenQuestsAudio\\q" .. sound.questID .. ".ogg"
+      sound.length = 3.4
       return true
     end,
     GetQuestLogQuestGiverTypeAndID = function()
@@ -19,8 +20,7 @@ VoiceOver = {
   },
   Player = {
     PlayNow = function(_, sound)
-      Spoken.queue[#Spoken.queue + 1] = sound
-      Spoken:Fire("AUDIO_CHANGED")
+      Spoken.sources.quests:PlayNow(sound)
     end,
   },
   Enums = {

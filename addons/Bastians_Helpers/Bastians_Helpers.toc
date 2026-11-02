@@ -1,0 +1,42 @@
+## Interface: 16001, 120105
+## Title: Bastian's Helpers
+## IconTexture: Interface\AddOns\Bastians_Helpers\Icon
+## Notes: The small everyday helpers: sell junk, repair, restock, take all mail, quest givers, IDs on tooltips, warnings.
+## Notes-koKR: 일상의 작은 도우미: 잡동사니 판매, 수리, 재보충, 우편 모두 받기, 퀘스트 제공자, 툴팁의 ID, 경고.
+## Notes-zhCN: 日常小助手：出售垃圾、修理、补货、收取全部邮件、任务发布者、鼠标提示中的 ID、警告。
+## Notes-zhTW: 日常小幫手：出售垃圾、修理、補貨、收取全部郵件、任務發布者、滑鼠提示中的 ID、警告。
+## Notes-deDE: Die kleinen Helfer des Alltags: Plunder verkaufen, reparieren, auffüllen, alle Post nehmen, Questgeber, IDs in Tooltips, Warnungen.
+## Notes-frFR: Les petits assistants du quotidien : vendre la camelote, réparer, réapprovisionner, prendre tout le courrier, donneurs de quêtes, ID dans les infobulles, alertes.
+## Notes-esES: Los pequeños ayudantes de cada día: vender chatarra, reparar, reponer, recoger todo el correo, dadores de misiones, ID en las descripciones, avisos.
+## Notes-esMX: Los pequeños ayudantes de cada día: vender chatarra, reparar, reponer, recoger todo el correo, dadores de misiones, ID en las descripciones, avisos.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
+## Author: Bastian
+## Version: 1.3.0
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## OptionalDeps: Bastians_Data, Bastians_Browser
+## SavedVariables: BastiansHelpersDB
+## SavedVariablesPerCharacter: BastiansHelpersCharDB
+
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+News.lua
+Helpers.lua
+Merchant.lua
+Mail.lua
+Quests.lua
+Tooltips.lua
+Info.lua
+Feed.lua
+Module.lua

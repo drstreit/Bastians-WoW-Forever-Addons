@@ -5,6 +5,13 @@ The game cannot read TOML, so the build turns every theme into a Lua table of fl
 committed (it is small and the same for both clients) and `--check` keeps it in step. Every theme
 names every token of the reference theme (`teal`, today's look) and nothing else, so a theme can
 never leave a colour undefined. Colours are `#RRGGBB` or `#RRGGBBAA`.
+
+Readability: every text token is
+measured against every ground it sits on with the WCAG 2 contrast ratio, and a theme that fails
+does not compile. Text at the UI's sizes (11 to 17 px) needs 4.5:1; text of 24 px and more and
+the glyphs on the kind tiles (graphics, not text) need 3:1. A translucent ground is measured by
+its own colour (what shows through it is the world, unknown at build time). The pairs are listed
+in READABLE below; a new text token is added there with its grounds.
 """
 
 from __future__ import annotations
@@ -23,6 +30,89 @@ OUT = ROOT / "addons" / "Bastians_Core" / "UI" / "Themes.lua"
 REFERENCE = "teal"
 HEX = re.compile(r"^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$")
 SHAPE_KEYS = {"radius": (0, 24), "radiusSmall": (0, 16)}
+# the look's geometry (ADR 0046): heights and sizes of the widget set in px, a ground alpha in %
+GEOMETRY_KEYS = {
+    "action": (16, 40),  # an action button (pictogram and text)
+    "actionRow": (14, 32),  # the same inside a row
+    "pill": (16, 40),
+    "tab": (16, 40),
+    "row": (16, 48),
+    "tile": (10, 32),  # the kind tile in rows and pills
+    "tileBig": (16, 48),  # the kind tile in a header
+    "gap": (0, 16),  # between a widget's icon and its text
+    "groundAlpha": (20, 100),
+}
+
+
+# The readability pairs (H2): (text tokens, ground tokens, px size or "icon"). The UI's text
+# tokens sit on the window ground and on panels (buttons, fields, rows); the title bar's words on
+# the header; the tooltip tokens on the game's tooltip (near black, outside our themes); the
+# map's words on the light rim drawn around them; the kind tiles carry a white glyph.
+TOOLTIP_GROUND = "#0a0a0a"
+TILE_GLYPH = "#ffffff"
+UI_TEXT = (
+    "text", "dim", "muted", "bright", "accent", "gold", "on", "good", "bad", "warn", "neutral",
+    "rare", "water", "note1", "note2", "note3", "note4", "note5", "note6",
+    "svcVendor", "svcQuest", "svcTrainer", "svcInn", "svcFlight", "svcRepair", "svcFriendly",
+    "svcHostile", "typeNpc", "typeItem", "typeQuest", "typeObject", "typeNode", "typeZone",
+    "typeRecipe", "typeSpot", "typeChain", "typeHere",
+    "coinGold", "coinSilver", "coinCopper",
+    "diffRed", "diffOrange", "diffYellow", "diffGreen", "diffGrey",
+)  # fmt: skip
+TILES = (
+    "tileGold", "tileRed", "tileTeal", "tileGreen",
+    "tileBlue", "tilePurple", "tileBrown", "tileGrey",
+)  # fmt: skip
+READABLE: tuple[tuple[tuple[str, ...], tuple[str, ...], int | str], ...] = (
+    (UI_TEXT, ("bg", "panel"), 12),
+    (("headerText",), ("header",), 15),
+    (("tipText", "tipDim", "tipGold", "chat", "chatEmote"), (TOOLTIP_GROUND,), 12),
+    (("mapText", "mapTextDim"), ("mapTextRim",), 11),
+    ((TILE_GLYPH,), TILES, "icon"),
+)
+LARGE_PX = 24  # text this big or bigger reads at 3:1 (WCAG 1.4.3)
+
+
+def minimum_ratio(size: int | str) -> float:
+    """4.5:1 for text under 24 px, 3:1 for larger text and for graphics ("icon")."""
+    if size == "icon" or (isinstance(size, int) and size >= LARGE_PX):
+        return 3.0
+    return 4.5
+
+
+def luminance(rgb: list[float]) -> float:
+    """The relative luminance of an sRGB colour (WCAG 2, the alpha ignored)."""
+
+    def linear(c: float) -> float:
+        return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
+    return 0.2126 * linear(rgb[0]) + 0.7152 * linear(rgb[1]) + 0.0722 * linear(rgb[2])
+
+
+def contrast(a: list[float], b: list[float]) -> float:
+    """The WCAG 2 contrast ratio of two colours, 1 (equal) to 21 (black on white)."""
+    la, lb = luminance(a), luminance(b)
+    hi, lo = max(la, lb), min(la, lb)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def unreadable(colors: dict[str, list[float]]) -> list[str]:
+    """The readability pairs a theme fails: 'text on ground 3.21 < 4.5', empty when it passes."""
+
+    def colour(name: str) -> list[float]:
+        if name.startswith("#"):
+            return parse_color(name, "readability")
+        return colors[name]
+
+    out = []
+    for texts, grounds, size in READABLE:
+        need = minimum_ratio(size)
+        for text in texts:
+            for ground in grounds:
+                ratio = contrast(colour(text), colour(ground))
+                if ratio < need:
+                    out.append(f"{text} on {ground} {ratio:.2f} < {need}")
+    return out
 
 
 class ThemeError(ValueError):
@@ -36,6 +126,7 @@ class Theme:
     order: int
     colors: dict[str, list[float]]
     shape: dict[str, int]
+    geometry: dict[str, int]
 
 
 def parse_color(text: object, where: str) -> list[float]:
@@ -53,7 +144,7 @@ def read_theme(path: Path) -> Theme:
         raw = tomllib.loads(path.read_text(encoding="utf-8"))
     except tomllib.TOMLDecodeError as err:
         raise ThemeError(f"{path.name}: {err}") from err
-    for key in ("id", "name", "order", "colors", "shape"):
+    for key in ("id", "name", "order", "colors", "shape", "geometry"):
         if key not in raw:
             raise ThemeError(f"{path.name}: `{key}` is missing")
     if raw["id"] != path.stem:
@@ -67,7 +158,15 @@ def read_theme(path: Path) -> Theme:
         if not isinstance(value, int) or not lo <= value <= hi:
             raise ThemeError(f"{path.name}: shape.{key} must be a whole number {lo}..{hi}")
         shape[key] = value
-    return Theme(raw["id"], str(raw["name"]), int(raw["order"]), colors, shape)
+    geometry = {}
+    for key, value in raw["geometry"].items():
+        if key not in GEOMETRY_KEYS:
+            raise ThemeError(f"{path.name}: unknown geometry token {key!r}")
+        lo, hi = GEOMETRY_KEYS[key]
+        if not isinstance(value, int) or not lo <= value <= hi:
+            raise ThemeError(f"{path.name}: geometry.{key} must be a whole number {lo}..{hi}")
+        geometry[key] = value
+    return Theme(raw["id"], str(raw["name"]), int(raw["order"]), colors, shape, geometry)
 
 
 def read_themes(folder: Path = THEMES_DIR) -> list[Theme]:
@@ -84,11 +183,19 @@ def read_themes(folder: Path = THEMES_DIR) -> list[Theme]:
             raise ThemeError(f"{t.id}: colours missing {missing}, unknown {extra}")
         if set(t.shape) != set(SHAPE_KEYS):
             raise ThemeError(f"{t.id}: shape needs {sorted(SHAPE_KEYS)}")
+        if set(t.geometry) != set(GEOMETRY_KEYS):
+            raise ThemeError(f"{t.id}: geometry needs {sorted(GEOMETRY_KEYS)}")
+        failing = unreadable(t.colors)
+        if failing:
+            raise ThemeError(f"{t.id}: unreadable (WCAG contrast): " + "; ".join(failing))
     return sorted(themes, key=lambda t: (t.order, t.id))
 
 
 def emit_themes(themes: list[Theme]) -> str:
-    table = [{"id": t.id, "name": t.name, "colors": t.colors, "shape": t.shape} for t in themes]
+    table = [
+        {"id": t.id, "name": t.name, "colors": t.colors, "shape": t.shape, "geometry": t.geometry}
+        for t in themes
+    ]
     return (
         f"{HEADER}\n"
         "-- The UI themes (ST3, ADR 0017): pipeline/config/themes/*.toml, compiled by\n"

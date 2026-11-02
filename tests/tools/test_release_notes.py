@@ -31,6 +31,8 @@ def test_trailers_parse_with_their_kind_sentence_and_app():
         rn.parse_notes("e" * 40, "Map: x", "Release-note: fix\n")
     assert rn.app_of("Map Art: coast masks") == "Bastians_Map_Art"
     assert rn.app_of("Release: beta.10") is None  # the suite as a whole
+    assert rn.app_of("Chat: junk filter") == "Bastians_Chat"
+    assert rn.app_of("Orbiter: glides") == "Bastians_Voice"
 
 
 def test_the_tracks_cover_every_shipped_folder_once():

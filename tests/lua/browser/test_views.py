@@ -57,7 +57,7 @@ def test_bq_opens_the_zone_page_in_the_browser(wow: WowRuntime):
     assert wow.eval("Bastians:ShowPage('nonsense')") is False
     # the views that remain are rows of the Browser's home; the old ones are gone
     views = [r.view for r in wow.eval(f"{BR}.IdleRows()[1].children").values()]  # no Here (C4)
-    assert views == ["quests.log", "quests.all", "quests.attune"]
+    assert views == ["quests.log", "quests.attune"]  # All quests: the Quests list covers it
     assert wow.errors == []
 
 
@@ -138,9 +138,10 @@ def test_without_the_browser_the_quests_window_hosts_views_and_pages(wow: WowRun
     # the Browser comes back: the next open goes to it again
     wow.execute("BastiansQuestsFrame:Hide()")
     wow.execute(f"{MOD}:Enable()")
-    wow.slash("/bq all")
+    wow.slash("/bq all")  # the view a list covers opens that list
     assert wow.eval("BastiansBrowserFrame:IsShown()") is True
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Quests: All quests"
+    wow.run_frames(5)
+    assert wow.eval(f"{MOD}.win.title:GetText()") == "Quests"
     assert wow.errors == []
 
 

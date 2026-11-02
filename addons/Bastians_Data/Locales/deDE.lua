@@ -17,6 +17,10 @@ ns.L:Register("deDE", {
   ["Item level"] = "Gegenstandsstufe",
   ["Requires level"] = "Benötigt Stufe",
   ["Instance entrance"] = "Instanzeingang",
+  ["Map"] = "Karte",
+  ["Floor %d"] = "Ebene %d",
+  ["Click: enlarge"] = "Klick: vergrößern",
+  ["%d bosses have no place on these maps yet"] = "%d Bosse haben auf diesen Karten noch keinen Platz",
   ["Dungeon"] = "Dungeon",
   ["Raid"] = "Schlachtzug",
   ["Bosses"] = "Bosse",
@@ -48,6 +52,10 @@ ns.L:Register("deDE", {
   ["Locations"] = "Orte",
   ["Sells"] = "Verkauft",
   ["Teaches"] = "Lehrt",
+  ["teaches %d"] = "lehrt %d",
+  ["Known by: %s"] = "Bekannt bei: %s",
+  ["you"] = "dir",
+  ["Not known by any of your characters"] = "Keiner deiner Charaktere kennt es",
   ["Drops"] = "Beute",
   ["Sources"] = "Quellen",
   ["Reagents"] = "Reagenzien",
@@ -164,4 +172,10 @@ ns.L:Register("deDE", {
   ["World drop"] = "Weltdrop",
   ["creatures level %s"] = "Kreaturen Stufe %s",
   ["%d creatures"] = "%d Kreaturen",
+  -- owner round 5 (31.10.2026): an item's lines and recipes
+  ["Stats"] = "Werte",
+  ["Used in recipes"] = "Verwendet in Rezepten",
+  -- 31.10.2026: what an item disenchants into
+  ["Disenchants into"] = "Entzaubern ergibt",
+  ["Disenchant"] = "Entzaubern",
 })

@@ -5,8 +5,8 @@ ns.L = ns.L or B.NewLocale()
 ns.L:Register("zhTW", {
   -- Focus.lua
   ["Dock"] = "停靠",
-  ["Dock the Browser"] = "停靠 Browser",
-  ["Opens the Browser beside the map at its height; both move together. Click again to undock."] = "在地圖旁以相同高度開啟 Browser；兩者會一起移動。再次點擊可取消停靠。",
+  ["Dock the Browser"] = "停靠瀏覽器",
+  ["Opens the Browser beside the map at its height; both move together. Click again to undock."] = "在地圖旁以相同高度開啟瀏覽器；兩者會一起移動。再次點擊可取消停靠。",
 
   -- Imagery.lua, Map.lua
   ["Map style"] = "地圖樣式",
@@ -72,8 +72,8 @@ ns.L:Register("zhTW", {
   ["Zone information"] = "區域資訊",
   ["My waypoint"] = "我的路徑點",
   ["Your own waypoint: a right click on empty map ground sets it, so does Show on map."] = "你自己的路徑點：在空白的地圖上按右鍵即可設定，「在地圖上顯示」亦同。",
-  ["Browser"] = "Browser",
-  ["Open or close the Browser."] = "開啟或關閉 Browser。",
+  ["Browser"] = "瀏覽器",
+  ["Open or close the Browser."] = "開啟或關閉瀏覽器。",
   ["Open or close the route's step list."] = "開啟或關閉路線的步驟清單。",
   ["Window"] = "視窗",
   ["Zoom in (or the mouse wheel)."] = "放大（或使用滑鼠滾輪）。",
@@ -127,6 +127,11 @@ ns.L:Register("zhTW", {
   ["Route"] = "路線",
   ["Plan a route there."] = "規劃前往該處的路線。",
   ["No matches."] = "沒有符合的結果。",
+  -- Mini.lua: the minimap's search (L4)
+  ["Note"] = "筆記",
+  ["Bookmark"] = "書籤",
+  ["The minimap finds NPCs, quests, zones and your notes."] = "小地圖可搜尋 NPC、任務、區域和你的筆記。",
+  ["No known place of the quest giver for %s."] = "%s 的任務提供者位置未知。",
   ["Search the world ..."] = "搜尋世界...",
 
   -- Tiles.lua
@@ -205,4 +210,39 @@ ns.L:Register("zhTW", {
   ["A frame around the minimap"] = "小地圖周圍的邊框",
   ["Options of this window"] = "此視窗的選項",
   ["Ctrl+click: put a button on the map, or back into the box."] = "Ctrl + 點擊：將按鈕放到地圖上，或放回盒子。",
+  -- owner round 5 (31.10.2026): the monster areas
+  ["Monsters"] = "怪物",
+  -- 31.10.2026: the dungeon doors' own layer
+  ["Dungeons and raids"] = "地城與團隊副本",
+  -- 31.10.2026: how a button moves between the box and the minimap's border
+  ["Ctrl+click: back into the button box. Drag: along the minimap's border."] = "Ctrl+點擊：放回按鈕盒。拖曳：沿小地圖邊緣移動。",
+  ["Ctrl+click: onto the minimap's border."] = "Ctrl+點擊：移到小地圖邊緣。",
+  ["Ctrl+click a button here: it moves onto the minimap's border."] = "在此Ctrl+點擊按鈕：它會移到小地圖邊緣。",
+  ["Ctrl+click it on the border: it comes back into this box."] = "在邊緣Ctrl+點擊：它會回到此盒中。",
+  ["Drag it on the border: it moves along the border."] = "在邊緣拖曳：沿邊緣移動。",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s，%s",
+  ["Click: the map. Right click: centre on you."] = "點擊：地圖。右鍵點擊：以你為中心。",
+  ["No waypoint. Right click a place on the map to set one."] = "沒有路徑點。右鍵點擊地圖上的地點來設定。",
+
+  -- Timers.lua (02.11.2026)
+  ["Timers"] = "計時器",
+  ["Stopwatch"] = "碼表",
+  ["Countdown"] = "倒數",
+  ["Start"] = "開始",
+  ["Pause"] = "暫停",
+  ["Reset"] = "重設",
+  ["Done"] = "完成",
+  ["Name"] = "名稱",
+  ["How long: 5m, 1:30, 90s, 2h"] = "時長：5m、1:30、90s、2h",
+  ["Add a stopwatch"] = "新增碼表",
+  ["Add a countdown"] = "新增倒數",
+  ["No timers yet. Add a stopwatch or a countdown below."] = "還沒有計時器。在下方新增碼表或倒數。",
+  ["%s is up."] = "%s 時間到。",
+  ["%s: %s left"] = "%s：剩餘 %s",
+  ["%d running"] = "%d 個進行中",
+  ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "碼表與倒數，想要多少都行。按鈕亮起：有倒數結束了。",
+  ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "無法讀取這個時間。試試 5m、1:30、90s 或 2h。",
 })

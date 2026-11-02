@@ -75,6 +75,18 @@ def test_every_own_texture_exists_and_matches_its_generator():
     for _, addon, rel in prefixes:
         if addon == "Bastians_Library":
             continue  # the book's own media: test_the_book_media_is_drawn_and_used
+        if rel == "Welcome/":
+            # the welcome's pictures by race (plan-launch-version 2.5): `<race>_<way>` for every
+            # race key of Welcome.RACES and both ways, written by tools/welcome_art.py
+            lua = (ROOT / "addons" / "Bastians_Core" / "UI" / "Welcome.lua").read_text("utf-8")
+            table = lua.split("Welcome.RACES = {")[1].split("\n}")[0]
+            races = set(re.findall(r'^  \w+ = "(\w+)",$', table, re.M))
+            assert len(races) == 8, races
+            folder = ROOT / "addons" / addon / "Media" / rel
+            for race in races:
+                for way in ("wanderer", "scholar"):
+                    assert (folder / f"{race}_{way}.blp").exists(), race
+            continue
         for kind in kinds:
             assert (ROOT / "addons" / addon / "Media" / rel / f"{kind}.tga").exists(), kind
             assert f"{rel}{kind}.tga" in make_media.FILES, kind

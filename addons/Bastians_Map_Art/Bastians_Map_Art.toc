@@ -2,8 +2,16 @@
 ## Title: Bastian's Map Art
 ## IconTexture: Interface\AddOns\Bastians_Map_Art\Icon
 ## Notes: Overview map textures for Bastian's Map (loads at startup).
+## Notes-koKR: Bastian's Map의 개요 지도 텍스처 (접속 시 불러옴).
+## Notes-zhCN: Bastian's Map 的概览地图纹理（登录时加载）。
+## Notes-zhTW: Bastian's Map 的概覽地圖材質（登入時載入）。
+## Notes-deDE: Übersichtskarten-Texturen für Bastian's Map (lädt beim Login).
+## Notes-frFR: Textures de la carte d'ensemble pour Bastian's Map (chargé à la connexion).
+## Notes-esES: Texturas del mapa general para Bastian's Map (se carga al conectar).
+## Notes-esMX: Texturas del mapa general para Bastian's Map (se carga al conectar).
+## Group: Bastians_Map
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

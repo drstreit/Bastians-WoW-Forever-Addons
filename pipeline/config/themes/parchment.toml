@@ -16,39 +16,42 @@ rule = "#3b2a1747"
 divider = "#3b2a1726"
 text = "#2e2014"
 dim = "#5e4a33"
-muted = "#7a6750"
+muted = "#655542"
 bright = "#1a1008"
 mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
 mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
 mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
 accent = "#8c2f1a"
-gold = "#8a6200"
-on = "#2f7a2a"
-good = "#2e7d32"
+wayWanderer = "#a8551c"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
+wayScholar = "#1f5a96"     # the welcome: the Scholar's picture frame (cool)
+gold = "#745200"
+on = "#256521"
+good = "#236427"
 bad = "#a8281e"
-warn = "#b35c00"
-neutral = "#6b5e4c"
+warn = "#8a4500"
+neutral = "#625645"
 rare = "#7a1fb8"
-water = "#1f6fa8"
+water = "#185c8d"
 # the six note colours of Bastian's Notes (notes.md, J), dark enough for the paper
-note1 = "#a87b00"
-note2 = "#2e8a36"
-note3 = "#1f6fa8"
-note4 = "#7b3fa0"
-note5 = "#b35a00"
-note6 = "#b53c3c"
+note1 = "#735300"
+note2 = "#1f6526"
+note3 = "#185c8d"
+note4 = "#783d9c"
+note5 = "#8c4500"
+note6 = "#9d3333"
 chat = "#66ccff"
+chatEmote = "#e8b47a"   # emote lines in the chat: sepia, the parchment of the scheme (L5)
 tipText = "#ffffff"
 tipDim = "#cccccc"
 tipGold = "#ffd100"
 diffRed = "#b01c1c"
-diffOrange = "#b85a14"
-diffYellow = "#8a7300"
-diffGreen = "#2f7a2a"
-diffGrey = "#7a6f60"
-coinGold = "#9a7400"
-coinSilver = "#5f6066"
-coinCopper = "#8c4a1f"
+diffOrange = "#8d430d"
+diffYellow = "#695700"
+diffGreen = "#256521"
+diffGrey = "#60574b"
+coinGold = "#715400"
+coinSilver = "#57585e"
+coinCopper = "#87471e"
 sea = "#b8a380"
 path = "#1f6fa8e6"
 waypoint = "#3b2a1799"
@@ -84,6 +87,55 @@ bookInkAmber = "#ffc871"
 bookBlue = "#1f4fa3"
 bookBlueNight = "#9cc2ff"
 
+# round 4 (ADR 0038): colour by meaning. Services (on tiles, chips, badges and counts, never on names),
+# the entity types, depth (the void behind the panes, a raised card, its light edge, the inner
+# highlight), and the title bar's words.
+svcVendor = "#745200"
+svcQuest = "#6d5500"
+svcTrainer = "#185c8d"
+svcInn = "#7a1fb8"
+svcFlight = "#12616a"
+svcRepair = "#625645"
+svcFriendly = "#236427"
+svcHostile = "#a8281e"
+typeNpc = "#236427"
+typeItem = "#185c8d"
+typeQuest = "#6d5500"
+typeObject = "#7a4f25"
+typeNode = "#12616a"
+typeZone = "#376134"
+typeRecipe = "#8a4500"
+typeSpot = "#745200"
+typeChain = "#7a1fb8"
+typeHere = "#8c2f1a"
+void = "#3b2a1714"
+card = "#fffaee8c"
+cardEdge = "#3b2a172e"
+inset = "#ffffff80"
+headerText = "#2e2014"
+
+# the kind tiles' eight groups (ADR 0046): value, hostile, place, nature, people, special, goods, other
+tileGold = "#9c6f14"
+tileRed = "#a4423b"
+tileTeal = "#178f86"
+tileGreen = "#3f8a45"
+tileBlue = "#3b6fb6"
+tilePurple = "#6b4aa8"
+tileBrown = "#7a5a2e"
+tileGrey = "#6f7780"
+
 [shape]
 radius = 6
 radiusSmall = 4
+
+# the widget set's sizes in px, the ground's alpha in % (ADR 0046, one look per theme)
+[geometry]
+action = 26
+actionRow = 22
+pill = 26
+tab = 26
+row = 28
+tile = 18
+tileBig = 26
+gap = 6
+groundAlpha = 92

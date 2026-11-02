@@ -224,6 +224,20 @@ def test_map_show_and_way_actions_and_no_tomtom(wow: WowRuntime):
     c = wow.eval(f"{MAP_}.Camera()")
     assert (round(c.wx), round(c.wy), c.level) == (-132, 86, 5)  # the box centre of both spawns
     assert wow.eval(f"{WP}.Get().label") == "Hogger"
+    # the shown entity is on the map ("always actually show what was
+    # selected"): Hogger's icon and name at both spawns, the Monsters layer off, and he is the focus
+    wow.advance(0.2)
+    hogger = [p for p in shown(wow, "pinPool") if p.pin.ref == "npc:448"]
+    assert len(hogger) == 2 and all(p.pin.label == "Hogger" and p.width == 24 for p in hogger)
+    assert all(p.ring.IsShown(p.ring) for p in hogger)  # the focus ring
+    assert wow.eval("Bastians:Focused()") == "npc:448"
+    assert wow.eval(f"{MAP_}.strip.name:GetText()") == "Hogger"  # the context strip
+    assert wow.eval(f"{PINS}.IsLayerOn(Bastians:GetMapLayer('map.monsters'))") is False
+    # Esc clears the focus and the shown entity with it; the waypoint dot stays
+    wow.execute(f"{MOD}.Focus.Escape()")
+    wow.advance(0.2)
+    assert not [p for p in shown(wow, "pinPool") if p.pin.ref == "npc:448"]
+    assert wow.eval(f"{WP}.Shown()") is None and wow.eval(f"{WP}.Get().label") == "Hogger"
     wow.execute("Bastians:RunAction('chat.way', 'npc:448', { source = 'test' })")
     assert wow.eval("Mock.chatInput") == "/way Elwynn Forest 27.0 86.0 Hogger"
     # TomTom installed: still no TomTom waypoint
@@ -290,6 +304,12 @@ def test_show_on_map_keeps_the_players_zoom_and_a_zone_opens_whole(wow: WowRunti
     )
     c = wow.eval(f"{MAP_}.Camera()")
     assert (round(c.wx), round(c.wy)) == (-10, 20) and wow.eval(f"{WP}.Get().label") == "the end"
+    s = wow.eval(f"{WP}.Shown()")  # the point is shown with the entity's icon and the point's label
+    assert (
+        s.ref == "npc:448"
+        and s.label == "the end"
+        and (s.points[1].wx, s.points[1].wy) == (-10, 20)
+    )
     ids = [a.id for a in wow.eval("Bastians:GetActions('zone:1429', { source = 'test' })").values()]
     assert "map.zone" in ids and "map.show" not in ids
     assert "map.zone" not in [
@@ -321,6 +341,11 @@ def test_the_bar_shows_icons_only_and_its_menus_work(wow: WowRuntime):
     wow.execute("C = select(2, " + BAR + ".Panel():GetChildren())")
     title, text = wow.eval("C.tip(C)")
     assert title and text
+    # the name shows at once, not after the tip delay
+    wow.execute("GameTooltip:Hide(); C:GetScript('OnEnter')(C)")
+    assert wow.eval("GameTooltip:IsShown() and GameTooltip:GetOwner() == C") is True
+    wow.execute("C:GetScript('OnLeave')(C)")
+    assert wow.eval("GameTooltip:IsShown()") is False
     # the style menu ticks the current style and switches
     wow.execute(f"M = {BAR}.StyleMenu({BAR}.Panel())")
     assert wow.eval("Bastians.UI.MenuFrame():IsShown()") is True
@@ -364,4 +389,20 @@ def test_the_bar_slides_shut_as_it_slides_open(wow: WowRuntime):
     wow.run_frames(20, 0.05)
     panel = wow.eval(f"{BAR}.Panel()")
     assert panel.IsShown(panel) is False and wow.eval(f"{BAR}.Tab().label:GetText()") == "Layers"
+    assert wow.errors == []
+
+
+def test_show_on_map_draws_the_entity_with_the_waypoint_layer_off(wow: WowRuntime):
+    """ "the map I open per right click still has nothing to show on":
+    with My waypoint switched off nothing drew the shown entity; Show on map switches the layer on."""
+    boot(wow)
+    wow.execute(f"{PINS}.SetLayerOn('map.waypoint', false)")
+    wow.advance(0.2)
+    assert wow.eval(f"{PINS}.IsLayerOn(Bastians:GetMapLayer('map.waypoint'))") is False
+    wow.execute("Bastians:RunAction('map.show', 'npc:448', { source = 'voice' })")
+    wow.advance(0.2)
+    assert wow.eval(f"{PINS}.IsLayerOn(Bastians:GetMapLayer('map.waypoint'))") is True
+    hogger = [p for p in shown(wow, "pinPool") if p.pin.ref == "npc:448"]
+    assert len(hogger) == 2 and all(p.pin.label == "Hogger" for p in hogger)
+    assert wow.eval("Bastians:Focused()") == "npc:448"
     assert wow.errors == []

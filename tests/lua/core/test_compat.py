@@ -62,6 +62,17 @@ def test_quest_log_is_normalized(core: WowRuntime):
     assert core.eval("Bastians.Compat.IsQuestCompleted(8)") is False
 
 
+def test_hidden_quests_are_not_the_players(core: WowRuntime):
+    """Retail's log holds hidden quests the player never took ("Level 3", "Tracking Quest"; owner,
+    retail 31.10.2026): they are left out."""
+    core.execute(
+        "table.insert(Mock.questLog, { questID = 90001, title = 'Level 3', level = 1, hidden = true,"
+        " objectives = {} })"
+    )
+    titles = [e.title for e in core.eval("Bastians.Compat.GetQuestLogEntries()").values()]
+    assert "Level 3" not in titles and len(titles) == 2
+
+
 def test_item_info(core: WowRuntime):
     item = core.eval("Bastians.Compat.GetItemInfo(2589)")
     assert (item.id, item.name, item.sellPrice, item.stack) == (2589, "Linen Cloth", 13, 20)

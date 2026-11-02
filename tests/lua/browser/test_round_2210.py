@@ -42,6 +42,7 @@ def test_the_navigation_is_there_on_every_entry(wow: WowRuntime):
         "Dungeons",
         "Farm spots",
         "Items",
+        "Mobs",
         "NPCs",
         "Nodes",
         "Objects",

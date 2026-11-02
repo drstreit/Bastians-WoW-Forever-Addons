@@ -27,13 +27,33 @@ Compat.CONTRACT = {
     .. " file token, 'WARRIOR'), race (the file token, 'Human'), health (0..1 or nil) }",
   IsInGroup = "-> bool (party or raid)",
   GetItemCount = "itemID -> number of that item in the bags (0 when none)",
+  ItemCooldown = "itemID -> seconds left on the item's cooldown (0 when ready), nil when unknown",
+  HasMsp = "-> bool ; whether a roleplay addon (Total RP 3, MyRolePlay) offers the msp protocol",
+  MspName = "unit or name -> { name, title, nick } of the player's roleplay profile, or nil (read only)",
+  MspRequest = "unit or name -> asked (bool) ; asks for the name fields, at most every 30 s per player",
   GetBagItems = "-> array of { bag, slot, itemID, count, quality, bound, noValue, icon, link } for every"
     .. " filled slot of the equipped bags, possibly empty",
+  GetContainerItems = "bagIDs -> the same rows as GetBagItems for the containers named (the bank's)",
+  BankBags = "-> the container ids of the bank the client has (the bank slots, its bags or tabs, the"
+    .. " reagent bank), each only while the bank is open readable",
+  GetEquippedLinks = "-> { [slot] = link } for the worn items, slots 1 to 19",
+  GetInboxItems = "-> rows { itemID, count, link, quality } of every attachment in the mailbox, and"
+    .. " the money in it (copper); nil, nil without the mail API",
+  MailPrepare = "recipient, subject -> bool ; the mail frame's send tab with both fields set (out of"
+    .. " combat, the mail frame open)",
+  MailAttach = "bag, slot -> bool ; attaches that stack to the open mail's next free slot",
+  MailFreeSlots = "-> how many attachment slots of the mail being written are free, 0 without one",
+  GetSendMailItems = "-> { [itemID] = count } attached to the mail being written",
+  NewGameWindow = "parent -> the game's PortraitFrameTemplate frame (Bg, CloseButton, SetTitle,"
+    .. " SetPortraitToAsset) or nil where the client lacks it",
+  NewInset = "parent -> the game's InsetFrameTemplate frame (Bg) or nil",
   GetMoney = "-> copper the character carries",
   GetPlayerXP = "-> xp, xpMax, level of the character (nil, nil, level when the client has no XP bar)",
   GetFontFiles = "-> { [path] = true } of the font files the client's font objects use",
   GetPlayerFacing = "-> radians, or nil when unknown (instances, a secret value)",
   OpenChat = "text -> nil ; puts the text into the chat input for the player to send or edit",
+  RegisterCompartment = "{ text, icon, func(button), onEnter(frame), onLeave(frame) } -> bool ; an entry"
+    .. " in the Addon Compartment by the minimap (false when the client has none)",
   GetProfessions = "-> { [name] = rank } of the known professions, or nil when the client cannot tell",
   GetReputation = "factionID -> { name, standing (1 Hated .. 8 Exalted), value } or nil when unknown",
   GetHearthstone = "-> { bindName, hasStone, ready, remaining (seconds) } ; the bind location name and the"
@@ -73,6 +93,8 @@ Compat.CONTRACT = {
   RequestQuestData = "questID -> bool (asked) ; asks the client to load the quest, QUEST_DATA_LOAD_RESULT"
     .. " follows",
   GetUnitNameByID = "npcID -> name or nil (a creature the client has not seen yet, or no tooltip API)",
+  ItemTooltipLines = "itemID -> { { left, right, r, g, b } } (the lines of the game's item tooltip,"
+    .. " the first its name) or nil (the item not cached yet, or no tooltip API)",
   TargetEntity = "-> 'npc:<id>' | 'object:<id>' or nil ; the target's entity from UnitGUID('target'):"
     .. " Creature and Vehicle are npcs, GameObject objects; players, pets and no target give nil",
   SetObjectiveTrackerShown = "on -> bool (done) ; shows or hides the game's objective tracker"
@@ -95,6 +117,8 @@ Compat.CONTRACT = {
   IsTradeskillTrainer = "-> bool, or nil when unknown",
   RegisterSettingsCategory = "frame, name[, parentCategory] -> category or nil",
   OpenSettings = "category -> nil",
+  OpenKeyBindings = "-> opened (boolean)",
+  BindingKey = "action -> key or nil",
   HookTooltip = "kind, fn(tooltip, info) -> nil ; kind 'unit' | 'item' | 'spell' | 'object' ;"
     .. " info = { kind, id, guid, link }",
   MapPosToWorld = "uiMapID, x, y (fractions) -> continent, wx, wy or nil",
@@ -103,6 +127,12 @@ Compat.CONTRACT = {
   SetTransformTable = "table -> nil ; fallback per-uiMapID affine transforms supplied by Data",
   -- 3D portraits
   GetSpellName = "spellID -> name or nil ; a recipe's name on retail, whose packs carry none",
+  IsSpellKnown = "spellID -> bool or nil ; whether this character knows the spell or recipe"
+    .. " (C_SpellBook.IsSpellKnown, IsSpellKnown, IsPlayerSpell); nil when the client cannot tell",
+  KnownSpells = "-> { [spellID] = true } or nil ; every spell of the character's spell book"
+    .. " (C_SpellBook skill lines and items); nil when the client cannot list it",
+  OpenRecipes = "-> { [recipeSpellID] = true } or nil ; the learned recipes of the profession window"
+    .. " that is open (C_TradeSkillUI.GetAllRecipeIDs, GetRecipeInfo.learned); nil without one",
   NewModel = "parent -> a PlayerModel frame (DressUpModel where the client has no PlayerModel) or nil",
   ShowCreature = "model, npcID -> bool ; the creature's 3D model, false when the client cannot",
   ShowItem = "model, itemID -> bool ; the item's own 3D model (weapons, shields, held things, helms,"
@@ -123,6 +153,9 @@ Compat.CONTRACT = {
   PlayerState = "-> { combat, stealthed, swimming, submerged, falling, flying, mounted, onTaxi, resting,"
     .. " indoors } (false where the client cannot tell)",
   PlayerAuras = "-> { [spellID] = name } of the player's helpful auras, possibly empty",
+  UnitAuras = "unit -> array of { spellId, name, expires (GetTime clock, nil when the aura does not"
+    .. " end or the client keeps it secret), duration, source (unit token or nil) } of the unit's"
+    .. " helpful auras, possibly empty (Bastian's Campfire, plan-second-wave.md S5)",
   LootSlots = "-> array of { slot, item ('item:<id>'), count, from (entity or nil) }, fishing (bool) ;"
     .. " empty without a loot window",
   ItemText = "-> { item, text, page } of the readable text open (a book, a plaque, a letter), or nil",
@@ -138,13 +171,66 @@ Compat.CONTRACT = {
   PlayKit = "soundKitID -> nil ; plays one of the client's sounds (PlaySound)",
   PlayFile = "path, channel -> handle or nil ; plays a sound file (PlaySoundFile); nil when it will not",
   StopFile = "handle -> nil ; stops a sound PlayFile started",
-  Speak = "text -> bool ; the client's text-to-speech reads the text aloud (C_VoiceChat.SpeakText, the"
-    .. " first voice; assumed, library.md 10.3); false when the client has none",
+  CanSpeak = "-> bool ; the client's text-to-speech (C_VoiceChat.SpeakText) with at least one voice",
+  Voices = "-> { { voiceID, name } } ; the voices the client's text-to-speech lists"
+    .. " (C_VoiceChat.GetTtsVoices)",
+  Speak = "text, voiceID? -> bool ; the client's text-to-speech reads the text aloud (C_VoiceChat.SpeakText)"
+    .. " with the rate and volume of the Accessibility settings (C_TTSSettings) and the given voice where"
+    .. " the client lists it, else a woman's voice by name, else the first voice; stops what spoke before"
+    .. " (assumed, library.md 10.3, voice.md); false without a voice",
   StopSpeaking = "-> nil ; stops what Speak reads",
   PickColor = "r, g, b, onChange(r, g, b) -> bool (shown) ; the game's colour picker: every change"
     .. " and a cancel (the old colour) go to onChange; false without it",
   CombatEvent = "-> { subevent, sourceGUID, sourceName, destGUID, destName, spellID, amount } of the"
     .. " current combat log event, or nil",
+  -- Bastian's Helpers (helpers.md): the merchant, the mailbox, quest givers, durability and bags
+  MerchantRepair = "-> { canRepair, cost (copper), guild (bool: the guild bank may pay), guildMoney"
+    .. " (copper the character may take, nil when unlimited or unknown) } or nil without a merchant",
+  RepairAll = "useGuild -> bool (asked) ; repairs every item, from the guild bank when useGuild",
+  SellBagItem = "bag, slot -> bool (sold) ; sells the stack to the open merchant; false (nothing done)"
+    .. " when no merchant window is shown",
+  MerchantBuy = "index, count -> bool (asked) ; buys count units of the merchant's item"
+    .. " (a multiple of its stack size)",
+  MerchantMaxStack = "index -> the most units one purchase buys, or nil",
+  GetBuybackItems = "-> array of { index, itemID, count, price (copper) } of the buyback tab, possibly"
+    .. " empty",
+  Buyback = "index -> bool (asked) ; buys an item back from the buyback tab",
+  GetInboxMail = "-> array of { index, sender, subject, money, cod (copper, 0 without), items (number"
+    .. " of attachments) } of the open mailbox, possibly empty",
+  TakeInboxMoney = "index -> bool (asked)",
+  TakeInboxItems = "index -> bool (asked) ; takes every attachment of the mail into the bags",
+  MailRecipient = "name -> bool ; puts the name into the send tab's recipient field (no tab switch)",
+  MailRecipientText = "-> the send tab's recipient text, or nil without the mail frame",
+  QuestAccept = "-> bool (asked) ; accepts the quest the quest frame offers (an escort's confirmation"
+    .. " with QuestAccept('confirm'))",
+  QuestProgress = "-> completable (bool), cost (copper the hand-in takes, 0 without) of the open"
+    .. " quest frame",
+  QuestContinue = "-> bool (asked) ; the progress step's Continue (CompleteQuest)",
+  QuestChoices = "-> array of { index, itemID, count } of the reward choices of the open quest frame,"
+    .. " possibly empty",
+  QuestTakeReward = "index or nil -> bool (asked) ; finishes the quest with that reward choice",
+  GreetingQuests = "-> active { { index, title, complete } }, available { { index, title } } of the"
+    .. " quest greeting frame",
+  GossipQuests = "-> active { { questID, title, complete } }, available { { questID, title } } of the"
+    .. " gossip frame",
+  GossipOptions = "-> array of { id, name } of the gossip frame's options, possibly empty",
+  NpcSelect = "frame ('gossip' | 'greeting'), kind ('option' | 'active' | 'available'), id -> bool"
+    .. " (asked) ; the gossip takes option and quest ids, the greeting list indices",
+  PushQuest = "questID -> bool (asked) ; shares a quest of the log with the group when it can be shared",
+  QuestDetail = "-> { title, text, objectives, reward, progress } of the open quest frame (the detail's,"
+    .. " progress's or hand-in's texts; strings or nil), or nil without a quest frame",
+  QuestID = "-> the questID the quest frame shows (GetQuestID), or nil",
+  QuestDecline = "-> bool (asked) ; declines the offered quest (DeclineQuest)",
+  NpcClose = "-> bool (asked) ; closes the gossip and the quest frame (C_GossipInfo.CloseGossip, CloseQuest)",
+  NpcFramesHidden = "hidden -> bool (changed) ; the game's GossipFrame and QuestFrame kept invisible and"
+    .. " without mouse while a conversation is shown elsewhere (alpha 0, not re-parented, never in combat"
+    .. " the first time), or given back",
+  InstanceMap = "-> instance map (Map.db2 id), name ; nil outside a dungeon or raid (GetInstanceInfo)",
+  GetDurability = "-> lowest (0..1 of the worn item with the least durability), broken (count) ; nil"
+    .. " when no worn item has durability",
+  BagSpace = "-> free, total of the general slots of the equipped bags",
+  ModifierDown = "key ('shift' | 'ctrl' | 'alt') -> bool",
+  ChatFrameNamed = "name -> the chat window whose tab carries that name (case ignored), or nil",
 }
 
 -- Layers call define(layer, name, fn); a later layer replaces an earlier one (Shared < Modern < client).

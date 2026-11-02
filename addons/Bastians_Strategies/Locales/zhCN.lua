@@ -11,10 +11,10 @@ ns.L:Register("zhCN", {
   ["Open in the book"] = "在书中打开",
   ["Read"] = "阅读",
   ["In the book"] = "在书中",
-  ["In Bastian's book"] = "在Bastian's书中",
-  ["Bastian's Gold Rumours"] = "Bastian's Gold 传闻",
+  ["In Bastian's book"] = "在巴斯蒂安的书中",
+  ["Bastian's Gold Rumours"] = "巴斯蒂安的金币传闻",
   ["the book"] = "本书",
-  ["Rumours (Bastian's book)"] = "传闻(Bastian's书)",
+  ["Rumours (Bastian's book)"] = "传闻（巴斯蒂安的书）",
   ["Strategies is disabled"] = "攻略已禁用",
 
   -- Plate.lua
@@ -52,7 +52,7 @@ ns.L:Register("zhCN", {
   ["%s: %s"] = "%s: %s",
   ["percent at the vendor"] = "商人处的百分比",
   ["Your note on this page (kept for every character)"] = "你对此页的笔记(所有角色共用)",
-  ["Bastian's verdict"] = "Bastian的评价",
+  ["Bastian's verdict"] = "巴斯蒂安的评价",
   ["What it pays on your market"] = "在你的市场上的收益",
   ["Today on your market"] = "今天在你的市场上",
   ["At the vendor"] = "在商人处",
@@ -77,7 +77,7 @@ ns.L:Register("zhCN", {
   ["told by %d channels"] = "%d个频道都在传",
   ["Rumour mill: %s"] = "传闻工坊: %s",
   ["Rumour mill: %d rumours I have not tried yet"] = "传闻工坊: %d条我还没试过的传闻",
-  ["Bastian's Strategies"] = "Bastian's Strategies",
+  ["Bastian's Strategies"] = "巴斯蒂安的攻略",
   ["Every way to get rich I was ever told about, written down by a man who is still not rich"] = "我听说过的每一种发财之道,由一个至今仍未发财的人写下",
   ["Printed in Booty Bay, on credit."] = "印于藏宝海湾,赊账。",
   ["What's new"] = "新内容",
@@ -129,4 +129,8 @@ ns.L:Register("zhCN", {
   ["%d updated pages"] = "%d个更新页面",
   ["%d more changes"] = "另有%d处更改",
   ["Route there"] = "规划路线",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d new"] = "%d 条新内容",
+  ["%d pages"] = "%d 页",
+  ["Click: the book. Right click: its settings."] = "点击: 书。右键: 设置。",
 })

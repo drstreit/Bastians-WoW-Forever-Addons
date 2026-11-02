@@ -280,6 +280,28 @@ function service:Get(typ, id)
   return record(typ, id)
 end
 
+-- An area's zone and a test for map points inside it ("the subzone
+-- information is quite limited ... I would expect the same information as in the main zone"):
+-- the area's world place and radius (data.md "Areas") with about a chunk of slack, the radius
+-- being that of a disc as large as its chunks. -> uiMapID, inside(map, x, y), or nil.
+Data.AREA_SLACK = 35 -- yards
+function service:AreaScope(id)
+  local r = record("area", tonumber(id))
+  if not (r and r.zone and r.wx and r.wy and r.continent ~= nil) then
+    return nil
+  end
+  local reach = (r.r or 0) + Data.AREA_SLACK
+  local reach2 = reach * reach
+  return r.zone,
+    function(map, x, y)
+      if not (map and x and y) then
+        return false
+      end
+      local c, wx, wy = B.Coords.ToWorld(map, x, y)
+      return c == r.continent and (wx - r.wx) ^ 2 + (wy - r.wy) ^ 2 <= reach2
+    end
+end
+
 -- The name of a record without asking the client: the pack's, else the one the client answered in
 -- this or an earlier session (Names' store); nil when neither knows it. For long lists, where a
 -- client request per row would flood the server (the Browser's quest list showed numbers on
@@ -327,11 +349,34 @@ local function clientPlaceNames(typ, pack)
   return placeNames[typ]
 end
 
+-- Does the record have every kind word (`type:vendor`)?
+local function kindOk(typ, id, kinds)
+  local words = service:KindWords(typ, id)
+  if not words then
+    return false
+  end
+  for _, kind in ipairs(kinds) do
+    local found = false
+    for _, w in ipairs(words) do
+      if string.find(w, kind, 1, true) then
+        found = true
+        break
+      end
+    end
+    if not found then
+      return false
+    end
+  end
+  return true
+end
+
+-- `text` a search text or a compiled query (ADR 0045: the suite's search syntax); a query's
+-- `kinds` keep only records of those kinds.
 function service:Find(typ, text, limit, yield)
-  text = string.lower(text or "")
+  local q = B.Query.Of(text)
   limit = limit or 20
   local out = {}
-  if text == "" then
+  if q.empty then
     return out
   end
   local packName = Data.typePack[typ]
@@ -363,14 +408,11 @@ function service:Find(typ, text, limit, yield)
         yield()
       end
       if type(name) == "string" and not seen[id] then
-        local low = string.lower(name)
-        local score
-        if low == text then
-          score = 1
-        elseif string.sub(low, 1, #text) == text then
-          score = 0.9
-        elseif string.find(low, text, 1, true) then
-          score = 0.7
+        -- the name first (a plain find), the kind only for the names that match: a kind means
+        -- decoding the record
+        local score = q:Score(name)
+        if score and q.kinds and not kindOk(typ, id, q.kinds) then
+          score = nil
         end
         if score then
           seen[id] = true
@@ -503,6 +545,31 @@ local KINDS = {
 }
 Data.KINDS = KINDS
 
+-- The kind words of a record, lower case (the search's `type:vendor`, ADR 0045): its flags or
+-- kind, their group and their label; nil for a record without one.
+function service:KindWords(typ, id)
+  local r = record(typ, id)
+  local flags = r and (r.flags or r.kind)
+  if flags == nil then
+    return nil
+  end
+  if type(flags) ~= "table" then
+    flags = { flags }
+  end
+  local out = {}
+  for _, f in ipairs(flags) do
+    out[#out + 1] = string.lower(tostring(f))
+    local label, group = service:Kind(typ, f)
+    if group then
+      out[#out + 1] = string.lower(group)
+    end
+    if label then
+      out[#out + 1] = string.lower(label)
+    end
+  end
+  return out
+end
+
 function service:Kind(typ, kind)
   if kind == nil or kind == "" then
     return nil, nil
@@ -561,6 +628,14 @@ local SUMMARY = {
     end
     if r.flags == "elite" then
       parts[#parts + 1] = L["elite"]
+    end
+    -- a trainer says what it trains: its subname, and how many it
+    -- teaches where the pack lists them (Forever; the retail sources carry no trainer lists)
+    if Data.Poi and Data.Poi.TrainerWords(r.subname) then
+      parts[#parts + 1] = r.subname
+      if type(r.trainer) == "table" and #r.trainer > 0 then
+        parts[#parts + 1] = string.format(L["teaches %d"], #r.trainer)
+      end
     end
     local zone = zoneName(r.zone)
     if zone then
@@ -877,6 +952,44 @@ local function vendorRows(ref)
   return rows
 end
 
+-- Who knows a trainer's spell (alts.md "Knowledge", the `knowledge` service of Bastian's Alts):
+-- the row's glyph in the state's colour (a tick in green: you; a tick in blue: one of your
+-- characters; the trainer glyph in grey: nobody), the names as the note, a tooltip line; nothing
+-- without the service.
+local function knownBy(spellID)
+  local knowledge = B:GetService("knowledge")
+  local k = knowledge and spellID and knowledge:Known(spellID) or nil
+  if not k then
+    return nil
+  end
+  local names = {}
+  if k.me then
+    names[#names + 1] = L["you"]
+  end
+  for _, name in ipairs(k.alts or {}) do
+    names[#names + 1] = name
+  end
+  if k.me then
+    return B.UI.GLYPH_PATHS.done, "good", names
+  elseif #names > 0 then
+    return B.UI.GLYPH_PATHS.done, "water", names
+  end
+  return B.UI.GLYPH_PATHS.trainer, "dim", names
+end
+
+local function knownTip(tt, row)
+  if row.ref then
+    S.EntityTip(tt, row.ref, row.text)
+  else
+    S.TipLine(tt, row.text)
+  end
+  if row.known and #row.known > 0 then
+    S.TipLine(tt, string.format(L["Known by: %s"], table.concat(row.known, ", ")), "tipGold")
+  else
+    S.TipLine(tt, L["Not known by any of your characters"], "tipDim")
+  end
+end
+
 -- NPC "Teaches": trainer rows [spell, name, cost, skill, level, item, src]
 local function trainerRows(ref)
   local typ, id = B.Entity.Parse(ref)
@@ -895,14 +1008,23 @@ local function trainerRows(ref)
     end
     -- the spell's name: the client's on a client in another language (ADR 0033), else the pack's
     local spell = Data.locale and t[1] and B.Compat.GetSpellName(t[1]) or t[2]
-    rows[#rows + 1] = {
+    local row = {
       text = (spell or (L["Spell"] .. " " .. tostring(t[1])))
         .. (#req > 0 and (" (" .. table.concat(req, ", ") .. ")") or ""),
       ref = t[6] and t[6] > 0 and ("item:" .. t[6]) or nil,
       value = t[3],
       valueKind = "money",
       note = CLASSIC_NOTE(t[7]),
+      spell = t[1],
     }
+    local icon, tint, names = knownBy(t[1])
+    if icon then
+      row.icon, row.tint, row.known, row.tooltip = icon, tint, names, knownTip
+      if #names > 0 then
+        row.note = table.concat(names, ", ")
+      end
+    end
+    rows[#rows + 1] = row
   end
   return rows
 end
@@ -929,7 +1051,8 @@ local function lootRows(ref)
   return rows
 end
 
--- A dungeon's bosses in the client's order (data.md "Dungeons"); each boss's page carries its loot
+-- A dungeon's bosses in the client's order (data.md "Dungeons"); each boss's page carries its loot.
+-- A boss without a known creature (`b[2]` nil, 02.11.2026) is its name alone, without a page.
 local function bossRows(ref)
   local typ, id = B.Entity.Parse(ref)
   local r = typ == "dungeon" and record("dungeon", id)
@@ -938,11 +1061,11 @@ local function bossRows(ref)
   end
   local rows = {}
   for _, b in ipairs(r.bosses) do
-    local e = B:Entity("npc:" .. b[2])
+    local e = b[2] and B:Entity("npc:" .. b[2])
     rows[#rows + 1] = {
-      text = e:Name() or b[3],
-      ref = "npc:" .. b[2],
-      icon = e:Icon(),
+      text = e and e:Name() or b[3],
+      ref = e and ("npc:" .. b[2]) or nil,
+      icon = e and e:Icon() or nil,
       value = b[1],
       valueKind = "number",
     }
@@ -969,7 +1092,71 @@ local function dungeonLootRows(ref)
       text = e:Name() or itemName(l[1]),
       ref = "item:" .. l[1],
       icon = e:Icon(),
-      note = boss and (B:Entity("npc:" .. boss[2]):Name() or boss[3]) or nil,
+      note = boss and (boss[2] and B:Entity("npc:" .. boss[2]):Name() or boss[3]) or nil,
+    }
+  end
+  return rows
+end
+
+-- A dungeon's floors (DG2c): one row per floor with the plate's data (Scenery.FloorLayout draws
+-- it): the client's map of the floor (`m` retail's UiMap, `a` the art files' prefix with `g` the
+-- grid, `t` ForeverDB's minimap tiles; `by` an artist's map in Core, ADR 0048), the bosses of
+-- that floor by number, name and ref (a pin
+-- opens the boss), the door. A boss no floor shows is counted in the first floor's note.
+local function floorTooltip(tip, row)
+  tip:SetText(row.text or "")
+  tip:AddLine(L["Click: enlarge"], 1, 1, 1)
+end
+
+local function floorRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local r = typ == "dungeon" and record("dungeon", id)
+  if not (r and r.floors) then
+    return nil
+  end
+  local names, refs, placed = {}, {}, {}
+  for _, b in ipairs(r.bosses or {}) do
+    names[b[1]] = b[2] and B:Entity("npc:" .. b[2]):Name() or b[3]
+    refs[b[1]] = b[2] and ("npc:" .. b[2]) or nil
+  end
+  for _, s in ipairs(r.bossSpots or {}) do
+    placed[s[1]] = true
+  end
+  local unplaced = 0
+  for _, b in ipairs(r.bosses or {}) do
+    if not placed[b[1]] then
+      unplaced = unplaced + 1
+    end
+  end
+  local rows = {}
+  for i, f in ipairs(r.floors) do
+    local bosses = {}
+    for _, s in ipairs(r.bossSpots or {}) do
+      if s[2] == i then
+        bosses[#bosses + 1] = { s[1], s[3], s[4], names[s[1]], refs[s[1]] }
+      end
+    end
+    local door = r.door and r.door[1] == i and { r.door[2], r.door[3] } or nil
+    local text = (f.n and f.n ~= "") and f.n or string.format(L["Floor %d"], i)
+    rows[#rows + 1] = {
+      text = text,
+      tooltip = floorTooltip,
+      floor = {
+        w = f.w,
+        h = f.h,
+        uiMap = f.m,
+        art = f.a,
+        cols = f.g and f.g[1],
+        rows = f.g and f.g[2],
+        tiles = f.t,
+        by = f.by, -- the artist of a hand-drawn map (ADR 0048), credited under it
+        bosses = bosses,
+        door = door,
+        dungeon = r.name,
+        note = (i == 1 and unplaced > 0)
+            and string.format(L["%d bosses have no place on these maps yet"], unplaced)
+          or nil,
+      },
     }
   end
   return rows
@@ -1021,7 +1208,7 @@ local function sourceRows(ref)
       note = count and string.format(L["%d creatures"], count) or nil,
     }
   end
-  if r.madeBy then
+  if r.madeBy and not Data.RecipesBy().makes[id] then -- the recipes themselves: the block "Made by"
     rows[#rows + 1] =
       { text = L["Made by"] .. " " .. tostring(r.madeBy[1]) .. " (" .. tostring(r.madeBy[2]) .. ")" }
   end
@@ -1031,7 +1218,7 @@ local function sourceRows(ref)
   return rows
 end
 
--- Recipe "Reagents": [item, count]
+-- Recipe "Reagents": [item, count], each with the item's icon; the product has its own block
 local function reagentRows(ref)
   local typ, id = B.Entity.Parse(ref)
   local r = typ == "recipe" and record("recipe", id)
@@ -1040,15 +1227,206 @@ local function reagentRows(ref)
   end
   local rows = {}
   for _, rg in ipairs(r.reagents) do
-    rows[#rows + 1] = { text = itemName(rg[1]), ref = "item:" .. rg[1], value = rg[2], valueKind = "number" }
-  end
-  if r.item then
     rows[#rows + 1] = {
-      text = L["Makes"] .. " " .. itemName(r.item) .. (r.count and r.count > 1 and (" x" .. r.count) or ""),
-      ref = "item:" .. r.item,
+      text = itemName(rg[1]),
+      ref = "item:" .. rg[1],
+      icon = B:Entity("item:" .. rg[1]):Icon(),
+      value = rg[2],
+      valueKind = "number",
     }
   end
   return rows
+end
+
+-- An item as the game describes it ("recipe information is extremely
+-- flat - I would like to see the item it produces with picture and all stats"): the lines of the
+-- game's tooltip after its name, in the theme's colours (a line with right-hand words as a row
+-- with a value, the rest wrapped); while the client lacks the item, the pack's words, and the
+-- item is asked for once (its load re-renders the page). `withName` puts the name in its
+-- quality's colour first (a recipe's product; an item's own page has it on the band).
+local function itemCardRows(itemID, count, withName)
+  local r = record("item", itemID)
+  local e = B:Entity("item:" .. itemID)
+  local rows = {}
+  if withName then
+    local name = (r and r.name) or e:Name() or ("item " .. itemID)
+    local times = count and count > 1 and ("  " .. S.H.muted .. "x" .. count .. "|r") or ""
+    rows[1] =
+      { ref = "item:" .. itemID, text = S.QualityText(r and r.quality, name) .. times, icon = e:Icon() }
+  end
+  local lines = B.Compat.ItemTooltipLines(itemID)
+  if lines then
+    for i = 2, #lines do -- the first line is the name
+      local l = lines[i]
+      if l.left ~= "" then
+        local text = S.TipInk(l.r, l.g, l.b) .. l.left .. "|r"
+        if l.right then
+          rows[#rows + 1] = { text = text, value = l.right }
+        else
+          rows[#rows + 1] = { kind = "para", text = text }
+        end
+      end
+    end
+    return rows
+  end
+  if Data.Names then
+    Data.Names.Want(itemID)
+  end
+  if r and r.level then
+    rows[#rows + 1] = { text = L["Item level"], value = r.level, valueKind = "number" }
+  end
+  if r and r.reqLevel then
+    rows[#rows + 1] = { text = L["Requires level"], value = r.reqLevel, valueKind = "number" }
+  end
+  if r and r.sell then
+    rows[#rows + 1] = { text = L["Vendor sell price"], value = r.sell, valueKind = "money" }
+  end
+  return rows
+end
+Data.ItemCardRows = itemCardRows
+
+-- Recipe "Makes": the product with its picture and the game's lines
+local function productRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local r = typ == "recipe" and record("recipe", id)
+  if not (r and r.item) then
+    return nil
+  end
+  return itemCardRows(r.item, r.count, true)
+end
+
+-- Item "Stats": the game's lines for the item of the page
+local function statRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  if typ ~= "item" or type(id) ~= "number" then
+    return nil
+  end
+  local rows = itemCardRows(id, nil, false)
+  return #rows > 0 and rows or nil
+end
+
+-- The recipes by item ("the item detail page should like usage in
+-- recipes"): which recipes take an item as a reagent and which make it, from the recipe records,
+-- built on the first ask and again once the pack's ids change (a pack load).
+local recipeIndex
+local function recipesBy()
+  local ids = service:Each("recipe")
+  if recipeIndex and recipeIndex.ids == ids then
+    return recipeIndex
+  end
+  local uses, makes = {}, {}
+  local function add(map, item, recipe)
+    if type(item) == "number" then
+      local list = map[item]
+      if not list then
+        list = {}
+        map[item] = list
+      end
+      list[#list + 1] = recipe
+    end
+  end
+  for _, id in ipairs(ids) do
+    local r = record("recipe", id)
+    if r then
+      for _, rg in ipairs(r.reagents or {}) do
+        add(uses, rg[1], id)
+      end
+      add(makes, r.item, id)
+    end
+  end
+  recipeIndex = { ids = ids, uses = uses, makes = makes }
+  return recipeIndex
+end
+Data.RecipesBy = recipesBy
+
+-- The rows of recipes: the recipe's name, its profession and skill in grey, the count of the item
+-- it takes (`counts`) as the value
+local function recipeRows(list, itemID, withCount)
+  if not list or #list == 0 then
+    return nil
+  end
+  local rows = {}
+  for _, rid in ipairs(list) do
+    local r = record("recipe", rid)
+    local name = (r and r.name) or B:Entity("recipe:" .. rid):Name() or ("recipe " .. rid)
+    local skill = r
+        and r.profession
+        and ("  " .. S.H.muted .. r.profession .. (r.skill and (" " .. r.skill) or "") .. "|r")
+      or ""
+    local count
+    for _, rg in ipairs(withCount and r and r.reagents or {}) do
+      if rg[1] == itemID then
+        count = rg[2]
+      end
+    end
+    rows[#rows + 1] = {
+      text = name .. skill,
+      ref = "recipe:" .. rid,
+      icon = B.UI.IconTexture("trainer"),
+      value = count,
+      valueKind = count and "number" or nil,
+    }
+  end
+  table.sort(rows, function(a, b)
+    return a.text < b.text
+  end)
+  return rows
+end
+
+-- "Disenchants into" ("add disenchant information to all items where
+-- possible"): the materials of the item's disenchant list (CMaNGOS, Classic values), each with
+-- its icon and how many come, the chance as the value; nil for an item no list names (unknown,
+-- or not disenchantable).
+local function disenchantRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local r = typ == "item" and record("item", id)
+  local list = r and r.disenchant and record("disenchant", r.disenchant)
+  if not (list and type(list.loot) == "table" and #list.loot > 0) then
+    return nil
+  end
+  local rows = {}
+  for _, l in ipairs(list.loot) do
+    local lo, hi = l[3], l[4]
+    local count = ""
+    if lo and hi and hi > lo then
+      count = "  " .. S.H.muted .. "x" .. lo .. "-" .. hi .. "|r"
+    elseif lo then
+      count = "  " .. S.H.muted .. "x" .. lo .. "|r"
+    end
+    rows[#rows + 1] = {
+      text = itemName(l[1]) .. count,
+      ref = "item:" .. l[1],
+      icon = B:Entity("item:" .. l[1]):Icon(),
+      value = l[2],
+      valueKind = l[2] and "percent" or nil,
+    }
+  end
+  return rows
+end
+
+local function disenchantTipRows(ref)
+  local rows = disenchantRows(ref)
+  for _, row in ipairs(rows or {}) do
+    row.text = L["Disenchant"] .. ": " .. row.text -- the tooltip has no block title
+    row.icon = nil
+  end
+  return rows
+end
+
+local function usedInRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  if typ ~= "item" then
+    return nil
+  end
+  return recipeRows(recipesBy().uses[id], id, true)
+end
+
+local function madeByRows(ref)
+  local typ, id = B.Entity.Parse(ref)
+  if typ ~= "item" then
+    return nil
+  end
+  return recipeRows(recipesBy().makes[id], id, false)
 end
 
 -- The places of a zone that matter on the way (ADR 0013, the zone page): flight master, inn, then
@@ -1077,16 +1455,40 @@ local function flagsOf(r)
   return set
 end
 
+-- The zone a zone or area page is about, and for an area the test of its places (the zone's
+-- blocks list only what stands in the area).
+local function scopeOf(ref)
+  local typ, id = B.Entity.Parse(ref)
+  if typ == "zone" then
+    return tonumber(id), nil
+  elseif typ == "area" then
+    return service:AreaScope(id)
+  end
+  return nil
+end
+
+-- Whether one of the record's places passes `inside` (no test: every record).
+local function standsIn(r, inside)
+  if not inside then
+    return true
+  end
+  for _, s in ipairs(spawns(r)) do
+    if inside(s.map, s.x, s.y) then
+      return true
+    end
+  end
+  return false
+end
+
 local function placeRows(ref)
-  local _, map = B.Entity.Parse(ref)
-  map = tonumber(map)
+  local map, inside = scopeOf(ref)
   if not map then
     return nil
   end
   local byFlag = {}
   for id in service:ByZone("npc", map) do
     local r = record("npc", id)
-    if r then
+    if r and standsIn(r, inside) then
       local set = flagsOf(r)
       for _, g in ipairs(PLACE_GROUPS) do
         if set[g[1]] then
@@ -1126,7 +1528,7 @@ local function placeRows(ref)
   local byProfession, professions = {}, {}
   for id in service:ByZone("node", map) do
     local r = record("node", id)
-    if r then
+    if r and standsIn(r, inside) then
       local key = r.profession or L["Nodes"]
       local list = byProfession[key]
       if not list then
@@ -1151,7 +1553,7 @@ local function placeRows(ref)
       collapsed = true,
     }
   end
-  return rows
+  return #rows > 0 and rows or nil
 end
 
 -- "Near" (the Here column, C4): the service NPCs, mailboxes and gathering nodes of the zone by
@@ -1388,6 +1790,12 @@ local function hasService(r)
   return false
 end
 
+-- A monster (the zone's Monsters, the Browser's Mobs list, the Map's monster areas; owner, retail
+-- 31.10.2026): an NPC without a service and without a faction it belongs to.
+function service:IsMonster(r)
+  return type(r) == "table" and not r.faction and not hasService(r)
+end
+
 -- "Areas" (data.md "Areas"): the zone's subzones by name, each leads to its own page
 local function areaRows(ref)
   local _, map = B.Entity.Parse(ref)
@@ -1417,15 +1825,14 @@ end
 -- The monsters of a zone: NPCs without a service, a faction or a quest to give, by level; their
 -- rows carry the worth per kill through the worth registry when Gold is there.
 local function monsterRows(ref)
-  local _, map = B.Entity.Parse(ref)
-  map = tonumber(map)
+  local map, inside = scopeOf(ref)
   if not map then
     return nil
   end
   local list, seen = {}, {}
   for id in service:ByZone("npc", map) do
     local r = record("npc", id)
-    if r and r.name and r.level and not r.faction and not hasService(r) and not seen[r.name] then
+    if r and r.name and r.level and service:IsMonster(r) and not seen[r.name] and standsIn(r, inside) then
       seen[r.name] = true
       list[#list + 1] = { id = id, r = r }
     end
@@ -1475,7 +1882,7 @@ local function registerSections(self)
   section({
     id = "data.monsters",
     title = L["Monsters"],
-    types = { "zone" },
+    types = { "zone", "area" }, -- an area: the zone's that stand in it
     order = 30,
     block = { limit = 10 },
     build = monsterRows,
@@ -1494,7 +1901,7 @@ local function registerSections(self)
   section({
     id = "data.places",
     title = L["Places"],
-    types = { "zone" },
+    types = { "zone", "area" },
     order = 12,
     block = { wide = true, limit = 12 },
     build = placeRows,
@@ -1535,7 +1942,8 @@ local function registerSections(self)
     title = L["Teaches"],
     types = { "npc" },
     order = 31,
-    block = { limit = 8 },
+    block = { limit = 12 }, -- what you can buy here, with who knows it
+    invalidateOn = { "BASTIANS_ALTS_CHANGED" },
     build = trainerRows,
   })
   section({
@@ -1562,6 +1970,53 @@ local function registerSections(self)
     order = 20,
     build = reagentRows,
   })
+  -- owner round 5 (retail, 31.10.2026): the product and the item's lines, an item's recipes
+  section({
+    id = "data.product",
+    title = L["Makes"],
+    types = { "recipe" },
+    order = 12,
+    block = { wide = true, limit = 30 },
+    invalidateOn = { "BASTIANS_ENTITY_CHANGED" }, -- the item's data arrives from the client
+    build = productRows,
+  })
+  section({
+    id = "data.stats",
+    title = L["Stats"],
+    types = { "item" },
+    order = 12,
+    block = { wide = true, limit = 30 },
+    invalidateOn = { "BASTIANS_ENTITY_CHANGED" },
+    build = statRows,
+  })
+  section({
+    id = "data.disenchant",
+    title = L["Disenchants into"],
+    types = { "item" },
+    order = 24,
+    block = { limit = 6 },
+    build = disenchantRows,
+    tooltip = { max = 3, build = disenchantTipRows },
+  })
+  section({
+    id = "data.usedin",
+    title = L["Used in recipes"],
+    types = { "item" },
+    order = 23,
+    block = { limit = 8 },
+    invalidateOn = { "BASTIANS_DATA_LOADED" },
+    build = usedInRows,
+    tooltip = { max = 2, build = usedInRows },
+  })
+  section({
+    id = "data.madeby",
+    title = L["Made by"],
+    types = { "item" },
+    order = 19,
+    block = { limit = 8 },
+    invalidateOn = { "BASTIANS_DATA_LOADED" },
+    build = madeByRows,
+  })
   -- dungeons (data.md "Dungeons"): the bosses in order, the loot of the instance, and the way back
   -- from a boss, a dungeon quest or a door to its dungeon
   section({
@@ -1571,6 +2026,14 @@ local function registerSections(self)
     order = 20,
     build = bossRows,
     tooltip = { max = 3, build = bossRows },
+  })
+  section({
+    id = "data.floors",
+    title = L["Map"],
+    types = { "dungeon" },
+    order = 25,
+    block = { limit = 8 },
+    build = floorRows,
   })
   section({
     id = "data.dungeonloot",
@@ -1611,10 +2074,10 @@ local function registerSearch(self)
     id = "data.names",
     label = L["World database"],
     priority = 100,
-    search = function(query, limit, yield)
+    search = function(query, limit, yield, q)
       local out = {}
       for _, typ in ipairs(TYPES) do
-        for _, hit in ipairs(service:Find(typ, query, limit, yield)) do
+        for _, hit in ipairs(service:Find(typ, q or query, limit, yield)) do
           out[#out + 1] =
             { ref = B.Entity.Make(typ, hit.id), label = hit.name, score = hit.score, note = L[typ] }
         end

@@ -13,7 +13,7 @@ B.deferred[#B.deferred + 1] = {
     build = "fixture",
     client = "forever",
     dungeon = {
-      [36] = [=[{ "The Deadmines", "dungeon", 5, 15, 25, 10, 1436, { { 1, 644, "Rhahk'Zor" }, { 2, 639, "Edwin VanCleef" } }, { { 1185, 1, "s" }, { 2589, 0, "c" } }, { 62 }, "forever" }]=],
+      [36] = [=[{ "The Deadmines", "dungeon", 5, 15, 25, 10, 1436, { { 1, 644, "Rhahk'Zor" }, { 2, 639, "Edwin VanCleef" } }, { { 1185, 1, "s" }, { 2589, 0, "c" } }, { 62 }, "forever", { { a = "interface/worldmap/thedeadmines/thedeadmines1_", g = { 4, 3 }, h = 668, m = 291, n = "The Deadmines 1", w = 1002 }, { h = 668, m = 292, n = "The Deadmines 2", w = 1002 } }, { { 1, 1, 38.59, 60.88 }, { 2, 2, 50, 50 } }, { 2, 60.22, 84.32 } }]=],
     },
     entrance = {
       ["36-1"] = [=[{ "Deadmines", nil, 36, 10, 1436, 0, -11208.7, 1675.9, 24.6, { { 1436, 0.42, 0.72, "places", 24.6 } }, nil, nil, "places" }]=],
@@ -116,7 +116,10 @@ B.deferred[#B.deferred + 1] = {
     },
     schema = {
       area = { "name", "zone", "continent", "wx", "wy", "r", "chunks", "spawns", "src" },
-      dungeon = { "name", "kind", "size", "levelLo", "levelHi", "levelReq", "zone", "bosses", "loot", "quests", "src" },
+      dungeon = {
+        "name", "kind", "size", "levelLo", "levelHi", "levelReq", "zone", "bosses", "loot", "quests", "src",
+        "floors", "bossSpots", "door",
+      },
       entrance = {
         "name", "label", "instance", "level", "zone", "continent", "wx", "wy", "wz", "spawns", "verified",
         "note", "src",

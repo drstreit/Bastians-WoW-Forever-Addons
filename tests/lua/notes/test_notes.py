@@ -191,6 +191,21 @@ def test_without_the_map_notes_still_show_on_pages(wow: WowRuntime):
     assert wow.errors == [] and logged_errors(wow) == []
 
 
+def test_a_note_shows_on_every_page_it_can_be_added_on(wow: WowRuntime):
+    """a note added on a dungeon's page was nowhere to see."""
+    boot(wow)
+    for ref in ("dungeon:36", "recipe:2549", "area:87"):
+        wow.execute(f"{N}.Save({{ on = '{ref}', title = 'Mine {ref}' }})")
+        rows = [
+            r
+            for s in wow.eval(f"Bastians:GetDetailSections('{ref}')").values()
+            if s.id == "notes.mine"
+            for r in s.rows.values()
+        ]
+        assert len(rows) == 1 and f"Mine {ref}" in rows[0].text, ref
+    assert wow.errors == [] and logged_errors(wow) == []
+
+
 def test_with_notes_the_bookmarks_live_in_the_lists(wow: WowRuntime):
     """N2 (E): the map's own bookmarks move into the list "Bookmarks" once, new ones go there, the
     title is renamed through the bar, a hidden list takes its bookmarks off the bar, and the Lists

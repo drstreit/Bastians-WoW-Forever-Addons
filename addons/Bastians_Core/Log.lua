@@ -62,6 +62,52 @@ function B:ClearLog()
   head, count = 0, 0
 end
 
+-- A notice of an app for the addon chat:
+-- BASTIANS_NOTICE(text, owner name) for the coming chat replacement, and one line in the chat
+-- window whose tab is named as Core's `noticeTab` ("Addons"). Without such a tab the normal chat
+-- stays untouched. Returns true when a chat window took the line.
+function B:Notify(owner, text)
+  text = tostring(text)
+  local name = type(owner) == "table" and owner.title and tostring(owner.title) or ownerName(owner)
+  B:Log(owner, "info", "%s", text)
+  B:Fire("BASTIANS_NOTICE", text, name)
+  local core = ns.core
+  local tab = core and core.db and core.db.profile.noticeTab or "Addons"
+  local frame = B.Compat and B.Compat.ChatFrameNamed and B.Compat.ChatFrameNamed(tab)
+  if not frame then
+    return false
+  end
+  frame:AddMessage(chat() .. name .. ":|r " .. text)
+  return true
+end
+
+-- The suite's own words (plan-launch-review.md R5.3, "speech not text" for the
+-- Wanderer): a notice, a reminder, a route step or an arrival goes to text, to the voice or to
+-- both, as the General page's Words section says per kind (`words<Kind>` = text | voice | both).
+-- The text is what the app shows today (`showText(text)`, else B:Notify); the voice is the
+-- `voice` service (the Orbiter: the game's voice in the player's chosen voice). Without the
+-- service, voice falls back to text, so nothing is ever lost. -> whether the words were spoken.
+B.WORD_KINDS = { "notice", "reminder", "step", "arrival" }
+function B:Tell(owner, kind, text, showText)
+  text = tostring(text)
+  local core = ns.core
+  local p = core and core.db and core.db.profile
+  local how = p and p["words" .. kind:sub(1, 1):upper() .. kind:sub(2)] or "text"
+  local voice = B:GetService("voice")
+  local spoken = false
+  if (how == "voice" or how == "both") and voice and voice.Can and voice.Can() then
+    spoken = voice.Speak(text, kind) and true or false
+  end
+  if how ~= "voice" or not spoken then
+    if showText then
+      showText(text)
+    else
+      B:Notify(owner, text)
+    end
+  end
+  return spoken
+end
+
 -- One chat line, used for things the player must see (a module disabled itself, a scan is saving).
 function B:Say(fmt, ...)
   local text = select("#", ...) > 0 and string.format(fmt, ...) or fmt

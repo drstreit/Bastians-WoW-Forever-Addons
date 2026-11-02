@@ -16,6 +16,10 @@ ns.L:Register("zhCN", {
   ["Item level"] = "物品等级",
   ["Requires level"] = "需要等级",
   ["Instance entrance"] = "副本入口",
+  ["Map"] = "地图",
+  ["Floor %d"] = "第 %d 层",
+  ["Click: enlarge"] = "点击：放大",
+  ["%d bosses have no place on these maps yet"] = "%d 个首领在这些地图上还没有位置",
   ["Dungeon"] = "地下城",
   ["Raid"] = "团队副本",
   ["Bosses"] = "首领",
@@ -47,6 +51,10 @@ ns.L:Register("zhCN", {
   ["Locations"] = "位置",
   ["Sells"] = "出售",
   ["Teaches"] = "教授",
+  ["teaches %d"] = "传授 %d 项",
+  ["Known by: %s"] = "已学会：%s",
+  ["you"] = "你",
+  ["Not known by any of your characters"] = "你的角色都未学会",
   ["Drops"] = "掉落",
   ["Sources"] = "来源",
   ["Reagents"] = "材料",
@@ -163,4 +171,10 @@ ns.L:Register("zhCN", {
   ["World drop"] = "世界掉落",
   ["creatures level %s"] = "生物等级%s",
   ["%d creatures"] = "%d个生物",
+  -- owner round 5 (31.10.2026): an item's lines and recipes
+  ["Stats"] = "属性",
+  ["Used in recipes"] = "用于配方",
+  -- 31.10.2026: what an item disenchants into
+  ["Disenchants into"] = "分解获得",
+  ["Disenchant"] = "分解",
 })

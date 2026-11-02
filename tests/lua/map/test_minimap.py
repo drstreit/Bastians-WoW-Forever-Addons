@@ -219,3 +219,43 @@ def test_the_zoom_probe_never_feeds_itself(wow: WowRuntime):
     wow.run_frames(5)
     assert wow.eval(f"{MM}.probes") == before and wow.eval(f"{MM}.Indoors()") is True
     assert wow.errors == []
+
+
+def test_the_clear_screen_key_hides_the_pins_and_brings_them_back(wow: WowRuntime):
+    """plan-launch-review R5.6 (01.11.2026): the overlay follows BASTIANS_SUITE_HIDDEN, the pins,
+    the rim arrows and the path pieces gone and no ticks while hidden; the page's tick for the Map
+    is honoured; the setting switched off by hand stays off after the key's return."""
+    boot(wow)
+    wow.execute(LAYER)
+    wow.advance(0.2)
+    assert "npc:54" in shown(wow) and wow.eval(f"{MM}.stats.edge") >= 1
+    screen = "Bastians.UI.Screen"
+    assert wow.eval(f"{screen}.Toggle()") is True  # the key: hidden
+    assert wow.eval(f"{MM}.HiddenByKey()") is True
+    assert wow.eval(f"{MM}.frame:IsShown()") is False and shown(wow) == {}
+    assert not [t for t in wow.eval(f"{MM}.pieces").values() if t.IsShown(t)]
+    # nothing comes back on its own: a zone change, a layer change, the player moving
+    wow.fire("ZONE_CHANGED_NEW_AREA")
+    wow.execute("Bastians:Fire('BASTIANS_LAYER_CHANGED', 'test.near')")
+    wow.fire("PLAYER_STARTED_MOVING")
+    wow.advance(0.3)
+    assert wow.eval(f"{MM}.frame:IsShown()") is False and shown(wow) == {}
+    assert wow.eval(f"{MM}.Ticking()") is False
+    wow.fire("PLAYER_STOPPED_MOVING")
+    assert wow.eval(f"{screen}.Toggle()") is True  # the key again: back
+    assert wow.eval(f"{MM}.HiddenByKey()") is False
+    assert wow.eval(f"{MM}.frame:IsShown()") is True and "npc:54" in shown(wow)
+    # unticked on the page "Hidden by the key": the key leaves the pins alone
+    wow.execute("Bastians:GetModule('Core').db.profile.screen_Map = false")
+    wow.execute(f"{screen}.Toggle()")
+    assert wow.eval(f"{MM}.frame:IsShown()") is True and "npc:54" in shown(wow)
+    wow.execute(f"{screen}.Toggle()")
+    wow.execute("Bastians:GetModule('Core').db.profile.screen_Map = nil")
+    # switched off by hand before the key: the key's return leaves it off
+    setting(wow, "minimapPins", False)
+    wow.advance(0.2)
+    wow.execute(f"{screen}.Toggle()")
+    wow.execute(f"{screen}.Toggle()")
+    wow.advance(0.2)
+    assert shown(wow) == {} and wow.eval(f"{MM}.frame:IsShown()") is False
+    assert wow.errors == []

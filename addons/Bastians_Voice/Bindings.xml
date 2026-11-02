@@ -1,0 +1,14 @@
+<Bindings>
+  <Binding name="BASTIANS_VOICE_ORBIT" header="BASTIANS_VOICE" category="ADDONS">
+    Bastians:GetModule("Voice").Orbit.Toggle()
+  </Binding>
+  <Binding name="BASTIANS_VOICE_PLAY" category="ADDONS">
+    Bastians:GetModule("Voice").Voice.TogglePause()
+  </Binding>
+  <Binding name="BASTIANS_VOICE_STOP" category="ADDONS">
+    Bastians:GetModule("Voice").Voice.StopAll()
+  </Binding>
+  <Binding name="BASTIANS_VOICE_HEARD" category="ADDONS">
+    Bastians:GetModule("Voice").Voice.MarkNowHeard()
+  </Binding>
+</Bindings>

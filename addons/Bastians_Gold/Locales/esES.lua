@@ -193,6 +193,21 @@ local strings = {
   ["object"] = "objeto del mundo",
   ["node"] = "punto de recolección",
   ["recipe"] = "receta",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s today"] = "%s hoy",
+  ["AH scan: the window is free"] = "Escaneo de la casa de subastas: la ventana está libre",
+  ["AH scan: the window is taken for %d more min"] = "Escaneo de la casa de subastas: la ventana está ocupada %d min más",
+  ["Auction house"] = "Casa de subastas",
+  ["Click: Gold. Right click: the bags."] = "Clic: Oro. Clic derecho: las bolsas.",
+  ["Last 7 days: %s"] = "Últimos 7 días: %s",
+  ["Loot and sales"] = "Botín y ventas",
+  ["Spent"] = "Gastado",
+  ["To post on the AH (%d)"] = "Para subastar (%d)",
+  ["To sell to a vendor (%d)"] = "Para vender al vendedor (%d)",
+  ["Today: %s"] = "Hoy: %s",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: sell on AH"] = "Bastian's: vender en subasta",
+  ["Bastian's: vendor"] = "Bastian's: vendedor",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

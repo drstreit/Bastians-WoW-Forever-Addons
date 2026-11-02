@@ -12,9 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from lupa import lua51
-
-from bastians_build.sources.luatable import to_python
+from bastians_build.sources.luatable import safe_runtime, to_python
 
 
 @dataclass(frozen=True)
@@ -44,9 +42,7 @@ class ProbeDump:
 
 def parse_probe_dump(text: str) -> ProbeDump:
     """The saved-variable file is plain Lua: `BastiansProbeDB = { ... }`."""
-    lua = lua51.LuaRuntime(
-        unpack_returned_tuples=True, register_eval=False, register_builtins=False
-    )
+    lua = safe_runtime()  # other people's files: no files, processes or Python (luatable)
     lua.execute(text)
     db = to_python(lua.globals().BastiansProbeDB)
     if not isinstance(db, dict):

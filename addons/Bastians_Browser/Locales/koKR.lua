@@ -33,6 +33,13 @@ ns.L:Register("koKR", {
   ["All"] = "전체",
   ["Where the rows are: in your zone, on your continent, or everywhere."] = "항목의 위치 범위: 현재 지역, 현재 대륙, 또는 전체.",
   ["Sort"] = "정렬",
+  ["Groups"] = "그룹",
+  ["By zone"] = "지역별",
+  ["None"] = "없음",
+  ["Nearest first, the rows under their zone's name."] = "가까운 순으로, 각 행을 지역 이름 아래에 표시합니다.",
+  ["Elsewhere"] = "그 밖의 곳",
+  ["Loading %d of %d ..."] = "%d / %d 불러오는 중 ...",
+  ["%d loaded"] = "%d개 불러옴",
   ["The order of the rows."] = "항목의 정렬 순서입니다.",
   ["No entries. Is the data pack loaded?"] = "항목이 없습니다. 데이터 팩이 불러와졌나요?",
   ["Nothing matches these filters. The x on a filter clears it."] = "이 필터와 일치하는 항목이 없습니다. 필터의 x를 누르면 지워집니다.",
@@ -68,6 +75,10 @@ ns.L:Register("koKR", {
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "줄에 퀘스트와 아이템의 가치(보상, 가격) 표시",
   ["Follow the target: an NPC or object you target becomes the subject"] = "대상 따라가기: 대상으로 지정한 NPC나 월드 오브젝트가 주제가 됩니다",
   ["Hide the game's objective tracker in slim mode"] = "간소 모드에서 게임의 목표 추적창 숨기기",
+  ["Preview a row in the page pane"] = "페이지 창에 행 미리보기",
+  ["While Shift is held"] = "Shift를 누른 동안",
+  ["On every hover"] = "마우스를 올릴 때마다",
+  ["Never"] = "안 함",
   ["Open in Browser"] = "브라우저에서 열기",
   ["Right click: open in the Browser"] = "오른쪽 클릭: 브라우저에서 열기",
 
@@ -236,4 +247,12 @@ ns.L:Register("koKR", {
   ["The link is in the chat input: copy it with Ctrl+C."] = "링크가 대화 입력창에 있습니다. Ctrl+C로 복사하세요.",
   ["Slide the list in"] = "목록 펼치기",
   ["Slide the list out"] = "목록 접기",
+  -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
+  ["Mobs"] = "몬스터",
+  ["Filter"] = "필터",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["Click: the Browser. Right click: the bookmarks."] = "클릭: 브라우저. 오른쪽 클릭: 책갈피.",
+  ["Everything the suite knows: quests, NPCs, items, places."] = "모음이 아는 모든 것: 퀘스트, NPC, 아이템, 장소.",
 })

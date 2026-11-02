@@ -52,19 +52,50 @@ About.SOURCES = {
   },
   { "NauticusClassic", "MIT", "the loops and departures of the boats and zeppelins (Forever)" },
   {
+    "Campfire Tooltips: Forever",
+    "GPL-3.0 or later",
+    "the camp features' auras, placements and values per level (Bastian's Campfire, Forever); by "
+      .. "GideonWhitlock, after Tweaks Forever by cjber",
+  },
+  {
     "TrinityCore TDB",
     "GPL-2.0 or later",
     "NPC services, levels and places, mailboxes and forges, the danger of the routes, and NPC, "
-      .. "object and quest names in every language (retail)",
+      .. "object and quest names in every language (retail); the Korean and Chinese quest texts "
+      .. "(Forever)",
   },
   { "AHledger", "Prices from AHledger", "market prices through the AHSync export" },
-  { "Spoken", "MIT", "the voice bridge of Bastian's Quests" },
+  { "Spoken", "MIT", "the voice of Bastian's Voice: quests, zones, bosses and books read aloud" },
+  -- the suite's own fonts (ADR 0038, Bastians_Core/Fonts, each with its licence text beside it)
+  { "Inter (Rasmus Andersson)", "SIL Open Font License 1.1", "a text font to choose in the settings" },
+  { "Exo 2 (Natanael Gama)", "SIL Open Font License 1.1", "a text font to choose in the settings" },
+  { "Roboto Condensed (Google)", "SIL Open Font License 1.1", "a text font to choose in the settings" },
+  { "Alegreya (Huerta Tipografica)", "SIL Open Font License 1.1", "a text font to choose in the settings" },
+  { "Cinzel (Natanael Gama)", "SIL Open Font License 1.1", "a heading font to choose in the settings" },
   -- the Library's fonts (EB Garamond, IM FELL Types, Atkinson Hyperlegible, OpenDyslexic; SIL Open
   -- Font License 1.1) come back with the Library: it is private until it ships
   {
     "Google Gemini image model",
     "Gemini API terms",
-    "the drawings of Bastian's book, made from our own scene descriptions (Bastian draws them in the story)",
+    "the drawings of Bastian's book, made from our own scene descriptions (Bastian draws them in the story), "
+      .. "and the welcome's pictures of the Wanderer and the Scholar",
+  },
+  {
+    "Santiago Reyes",
+    "used with permission, not under the GPL",
+    "from his Atlas of Azeroth: Forever, the maps of the City of Dalaran, the Excavation Site: "
+      .. "Wetlands, the Hall of Thanes and the Ruins of Lordaeron (www.artstation.com/sr433_20). "
+      .. "Thank you, Santiago!",
+  },
+}
+
+-- The artists whose maps the suite shows with their permission (ADR 0048): the dungeon floors
+-- name theirs (`floor.by`), and Scenery credits it under the map with the address to copy.
+About.ARTISTS = {
+  santiago = {
+    name = "Santiago Reyes",
+    work = "Atlas of Azeroth: Forever",
+    url = "https://www.artstation.com/sr433_20",
   },
 }
 

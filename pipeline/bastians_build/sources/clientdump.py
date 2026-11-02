@@ -1,5 +1,6 @@
 """Readers for `tools/clientdump db2` JSON (client-extraction.md): TaxiNodes, TaxiPath with
-TaxiPathNode, UiMap, UiMapAssignment and AreaTable.
+TaxiPathNode, UiMap, UiMapAssignment and AreaTable, and the dungeon floors' map art
+(UiMapXMapArt, UiMapArtTile with the community listfile).
 
 The dump is ``{"table": "TaxiNodes", "build": "...", "rows": [ {...}, ... ]}``. A row's ``Pos``
 is the world position ``[X, Y, Z]`` with X growing north and Y growing west (coordinates.md:
@@ -204,6 +205,8 @@ class Assignment:
     ui_min: tuple[float, float]
     ui_max: tuple[float, float]
     area_id: int = 0  # the AreaTable id the assignment draws (0 = none)
+    z_lo: float = -1000000.0  # the region's height band (a dungeon floor's; the open world: all)
+    z_hi: float = 1000000.0
 
 
 @dataclass(frozen=True)
@@ -264,6 +267,8 @@ def read_ui_map_assignments(path: Path) -> list[Assignment]:
                 ui_min=(float(ui_min[0]), float(ui_min[1])),
                 ui_max=(float(ui_max[0]), float(ui_max[1])),
                 area_id=int(row.get("AreaID") or 0),
+                z_lo=float(region[2]),
+                z_hi=float(region[5]),
             )
         )
     return out
@@ -484,3 +489,144 @@ def read_quest_titles(path: Path) -> dict[int, str]:
         if isinstance(quest_id, int) and isinstance(title, str) and title.strip():
             out[quest_id] = title.strip()
     return out
+
+
+# --- The dungeon floors' map art (DG2c, 30.10.2026) ---------------------------------------------
+#
+# Retail's UiMap table holds every Classic instance's floors as dungeon maps (Type 4; the Stockade
+# 225, the Deadmines 291 and 292, Blackrock Spire 250 to 255), each assigned to the instance's
+# Map.db2 id with a world region per WMO group (UiMapAssignment), and its art as a grid of tiles
+# (UiMapXMapArt, UiMapArtTile; 4 x 3 tiles of 256 px, 1002 x 668 of them visible). The Forever
+# client lacks the UiMap rows (60 maps, none of a dungeon, build 1.60.1.70685) but carries the
+# same art files under their names (`Interface\WorldMap\TheStockade\TheStockade1_1` and so on,
+# the way the DungeonJournal addon draws them): the community listfile names retail's tiles, and
+# the name of a floor's first tile gives the prefix every tile of the floor follows.
+
+FLOOR_TILE_PX = 256  # a map art tile on the Classic dungeon maps
+FLOOR_VISIBLE = {(4, 3): (1002, 668)}  # the visible part of a grid, by (cols, rows)
+WHOLE_WORLD = 10000.0  # a region wider than this is a catch-all, not a floor's extent
+
+
+@dataclass(frozen=True)
+class FloorArt:
+    ui_map_id: int
+    name: str
+    art: str | None  # the tiles' path prefix, tile i (from 1, row by row) = art + i; None: unnamed
+    cols: int
+    rows: int
+    # the world regions the client shows the floor for: (min_x, min_y, z_lo, max_x, max_y, z_hi)
+    regions: tuple[tuple[float, float, float, float, float, float], ...]
+
+    @property
+    def size(self) -> tuple[int, int]:
+        """The visible art in pixels: 1002 x 668 for the Classic grid, else the whole grid."""
+        return FLOOR_VISIBLE.get(
+            (self.cols, self.rows), (self.cols * FLOOR_TILE_PX, self.rows * FLOOR_TILE_PX)
+        )
+
+
+def read_listfile(path: Path, prefix: str = "interface/worldmap/") -> dict[int, str]:
+    """The community listfile (`id;path` per line): file data id -> path, for the paths that start
+    with `prefix` (lower case)."""
+    out: dict[int, str] = {}
+    with path.open(encoding="utf-8", errors="ignore") as fh:
+        for line in fh:
+            fid, sep, name = line.partition(";")
+            name = name.strip().lower()
+            if sep and name.startswith(prefix) and fid.isdigit():
+                out[int(fid)] = name
+    return out
+
+
+def _art_prefix(names: list[str | None]) -> str | None:
+    """The common prefix of a floor's tile names when tile i is `<prefix><i>.blp` for every i."""
+    first = names[0] if names else None
+    if not first or not first.endswith(".blp"):
+        return None
+    stem = first[: -len(".blp")]
+    digits = len(stem) - len(stem.rstrip("0123456789"))
+    if digits == 0:
+        return None
+    prefix = stem[:-digits]
+    if any(n != f"{prefix}{i}.blp" for i, n in enumerate(names, 1)):
+        return None
+    return prefix
+
+
+def read_floor_art(dumps: Path, prefix: str, listfile: Path | None) -> dict[int, list[FloorArt]]:
+    """Every UiMap assigned to an instance, by the instance's Map.db2 id, in UiMap id order: its
+    name (floors of one name are numbered), art prefix (with the listfile), grid and regions.
+    Continents and zones (the open world's maps) are left out."""
+    ui_maps = read_ui_maps(dumps / f"{prefix}_UiMap.json")
+    assignments = read_ui_map_assignments(dumps / f"{prefix}_UiMapAssignment.json")
+    art_of: dict[int, int] = {}
+    for row in _rows(dumps / f"{prefix}_UiMapXMapArt.json", "UiMapXMapArt"):
+        art_of.setdefault(int(row["UiMapID"]), int(row["UiMapArtID"]))
+    tiles: dict[int, list[tuple[int, int, int]]] = {}
+    for row in _rows(dumps / f"{prefix}_UiMapArtTile.json", "UiMapArtTile"):
+        if int(row.get("LayerIndex") or 0) == 0:
+            tiles.setdefault(int(row["UiMapArtID"]), []).append(
+                (int(row["RowIndex"]), int(row["ColIndex"]), int(row["FileDataID"]))
+            )
+    names = read_listfile(listfile) if listfile is not None else {}
+    regions: dict[tuple[int, int], list[tuple[float, ...]]] = {}
+    for a in assignments:
+        u = ui_maps.get(a.ui_map_id)
+        if u is None or u.type in (UI_MAP_CONTINENT, UI_MAP_ZONE, 1) or a.map_id < 0:
+            continue
+        regions.setdefault((a.map_id, a.ui_map_id), []).append(
+            (a.min_x, a.min_y, a.z_lo, a.max_x, a.max_y, a.z_hi)
+        )
+    out: dict[int, list[FloorArt]] = {}
+    for (map_id, ui_map_id), region_rows in sorted(regions.items()):
+        grid = sorted(tiles.get(art_of.get(ui_map_id, -1), []))
+        cols = max((c for _, c, _ in grid), default=-1) + 1
+        rows = max((r for r, _, _ in grid), default=-1) + 1
+        art = None
+        if cols > 0 and rows > 0 and len(grid) == cols * rows:
+            art = _art_prefix([names.get(f) for _, _, f in grid])
+        out.setdefault(map_id, []).append(
+            FloorArt(
+                ui_map_id,
+                ui_maps[ui_map_id].name,
+                art,
+                max(cols, 0),
+                max(rows, 0),
+                tuple(region_rows),
+            )
+        )
+    for floors in out.values():
+        counts: dict[str, int] = {}
+        for f in floors:
+            counts[f.name] = counts.get(f.name, 0) + 1
+        seen: dict[str, int] = {}
+        for i, f in enumerate(floors):
+            if counts[f.name] > 1:
+                seen[f.name] = seen.get(f.name, 0) + 1
+                floors[i] = FloorArt(
+                    f.ui_map_id, f"{f.name} {seen[f.name]}", f.art, f.cols, f.rows, f.regions
+                )
+    return out
+
+
+def floor_for_point(floors: list[FloorArt], wx: float, wy: float, z: float | None) -> int | None:
+    """The floor (index from 1) the client shows at a world point: among the floors whose region
+    holds (wx, wy), the one whose height band holds z with the highest lower edge; without a
+    height band that fits, the single floor whose catch-all region holds the point. None when
+    no floor or several fit (the floors of one spire share their region)."""
+    best: tuple[float, int] | None = None
+    catch: set[int] = set()
+    for i, f in enumerate(floors, 1):
+        for min_x, min_y, z_lo, max_x, max_y, z_hi in f.regions:
+            if max_x - min_x > WHOLE_WORLD or max_y - min_y > WHOLE_WORLD:
+                continue
+            if not (min_x <= wx <= max_x and min_y <= wy <= max_y):
+                continue
+            if z_lo > -WHOLE_WORLD + 1:
+                if z is not None and z_lo <= z <= z_hi and (best is None or z_lo > best[0]):
+                    best = (z_lo, i)
+            else:
+                catch.add(i)
+    if best is not None:
+        return best[1]
+    return next(iter(catch)) if len(catch) == 1 else None

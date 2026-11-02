@@ -45,11 +45,18 @@ local function windowApps()
 end
 Launcher.WindowApps = windowApps
 
+-- A switched-off app's button (Chat's "just says switched off, never on,
+-- unclear what it even does"): its page in the hub, where its Enabled switch is.
+function Launcher.OpenSwitchedOff(mod)
+  B:Say(L["%s is switched off. Its page has the switch to turn it on."], mod.title)
+  B.UI.Hub.Open(mod.name)
+end
+
 local function openApp(mod)
   if mod:IsEnabled() then
     mod.def.open()
   else
-    B:Say(L["%s is switched off."], mod.title)
+    Launcher.OpenSwitchedOff(mod)
   end
 end
 
@@ -217,12 +224,52 @@ end
 Launcher.OnClick = onClick
 Launcher.Tooltip = tooltip
 
+-- ---------------------------------------------------------------------------------------------
+-- LibDBIcon at runtime (ADR 0043 decision 4): when another addon loaded it (it is All Rights
+-- Reserved, never bundled), the minimap buttons are LibDBIcon's, made from our LDB objects, so
+-- collectors and Bazooka know them. Their place and switch stay in our settings: `cfg(create)`
+-- returns { angle, hide } and LibDBIcon's `minimapPos` is our `angle` (degrees, the same circle).
+-- ---------------------------------------------------------------------------------------------
+
+function Launcher.DBIcon()
+  return LibStub and LibStub("LibDBIcon-1.0", true) or nil
+end
+
+function Launcher.IconDB(cfg, default)
+  return setmetatable({}, {
+    __index = function(_, key)
+      if key == "minimapPos" then
+        return cfg().angle or default
+      elseif key == "hide" then
+        return cfg().hide
+      end
+      return nil
+    end,
+    __newindex = function(_, key, value)
+      if key == "minimapPos" then
+        cfg(true).angle = value -- a drag is written
+      end
+    end,
+  })
+end
+
+local function dbiconButton(name, object, cfg, default)
+  local lib = Launcher.DBIcon()
+  if not (lib and object) then
+    return nil
+  end
+  if not lib:IsRegistered(name) then
+    lib:Register(name, object, Launcher.IconDB(cfg, default))
+  end
+  return lib:GetMinimapButton(name)
+end
+
 function Launcher.MinimapButton()
   if button then
     return button
   end
-  button =
-    makeButton("BastiansMinimapButton", "Interface\\Icons\\INV_Misc_Map_01", onClick, tooltip, settings)
+  button = dbiconButton("Bastians", Launcher.Broker(), settings, 200)
+    or makeButton("BastiansMinimapButton", B.UI.IconTexture(B.UI.SUITE_ICON), onClick, tooltip, settings)
   Launcher.UpdateVisibility()
   if B.UI.News then
     B.UI.News.UpdateDot() -- the dot of What's new (ADR 0021)
@@ -236,19 +283,18 @@ function Launcher.Current()
 end
 
 -- ---------------------------------------------------------------------------------------------
--- One button per app with a window. An app may set `icon` in its
--- module definition; the defaults below are Blizzard icons both clients ship.
+-- One button per app with a window, wearing the app's one icon: the
+-- `icon` of its identity record in B.APPS (`B.UI.AppIcon`, plan-launch-review.md I1; before
+-- 01.11.2026 a table here, the module's `icon` and a Blizzard default picked by three rules). A
+-- module that is no app of the suite may still name `icon` in its definition.
 -- ---------------------------------------------------------------------------------------------
 
--- the suite's glyphs
-Launcher.ICONS = {
-  Browser = B.UI.IconTexture("trainer"), -- the book of everything
-  Gold = B.UI.IconTexture("gold"),
-  Map = B.UI.IconTexture("zone"),
-  Quests = B.UI.IconTexture("quest"),
-  Route = B.UI.IconTexture("route"),
-}
 Launcher.apps = {} -- module name -> its minimap button
+
+-- The icon of an app's button: the identity's, else the module's own, else the grey "other".
+function Launcher.IconOf(mod)
+  return B.UI.AppIcon(mod.name) or mod.def.icon or B.UI.IconTexture("other")
+end
 
 -- The button settings of an app: { angle, hide }, in Core's profile.
 -- Nothing is written until the player drags or hides a button (`create`): the saved file stays
@@ -294,8 +340,9 @@ local function buttonEntries()
   for _, mod in ipairs(windowApps()) do
     out[#out + 1] = {
       name = mod.name,
+      mod = mod,
       title = mod.title,
-      icon = mod.def.icon or Launcher.ICONS[mod.name] or B.UI.IconTexture("other"),
+      icon = Launcher.IconOf(mod),
       open = function()
         openApp(mod)
       end,
@@ -303,6 +350,25 @@ local function buttonEntries()
         return mod:IsEnabled()
       end,
     }
+    -- an app's further buttons (`def.minimapButtons = { { id, title, icon, open } }`; Bastian's
+    -- Chat's Messenger, ), named after the app: "ChatMessenger"
+    for _, extra in ipairs(mod.def.minimapButtons or {}) do
+      out[#out + 1] = {
+        name = mod.name .. extra.id,
+        title = extra.title or extra.id,
+        icon = extra.icon or mod.def.icon or B.UI.IconTexture("other"),
+        open = function()
+          if mod:IsEnabled() then
+            extra.open()
+          else
+            Launcher.OpenSwitchedOff(mod)
+          end
+        end,
+        shown = function()
+          return mod:IsEnabled()
+        end,
+      }
+    end
   end
   out[#out + 1] = {
     name = "Options",
@@ -315,9 +381,50 @@ local function buttonEntries()
       return true
     end,
   }
+  -- the welcome with the Wanderer and the Scholar, any time ("I miss the
+  -- intro page with wanderer and scholar - add a minimap button to bring that on")
+  out[#out + 1] = {
+    name = "Welcome",
+    title = L["Welcome"],
+    icon = B.UI.IconTexture("tale"),
+    open = function()
+      local welcome = B.UI.Welcome
+      if welcome.IsShown() then
+        welcome.Hide()
+      else
+        welcome.Show()
+      end
+    end,
+    shown = function()
+      return B.UI.Welcome ~= nil
+    end,
+  }
   return out
 end
 Launcher.ButtonEntries = buttonEntries
+
+-- The LDB object a LibDBIcon button is made from: the app's feed (ADR 0043), or a launcher of
+-- its own for the options window.
+function Launcher.EntryObject(entry)
+  if entry.mod then
+    return B.Feeds.ObjectFor(entry.mod)
+  end
+  local lib = LibStub and LibStub("LibDataBroker-1.1", true)
+  if not lib then
+    return nil
+  end
+  local name = "Bastian's " .. entry.name
+  return lib:GetDataObjectByName(name)
+    or lib:NewDataObject(name, {
+      type = "launcher",
+      label = tostring(entry.title),
+      icon = entry.icon,
+      OnClick = function()
+        entry.open()
+      end,
+      OnTooltipShow = appTooltip(entry.title),
+    })
+end
 
 -- Creates the missing app buttons and shows each by its setting and its app's state.
 function Launcher.UpdateAppButtons()
@@ -329,15 +436,17 @@ function Launcher.UpdateAppButtons()
     local cfg = Launcher.AppSettings(name, slot)
     local b = Launcher.apps[name]
     if not b and not cfg.hide then
-      b = makeButton(
-        "BastiansMinimapButton" .. name,
-        entry.icon,
-        entry.open,
-        appTooltip(entry.title),
-        function(create)
-          return Launcher.AppSettings(name, slot, create)
-        end
-      )
+      local function appCfg(create)
+        return Launcher.AppSettings(name, slot, create)
+      end
+      b = dbiconButton("Bastian's " .. name, Launcher.EntryObject(entry), appCfg)
+        or makeButton(
+          "BastiansMinimapButton" .. name,
+          entry.icon,
+          entry.open,
+          appTooltip(entry.title),
+          appCfg
+        )
       Launcher.apps[name] = b
     end
     if b then
@@ -348,6 +457,32 @@ function Launcher.UpdateAppButtons()
       end
     end
   end
+end
+
+-- A count on an app's button (the Messenger's unread whispers): hidden at 0, "99+" above 99.
+function Launcher.SetBadge(name, n)
+  local b = Launcher.apps[name]
+  if not b then
+    return false
+  end
+  if not b.badge then
+    b.badge = CreateFrame("Frame", nil, b)
+    b.badge:SetSize(18, 13)
+    b.badge:SetFrameLevel((b:GetFrameLevel() or 8) + 2)
+    b.badge:SetPoint("TOPRIGHT", 2, 2)
+    b.badge.bg = S.fill(b.badge, S.C.accent)
+    b.badge.text = S.text(b.badge, 10, S.C.headerText)
+    b.badge.text:SetPoint("CENTER")
+  end
+  n = tonumber(n) or 0
+  b.badge:SetShown(n > 0)
+  b.badge.text:SetText(n > 99 and "99+" or tostring(n))
+  return true
+end
+
+-- Is an app's button shown by its setting?
+function Launcher.AppButtonShown(name)
+  return not Launcher.AppSettings(name).hide
 end
 
 -- Turns an app's button on or off (its settings page).
@@ -378,7 +513,7 @@ function Launcher.Broker()
   end
   Launcher.ldb = ldb:NewDataObject("Bastians", {
     type = "launcher",
-    icon = B.UI.IconTexture("open"), -- the suite's search
+    icon = B.UI.IconTexture(B.UI.SUITE_ICON), -- the suite's one face
     label = "Bastian's",
     OnClick = onClick,
     OnTooltipShow = tooltip,
@@ -386,13 +521,37 @@ function Launcher.Broker()
   return Launcher.ldb
 end
 
+-- The suite's entry in the Addon Compartment (ADR 0043 decision 3), click and tooltip as its button.
+function Launcher.Compartment()
+  if Launcher.inCompartment ~= nil then
+    return Launcher.inCompartment
+  end
+  Launcher.inCompartment = B.Compat.RegisterCompartment({
+    text = "Bastian's",
+    icon = B.UI.IconTexture(B.UI.SUITE_ICON),
+    func = function(mouse)
+      onClick(nil, mouse)
+    end,
+    onEnter = function(owner)
+      GameTooltip:SetOwner(owner or UIParent, "ANCHOR_LEFT")
+      tooltip(GameTooltip)
+      GameTooltip:Show()
+    end,
+    onLeave = function()
+      GameTooltip:Hide()
+    end,
+  }) and true or false
+  return Launcher.inCompartment
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:SetScript("OnEvent", function(self)
   self:UnregisterEvent("PLAYER_LOGIN")
-  Launcher.MinimapButton()
   Launcher.Broker()
+  Launcher.MinimapButton()
   Launcher.UpdateAppButtons()
+  Launcher.Compartment()
 end)
 ns.on("BASTIANS_MODULE_STATE", function()
   Launcher.UpdateAppButtons() -- an app switched on or off, a load-on-demand app loaded

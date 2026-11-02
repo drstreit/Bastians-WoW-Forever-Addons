@@ -1,9 +1,24 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Data: Quests
+## Title-koKR: Bastian's Data: 퀘스트
+## Title-zhCN: Bastian's Data: 任务
+## Title-zhTW: Bastian's Data: 任務
+## Title-deDE: Bastian's Data: Quests
+## Title-frFR: Bastian's Data: Quêtes
+## Title-esES: Bastian's Data: Misiones
+## Title-esMX: Bastian's Data: Misiones
 ## IconTexture: Interface\AddOns\Bastians_Data_Quests\Icon
 ## Notes: Generated quest data pack (loads at startup).
+## Notes-koKR: 생성된 퀘스트 데이터 팩 (접속 시 불러옴).
+## Notes-zhCN: 生成的任务数据包（登录时加载）。
+## Notes-zhTW: 生成的任務資料包（登入時載入）。
+## Notes-deDE: Erzeugtes Questpaket (lädt beim Login).
+## Notes-frFR: Paquet de données des quêtes généré (chargé à la connexion).
+## Notes-esES: Paquete de datos de misiones generado (se carga al conectar).
+## Notes-esMX: Paquete de datos de misiones generado (se carga al conectar).
+## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

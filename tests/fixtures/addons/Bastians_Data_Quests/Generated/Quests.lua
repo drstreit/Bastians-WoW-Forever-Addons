@@ -8,7 +8,7 @@ B.deferred[#B.deferred + 1] = {
   "quests",
   {
     attunement = {
-      fargodeep = [=[{ "The Fargodeep Attunement", "Alliance", true, "fixture: the mine chain", { { "quest", 62, "The Fargodeep Mine" }, { "quest", 76, "The Jasperlode Mine" }, { "quest", 11, "Riverpaw Gnoll Bounty" } }, "config" }]=],
+      fargodeep = [=[{ "The Fargodeep Attunement", "Alliance", true, "fixture: the mine chain", { { "quest", 62, "The Fargodeep Mine" }, { "quest", 76, "The Jasperlode Mine" }, { "quest", 11, "Riverpaw Gnoll Bounty" } }, "config", 36 }]=],
       ["gnoll-claw"] = [=[{ "The Gnoll Claw", "both", false, nil, { { "item", 1931, "Huge Gnoll Claw" }, { "rep", 529, "Argent Dawn", 6 }, { "quest", 176, "Wanted: \"Hogger\"" } }, "config" }]=],
     },
     build = "fixture",
@@ -72,7 +72,7 @@ B.deferred[#B.deferred + 1] = {
       [1000] = [=[{ "Horde Only Errand", 9, 8, nil, 178, nil, { "npc:234" }, nil, { "npc:234" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1436, nil, nil, nil, nil, nil, "forever" }]=],
     },
     schema = {
-      attunement = { "name", "faction", "verified", "note", "steps", "src" },
+      attunement = { "name", "faction", "verified", "note", "steps", "src", "instance" },
       quest = {
         "name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends",
         "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday",

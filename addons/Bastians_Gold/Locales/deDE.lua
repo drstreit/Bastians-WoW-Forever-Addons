@@ -194,4 +194,19 @@ ns.L:Register("deDE", {
   ["object"] = "Objekt",
   ["node"] = "Sammelpunkt",
   ["recipe"] = "Rezept",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s today"] = "%s heute",
+  ["AH scan: the window is free"] = "AH-Scan: das Zeitfenster ist frei",
+  ["AH scan: the window is taken for %d more min"] = "AH-Scan: das Zeitfenster ist noch %d Min. belegt",
+  ["Auction house"] = "Auktionshaus",
+  ["Click: Gold. Right click: the bags."] = "Klick: Gold. Rechtsklick: die Taschen.",
+  ["Last 7 days: %s"] = "Letzte 7 Tage: %s",
+  ["Loot and sales"] = "Beute und Verkäufe",
+  ["Spent"] = "Ausgegeben",
+  ["To post on the AH (%d)"] = "Ins AH stellen (%d)",
+  ["To sell to a vendor (%d)"] = "An Händler verkaufen (%d)",
+  ["Today: %s"] = "Heute: %s",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: sell on AH"] = "Bastian's: im AH verkaufen",
+  ["Bastian's: vendor"] = "Bastian's: Händler",
 })

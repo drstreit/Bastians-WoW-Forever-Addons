@@ -288,6 +288,40 @@ define("shared", "GetUnitNameByID", function(npcID)
   return nil
 end)
 
+-- The lines of an item's tooltip as the game builds it ("the item it
+-- produces with picture and all stats"): C_TooltipInfo.GetItemByID, the retail family's (the
+-- namespace is on Forever with 82 functions, forever-api.md; this one assumed until measured).
+-- Texts through Plain (secret values on retail 12.x); nil while the client has not the item.
+define("shared", "ItemTooltipLines", function(itemID)
+  if type(itemID) ~= "number" or not has(C_TooltipInfo, "GetItemByID") then
+    return nil
+  end
+  local data = C_TooltipInfo.GetItemByID(itemID)
+  if type(data) ~= "table" or type(data.lines) ~= "table" then
+    return nil
+  end
+  local out = {}
+  for _, line in ipairs(data.lines) do
+    local left = plain(line.leftText)
+    if type(left) == "string" then
+      local c = type(line.leftColor) == "table" and line.leftColor or {}
+      local right = plain(line.rightText)
+      out[#out + 1] = {
+        left = left,
+        right = type(right) == "string" and right ~= "" and right or nil,
+        r = plain(c.r),
+        g = plain(c.g),
+        b = plain(c.b),
+      }
+    end
+  end
+  local retrieving = rawget(_G, "RETRIEVING_ITEM_INFO")
+  if #out == 0 or (retrieving and out[1].left == retrieving) then
+    return nil
+  end
+  return out
+end)
+
 -- The entity behind a GUID (C6): "Creature-0-<server>-<instance>-<zone>-<npcID>-<spawn>" (the id
 -- in the sixth field, retail shape, assumed the same on Forever: forever-api.md). Creature and
 -- Vehicle are NPCs, GameObject objects; Player, Pet, Item and anything else give nil.
@@ -444,6 +478,28 @@ define("shared", "OpenChat", function(text)
   end
 end)
 
+-- The Addon Compartment (retail 11.0+; the frame is in Forever's P1 dump of 70532, the Lua call
+-- assumed, forever-api.md). `func` gets the mouse button's name.
+define("shared", "RegisterCompartment", function(entry)
+  local frame = rawget(_G, "AddonCompartmentFrame")
+  if type(frame) ~= "table" or type(frame.RegisterAddon) ~= "function" then
+    note("RegisterCompartment", "none")
+    return false
+  end
+  note("RegisterCompartment", "AddonCompartmentFrame")
+  frame:RegisterAddon({
+    text = entry.text,
+    icon = entry.icon,
+    notCheckable = true,
+    func = function(_, input)
+      entry.func(type(input) == "table" and input.buttonName or "LeftButton")
+    end,
+    funcOnEnter = entry.onEnter,
+    funcOnLeave = entry.onLeave,
+  })
+  return true
+end)
+
 -- Hearthstone (GetBindLocation and the item cooldown: documented identically on both clients; retail
 -- reads the cooldown through C_Container, the legacy global is the fallback). The global cooldown of
 -- 1.5 s or less never counts as "not ready".
@@ -538,6 +594,77 @@ local function cooldownLeft(start, duration)
   return 0
 end
 
+-- An item's cooldown left in seconds (C_Container.GetItemCooldown, documented on both clients;
+-- 0 when ready, nil when the client cannot tell). Bastian's Campfire's features (probe C3).
+define("shared", "ItemCooldown", function(itemID)
+  if has(C_Container, "GetItemCooldown") then
+    return cooldownLeft(C_Container.GetItemCooldown(itemID))
+  end
+  return nil
+end)
+
+-- What this character knows (alts.md "Knowledge", 01.11.2026): a spell or recipe by id, the whole
+-- spell book, the open profession's learned recipes. Each answers nil where the client has no API.
+define("shared", "IsSpellKnown", function(id)
+  id = tonumber(id)
+  if not id then
+    return nil
+  end
+  if has(C_SpellBook, "IsSpellKnown") then
+    return plain(C_SpellBook.IsSpellKnown(id)) == true
+  elseif type(_G.IsSpellKnown) == "function" then
+    return plain(_G.IsSpellKnown(id)) == true
+  elseif type(_G.IsPlayerSpell) == "function" then
+    return plain(_G.IsPlayerSpell(id)) == true
+  end
+  return nil
+end)
+
+define("shared", "KnownSpells", function()
+  if
+    not (has(C_SpellBook, "GetNumSpellBookSkillLines") and has(C_SpellBook, "GetSpellBookSkillLineInfo"))
+  then
+    return nil
+  end
+  if not has(C_SpellBook, "GetSpellBookItemInfo") then
+    return nil
+  end
+  local bank = rawget(_G, "Enum") and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Player or 0
+  local out = {}
+  local lines = plain(C_SpellBook.GetNumSpellBookSkillLines()) or 0
+  for i = 1, lines do
+    local info = C_SpellBook.GetSpellBookSkillLineInfo(i)
+    local offset, count =
+      info and plain(info.itemIndexOffset) or 0, info and plain(info.numSpellBookItems) or 0
+    for j = offset + 1, offset + count do
+      local item = C_SpellBook.GetSpellBookItemInfo(j, bank)
+      local spellID = item and plain(item.spellID)
+      if spellID and item.isPassive ~= true then
+        out[spellID] = true
+      end
+    end
+  end
+  return out
+end)
+
+define("shared", "OpenRecipes", function()
+  if not (has(C_TradeSkillUI, "GetAllRecipeIDs") and has(C_TradeSkillUI, "GetRecipeInfo")) then
+    return nil
+  end
+  local ids = C_TradeSkillUI.GetAllRecipeIDs()
+  if type(ids) ~= "table" then
+    return nil
+  end
+  local out = {}
+  for _, id in ipairs(ids) do
+    local info = C_TradeSkillUI.GetRecipeInfo(id)
+    if info and plain(info.learned) == true then
+      out[plain(info.recipeID) or id] = true
+    end
+  end
+  return out
+end)
+
 define("shared", "GetTeleportState", function(kind, id, reagent)
   local owned
   if kind == "spell" then
@@ -624,13 +751,12 @@ end)
 
 -- Bag slots (C_Container: 47 functions present on Forever, P1 of 20.10.2026; the info table is the
 -- retail shape, assumed on Forever until the bag advisor ran there). Bags 0 to the last equipped one.
-define("shared", "GetBagItems", function()
+local function containerRows(bags)
   local out = {}
   if type(C_Container) ~= "table" or not C_Container.GetContainerNumSlots then
     return out
   end
-  local last = rawget(_G, "NUM_TOTAL_EQUIPPED_BAG_SLOTS") or rawget(_G, "NUM_BAG_SLOTS") or 4
-  for bag = 0, last do
+  for _, bag in ipairs(bags) do
     local slots = C_Container.GetContainerNumSlots(bag) or 0
     for slot = 1, slots do
       local info = C_Container.GetContainerItemInfo(bag, slot)
@@ -650,6 +776,177 @@ define("shared", "GetBagItems", function()
     end
   end
   return out
+end
+
+define("shared", "GetBagItems", function()
+  local last = rawget(_G, "NUM_TOTAL_EQUIPPED_BAG_SLOTS") or rawget(_G, "NUM_BAG_SLOTS") or 4
+  local bags = {}
+  for bag = 0, last do
+    bags[#bags + 1] = bag
+  end
+  return containerRows(bags)
+end)
+
+define("shared", "GetContainerItems", function(bags)
+  return containerRows(bags or {})
+end)
+
+-- The bank's containers (Bastian's Alts, ADR 0041; the retail family's Enum.BagIndex names: Bank and
+-- BankBag_1..7 on the old layout, CharacterBankTab_1..9 on both clients' API dumps (6 to 14; there
+-- -1 is the keyring, so it is only taken without the enum), Reagentbank; the account's warband
+-- tabs are left out, they are no character's). Assumed on Forever until measured (forever-api.md).
+define("shared", "BankBags", function()
+  local out, seen = {}, {}
+  local function add(id)
+    if type(id) == "number" and not seen[id] then
+      seen[id] = true
+      out[#out + 1] = id
+    end
+  end
+  local index = rawget(_G, "Enum") and Enum.BagIndex
+  if type(index) == "table" then
+    add(index.Bank)
+    for i = 1, 7 do
+      add(index["BankBag_" .. i])
+    end
+    for i = 1, 9 do -- Forever's dump names nine, retail's six (measured in the API stubs)
+      add(index["CharacterBankTab_" .. i])
+    end
+    add(index.Reagentbank)
+  end
+  if #out == 0 then
+    add(rawget(_G, "BANK_CONTAINER") or -1)
+    local first = (rawget(_G, "NUM_BAG_SLOTS") or 4) + 1
+    for bag = first, first + (rawget(_G, "NUM_BANKBAGSLOTS") or 6) - 1 do
+      add(bag)
+    end
+  end
+  return out
+end)
+
+-- The worn items by slot (GetInventoryItemLink, in both P1 dumps; verified through the reward
+-- comparison, W1).
+define("shared", "GetEquippedLinks", function()
+  local out = {}
+  if type(GetInventoryItemLink) ~= "function" then
+    return out
+  end
+  for slot = 1, 19 do
+    local link = plain(GetInventoryItemLink("player", slot))
+    local byID = rawget(_G, "GetInventoryItemID")
+    if type(link) ~= "string" and type(byID) == "function" then
+      -- the link withheld (a secret value on the retail family): the id still names the item
+      local id = plain(byID("player", slot))
+      link = id and ("item:" .. id) or nil
+    end
+    if link then
+      out[slot] = link
+    end
+  end
+  return out
+end)
+
+-- A global of the client's mail API, nil when the client lacks it.
+local function mailApi(name)
+  return rawget(_G, name)
+end
+
+-- The mailbox (GetInboxNumItems, GetInboxHeaderInfo, GetInboxItem, GetInboxItemLink: the retail
+-- family's globals, assumed on Forever until measured): every attachment and the money.
+define("shared", "GetInboxItems", function()
+  local numItems, header, item, itemLink =
+    mailApi("GetInboxNumItems"),
+    mailApi("GetInboxHeaderInfo"),
+    mailApi("GetInboxItem"),
+    mailApi("GetInboxItemLink")
+  if type(numItems) ~= "function" or type(item) ~= "function" then
+    return nil, nil
+  end
+  local rows, money = {}, 0
+  local perMail = rawget(_G, "ATTACHMENTS_MAX_RECEIVE") or 16
+  for i = 1, numItems() or 0 do
+    local cash = type(header) == "function" and select(5, header(i)) or nil
+    if type(cash) == "number" then
+      money = money + cash
+    end
+    for at = 1, perMail do
+      local _, itemID, _, count, quality = item(i, at)
+      if itemID then
+        local link = type(itemLink) == "function" and itemLink(i, at) or nil
+        rows[#rows + 1] = { itemID = itemID, count = count or 1, link = link, quality = quality }
+      end
+    end
+  end
+  return rows, money
+end)
+
+-- Writing a mail (the mail frame's send tab: MailFrameTab2, SendMailNameEditBox,
+-- SendMailSubjectEditBox; ClickSendMailItemButton and C_Container.PickupContainerItem as Postal
+-- and TSM's mailing use them; assumed on Forever). Never in combat.
+define("shared", "MailPrepare", function(recipient, subject)
+  if (type(InCombatLockdown) == "function" and InCombatLockdown()) or not _G.SendMailNameEditBox then
+    return false
+  end
+  local tab = _G.MailFrameTab2
+  if tab and tab.Click then
+    tab:Click()
+  end
+  _G.SendMailNameEditBox:SetText(recipient or "")
+  if _G.SendMailSubjectEditBox then
+    _G.SendMailSubjectEditBox:SetText(subject or "")
+  end
+  return true
+end)
+
+local function sendSlots()
+  return rawget(_G, "ATTACHMENTS_MAX_SEND") or 12
+end
+
+define("shared", "GetSendMailItems", function()
+  local out = {}
+  local get = mailApi("GetSendMailItem")
+  if type(get) ~= "function" then
+    return out
+  end
+  for i = 1, sendSlots() do
+    local _, itemID, _, count = get(i)
+    if itemID then
+      out[itemID] = (out[itemID] or 0) + (count or 1)
+    end
+  end
+  return out
+end)
+
+define("shared", "MailFreeSlots", function()
+  if type(mailApi("GetSendMailItem")) ~= "function" then
+    return 0
+  end
+  local free = 0
+  for i = 1, sendSlots() do
+    if not mailApi("GetSendMailItem")(i) then
+      free = free + 1
+    end
+  end
+  return free
+end)
+
+define("shared", "MailAttach", function(bag, slot)
+  if
+    (type(InCombatLockdown) == "function" and InCombatLockdown())
+    or type(mailApi("ClickSendMailItemButton")) ~= "function"
+    or type(mailApi("GetSendMailItem")) ~= "function"
+    or not (type(C_Container) == "table" and C_Container.PickupContainerItem)
+  then
+    return false
+  end
+  for i = 1, sendSlots() do
+    if not mailApi("GetSendMailItem")(i) then
+      C_Container.PickupContainerItem(bag, slot)
+      mailApi("ClickSendMailItemButton")(i)
+      return true
+    end
+  end
+  return false
 end)
 
 -- Money (GetMoney: documented identically on both clients).
@@ -807,6 +1104,46 @@ define("shared", "OpenSettings", function(category)
   end
 end)
 
+-- The game's Key Bindings screen (the welcome's "Set the clear-screen key", plan-launch-review
+-- O1): an addon cannot bind a key itself. The retail family opens the Settings panel's key
+-- bindings category; the old client loads Blizzard_BindingUI (**assumed** on both clients
+-- 01.11.2026, forever-api.md). -> whether a screen opened.
+define("shared", "OpenKeyBindings", function()
+  if Has.SettingsAPI and type(Settings.OpenToCategory) == "function" and Settings.KEYBINDINGS_CATEGORY_ID then
+    note("OpenKeyBindings", "Settings.KEYBINDINGS_CATEGORY_ID")
+    Settings.OpenToCategory(Settings.KEYBINDINGS_CATEGORY_ID)
+    return true
+  end
+  local load = rawget(_G, "KeyBindingFrame_LoadUI")
+  if type(load) == "function" then
+    note("OpenKeyBindings", "KeyBindingFrame_LoadUI")
+    load()
+    local frame, show = rawget(_G, "KeyBindingFrame"), rawget(_G, "ShowUIPanel")
+    if frame and type(show) == "function" then
+      show(frame)
+      return true
+    end
+  end
+  note("OpenKeyBindings", "no key bindings screen")
+  return false
+end)
+
+-- The key set for a binding action (the app pages' Keys rows, the Help page): the first key the
+-- game names, nil when none is set or the client lacks GetBindingKey (**assumed** on both clients
+-- 01.11.2026, forever-api.md).
+define("shared", "BindingKey", function(action)
+  local get = rawget(_G, "GetBindingKey")
+  if type(get) ~= "function" then
+    note("BindingKey", "no GetBindingKey")
+    return nil
+  end
+  local key = get(action)
+  if key == nil or key == "" then
+    return nil
+  end
+  return key
+end)
+
 -- ---------------------------------------------------------------------------------------------
 -- Map transforms: the API first, else the generated table from Data (coordinates.md)
 -- ---------------------------------------------------------------------------------------------
@@ -937,6 +1274,50 @@ define("shared", "HasAnimation", function(model, animID)
     return nil -- the client cannot tell
   end
   return model:HasAnimation(animID) and true or false
+end)
+
+-- The game's own window parts ("I need a clearly skinned style according
+-- to Blizzard examples"): Blizzard's SharedXML templates, in Forever's UI files of 1.60.1 (the
+-- Mainline SharedUIPanelTemplates.xml) and on retail. C_XMLUtil.GetTemplateInfo says whether the
+-- client knows one; without that function the frame is tried. nil where the client lacks it.
+local function templated(parent, template)
+  local util = rawget(_G, "C_XMLUtil")
+  if
+    type(util) == "table"
+    and type(util.GetTemplateInfo) == "function"
+    and not util.GetTemplateInfo(template)
+  then
+    return nil
+  end
+  local ok, frame = pcall(CreateFrame, "Frame", nil, parent, template)
+  return ok and frame or nil
+end
+
+-- PortraitFrameTemplate: the metal frame, the rock ground (`Bg`), the title bar (`SetTitle`), the
+-- red close button (`CloseButton`) and the round portrait (`SetPortraitToAsset`).
+define("shared", "NewGameWindow", function(parent)
+  local frame = templated(parent, "PortraitFrameTemplate")
+  if frame and frame.CloseButton and type(frame.SetPortraitToAsset) == "function" and frame.SetTitle then
+    note("NewGameWindow", "PortraitFrameTemplate")
+    return frame
+  end
+  if frame then
+    frame:Hide()
+  end
+  return nil
+end)
+
+-- InsetFrameTemplate: the marble ground (`Bg`) in its bevelled edge, the game's inner panels.
+define("shared", "NewInset", function(parent)
+  local frame = templated(parent, "InsetFrameTemplate")
+  if frame and frame.Bg then
+    note("NewInset", "InsetFrameTemplate")
+    return frame
+  end
+  if frame then
+    frame:Hide()
+  end
+  return nil
 end)
 
 define("shared", "NewBackdrop", function(parent)
@@ -1071,11 +1452,15 @@ define("shared", "UnitFacts", function(unit)
   end
   local guid = call("UnitGUID", unit)
   local health, max = call("UnitHealth", unit), call("UnitHealthMax", unit)
+  -- the distance stays unknown in combat: retail refuses CheckInteractDistance there (blocked 12x,
+  -- taint log 31.10.2026, retail 12.1.5.70688)
   local within
-  if call("CheckInteractDistance", unit, 3) then
-    within = 10
-  elseif call("CheckInteractDistance", unit, 1) then
-    within = 28
+  if not call("InCombatLockdown") then
+    if call("CheckInteractDistance", unit, 3) then
+      within = 10
+    elseif call("CheckInteractDistance", unit, 1) then
+      within = 28
+    end
   end
   return {
     unit = unit,
@@ -1138,6 +1523,34 @@ define("shared", "PlayerAuras", function()
     end
     note("PlayerAuras", "UnitAura")
   end
+  return out
+end)
+
+-- A unit's helpful auras with their end (C_UnitAuras.GetAuraDataByIndex, the retail family's
+-- AuraData: expirationTime 0 for an aura without an end; assumed on Forever, probe C1).
+define("shared", "UnitAuras", function(unit)
+  local out = {}
+  if not has(C_UnitAuras, "GetAuraDataByIndex") then
+    return out
+  end
+  for i = 1, 80 do
+    local a = C_UnitAuras.GetAuraDataByIndex(unit, i, "HELPFUL")
+    if type(a) ~= "table" then
+      break
+    end
+    local id = plain(a.spellId)
+    if id then
+      local ends = plain(a.expirationTime)
+      out[#out + 1] = {
+        spellId = id,
+        name = plain(a.name),
+        expires = type(ends) == "number" and ends > 0 and ends or nil,
+        duration = plain(a.duration),
+        source = plain(a.sourceUnit),
+      }
+    end
+  end
+  note("UnitAuras", "C_UnitAuras")
   return out
 end)
 
@@ -1283,21 +1696,142 @@ define("shared", "StopFile", function(handle)
   end
 end)
 
--- The client's text-to-speech (assumed; forever-api.md, library.md 10.3): the first voice the
--- client offers. Both clients' SpeakText takes (voiceID, text, rate, volume, overlap) (api stubs,
--- 28.10.2026); the older (voiceID, text, destination, rate, volume) put 0 into the volume and the
--- owner heard nothing on retail. A client whose signature differs answers false through pcall.
-define("shared", "Speak", function(text)
+-- The client's text-to-speech (assumed; forever-api.md, library.md 10.3, the Orbiter's fallback
+-- where Spoken has no line, ). Both clients' SpeakText takes (voiceID, text, rate,
+-- volume, overlap) (api stubs, 28.10.2026); the older (voiceID, text, destination, rate, volume)
+-- put 0 into the volume and the owner heard nothing on retail. A client whose signature differs
+-- answers false through pcall. The rate and volume are the player's under Accessibility
+-- (C_TTSSettings). The voice is the caller's where it names one the client lists, else a woman's
+-- voice by its name (the client's default is a man's, and nobody finds the
+-- Accessibility setting), else the first voice the client lists.
+local function ttsVoices()
   local vc = rawget(_G, "C_VoiceChat")
-  if not (vc and vc.SpeakText and vc.GetTtsVoices) or type(text) ~= "string" or text == "" then
-    return false
+  if not (vc and vc.SpeakText and vc.GetTtsVoices) then
+    return {}
   end
   local voices = vc.GetTtsVoices()
-  local voice = type(voices) == "table" and voices[1]
-  if not (voice and voice.voiceID) then
+  return type(voices) == "table" and voices or {}
+end
+
+-- The women among the Windows (SAPI, OneCore) and macOS voices the clients list, by first name.
+local WOMEN_VOICES = {
+  "zira",
+  "hazel",
+  "susan",
+  "linda",
+  "catherine",
+  "hedda",
+  "katja",
+  "hortense",
+  "julie",
+  "caroline",
+  "helena",
+  "laura",
+  "sabina",
+  "elsa",
+  "haruka",
+  "ayumi",
+  "huihui",
+  "yaoyao",
+  "hanhan",
+  "tracy",
+  "heami",
+  "heera",
+  "kalpana",
+  "irina",
+  "paulina",
+  "herena",
+  "maria",
+  "lucia",
+  "helia",
+  "hilda",
+  "hoda",
+  "salma",
+  "samantha",
+  "victoria",
+  "karen",
+  "moira",
+  "tessa",
+  "fiona",
+  "kate",
+  "serena",
+  "amelie",
+  "anna",
+  "alice",
+  "alva",
+  "ellen",
+  "ioana",
+  "joana",
+  "kyoko",
+  "lekha",
+  "luciana",
+  "mariska",
+  "melina",
+  "milena",
+  "monica",
+  "nora",
+  "sara",
+  "satu",
+  "yuna",
+  "zosia",
+  "zuzana",
+}
+
+local function womanVoice(voices)
+  for _, v in ipairs(voices) do
+    local name = type(v.name) == "string" and v.name:lower() or ""
+    for _, woman in ipairs(WOMEN_VOICES) do
+      if name:find(woman, 1, true) and v.voiceID then
+        return v.voiceID
+      end
+    end
+  end
+  return nil
+end
+
+define("shared", "CanSpeak", function()
+  local voices = ttsVoices()
+  return voices[1] ~= nil and voices[1].voiceID ~= nil
+end)
+
+define("shared", "Voices", function()
+  local out = {}
+  for _, v in ipairs(ttsVoices()) do
+    if v.voiceID then
+      out[#out + 1] =
+        { voiceID = v.voiceID, name = type(v.name) == "string" and v.name or tostring(v.voiceID) }
+    end
+  end
+  return out
+end)
+
+define("shared", "Speak", function(text, voiceID)
+  local vc = rawget(_G, "C_VoiceChat")
+  if type(text) ~= "string" or text == "" then
     return false
   end
-  return pcall(vc.SpeakText, voice.voiceID, text, 0, 100, false) == true
+  local voices = ttsVoices()
+  if not (voices[1] and voices[1].voiceID) then
+    return false
+  end
+  local voice, rate, volume = nil, 0, 100
+  for _, v in ipairs(voices) do
+    if voiceID ~= nil and v.voiceID == voiceID then
+      voice = voiceID
+    end
+  end
+  voice = voice or womanVoice(voices) or voices[1].voiceID
+  local T = rawget(_G, "C_TTSSettings")
+  if has(T, "GetSpeechRate") then
+    rate = tonumber(T.GetSpeechRate()) or rate
+  end
+  if has(T, "GetSpeechVolume") then
+    volume = tonumber(T.GetSpeechVolume()) or volume
+  end
+  if vc.StopSpeakingText then
+    pcall(vc.StopSpeakingText) -- one text at a time
+  end
+  return pcall(vc.SpeakText, voice, text, rate, volume, false) == true
 end)
 
 define("shared", "StopSpeaking", function()
@@ -1361,5 +1895,413 @@ define("shared", "PickColor", function(r, g, b, onChange)
     f:Show()
     note("PickColor", "the frame's fields")
   end
+  -- above the suite's windows (FULLSCREEN_DIALOG): the picker opened behind the settings (owner,
+  -- retail 31.10.2026)
+  if type(f.SetFrameStrata) == "function" then
+    f:SetFrameStrata("TOOLTIP")
+    f:Raise()
+  end
   return true
+end)
+
+-- ---------------------------------------------------------------------------------------------
+-- Bastian's Helpers (helpers.md): the merchant, the mailbox, quest givers, durability, bags. The
+-- retail family's globals and C_GossipInfo; every one is in both P1 dumps (Forever 21.10.2026,
+-- retail 22.10.2026), the behaviour assumed until the helpers' in-game checklist (forever-api.md).
+-- ---------------------------------------------------------------------------------------------
+
+-- A global function of the client, nil when it lacks it (the legacy globals are no stubs).
+local function api(name)
+  local fn = rawget(_G, name)
+  return type(fn) == "function" and fn or nil
+end
+
+local function shown(name)
+  local f = rawget(_G, name)
+  return type(f) == "table" and type(f.IsShown) == "function" and f:IsShown() and true or false
+end
+
+-- Calls the client function `name` with the arguments: true when the client has it.
+local function invoke(name, ...)
+  local fn = api(name)
+  if not fn then
+    return false
+  end
+  fn(...)
+  return true
+end
+
+define("shared", "MerchantRepair", function()
+  local cost = api("GetRepairAllCost")
+  if not (shown("MerchantFrame") and cost) then
+    return nil
+  end
+  local amount, can = cost()
+  local merchant, guild, withdraw =
+    api("CanMerchantRepair"), api("CanGuildBankRepair"), api("GetGuildBankWithdrawMoney")
+  local guildMoney = withdraw and plain(withdraw()) or nil
+  if type(guildMoney) == "number" and guildMoney < 0 then
+    guildMoney = nil -- the guild master: no limit
+  end
+  return {
+    canRepair = (merchant == nil or merchant()) and can and true or false,
+    cost = plain(amount) or 0,
+    guild = guild ~= nil and guild() and true or false,
+    guildMoney = guildMoney,
+  }
+end)
+
+define("shared", "RepairAll", function(useGuild)
+  return invoke("RepairAllItems", useGuild and true or nil)
+end)
+
+-- Selling is "using" the stack while the merchant listens: with the window closed the same call
+-- would equip, eat or open the item, so it is refused then.
+define("shared", "SellBagItem", function(bag, slot)
+  if not (shown("MerchantFrame") and has(C_Container, "UseContainerItem")) then
+    return false
+  end
+  C_Container.UseContainerItem(bag, slot)
+  return true
+end)
+
+define("shared", "MerchantBuy", function(index, count)
+  return shown("MerchantFrame") and invoke("BuyMerchantItem", index, count)
+end)
+
+define("shared", "MerchantMaxStack", function(index)
+  local max = api("GetMerchantItemMaxStack")
+  local n = max and max(index)
+  return type(n) == "number" and n > 0 and n or nil
+end)
+
+define("shared", "GetBuybackItems", function()
+  local out = {}
+  local num, link, info = api("GetNumBuybackItems"), api("GetBuybackItemLink"), api("GetBuybackItemInfo")
+  if not (num and link) then
+    return out
+  end
+  for i = 1, num() or 0 do
+    local id = tonumber(string.match(tostring(link(i) or ""), "item:(%d+)"))
+    if id then
+      local count, price = 1, nil
+      if info then
+        local _, _, p, n = info(i)
+        price, count = p, n or 1
+      end
+      out[#out + 1] = { index = i, itemID = id, count = count, price = price }
+    end
+  end
+  return out
+end)
+
+define("shared", "Buyback", function(index)
+  return shown("MerchantFrame") and invoke("BuybackItem", index)
+end)
+
+define("shared", "GetInboxMail", function()
+  local out = {}
+  local num, header, item = api("GetInboxNumItems"), api("GetInboxHeaderInfo"), api("GetInboxItem")
+  if not (num and header) then
+    return out
+  end
+  local perMail = item and (rawget(_G, "ATTACHMENTS_MAX_RECEIVE") or 16) or 0
+  for i = 1, num() or 0 do
+    local _, _, sender, subject, money, cod = header(i)
+    local items = 0
+    for a = 1, perMail do
+      if select(2, item(i, a)) then
+        items = items + 1
+      end
+    end
+    out[#out + 1] = {
+      index = i,
+      sender = plain(sender),
+      subject = plain(subject),
+      money = money or 0,
+      cod = cod or 0,
+      items = items,
+    }
+  end
+  return out
+end)
+
+define("shared", "TakeInboxMoney", function(index)
+  return invoke("TakeInboxMoney", index)
+end)
+
+define("shared", "TakeInboxItems", function(index)
+  return invoke("AutoLootMailItem", index)
+end)
+
+define("shared", "MailRecipient", function(name)
+  local box = rawget(_G, "SendMailNameEditBox")
+  if (type(InCombatLockdown) == "function" and InCombatLockdown()) or not box then
+    return false
+  end
+  box:SetText(name or "")
+  return true
+end)
+
+define("shared", "MailRecipientText", function()
+  local box = rawget(_G, "SendMailNameEditBox")
+  return box and box:GetText() or nil
+end)
+
+-- An auto-accepted quest only wants the acknowledgement (QuestGetAutoAccept, retail family).
+define("shared", "QuestAccept", function(kind)
+  if kind == "confirm" then
+    return invoke("ConfirmAcceptQuest")
+  end
+  local auto = api("QuestGetAutoAccept")
+  if auto and auto() and invoke("AcknowledgeAutoAcceptQuest") then
+    return true
+  end
+  return invoke("AcceptQuest")
+end)
+
+define("shared", "QuestProgress", function()
+  local completable, money = api("IsQuestCompletable"), api("GetQuestMoneyToGet")
+  return completable ~= nil and completable() and true or false, money and money() or 0
+end)
+
+define("shared", "QuestContinue", function()
+  return invoke("CompleteQuest")
+end)
+
+define("shared", "QuestChoices", function()
+  local out = {}
+  local num, link, info = api("GetNumQuestChoices"), api("GetQuestItemLink"), api("GetQuestItemInfo")
+  for i = 1, num and num() or 0 do
+    local id = link and tonumber(string.match(tostring(link("choice", i) or ""), "item:(%d+)")) or nil
+    local count = info and select(3, info("choice", i)) or 1
+    out[#out + 1] = { index = i, itemID = id, count = count }
+  end
+  return out
+end)
+
+define("shared", "QuestTakeReward", function(index)
+  return invoke("GetQuestReward", index)
+end)
+
+define("shared", "GreetingQuests", function()
+  local active, available = {}, {}
+  local numActive, activeTitle = api("GetNumActiveQuests"), api("GetActiveTitle")
+  local numAvailable, availableTitle = api("GetNumAvailableQuests"), api("GetAvailableTitle")
+  for i = 1, numActive and numActive() or 0 do
+    local title, complete
+    if activeTitle then
+      title, complete = activeTitle(i)
+    end
+    active[#active + 1] = { index = i, title = plain(title), complete = complete and true or false }
+  end
+  for i = 1, numAvailable and numAvailable() or 0 do
+    available[#available + 1] = { index = i, title = availableTitle and plain(availableTitle(i)) or nil }
+  end
+  return active, available
+end)
+
+define("shared", "GossipQuests", function()
+  local active, available = {}, {}
+  if has(C_GossipInfo, "GetActiveQuests") then
+    for _, q in ipairs(C_GossipInfo.GetActiveQuests() or {}) do
+      active[#active + 1] =
+        { questID = q.questID, title = plain(q.title), complete = q.isComplete and true or false }
+    end
+  end
+  if has(C_GossipInfo, "GetAvailableQuests") then
+    for _, q in ipairs(C_GossipInfo.GetAvailableQuests() or {}) do
+      available[#available + 1] = { questID = q.questID, title = plain(q.title) }
+    end
+  end
+  return active, available
+end)
+
+define("shared", "GossipOptions", function()
+  local out = {}
+  if has(C_GossipInfo, "GetOptions") then
+    for _, o in ipairs(C_GossipInfo.GetOptions() or {}) do
+      out[#out + 1] = { id = o.gossipOptionID, name = plain(o.name) }
+    end
+  end
+  return out
+end)
+
+-- The gossip frame selects by option and quest id (C_GossipInfo), the greeting frame by list index.
+local GOSSIP_SELECT =
+  { option = "SelectOption", active = "SelectActiveQuest", available = "SelectAvailableQuest" }
+local GREETING_SELECT = { active = "SelectActiveQuest", available = "SelectAvailableQuest" }
+define("shared", "NpcSelect", function(frame, kind, id)
+  if id == nil then
+    return false
+  end
+  if frame == "gossip" then
+    local fn = GOSSIP_SELECT[kind]
+    if not (fn and has(C_GossipInfo, fn)) then
+      return false
+    end
+    C_GossipInfo[fn](id)
+    return true
+  elseif frame == "greeting" and GREETING_SELECT[kind] then
+    return invoke(GREETING_SELECT[kind], id)
+  end
+  return false
+end)
+
+-- The quest frame's texts (Bastian's Voice draws the conversation itself).
+define("shared", "QuestDetail", function()
+  local title = api("GetTitleText")
+  if not title then
+    return nil
+  end
+  local function text(name)
+    local fn = api(name)
+    local value = fn and fn()
+    return type(value) == "string" and value ~= "" and plain(value) or nil
+  end
+  return {
+    title = plain(title()),
+    text = text("GetQuestText"),
+    objectives = text("GetObjectiveText"),
+    reward = text("GetRewardText"),
+    progress = text("GetProgressText"),
+  }
+end)
+
+define("shared", "QuestID", function()
+  local fn = api("GetQuestID")
+  local id = fn and fn()
+  return type(id) == "number" and id > 0 and id or nil
+end)
+
+define("shared", "QuestDecline", function()
+  return invoke("DeclineQuest")
+end)
+
+define("shared", "NpcClose", function()
+  local closed = false
+  if has(C_GossipInfo, "CloseGossip") then
+    C_GossipInfo.CloseGossip()
+    closed = true
+  elseif api("CloseGossip") then
+    closed = invoke("CloseGossip") or closed
+  end
+  if api("CloseQuest") then
+    closed = invoke("CloseQuest") or closed
+  end
+  return closed
+end)
+
+-- The game's NPC windows stay built and keep their events; they are only made invisible and
+-- deaf to the mouse (as DialogueUI does), never re-parented, and left alone in combat the first
+-- time (a protected frame is not touched then).
+local npcFramesHidden = false
+define("shared", "NpcFramesHidden", function(hidden)
+  hidden = hidden and true or false
+  if hidden == npcFramesHidden then
+    return false
+  end
+  if hidden and type(InCombatLockdown) == "function" and InCombatLockdown() then
+    return false
+  end
+  for _, name in ipairs({ "GossipFrame", "QuestFrame" }) do
+    local frame = rawget(_G, name)
+    if type(frame) == "table" and frame.SetAlpha then
+      frame:SetAlpha(hidden and 0 or 1)
+      if frame.EnableMouse then
+        frame:EnableMouse(not hidden)
+      end
+    end
+  end
+  npcFramesHidden = hidden
+  return true
+end)
+
+define("shared", "InstanceMap", function()
+  local inside = fnOf("IsInInstance")
+  local info = fnOf("GetInstanceInfo")
+  if not (inside and info) then
+    return nil
+  end
+  local is, kind = inside()
+  if not is or (kind ~= "party" and kind ~= "raid") then
+    return nil
+  end
+  local name, _, _, _, _, _, _, instanceID = info()
+  instanceID = plain(instanceID)
+  if type(instanceID) ~= "number" or instanceID <= 0 then
+    return nil
+  end
+  return instanceID, plain(name)
+end)
+
+define("shared", "PushQuest", function(questID)
+  if
+    not (
+      api("QuestLogPushQuest")
+      and has(C_QuestLog, "IsPushableQuest")
+      and C_QuestLog.IsPushableQuest(questID)
+    )
+  then
+    return false
+  end
+  if has(C_QuestLog, "SetSelectedQuest") then
+    C_QuestLog.SetSelectedQuest(questID)
+  end
+  return invoke("QuestLogPushQuest")
+end)
+
+define("shared", "GetDurability", function()
+  local get = api("GetInventoryItemDurability")
+  if not get then
+    return nil
+  end
+  local lowest, broken
+  for slot = 1, 19 do
+    local cur, max = get(slot)
+    if type(cur) == "number" and type(max) == "number" and max > 0 then
+      lowest = math.min(lowest or 1, cur / max)
+      broken = (broken or 0) + (cur == 0 and 1 or 0)
+    end
+  end
+  return lowest, broken
+end)
+
+define("shared", "BagSpace", function()
+  if not has(C_Container, "GetContainerNumFreeSlots") then
+    return nil, nil
+  end
+  local free, total = 0, 0
+  for bag = 0, rawget(_G, "NUM_BAG_SLOTS") or 4 do
+    local n, family = C_Container.GetContainerNumFreeSlots(bag)
+    if (family or 0) == 0 then -- general bags only: a herb bag takes no cloth
+      free = free + (n or 0)
+      total = total + (C_Container.GetContainerNumSlots(bag) or 0)
+    end
+  end
+  return free, total
+end)
+
+-- The chat window of a tab name (GetChatWindowInfo: name first; ChatFrame1..NUM_CHAT_WINDOWS;
+-- in both P1 dumps, assumed): the addon chat of Core's notices.
+define("shared", "ChatFrameNamed", function(name)
+  local info = api("GetChatWindowInfo")
+  if not (info and type(name) == "string" and name ~= "") then
+    return nil
+  end
+  local want = string.lower(name)
+  for i = 1, rawget(_G, "NUM_CHAT_WINDOWS") or 10 do
+    local tab = plain(info(i))
+    local frame = rawget(_G, "ChatFrame" .. i)
+    if type(tab) == "string" and string.lower(tab) == want and frame then
+      return frame
+    end
+  end
+  return nil
+end)
+
+local MODIFIERS = { shift = "IsShiftKeyDown", ctrl = "IsControlKeyDown", alt = "IsAltKeyDown" }
+define("shared", "ModifierDown", function(key)
+  local fn = api(MODIFIERS[key] or "")
+  return fn ~= nil and fn() and true or false
 end)

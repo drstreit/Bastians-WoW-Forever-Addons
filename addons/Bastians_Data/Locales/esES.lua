@@ -16,6 +16,10 @@ local strings = {
   ["Item level"] = "Nivel de objeto",
   ["Requires level"] = "Requiere nivel",
   ["Instance entrance"] = "Entrada de instancia",
+  ["Map"] = "Mapa",
+  ["Floor %d"] = "Planta %d",
+  ["Click: enlarge"] = "Clic: ampliar",
+  ["%d bosses have no place on these maps yet"] = "%d jefes aún no tienen lugar en estos mapas",
   ["Dungeon"] = "Calabozo",
   ["Raid"] = "Banda",
   ["Bosses"] = "Jefes",
@@ -47,6 +51,10 @@ local strings = {
   ["Locations"] = "Ubicaciones",
   ["Sells"] = "Vende",
   ["Teaches"] = "Enseña",
+  ["teaches %d"] = "enseña %d",
+  ["Known by: %s"] = "Lo conoce: %s",
+  ["you"] = "tú",
+  ["Not known by any of your characters"] = "Ninguno de tus personajes lo conoce",
   ["Drops"] = "Botín",
   ["Sources"] = "Fuentes",
   ["Reagents"] = "Componentes",
@@ -163,6 +171,12 @@ local strings = {
   ["World drop"] = "Botín del mundo",
   ["creatures level %s"] = "criaturas de nivel %s",
   ["%d creatures"] = "%d criaturas",
+  -- owner round 5 (31.10.2026): an item's lines and recipes
+  ["Stats"] = "Atributos",
+  ["Used in recipes"] = "Usado en recetas",
+  -- 31.10.2026: what an item disenchants into
+  ["Disenchants into"] = "Desencantar da",
+  ["Disenchant"] = "Desencantar",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

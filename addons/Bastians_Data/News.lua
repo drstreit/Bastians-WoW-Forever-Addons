@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.3.0:1",
+    date = "2026-11-02",
+    version = "1.3.0",
+    text = "The dungeon pages name the right bosses; some showed an unrelated creature (Shadowfang Keep's first boss as Archaedas) with loot that was not its own.",
+  },
+  {
+    id = "1.0.0-beta.13:3-core",
+    date = "2026-10-29",
+    version = "1.0.0-beta.13",
+    text = "Flight masters and measured flight times are kept by Bastian's Data, so every app's travel times use them.",
+  },
+  {
     id = "1.0.0-beta.13:1",
     date = "2026-10-29",
     version = "1.0.0-beta.13",

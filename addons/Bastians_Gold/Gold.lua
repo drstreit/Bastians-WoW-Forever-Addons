@@ -87,6 +87,7 @@ local mod = B:NewModule("Gold", {
     ns.Spots.Register(self)
     ns.Signals.Register(self) -- the signals as things and activities (W10 step 2)
     ns.Window.Register(self)
+    ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
   OnDisable = function()
     ns.Window.Hide()

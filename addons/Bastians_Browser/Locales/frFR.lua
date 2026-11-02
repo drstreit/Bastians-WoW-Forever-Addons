@@ -33,6 +33,13 @@ ns.L:Register("frFR", {
   ["All"] = "Tout",
   ["Where the rows are: in your zone, on your continent, or everywhere."] = "Où se trouvent les lignes : dans votre zone, sur votre continent ou partout.",
   ["Sort"] = "Trier",
+  ["Groups"] = "Groupes",
+  ["By zone"] = "Par zone",
+  ["None"] = "Aucun",
+  ["Nearest first, the rows under their zone's name."] = "Les plus proches d'abord, les lignes sous le nom de leur zone.",
+  ["Elsewhere"] = "Ailleurs",
+  ["Loading %d of %d ..."] = "Chargement de %d sur %d ...",
+  ["%d loaded"] = "%d chargés",
   ["The order of the rows."] = "L'ordre des lignes.",
   ["No entries. Is the data pack loaded?"] = "Aucune entrée. Le pack de données est-il chargé ?",
   ["Nothing matches these filters. The x on a filter clears it."] = "Rien ne correspond à ces filtres. Le x sur un filtre l'efface.",
@@ -68,6 +75,10 @@ ns.L:Register("frFR", {
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "Afficher ce que valent les quêtes et les objets (récompenses, prix) sur les lignes",
   ["Follow the target: an NPC or object you target becomes the subject"] = "Suivre la cible : un PNJ ou un objet ciblé devient le sujet",
   ["Hide the game's objective tracker in slim mode"] = "Masquer le suivi des objectifs du jeu en mode étroit",
+  ["Preview a row in the page pane"] = "Aperçu d'une ligne dans le volet de la page",
+  ["While Shift is held"] = "Tant que Maj est enfoncée",
+  ["On every hover"] = "À chaque survol",
+  ["Never"] = "Jamais",
   ["Open in Browser"] = "Ouvrir dans le navigateur",
   ["Right click: open in the Browser"] = "Clic droit : ouvrir dans le navigateur",
 
@@ -236,4 +247,12 @@ ns.L:Register("frFR", {
   ["The link is in the chat input: copy it with Ctrl+C."] = "Le lien est dans la saisie du chat : copiez-le avec Ctrl+C.",
   ["Slide the list in"] = "Replier la liste",
   ["Slide the list out"] = "Déplier la liste",
+  -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
+  ["Mobs"] = "Monstres",
+  ["Filter"] = "Filtrer",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["Click: the Browser. Right click: the bookmarks."] = "Clic : le navigateur. Clic droit : les favoris.",
+  ["Everything the suite knows: quests, NPCs, items, places."] = "Tout ce que la suite sait : quêtes, PNJ, objets, lieux.",
 })

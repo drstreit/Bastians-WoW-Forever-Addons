@@ -124,5 +124,7 @@ def test_dock_sits_in_the_title_bar_and_the_gesture_is_wired(wow: WowRuntime):
     g = wow.eval(f"{MOD}.win.opts.gestures")
     assert g.back is not None and g.forward is not None
     assert wow.eval(f"{MOD}.toolbar:GetHeight()") == 26
-    assert wow.eval(f"{MOD}.toolbar.back:GetWidth()") == 30
+    assert (
+        wow.eval(f"{MOD}.toolbar.back:GetWidth()") >= 30
+    )  # self-sized since ADR 0046 (pictogram and word)
     assert wow.errors == []

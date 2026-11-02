@@ -190,11 +190,11 @@ def test_the_quest_page_carries_the_chain(wow: WowRuntime):
     )
     texts = page_rows(wow, DS)
     chain = texts.index("Chain")
-    assert texts[chain + 1 : chain + 5] == [
-        "Continue the chain with: [7] The Fargodeep Mine  Chain 1/3  (Elwynn Forest)",
-        "[7] The Fargodeep Mine  Chain 1/3",
-        "[9] The Jasperlode Mine  Chain 2/3 - > Westfall",
-        "[10] Riverpaw Gnoll Bounty  Chain 3/3  (Westfall)",
+    assert texts[chain + 1 : chain + 5] == [  # the progress chain
+        "Step 1 of 3. Next: The Fargodeep Mine",
+        "1. [7] The Fargodeep Mine  Chain 1/3  in your log  <- you are here",
+        "2. [9] The Jasperlode Mine  Chain 2/3 - > Westfall  after step 1",
+        "3. [10] Riverpaw Gnoll Bounty  Chain 3/3  (Westfall)  after step 2",
     ]
     open_view(wow, "/bq 176")
     assert "Chain" not in page_rows(wow, DS)  # not part of a chain: no section
@@ -212,21 +212,22 @@ def test_log_view_lists_the_log_with_objectives_and_text(wow: WowRuntime):
         "HAND IN HERE  1",
         "[7] The Fargodeep Mine II  Chain 1/3",  # the client's title wins over the data
         "Quest text",
+        "next in chain: [9] The Jasperlode Mine  Chain 2/3 - > Westfall",  # greyed: not yet
         "OBJECTIVES HERE  1",
         "[11] The Fargodeep Mine  Group  0/1",
         "Explore the Fargodeep Mine  0/1",
         "Hogger has been seen.",  # client text, first sentence, folded
     ]
-    hogger = wow.eval(f"{WIN}.tree.flat[5]")
+    hogger = wow.eval(f"{WIN}.tree.flat[6]")
     # the nearest of the two known spots (player at 0.42, 0.65)
     assert (hogger.target, hogger.map, hogger.x, hogger.y) == ("objective", 1429, 0.40, 0.70)
-    wow.execute(f"{WIN}.tree:ToggleFold({WIN}.tree.flat[7])")
-    assert flat(wow)[7:9] == ["Hogger has been seen.", "Kill him."]
+    wow.execute(f"{WIN}.tree:ToggleFold({WIN}.tree.flat[8])")
+    assert flat(wow)[8:10] == ["Hogger has been seen.", "Kill him."]
     # the text pack, once loaded, comes first
     wow.execute("Bastians:GetService('data'):LoadPack('text')")
     wow.run_frames(5)
     wow.execute(f"{WIN}.Render()")
-    assert flat(wow)[7] == "Hogger has terrorised the farms of Elwynn long enough."
+    assert flat(wow)[8] == "Hogger has terrorised the farms of Elwynn long enough."
     assert wow.eval(f"{WIN}.CurrentMap()") == 1429
     open_view(wow, "/bq active")  # the old name still works
     assert title(wow) == "My quests"
@@ -381,6 +382,44 @@ def test_level_colour_follows_the_classic_rule(wow: WowRuntime):
     assert color(12, 12) == "|cffffff00"
     assert color(10, 12) == "|cffffff00"
     assert color(7, 12) == "|cff40c040"  # the green range at level 12 is 6 levels
-    assert color(5, 12) == "|cff808080"
+    assert color(5, 12) == "|cff858585"  # the grey of the teal scheme (H2: 4.5:1 on the panel)
     assert color("nil", 12) == "|cffffffff"
     assert wow.eval("Bastians:GetModule('Quests').Rows.greenRange(45)") == 10
+
+
+def test_a_hand_in_activates_the_next_in_chain_entry_until_it_is_taken(wow: WowRuntime):
+    """ "'next in chain' as separate entry: greyed out as long as not
+    active, then when I close the prior quest it gets activated (and the next greyed out quest
+    will be shown)". The log quest carries its chain's next quest greyed; the hand-in moves the
+    next quest into a "Next in chain" section of its own, now in its own colours (available),
+    with its successor greyed under it; the memory lives with the character and drops the entry
+    once the quest is in the log or done."""
+    boot(wow)
+    open_view(wow, "/bq log")
+    assert any(t.startswith("next in chain: [9] The Jasperlode Mine") for t in flat(wow))
+    # hand in The Fargodeep Mine (62): 76 is next and available now, 11 greyed under it
+    wow.execute("Mock.completedQuests = { 783, 7, 18, 62 }; Mock.questLog[3] = nil")
+    wow.fire("QUEST_TURNED_IN", 62, 300, 150)
+    wow.fire("QUEST_LOG_UPDATE")
+    wow.advance(0.3)
+    wow.run_frames(5)
+    rows = flat(wow)
+    assert "NEXT IN CHAIN  1" in rows
+    i = rows.index("NEXT IN CHAIN  1")
+    assert rows[i + 1].startswith("[9] The Jasperlode Mine  Chain 2/3")
+    assert rows[i + 2].startswith("next in chain: [") and "Riverpaw Gnoll Bounty" in rows[i + 2]
+    follow = wow.eval("Bastians:GetModule('Quests').db.char.chainNext")
+    assert dict(follow) == {76: 62}
+    # the quest taken: the section goes, the log entry carries the next greyed again
+    wow.execute(
+        "Mock.questLog[3] = { questID = 76, title = 'The Jasperlode Mine', level = 9, complete = false, objectives = {} }"
+    )
+    wow.fire("QUEST_ACCEPTED", 1, 76)
+    wow.fire("QUEST_LOG_UPDATE")
+    wow.advance(0.3)
+    wow.run_frames(5)
+    rows = flat(wow)
+    assert "NEXT IN CHAIN  1" not in rows
+    assert any("Riverpaw Gnoll Bounty" in t and t.startswith("next in chain:") for t in rows)
+    assert dict(wow.eval("Bastians:GetModule('Quests').db.char.chainNext")) == {}
+    assert errors(wow) == []

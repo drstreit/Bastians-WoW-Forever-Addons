@@ -23,6 +23,12 @@ APPS = (
     "Bastians_Route",
     "Bastians_Strategies",
     "Bastians_Notes",
+    "Bastians_Alts",
+    "Bastians_Helpers",
+    "Bastians_Voice",
+    "Bastians_Gestures",
+    "Bastians_Campfire",
+    "Bastians_Chat",
 )
 # the file of a locale and the client locales it registers for
 LOCALES = {

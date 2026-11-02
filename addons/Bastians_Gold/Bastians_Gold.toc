@@ -2,8 +2,23 @@
 ## Title: Bastian's Gold
 ## IconTexture: Interface\AddOns\Bastians_Gold\Icon
 ## Notes: Prices, auction capture and gold tracking.
+## Notes-koKR: 시세, 경매장 기록, 골드 추적.
+## Notes-zhCN: 价格、拍卖行记录和金币追踪。
+## Notes-zhTW: 價格、拍賣場記錄與金幣追蹤。
+## Notes-deDE: Preise, Auktionserfassung und Goldverlauf.
+## Notes-frFR: Prix, relevé de l'hôtel des ventes et suivi de l'or.
+## Notes-esES: Precios, registro de la casa de subastas y seguimiento del oro.
+## Notes-esMX: Precios, registro de la casa de subastas y seguimiento del oro.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data
@@ -27,4 +42,5 @@ Worth.lua
 Income.lua
 Advisor.lua
 Window.lua
+Feed.lua
 Gold.lua

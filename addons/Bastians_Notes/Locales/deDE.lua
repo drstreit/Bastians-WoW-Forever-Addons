@@ -26,7 +26,8 @@ ns.L:Register("deDE", {
   ["Never"] = "Nie",
   ["When near"] = "In der Nähe",
   ["When I target it"] = "Beim Anvisieren",
-  ["Keep"] = "Behalten",
+  ["Save"] = "Speichern",
+  ["(right click: open it)"] = "(Rechtsklick: öffnen)",
   ["Cancel"] = "Abbrechen",
   ["Remove"] = "Entfernen",
   ["A note needs a title."] = "Eine Notiz braucht einen Titel.",
@@ -84,4 +85,11 @@ ns.L:Register("deDE", {
   ["Send to my group"] = "An meine Gruppe senden",
   ["No place to send."] = "Kein Ort zum Senden.",
   ["Bookmark: a click shows it on the map, a right click renames it"] = "Lesezeichen: Klick zeigt es auf der Karte, Rechtsklick benennt es um",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d notes"] = "%d Notizen",
+  ["%d notes, %d reminders"] = "%d Notizen, %d Erinnerungen",
+  ["Click: the lists. Right click: a note here."] = "Klick: die Listen. Rechtsklick: eine Notiz hier.",
+  ["Near here:"] = "In der Nähe:",
+  ["No notes near here."] = "Keine Notizen in der Nähe.",
+  ["and %d more"] = "und %d weitere",
 })

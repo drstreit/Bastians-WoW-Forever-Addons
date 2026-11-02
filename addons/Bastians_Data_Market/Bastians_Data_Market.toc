@@ -1,9 +1,24 @@
 ## Interface: 16001
 ## Title: Bastian's Data: Market
+## Title-koKR: Bastian's Data: 시세
+## Title-zhCN: Bastian's Data: 市场
+## Title-zhTW: Bastian's Data: 市場
+## Title-deDE: Bastian's Data: Markt
+## Title-frFR: Bastian's Data: Marché
+## Title-esES: Bastian's Data: Mercado
+## Title-esMX: Bastian's Data: Mercado
 ## IconTexture: Interface\AddOns\Bastians_Data_Market\Icon
 ## Notes: Generated market price snapshot (loads when Gold is enabled).
+## Notes-koKR: 생성된 시세 스냅샷 (Gold를 켜면 불러옴).
+## Notes-zhCN: 生成的市场价格快照（启用 Gold 时加载）。
+## Notes-zhTW: 生成的市場價格快照（啟用 Gold 時載入）。
+## Notes-deDE: Erzeugte Marktpreise (lädt, wenn Gold eingeschaltet ist).
+## Notes-frFR: Instantané des prix du marché généré (chargé si Gold est activé).
+## Notes-esES: Instantánea de precios del mercado generada (se carga si Gold está activado).
+## Notes-esMX: Instantánea de precios del mercado generada (se carga si Gold está activado).
+## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

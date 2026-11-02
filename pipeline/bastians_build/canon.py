@@ -14,6 +14,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import pairwise
+from typing import Any
 
 from bastians_build.areas import AreaBlock, add_areas
 from bastians_build.coords import (
@@ -29,7 +30,14 @@ from bastians_build.model import World
 from bastians_build.sources import cmangos, foreverdb
 from bastians_build.sources.allthethings import AllTheThings
 from bastians_build.sources.client_tables import ClientTables
-from bastians_build.sources.clientdump import AreaRow, TaxiNode, TaxiPath
+from bastians_build.sources.clientdump import (
+    WHOLE_WORLD,
+    AreaRow,
+    FloorArt,
+    TaxiNode,
+    TaxiPath,
+    floor_for_point,
+)
 from bastians_build.sources.everything_quests import EverythingQuests
 from bastians_build.sources.itemdb import ItemDB
 from bastians_build.sources.probe import Transform
@@ -127,6 +135,10 @@ class Sources:
     fdb_items: list[foreverdb.ItemFacts] = field(default_factory=list)
     fdb_names: dict[int, str] = field(default_factory=dict)
     fdb_dungeons: list[foreverdb.DungeonRow] = field(default_factory=list)
+    fdb_dungeon_maps: list[foreverdb.DungeonMapRow] = field(default_factory=list)
+    fdb_boss_creatures: foreverdb.BossCreatures | None = None  # Loot.lua (02.11.2026)
+    # the client's dungeon maps by instance (retail's UiMap tables, DG2c): the floors' art
+    floor_art: dict[int, list[FloorArt]] = field(default_factory=dict)
     cm_quests: list[cmangos.QuestRow] = field(default_factory=list)
     cm_creatures: list[dict] = field(default_factory=list)  # creature_template rows
     cm_objects: list[dict] = field(default_factory=list)  # gameobject_template rows
@@ -135,6 +147,7 @@ class Sources:
     cm_trainers: list[cmangos.TrainerService] = field(default_factory=list)
     cm_loot: list[cmangos.LootRow] = field(default_factory=list)
     cm_items: list[cmangos.ItemRow] = field(default_factory=list)
+    cm_disenchant: dict[int, list[list[Any]]] = field(default_factory=dict)
     cm_spell_names: dict[int, str] = field(default_factory=dict)  # spell_template SpellName
     # the client's FactionTemplate as { id: (side, hostile) } (sources/tdb.faction_sides):
     # the side and hostility of CMaNGOS' creatures (guards and the danger, R26.5)
@@ -737,6 +750,14 @@ def merge_items(world: World, s: Sources) -> None:
         rec["sell"] = it.sell_price
         rec["buy"] = it.buy_price
         rec["stack"] = it.stackable
+        rec["src"] = "classic"
+        if it.disenchant_id in s.cm_disenchant:
+            rec["disenchant"] = it.disenchant_id  # the list's id: a few lists serve every item
+    # the disenchant lists the items name
+    used = {it.disenchant_id for it in s.cm_items if it.disenchant_id in s.cm_disenchant}
+    for list_id in sorted(used):
+        rec = _rec(world, "disenchant", list_id)
+        rec["loot"] = s.cm_disenchant[list_id]
         rec["src"] = "classic"
     for item_id, name in s.fdb_names.items():
         if foreverdb.is_old(name):
@@ -1478,6 +1499,10 @@ def merge_dungeons(world: World, s: Sources) -> None:
         for zone_id, rec in world.records.get("zone", {}).items()
         if isinstance(rec.get("name"), str)
     }
+    by_name: dict[str, list[int]] = {}
+    for npc_id, npc in world.records.get("npc", {}).items():
+        if isinstance(npc.get("name"), str):
+            by_name.setdefault(npc["name"].lower(), []).append(npc_id)
     for d in s.fdb_dungeons:
         rec = _rec(world, "dungeon", d.id)
         rec["name"] = clean_name(d.name)
@@ -1487,13 +1512,18 @@ def merge_dungeons(world: World, s: Sources) -> None:
         rec["zone"] = zones_by_name.get(d.zone_name) if d.zone_name else None
         if d.zone_name and rec["zone"] is None:
             world.notes.append(f"dungeon {d.id} {d.name}: zone {d.zone_name!r} is unknown here")
-        rec["bosses"] = [[b.order, b.npc_id, b.name] for b in d.bosses] or None
+        creature = {b.order: _boss_creature(world, s, d, b, by_name) for b in d.bosses}
+        rec["bosses"] = [[b.order, creature[b.order], b.name] for b in d.bosses] or None
         rec["loot"] = [[x.item_id, x.boss_order, x.label] for x in d.loot] or None
         rec["quests"] = list(d.quests) or None
         rec["src"] = "forever"
-        by_order = {b.order: b for b in d.bosses}
+        unlinked = [b.name for b in d.bosses if creature[b.order] is None]
+        if unlinked:
+            world.notes.append(f"dungeon {d.id} {d.name}: no creature known for {unlinked}")
         for b in d.bosses:
-            npc = _rec(world, "npc", b.npc_id)
+            if creature[b.order] is None:
+                continue  # the boss keeps its name on the dungeon, without a page of its own
+            npc = _rec(world, "npc", creature[b.order])
             _set_if_missing(npc, "name", clean_name(b.name))
             flags = npc.get("flags")
             flags = [flags] if isinstance(flags, str) else list(flags or [])
@@ -1503,10 +1533,10 @@ def merge_dungeons(world: World, s: Sources) -> None:
             npc["dungeon"] = d.id
             _set_if_missing(npc, "src", "forever")
         for x in d.loot:
-            boss = by_order.get(x.boss_order)
-            if boss is None or x.label != "s":
-                continue  # the instance's unassigned loot stays on the dungeon record
-            npc = world.get("npc", boss.npc_id)
+            npc_id = creature.get(x.boss_order)
+            if npc_id is None or x.label != "s":
+                continue  # unassigned loot and an unlinked boss's stay on the dungeon
+            npc = world.get("npc", npc_id)
             loot = npc.get("loot") or []
             if not any(int(row[0]) == x.item_id for row in loot):
                 loot.append([x.item_id, None])  # seen in Forever, chance unknown
@@ -1516,6 +1546,154 @@ def merge_dungeons(world: World, s: Sources) -> None:
             quest = world.get("quest", quest_id)
             if quest is not None:
                 quest["dungeon"] = d.id
+    # the floors: the
+    # client's own dungeon maps from retail's UiMap tables (`floor_art`; the Forever client has
+    # the same art under its file names), the boss spots and the door placed on them through the
+    # world from ForeverDB's layout (DungeonFloor.world_point) and the floors' height bands; an
+    # instance the client has no map of (Forever's own dungeons) keeps ForeverDB's minimap plates
+    # on the Forever client, a bare plate on retail (the tiles are the Forever client's files)
+    bosses_of = {d.id: d.bosses for d in s.fdb_dungeons}
+    for m in s.fdb_dungeon_maps:
+        rec = world.get("dungeon", m.id)
+        if rec is None:
+            world.notes.append(f"dungeon map {m.id}: no dungeon record for it, left out")
+            continue
+        art = s.floor_art.get(m.id) or []
+        if art:
+            rec["floors"] = [_floor_record(f) for f in art]
+            heights = _boss_heights(s, m.id, bosses_of.get(m.id, ()))
+            spots, lost = [], []
+            for order, floor, x, y in m.boss_spots:
+                placed = _place_on_floor(art, m, floor, x, y, heights.get(order))
+                if placed is None:
+                    lost.append(order)
+                else:
+                    spots.append([order, *placed])
+            rec["bossSpots"] = spots or None
+            door = m.door and _place_on_floor(art, m, m.door[0], m.door[1], m.door[2], None)
+            rec["door"] = list(door) if door else None
+            if lost:
+                world.notes.append(
+                    f"dungeon {m.id} {rec.get('name')}: bosses {lost} have no floor on the"
+                    " client's maps (several floors share their region)"
+                )
+            continue
+        floors = []
+        for f in m.floors:
+            row = {"n": f.name, "w": f.width, "h": f.height}
+            if f.tiles and s.client == "forever":
+                row["t"] = [[t.fdid, t.x, t.y, t.w, t.h, t.q] for t in f.tiles]
+            floors.append(row)
+        rec["floors"] = floors or None
+        rec["bossSpots"] = [[o, fl, x, y] for o, fl, x, y in m.boss_spots] or None
+        rec["door"] = list(m.door) if m.door else None
+        if m.why:
+            world.notes.append(f"dungeon map {m.id} {rec.get('name')}: {m.why}")
+
+
+def _boss_creature(
+    world: World, s: Sources, d: foreverdb.DungeonRow, b, by_name: dict[str, list[int]]
+) -> int | None:
+    """The creature id of a ForeverDB boss (02.11.2026): Dungeons.lua's boss numbers are not
+    creature ids (Shadowfang Keep's 2748 is the creature Archaedas, Dalaran's 3298 Gabrielle
+    Chase). In order: Loot.lua's creature for the boss of that instance; the CMaNGOS creature of
+    that name with a spawn on the instance's map (the Classic dungeons); on Forever, the only npc
+    of that name in the data. None when nothing names it: never a guess. Retail does not link
+    Forever's own dungeons' bosses (their ids would be retail's other creatures)."""
+    name = clean_name(b.name).lower()
+    known = s.fdb_boss_creatures
+    forever_only = known is not None and d.id in known.forever
+    if s.client != "forever" and forever_only:
+        return None
+    if known is not None and name in known.npcs.get(d.id, {}):
+        return known.npcs[d.id][name]
+    entries = {
+        int(row["Entry"]) for row in s.cm_creatures if str(row.get("Name") or "").lower() == name
+    }
+    spawned = sorted(
+        {
+            sp.entry
+            for sp in s.cm_spawns
+            if sp.kind == "creature" and sp.map_id == d.id and sp.entry in entries
+        }
+    )
+    if len(spawned) == 1:
+        return spawned[0]
+    if s.client == "forever":
+        same = by_name.get(name, [])
+        if len(same) == 1:
+            return same[0]
+    return None
+
+
+def _floor_record(f: FloorArt) -> dict:
+    """A floor as the pack carries it: `n` name, `m` the retail UiMap id (retail draws its art
+    through C_Map), `a` the tiles' path prefix with `g` = {cols, rows} (Forever draws the files),
+    `w` x `h` the visible art in pixels."""
+    w, h = f.size
+    row: dict = {"n": f.name, "m": f.ui_map_id, "w": w, "h": h}
+    if f.art:
+        row["a"] = f.art
+        row["g"] = [f.cols, f.rows]
+    return row
+
+
+def _boss_heights(s: Sources, map_id: int, bosses) -> dict[int, list[tuple[float, float, float]]]:
+    """Per boss order the Classic spawn points (x, y, z) of a creature of that name on the
+    instance map (CMaNGOS; Forever renumbered its bosses, so the name is the join): the exact
+    height picks the floor where the floors stack."""
+    if not s.cm_spawns or not bosses:
+        return {}
+    wanted = {clean_name(b.name).lower(): b.order for b in bosses}
+    entries: dict[int, int] = {}
+    for row in s.cm_creatures:
+        name = str(row.get("Name") or "").lower()
+        if name in wanted:
+            entries[int(row["Entry"])] = wanted[name]
+    out: dict[int, list[tuple[float, float, float]]] = {}
+    for sp in s.cm_spawns:
+        on_map = sp.kind == "creature" and sp.map_id == map_id and sp.entry in entries
+        if on_map and sp.position_z is not None:
+            out.setdefault(entries[sp.entry], []).append(
+                (sp.position_x, sp.position_y, sp.position_z)
+            )
+    return out
+
+
+def _place_on_floor(
+    art: list[FloorArt],
+    m: foreverdb.DungeonMapRow,
+    floor: int,
+    x_pct: float,
+    y_pct: float,
+    heights: list[tuple[float, float, float]] | None,
+) -> tuple[int, float, float] | None:
+    """A ForeverDB spot (percent of its floor) on the client's floors: (floor index from 1, x %,
+    y %) of the floor the client shows there, or None when ForeverDB's floor has no place in the
+    world or no single floor fits."""
+    if not 1 <= floor <= len(m.floors):
+        return None
+    f = m.floors[floor - 1]
+    wp = f.world_point(x_pct, y_pct)
+    if wp is None:
+        return None
+    wx, wy = wp
+    z = f.z_mid
+    if heights:
+        _, _, z = min(heights, key=lambda p: (p[0] - wx) ** 2 + (p[1] - wy) ** 2)
+    i = floor_for_point(art, wx, wy, z)
+    if i is None:
+        return None
+    regions = [
+        r for r in art[i - 1].regions if r[3] - r[0] <= WHOLE_WORLD and r[4] - r[1] <= WHOLE_WORLD
+    ]
+    region = next((r for r in regions if r[0] <= wx <= r[3] and r[1] <= wy <= r[4]), None)
+    if region is None:
+        return None
+    min_x, min_y, _, max_x, max_y, _ = region
+    px = (max_y - wy) / (max_y - min_y) * 100
+    py = (max_x - wx) / (max_x - min_x) * 100
+    return i, round(px, 2), round(py, 2)
 
 
 def build_world(s: Sources) -> World:

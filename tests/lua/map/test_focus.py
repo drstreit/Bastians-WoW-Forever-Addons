@@ -165,7 +165,10 @@ def test_dock_puts_the_browser_beside_the_map(wow: WowRuntime):
 
 
 def test_the_strip_offers_route_and_play_when_their_apps_are_there(wow: WowRuntime):
-    boot(wow, CORE, DATA, "Spoken", "Spoken_Quests", QUESTS, BROWSER, MAP, ROUTE)
+    boot(wow, CORE, DATA, "Spoken", "Spoken_Quests", QUESTS, BROWSER, MAP, ROUTE, "Bastians_Voice")
+    wow.execute(
+        "Bastians:GetModule('Voice').Orbit.Hide()"
+    )  # the strip, not the orbit, is under test
     wow.execute("Bastians:Focus('npc:240', { source = 'test' })")
     assert strip_buttons(wow) == ["Open in Browser", "Route to"]  # an NPC has a place: Route
     wow.execute("Bastians:Focus('quest:176', { source = 'test' })")
@@ -176,4 +179,45 @@ def test_the_strip_offers_route_and_play_when_their_apps_are_there(wow: WowRunti
     assert strip_buttons(wow)[2] == "Stop"
     wow.execute("Bastians:Focus('quest:999', { source = 'test' })")  # no line, no place: Open only
     assert strip_buttons(wow) == ["Open in Browser"]
+    assert wow.errors == []
+
+
+# Westfall placed in the mock and the Deadmines' door listed in Elwynn's zone too, so the fixture's
+# dungeon stands in the zones the map queries
+WESTFALL = (
+    "Mock.maps[1436] = { name = 'Westfall', mapType = 3, parent = 1415,"
+    " c00 = { 0, -200, 200 }, c11 = { 0, -600, -200 } }"
+)
+DOOR_IN_VIEW = (
+    "local idx = Bastians:GetService('data'):Index('entrance.byZone')"
+    " idx[1429] = idx[1429] or {} table.insert(idx[1429], '36-1')"
+)
+
+
+def test_a_dungeon_from_the_browser_switches_its_layer_on_and_is_ringed(wow: WowRuntime):
+    """ "when I click in the browser on a dungeon, I expect to see it - so
+    switch on the dungeon layer automatically"."""
+    wow.execute(WESTFALL)
+    boot(wow, CORE, DATA, BROWSER, MAP)
+    wow.execute(DOOR_IN_VIEW)
+    layer = f"{PINS}.IsLayerOn(Bastians:GetMapLayer('map.dungeons'))"
+    assert wow.eval(layer) is True  # on by default, as Travel was for the doors
+    wow.execute(f"{PINS}.SetLayerOn('map.dungeons', false)")
+    wow.execute(f"{MAP_}.Fly(0, -300, 32, 5)")  # the door (-488, 32) and a part of Elwynn in view
+    wow.advance(0.3)
+    shown = [p.pin.ref for p in wow.eval(f"{PINS}.pinPool").values() if p.IsShown(p) and p.pin]
+    assert "dungeon:36" not in shown
+    # a click on the dungeon's row in the Browser (Browser.lua focuses it with source "browser")
+    wow.execute("Bastians:Focus('dungeon:36', { source = 'browser' })")
+    wow.advance(0.3)
+    assert wow.eval(layer) is True
+    door = pin(wow, "dungeon:36")  # the door's pin is the dungeon's: its page, its name
+    assert door.pin.label == "The Deadmines" and rings(wow) == ["dungeon:36"]
+    # "Show on map" on the dungeon's page switches it on too, from anywhere on the map
+    wow.execute(f"{PINS}.SetLayerOn('map.dungeons', false); {MAP_}.Fly(0, 0, 0, 6)")
+    wow.execute("Bastians:RunAction('map.show', 'dungeon:36', { source = 'browser' })")
+    wow.advance(0.3)
+    assert wow.eval(layer) is True
+    cam = (wow.eval(f"{MAP_}.Camera().wx"), wow.eval(f"{MAP_}.Camera().wy"))
+    assert cam == (-488, 32)  # at the door
     assert wow.errors == []

@@ -19,7 +19,7 @@ from bastians_build.canon import (
 from bastians_build.config import load_config
 from bastians_build.load import SourcePaths, load_sources
 from bastians_build.model import World
-from bastians_build.sources import cmangos, foreverdb, probe, questiedb
+from bastians_build.sources import clientdump, cmangos, foreverdb, probe, questiedb
 from bastians_build.sources.everything_quests import read_everything_quests
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "sources"
@@ -37,6 +37,10 @@ def fixture_sources(*, with_probe: bool = True) -> Sources:
     s.fdb_items = foreverdb.read_items(fdb / "Items.lua")
     s.fdb_names = foreverdb.read_search_names(fdb / "SearchNames.lua")
     s.fdb_dungeons = foreverdb.read_dungeons(fdb / "Dungeons.lua")
+    s.fdb_dungeon_maps = foreverdb.read_dungeon_maps(fdb / "DungeonMaps.lua")
+    s.fdb_boss_creatures = foreverdb.read_boss_creatures(fdb / "Loot.lua")
+    floors = FIXTURES / "clientdump-floors"
+    s.floor_art = clientdump.read_floor_art(floors, "retail", floors / "listfile.csv")
     tables = cmangos.read_tables(FIXTURES / "cmangos" / "classicdb_mini.sql.gz")
     s.cm_quests = cmangos.quest_rows(tables)
     s.cm_creatures = tables["creature_template"]
@@ -365,6 +369,59 @@ def test_dungeons_join_the_world_with_their_bosses_loot_and_quests():
     assert world.get("dungeon", 249)["kind"] == "raid" and world.get("dungeon", 249)["size"] == 40
 
 
+def test_a_boss_is_its_creature_never_its_encounter_number():
+    """02.11.2026 (owner's retail screenshot: Dalaran's first boss shown as Gabrielle Chase):
+    ForeverDB's boss numbers are encounter ids. The creature comes from Loot.lua; a boss without
+    one keeps its name on the dungeon, links nowhere, and is a build note; the creature its number
+    happens to be (VanCleef's 448 is Hogger) is never touched."""
+    world = build_world(fixture_sources())
+    deadmines = world.get("dungeon", 36)
+    assert deadmines["bosses"] == [
+        [1, 644, "Rhahk'Zor"],
+        [2, None, "Mr. Smite"],
+        [3, 639, "Edwin VanCleef"],
+    ]
+    assert world.get("dungeon", 249)["bosses"] == [[1, 10184, "Onyxia"]]
+    hogger = world.get("npc", 448)
+    assert hogger["name"] == "Hogger" and "boss" not in (hogger.get("flags") or [])
+    assert hogger.get("dungeon") is None and hogger.get("lootSrc") != "forever"
+    assert not {872, 1185, 5443, 2169, 5187} & {row[0] for row in hogger.get("loot") or []}
+    assert world.get("npc", 1145) is None and world.get("npc", 1144) is None
+    assert any("no creature known for ['Mr. Smite']" in n for n in world.notes)
+    # the seen loot of an unlinked boss stays on the dungeon only (5443: Mr. Smite's)
+    assert [5443, 2, "s"] in deadmines["loot"]
+    assert all(
+        5443 not in [r[0] for r in (n.get("loot") or [])] for n in world.records["npc"].values()
+    )
+
+
+def test_retail_does_not_link_forevers_own_dungeons_bosses():
+    """A creature id of a dungeon only Forever has would be another creature on retail."""
+    s = fixture_sources()
+    s.client = "retail"
+    s.fdb_dungeons = [
+        foreverdb.DungeonRow(
+            2999,
+            "Ruins of Lordaeron",
+            "dungeon",
+            5,
+            15,
+            22,
+            15,
+            None,
+            (foreverdb.DungeonBoss(1, 3353, "Witherfang"),),
+            (),
+            (),
+        )
+    ]
+    s.fdb_dungeon_maps = []
+    world = build_world(s)
+    assert world.get("dungeon", 2999)["bosses"] == [[1, None, "Witherfang"]]
+    s.client = "forever"
+    world = build_world(s)
+    assert world.get("dungeon", 2999)["bosses"] == [[1, 250483, "Witherfang"]]
+
+
 def test_a_client_without_foreverdb_takes_the_dungeons_file_given(tmp_path):
     """data.md "Dungeons": the retail test client shows Forever's dungeons
     from ForeverDB's file handed over by path; a client that has ForeverDB keeps its own."""
@@ -381,3 +438,56 @@ def test_a_client_without_foreverdb_takes_the_dungeons_file_given(tmp_path):
     assert any(name.startswith("ForeverDB Dungeons.lua") for name in s.source_names)
     world = build_world(s)
     assert world.get("dungeon", 36)["name"] == "The Deadmines"
+
+
+def test_the_floors_are_the_clients_dungeon_maps_with_the_boss_spots_placed_through_the_world():
+    """data.md "Dungeons": the floors come
+    from retail's UiMap tables (name, UiMap id, the art files' prefix and grid when the listfile
+    names the tiles, the visible size); ForeverDB's boss spots and the door go through the world
+    (the floor's scale and corner) onto the floor whose region and height band hold them. The
+    Deadmines: boss 1 lies on floor 1 only, boss 3 on both floors' regions and floor 1's height
+    band, the door on floor 2 only."""
+    world = build_world(fixture_sources())
+    d = world.get("dungeon", 36)
+    assert d["floors"] == [
+        {
+            "n": "The Deadmines 1",
+            "m": 291,
+            "w": 1002,
+            "h": 668,
+            "a": "interface/worldmap/thedeadmines/thedeadmines1_",
+            "g": [4, 3],
+        },
+        {"n": "The Deadmines 2", "m": 292, "w": 1002, "h": 668},
+    ]
+    assert d["bossSpots"] == [[1, 1, 38.59, 60.88], [3, 1, 52.7, 50.53]]
+    assert d["door"] == [2, 60.22, 84.32]
+    # an instance the client has no map of keeps ForeverDB's plates: the minimap tiles on
+    # Forever, the bare plate on retail (the tiles are the Forever client's files)
+    ony = world.get("dungeon", 249)
+    assert ony["floors"] == [
+        {"n": "Part 1", "w": 400, "h": 300},
+        {"n": "Part 2", "w": 200, "h": 150, "t": [[300001, 0, 0, 200, 150, 1]]},
+    ]
+    assert ony["bossSpots"] == [[1, 2, 50.0, 50.0]]
+    assert ony.get("door") is None and any("can't be read" in n for n in world.notes)
+    s = fixture_sources()
+    s.client = "retail"
+    retail = build_world(s).get("dungeon", 249)
+    assert retail["floors"][1] == {"n": "Part 2", "w": 200, "h": 150}
+
+
+def test_a_boss_several_floors_could_show_stays_off_the_maps_with_a_note():
+    """Unknown is not zero: when the floors of a spire share their region and no height band
+    tells them apart, the boss gets no pin and the report says so."""
+    s = fixture_sources()
+    for f in s.floor_art[36]:
+        object.__setattr__(
+            f,
+            "regions",
+            tuple((*r[:2], -10000.0, *r[3:5], 1000000.0) for r in s.floor_art[36][0].regions),
+        )
+    world = build_world(s)
+    d = world.get("dungeon", 36)
+    assert d.get("bossSpots") is None and d.get("door") is None
+    assert any("bosses [1, 3] have no floor" in n for n in world.notes)

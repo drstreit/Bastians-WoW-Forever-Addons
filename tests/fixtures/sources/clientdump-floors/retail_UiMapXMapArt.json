@@ -1,0 +1,11 @@
+{
+ "table": "UiMapXMapArt",
+ "build": "12.1.7.fixture",
+ "rowCount": 3,
+ "columns": ["ID", "PhaseID", "UiMapArtID", "UiMapID"],
+ "rows": [
+  {"ID": 1, "PhaseID": 0, "UiMapArtID": 300, "UiMapID": 291},
+  {"ID": 2, "PhaseID": 0, "UiMapArtID": 301, "UiMapID": 292},
+  {"ID": 3, "PhaseID": 0, "UiMapArtID": 302, "UiMapID": 225}
+ ]
+}

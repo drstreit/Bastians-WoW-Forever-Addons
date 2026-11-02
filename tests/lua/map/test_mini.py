@@ -229,8 +229,14 @@ def test_the_button_box_takes_the_buttons_and_names_the_hovered_one(wow: WowRunt
     assert wow.eval(f"{win}:IsShown()") is True
     names = [e.name for e in wow.eval(f"{MB}.collected").values()]
     # the others and our apps' buttons; the suite's own is the badge, the game's zoom stays out
-    # since 30.10.2026 the options window has a button too
-    assert names == ["Bastian's Map", "Bastian's Options", "Bug Sack", "Weak Auras"]
+    # since 30.10.2026 the options window has a button too, since 02.11.2026 the welcome
+    assert names == [
+        "Bastian's Map",
+        "Bastian's Options",
+        "Bastian's Welcome",
+        "Bug Sack",
+        "Weak Auras",
+    ]
     assert wow.eval(f"B1:GetParent() == {win}.grid") is True  # the grid scrolls (30.10.2026)
     # in the box on the window's layer, not under it
     assert wow.eval("B1:GetFrameStrata()") == wow.eval(f"{win}.frame:GetFrameStrata()")
@@ -434,6 +440,35 @@ def test_ctrl_click_moves_a_button_between_the_box_and_the_map(wow: WowRuntime):
     assert wow.errors == []
 
 
+def test_hovering_the_box_or_a_button_says_how_buttons_move(wow: WowRuntime):
+    """ "when hovering over the minimap button collector window, a hint
+    should be shown how to move buttons between that window and the minimap border"."""
+    boot(wow)
+    wow.execute(
+        """B1 = CreateFrame("Button", "LibDBIcon10_BugSack", Minimap)
+        B1:SetSize(31, 31); B1:SetPoint("CENTER", Minimap, "CENTER", 50, 50)
+        B1:SetScript("OnEnter", function(self)
+          GameTooltip:SetOwner(self, "ANCHOR_LEFT"); GameTooltip:AddLine("BugSack"); GameTooltip:Show()
+        end)"""
+    )
+    opener = "BastiansMiniMap.boxButton"
+    wow.execute(f"{opener}:GetScript('OnEnter')({opener})")
+    win = f"{MB}.Window()"
+
+    def lines() -> list[str]:
+        return [ln.left for ln in wow.eval("GameTooltip.lines").values()]
+
+    wow.execute(f"{win}.frame:GetScript('OnEnter')({win}.frame)")
+    box = lines()
+    assert box[0] == "Minimap buttons" and any("border" in t for t in box[1:])
+    wow.execute("GameTooltip.lines = {}; B1:GetScript('OnEnter')(B1)")
+    assert lines() == ["BugSack", "Ctrl+click: onto the minimap's border."]  # under its own tooltip
+    wow.execute("Mock.ctrl = true; B1:Click(); Mock.ctrl = false")  # out onto the rim
+    wow.execute("GameTooltip.lines = {}; B1:GetScript('OnEnter')(B1)")
+    assert lines()[-1].startswith("Ctrl+click: back into the button box.")
+    assert wow.errors == []
+
+
 def rim_point(wow: WowRuntime, name: str) -> tuple:
     """A button's anchor on the rim: point, whether relative to the view, x, y (rounded)."""
     p = wow.eval(
@@ -591,8 +626,9 @@ def test_the_button_box_scales_with_its_width_and_scrolls_past_six_rows(wow: Wow
     assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 26 + 4 + 6 * cell + 16 + 4
     # narrower: fewer columns, more rows, the window stays at six rows and the rest scrolls
     wow.execute(f"{win}.frame:SetWidth(150); {MB}.Layout()")
-    assert wow.eval(f"{MB}.cols") == 4 and wow.eval(f"{MB}.rows") == 13
-    assert wow.eval(f"{win}.grid:GetHeight()") == 4 + 13 * cell
+    # 53 buttons (50, the Map's, the options', the welcome's) in four columns
+    assert wow.eval(f"{MB}.cols") == 4 and wow.eval(f"{MB}.rows") == 14
+    assert wow.eval(f"{win}.grid:GetHeight()") == 4 + 14 * cell
     assert wow.eval(f"{win}.frame:GetHeight()") == 30 + 2 * inset + 26 + 4 + 6 * cell + 16 + 4
     assert wow.eval(f"{win}.bar ~= nil") is True
     assert wow.eval(f"{win}.title.wordWrap") is False

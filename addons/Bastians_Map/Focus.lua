@@ -1,6 +1,6 @@
 -- The focus on the map (map.md, ADR 0013 D): the context strip at the bottom of the map with the
 -- focused entity's name, its status words and the three actions Open, Route and Play (the registered
--- actions browser.open, route.to and quests.voice, whichever exist), the Dock button, and Esc
+-- actions browser.open, route.to and voice.play, whichever exist), the Dock button, and Esc
 -- clearing the focus. The ring around the focused pin is drawn by Pins.lua. Nothing here runs
 -- while the map is hidden.
 local _, ns = ...
@@ -13,7 +13,7 @@ local Focus = {}
 ns.Focus = Focus
 
 Focus.STRIP_H = 24
-Focus.ACTIONS = { "browser.open", "route.to", "quests.voice" } -- in this order on the strip
+Focus.ACTIONS = { "browser.open", "route.to", "voice.play" } -- in this order on the strip
 
 local strip
 
@@ -38,29 +38,31 @@ end
 local function placeButton(i, a, ref, x)
   local b = strip.buttons[i]
   if not b then
-    b = S.button(strip, "", 60, Focus.STRIP_H - 4)
-    b:SetScript("OnClick", function(self)
-      if self.action then
-        B:RunAction(self.action, self.ref, { source = "map", button = "LeftButton" })
-      end
-    end)
+    -- a row action (ADR 0046): the registered action's icon as its pictogram, the look sizes it
+    b = S.action(strip, {
+      label = "",
+      row = true,
+      boxed = true,
+      onClick = function(self)
+        if self.action then
+          B:RunAction(self.action, self.ref, { source = "map", button = "LeftButton" })
+        end
+      end,
+    })
     strip.buttons[i] = b
   end
   b.action, b.ref = a.id, ref
   b.tipText = a.desc or a.label
   b:SetEnabledFlat(a.enabled ~= false) -- greyed when the action cannot run now (Core, 21.10.2026)
-  b.label:SetText((a.icon and B.UI.InlineTexture(a.icon, 12) or "") .. a.label)
-  local col = a.active and S.C.accent or S.C.text
-  b.label:SetTextColor(col[1], col[2], col[3])
-  local w = b.label:GetStringWidth() or 0
-  if w == 0 then
-    w = #a.label * 6 + 16
-  end
-  b:SetWidth(w + 14)
+  b.spec.icon = a.icon
+  b.spec.label = a.label
+  b.spec.on = a.active or nil
+  S.Draw(b)
+  local w = b:GetWidth()
   b:ClearAllPoints()
   b:SetPoint("RIGHT", strip, "RIGHT", -x, 0)
   b:Show()
-  return x + w + 18
+  return x + w + 4
 end
 
 -- Draws the strip for the focused entity, or hides it.

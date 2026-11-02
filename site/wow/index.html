@@ -4,19 +4,21 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bastian's Suite</title>
-<meta name="description" content="Bastian's Suite: addons for WoW Forever and retail. Quests, map, browser, gold, routes and a book of gold strategies, each working alone and together.">
+<meta name="description" content="Bastian's Suite for WoW Forever: Azeroth, told in your own way. Walk it as the Wanderer, guided by its voices, or as the Scholar, with every quest, creature, item and place one click away.">
 <link rel="icon" type="image/svg+xml" href="../media/bastians-suite.svg">
 <link rel="icon" type="image/png" href="../media/bastians-suite.png">
 <link rel="apple-touch-icon" href="../media/bastians-suite-black.png">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Bastian's Suite">
-<meta property="og:description" content="Addons for WoW Forever and retail: quests, map, browser, gold, routes and a book of gold strategies.">
+<meta property="og:title" content="Bastian's Suite: Azeroth, told in your own way">
+<meta property="og:description" content="Addons for WoW Forever. The Wanderer hears the land; the Scholar knows it. Fifteen apps, one install.">
 <meta property="og:url" content="https://bastians.dev/wow/">
-<meta property="og:image" content="https://bastians.dev/media/bastians-suite-black.png">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://bastians.dev/media/welcome/wanderer.jpg">
+<meta name="twitter:card" content="summary_large_image">
 <style>
-/* Layout: one column; a hero with the suite's symbol, the apps as a grid of cards in their own
-   colours, then install, data, credits. System fonts only: nothing is loaded from other hosts. */
+/* One column of chapters: the two ways, the Wanderer's road, the Scholar's desk, the common
+   ground, install, credits. A picture still to come is a dashed frame that says what it will
+   show; a file of that name in media/shots/ replaces it (the script at the end). System fonts
+   only: nothing is loaded from other hosts. */
 :root {
   /* the suite's Dark teal theme */
   --bg: #14110f;
@@ -27,6 +29,8 @@
   --dim: #a39c93;
   --accent: #0cd29d;
   --on-accent: #0b0a09;
+  --wanderer: #e6a04a;
+  --scholar: #5aa8e6;
   --display: "Palatino Linotype", "Book Antiqua", Palatino, "URW Palladio L", Georgia, serif;
   --body: system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, "SFMono-Regular", monospace;
@@ -43,6 +47,8 @@
     --dim: #5e4a33;
     --accent: #8c2f1a;
     --on-accent: #fff8ec;
+    --wanderer: #a8551c;
+    --scholar: #1f5a96;
     color-scheme: light;
   }
 }
@@ -55,183 +61,508 @@
   --dim: #5e4a33;
   --accent: #8c2f1a;
   --on-accent: #fff8ec;
+  --wanderer: #a8551c;
+  --scholar: #1f5a96;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 body {
   background: var(--bg);
   color: var(--text);
-  font: 17px/1.55 var(--body);
+  font: 17px/1.6 var(--body);
 }
 a { color: var(--accent); }
 a:focus-visible, .pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+img { max-width: 100%; height: auto; }
 .wrap {
-  max-width: 1080px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding-left: max(18px, env(safe-area-inset-left, 0px));
-  padding-right: max(18px, env(safe-area-inset-right, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance; }
-h1 { font-size: clamp(36px, 6vw, 58px); line-height: 1.05; letter-spacing: 0.01em; }
-h2 { font-size: clamp(26px, 3.4vw, 34px); line-height: 1.15; }
-h3 { font-size: 22px; line-height: 1.2; }
-p { margin: 0; max-width: 66ch; }
+h1 { font-size: clamp(38px, 6.4vw, 64px); line-height: 1.04; letter-spacing: 0.01em; }
+h2 { font-size: clamp(28px, 3.8vw, 40px); line-height: 1.12; }
+h3 { font-size: 23px; line-height: 1.2; }
+p { margin: 0; max-width: 68ch; }
 code, .cmd { font-family: var(--mono); font-size: 0.86em; }
+.cmd { background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; color: var(--text); white-space: nowrap; }
+.dim { color: var(--dim); }
+.kicker { font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
 
-/* hero */
-.top { padding-top: 20px; font-size: 15px; color: var(--dim); }
+/* top and hero */
+.top { padding-top: 20px; font-size: 15px; color: var(--dim); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .top a { color: var(--dim); text-decoration: none; }
 .top a:hover { color: var(--accent); }
-.hero { padding-block: 56px 40px; display: grid; grid-template-columns: auto 1fr; gap: 28px 40px; align-items: center; }
-.hero img { width: clamp(140px, 22vw, 220px); height: auto; filter: drop-shadow(0 10px 22px rgba(0, 0, 0, 0.35)); }
-.hero .lead { font-size: 20px; color: var(--dim); margin-top: 14px; }
-.hero .clients { margin-top: 10px; font-size: 15px; color: var(--dim); }
-.links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
+.top .jump { display: flex; gap: 16px; flex-wrap: wrap; }
+.hero { padding-block: 40px 30px; display: grid; gap: 22px; }
+.hero .lead { font-size: clamp(19px, 2.2vw, 23px); color: var(--dim); max-width: 60ch; }
+.hero .lead b { color: var(--text); font-weight: 600; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+.duo figure { margin: 0; position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); }
+.duo figure img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; }
+.duo figcaption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 40px 18px 14px;
+  background: linear-gradient(to top, rgba(10, 8, 6, 0.86), rgba(10, 8, 6, 0));
+  color: #f4ece0; display: grid; gap: 2px;
+}
+.duo figcaption b { font-family: var(--display); font-size: 24px; }
+.duo .w { border-top: 4px solid var(--wanderer); }
+.duo .s { border-top: 4px solid var(--scholar); }
+@media (max-width: 720px) { .duo { grid-template-columns: 1fr; } }
+.links { display: flex; flex-wrap: wrap; gap: 10px; }
 .pill {
-  display: inline-block;
-  padding: 9px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  color: var(--text);
-  text-decoration: none;
-  font-weight: 600;
-  font-size: 15px;
+  display: inline-block; padding: 9px 16px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--text); text-decoration: none; font-weight: 600; font-size: 15px;
 }
 .pill.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .pill:hover { border-color: var(--accent); }
-.note { font-size: 14px; color: var(--dim); margin-top: 10px; }
-@media (max-width: 640px) { .hero { grid-template-columns: 1fr; } }
+.note { font-size: 14px; color: var(--dim); }
 
-section { padding-block: 34px; border-top: 1px solid var(--line); }
-section > .head { display: grid; gap: 8px; margin-bottom: 22px; }
-section > .head p { color: var(--dim); }
+/* chapters */
+section { padding-block: 44px; border-top: 1px solid var(--line); }
+.head { display: grid; gap: 10px; margin-bottom: 26px; }
+.head p { color: var(--dim); font-size: 18px; }
+.chapter { display: grid; gap: 10px; margin-bottom: 30px; padding: 26px 24px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); }
+.chapter.w { border-left: 6px solid var(--wanderer); }
+.chapter.s { border-left: 6px solid var(--scholar); }
+.chapter .kicker { color: var(--wanderer); }
+.chapter.s .kicker { color: var(--scholar); }
+.chapter p { font-size: 18px; }
 
-/* the apps */
-.apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+/* the two ways */
+.ways { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; }
+.way { padding: 22px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); display: grid; gap: 12px; align-content: start; }
+.way.w { border-top: 5px solid var(--wanderer); }
+.way.s { border-top: 5px solid var(--scholar); }
+.way ul { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; }
+.way .first { font-size: 15px; color: var(--dim); }
+.callout { margin-top: 18px; padding: 16px 20px; border-radius: 14px; background: var(--raised); border: 1px dashed var(--line); }
+
+/* an app */
 .app {
   --app: var(--accent);
-  display: grid;
-  grid-template-columns: 76px 1fr;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-left: 4px solid var(--app);
-  min-width: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 26px; align-items: center;
+  padding-block: 26px; border-top: 1px solid var(--line);
 }
-.app img { width: 76px; height: 76px; border-radius: 16px; }
-.app .body { display: grid; gap: 6px; align-content: start; min-width: 0; }
-.app p { font-size: 16px; }
-.app .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 14px; color: var(--dim); }
-.cmd { background: var(--raised); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; color: var(--text); }
-.app.data { grid-column: 1 / -1; }
+.app:first-of-type { border-top: 0; }
+.app.flip > .text { order: 2; }
+.app .text { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.app .title { display: flex; gap: 14px; align-items: center; }
+.app .title img { width: 56px; height: 56px; flex: none; }
+.app .title .tag { font-size: 13px; color: var(--dim); }
+.app ul { margin: 0; padding-left: 1.2em; display: grid; gap: 5px; }
+.app li::marker { color: var(--app); }
+.app .meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 14px; color: var(--dim); align-items: center; }
+.app .quip { font-style: italic; color: var(--dim); }
+@media (max-width: 820px) {
+  .app { grid-template-columns: 1fr; gap: 16px; }
+  .app.flip > .text { order: 0; }
+}
 
-/* install and the rest */
+/* a picture, or the frame of one still to come */
+.shot { margin: 0; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.shot .frame {
+  aspect-ratio: 16 / 10; border-radius: 14px; border: 2px dashed var(--line);
+  background: repeating-linear-gradient(135deg, transparent 0 14px, rgba(127, 127, 127, 0.05) 14px 28px), var(--raised);
+  display: grid; grid-template-columns: minmax(0, 1fr); align-content: center; gap: 10px; padding: 20px; text-align: center;
+}
+.shot .frame .soon { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+.shot .frame p { font-size: 15px; color: var(--dim); max-width: 46ch; margin: 0 auto; }
+.shot img { display: block; width: 100%; border-radius: 14px; border: 1px solid var(--line); }
+.shot figcaption { font-size: 14px; color: var(--dim); }
+.shot.wide .frame { aspect-ratio: 21 / 9; }
+
+/* small things, the ground */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.card { --app: var(--accent); padding: 20px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--app); display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card .title { display: flex; gap: 12px; align-items: center; }
+.card .title img { width: 44px; height: 44px; }
+.card p { font-size: 16px; }
+.table { width: 100%; border-collapse: collapse; font-size: 16px; }
+.table th, .table td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.table th { font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+.table td:first-child { white-space: nowrap; font-weight: 600; }
+.table img { width: 22px; height: 22px; vertical-align: -5px; margin-right: 8px; }
+.scroll { overflow-x: auto; }
+.rules { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.rules li { padding: 16px 18px; border-radius: 12px; background: var(--raised); border: 1px solid var(--line); }
+.rules b { display: block; font-family: var(--display); font-size: 19px; margin-bottom: 4px; }
+
+/* install, credits, footer */
 .cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px 32px; }
 .cols > div { display: grid; gap: 8px; align-content: start; min-width: 0; }
 .steps { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; }
 .credits { columns: 2 280px; column-gap: 32px; padding: 0; margin: 0; list-style: none; }
-.credits li { break-inside: avoid; margin-bottom: 8px; }
+.credits li { break-inside: avoid; margin-bottom: 9px; }
 .credits b { font-weight: 600; }
 footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var(--dim); font-size: 14px; display: grid; gap: 8px; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav class="top" aria-label="Breadcrumb"><a href="../">bastians.dev</a> / Bastian's Suite</nav>
+  <nav class="top" aria-label="Site">
+    <span><a href="../">bastians.dev</a> / Bastian's Suite</span>
+    <span class="jump"><a href="#ways">The two ways</a><a href="#wanderer">Wanderer</a><a href="#scholar">Scholar</a><a href="#install">Install</a></span>
+  </nav>
+
   <header class="hero">
-    <img src="../media/bastians-suite.svg" alt="Bastian's Suite: a B in a ring of the eight app icons" width="512" height="512">
-    <div>
-      <h1>Bastian's Suite</h1>
-      <p class="lead">Quests, map, browser, gold, routes and a book of gold strategies. Every app works on its own, and together they work as one system.</p>
-      <p class="clients">For WoW Forever and retail.</p>
-      <div class="links">
-        <a class="pill primary" href="#apps">The apps</a>
-        <a class="pill" href="https://github.com/drstreit/Bastians-WoW-Forever-Addons">Source on GitHub</a>
-        <a class="pill" href="https://github.com/drstreit/Bastians-WoW-Forever-Addons/issues/new/choose">Report a bug or an idea</a>
-      </div>
-      <p class="note">On CurseForge from launch day, 4 November 2026.</p>
+    <p class="kicker">Addons for WoW Forever</p>
+    <h1>Azeroth, told in your own way.</h1>
+    <p class="lead">You might be the <b>Wanderer</b>, who explores this new world on their own, guided only by the voices of the land. Or you might be the <b>Scholar</b>, with every quest, creature, item and place one click from its page, its spot on the map and the way there.</p>
+    <div class="duo">
+      <figure class="w">
+        <img src="../media/welcome/wanderer.jpg" alt="A human traveller with a staff and a pack looks out over an autumn valley with a river and snowy peaks" width="1376" height="768">
+        <figcaption><b>The Wanderer</b><span>hears the land</span></figcaption>
+      </figure>
+      <figure class="s">
+        <img src="../media/welcome/scholar.jpg" alt="The same valley; the traveller now wears a long coat and reads a journal, a spyglass at the belt" width="1376" height="768">
+        <figcaption><b>The Scholar</b><span>knows the land</span></figcaption>
+      </figure>
     </div>
+    <div class="links">
+      <a class="pill primary" href="#ways">Choose your way</a>
+      <a class="pill" href="my-gold-diary/">Read Bastian's gold diary</a>
+      <a class="pill" href="https://github.com/drstreit/Bastians-WoW-Forever-Addons/issues/new/choose">Report a bug or an idea</a>
+    </div>
+    <p class="note">Fifteen apps, one install, free software under the GPL-3.0. On CurseForge from the WoW Forever launch, 4 November 2026.</p>
   </header>
 
-  <section id="apps">
+  <section id="ways">
     <div class="head">
-      <h2>The apps</h2>
-      <p>Install the suite and turn off what you do not need, in the game's addon list or in the settings hub with <span class="cmd">/bastians</span>.</p>
+      <p class="kicker">Chapter one</p>
+      <h2>Two ways to walk Azeroth</h2>
+      <p>Same valley, same suite, two moods. The way you pick only decides what is switched on at the start. Nothing is locked, nothing is lost, and you can change your mind at any campfire.</p>
     </div>
-    <div class="apps">
-      <article class="app" style="--app:#0cd29d">
-        <img src="../media/bastians-core.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Core</h3>
-          <p>The base every app needs: the settings hub, the launcher at the minimap, one search over quests, NPCs, items and places, and four colour themes.</p>
-          <div class="meta"><span class="cmd">/bastians</span><span class="cmd">/bs</span></div>
-        </div>
+    <div class="ways">
+      <article class="way w">
+        <h3>The Wanderer</h3>
+        <p>Explore Azeroth on your own, guided by its voices.</p>
+        <ul>
+          <li>The land tells its stories as you walk</li>
+          <li>Talk to people without quest windows</li>
+          <li>Your gestures on a ring, thanks in your own words</li>
+          <li>One key clears the screen for the view</li>
+        </ul>
+        <p class="first">Your first five minutes: hear this place, greet someone, clear the screen.</p>
       </article>
-      <article class="app" style="--app:#ffd100">
-        <img src="../media/bastians-quests.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Quests</h3>
-          <p>Your quest log with what to do next: quests that suit your level and zone, chains and attunements, and a tracker. Quest texts voiced with Spoken Quests on WoW Forever.</p>
-          <div class="meta"><span class="cmd">/bq</span></div>
-        </div>
+      <article class="way s">
+        <h3>The Scholar</h3>
+        <p>Every quest, creature, item and place one click away.</p>
+        <ul>
+          <li>A page for everything, with where and how</li>
+          <li>The way there, by road, flight and boat</li>
+          <li>Prices, and who of your characters has what</li>
+          <li>A tracker that says what to do here</li>
+        </ul>
+        <p class="first">Your first five minutes: look something up, find the way, know what it is worth.</p>
       </article>
-      <article class="app" style="--app:#4de666">
-        <img src="../media/bastians-map.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Map</h3>
-          <p>Pins on the world map and the minimap for quests, NPCs, vendors, trainers and gathering spots, with a layer from every other app.</p>
-          <div class="meta"><span class="cmd">/bmap</span></div>
-        </div>
+    </div>
+
+    <div class="app" style="--app:var(--accent)">
+      <div class="text">
+        <h3>A welcome that knows who you are</h3>
+        <p>At your first login a window greets you with two pictures of the same valley: you, as the Wanderer, and you, as the Scholar. Your race, that is. A tauren sees a tauren on that ledge, a gnome sees a gnome.</p>
+        <ul>
+          <li>Pick a way, and the suite switches itself to match.</li>
+          <li>Three first steps for your way, ticked off by themselves as you do them.</li>
+          <li>A page for roleplayers and a map of where everything lives.</li>
+          <li>It comes back at every login until you say "Don't show again".</li>
+        </ul>
+      </div>
+      <figure class="shot">
+        <img src="../media/welcome/every-race.jpg" alt="Sixteen versions of the autumn valley: each of the eight original races as Wanderer and as Scholar" width="1376" height="768">
+        <figcaption>Eight races, two ways each. The welcome shows yours.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="wanderer">
+    <div class="chapter w">
+      <p class="kicker">Chapter two</p>
+      <h2>The Wanderer's road</h2>
+      <p>No quest helper arrows, no wall of windows. Just you, the road, and a world that talks back. The Wanderer's apps make Azeroth louder and the interface quieter.</p>
+    </div>
+
+    <article class="app" style="--app:#a880eb">
+      <div class="text">
+        <div class="title"><img src="../media/marks/orbiter.png" alt="" width="256" height="256"><div><h3>The Orbiter</h3><span class="tag">Bastian's Orbiter</span></div></div>
+        <p>A small round companion on your screen. Around it circle the stories within earshot: the zone you stand in, the dungeon you entered, the quest givers nearby with their quests as little moons, bosses, rares and books.</p>
+        <ul>
+          <li>Hover it and it opens up; click any bubble and <a href="https://www.curseforge.com/wow/addons/spoken">Spoken</a> reads it to you.</li>
+          <li>Quest givers sit in their real direction from you. Turn around, and they move.</li>
+          <li>What you have heard dims, so the new stories come first.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bv</span><span class="cmd">/orbiter</span><span>voices by Spoken</span></div>
+      </div>
+      <figure class="shot" data-shot="orbiter"><div class="frame"><span class="soon">Picture to come</span><p>The Orbiter opened wide at a busy quest hub: the zone and the area on the inner ring, three quest givers' faces with their quest moons on the outer ring, a story playing with its progress ring.</p></div></figure>
+    </article>
+
+    <article class="app flip" style="--app:#a880eb">
+      <div class="text">
+        <h3>Conversations without windows</h3>
+        <p>Talk to a quest giver and no grey window slides in. The Orbiter becomes the conversation: their face in the middle, their quests around it, your answers on an arc. You hear the quest, you see the goal, you say Accept or Not now.</p>
+        <p class="quip">The game's own window is one click away, for the days you miss it.</p>
+        <div class="meta"><span>off by default, the Wanderer turns it on</span></div>
+      </div>
+      <figure class="shot" data-shot="talk"><div class="frame"><span class="soon">Picture to come</span><p>A conversation with a quest giver in the open world: the NPC's face in the Orbiter's hub, two quests on the inner ring, Accept and Not now beside the chosen quest, its goal written under the orbit. No quest window on screen.</p></div></figure>
+    </article>
+
+    <article class="app" style="--app:#5cc76b">
+      <div class="text">
+        <div class="title"><img src="../media/marks/gestures.png" alt="" width="256" height="256"><div><h3>Gestures</h3><span class="tag">Bastian's Gestures</span></div></div>
+        <p>Hold one key and a ring of eight gestures opens at your cursor. Let go over a wedge and your character waves, bows, salutes, or says one of your own lines. Roll the mouse wheel for the next ring.</p>
+        <ul>
+          <li>Three rings to start with: gestures, your lines, and the suite's actions.</li>
+          <li>Lines know their audience: <code>%t</code> is your target, plus race, class, zone and more, even in your character's own languages.</li>
+          <li>Someone buffs you, resurrects you or waves at you? A small bubble offers a thank-you. A duel or trade from a stranger? Bow, wave, or decline politely.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bgest</span><span>the ring editor</span></div>
+      </div>
+      <figure class="shot" data-shot="gestures"><div class="frame"><span class="soon">Picture to come</span><p>The Gestures ring open at the cursor in a town: eight wedges (Wave, Bow, Salute, Greetings, Thank, Cheer, Sit, Farewell), the cursor over Bow, the ring's name in the hub. A second, smaller inset: the thank-you bubble after a stranger's buff.</p></div></figure>
+    </article>
+
+    <article class="app flip" style="--app:#f58c33">
+      <div class="text">
+        <div class="title"><img src="../media/marks/campfire.png" alt="" width="256" height="256"><div><h3>Campfire</h3><span class="tag">Bastian's Campfire, WoW Forever</span></div></div>
+        <p>In WoW Forever a campfire is where strangers sit together for a minute. Bastian's Campfire makes the most of that minute.</p>
+        <ul>
+          <li>A card while a fire is near: what the camp gives, what you could add from your bags, how long until you are warm.</li>
+          <li>A camp ring in Gestures: sit, warm your hands, offer a feature, thank the host, hear the place's story.</li>
+          <li>Share the fire: your group and guild see it on their map for an hour.</li>
+          <li>The planner: every camp feature, what it is worth at your level, and which of your characters can build it.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bcamp</span></div>
+      </div>
+      <figure class="shot" data-shot="campfire"><div class="frame"><span class="soon">Picture to come</span><p>Your character sitting at a camp at dusk, other players around the fire. The fire card beside it: the camp's buffs, one feature you could add, "warm in 0:40", Sit and Share the fire.</p></div></figure>
+    </article>
+
+    <article class="app" style="--app:#4cc7b8">
+      <div class="text">
+        <h3>One key clears the screen</h3>
+        <p>Azeroth is beautiful. The interface is in the way. One key hides everything but your action bars; the same key brings it back. For the sunset over Westfall, the screenshot, the moment.</p>
+        <p class="quip">There is also a gesture for a screenshot without the interface, because of course there is.</p>
+      </div>
+      <figure class="shot" data-shot="clear"><div class="frame"><span class="soon">Picture to come</span><p>Two halves of one view: on the left the full interface over a landscape, on the right the same moment after the clear-screen key, only the action bars left and the landscape free.</p></div></figure>
+    </article>
+
+    <article class="app flip" style="--app:#4cc7b8">
+      <div class="text">
+        <div class="title"><img src="../media/marks/chat.png" alt="" width="256" height="256"><div><h3>Chat</h3><span class="tag">Bastian's Chat, new, off until you try it</span></div></div>
+        <p>The whole chat, rebuilt for people who actually read it.</p>
+        <ul>
+          <li>Windows and tabs you define: Trade over here, your guild over there, roleplay in its own tab.</li>
+          <li>The Messenger: your whispers as conversations, one per person, like a phone.</li>
+          <li>A spam filter with a Junk window, so nothing is lost and nothing shouts.</li>
+          <li>Roleplay names from Total RP 3 and MyRolePlay in say and emote lines, emotes in their own colour.</li>
+          <li>Long texts and copying out of chat.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bchat</span></div>
+      </div>
+      <figure class="shot" data-shot="chat"><div class="frame"><span class="soon">Picture to come</span><p>Bastian's Chat in a tavern: a General tab with roleplay names and coloured emote lines, a Roleplay tab beside it, and the Messenger open with one whisper conversation.</p></div></figure>
+    </article>
+  </section>
+
+  <section id="scholar">
+    <div class="chapter s">
+      <p class="kicker">Chapter three</p>
+      <h2>The Scholar's desk</h2>
+      <p>Never alt-tab for a wiki again. Every name is a link, every place is on the map, every map pin knows the way there. The Scholar's apps put the whole world into one window, and keep it light.</p>
+    </div>
+
+    <article class="app" style="--app:#66bdf2">
+      <div class="text">
+        <div class="title"><img src="../media/marks/browser.png" alt="" width="256" height="256"><div><h3>Browser</h3><span class="tag">Bastian's Browser</span></div></div>
+        <p>A page for everything: NPCs, items, quests, objects, zones and dungeons. Who sells it, who drops it, which quest needs it, where it stands.</p>
+        <ul>
+          <li>Lists filtered by place, service, rank and level, nearest first by travel time.</li>
+          <li>Every creature as a 3D model in front of its zone's painting.</li>
+          <li>Dungeon pages with their floor maps and bosses.</li>
+          <li>One search over all of it, from any window.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bb</span><span class="cmd">/bs</span></div>
+      </div>
+      <figure class="shot" data-shot="browser"><div class="frame"><span class="soon">Picture to come</span><p>The NPC list, nearest first, filtered to vendors, with one vendor's page open: the 3D model in front of the zone painting, what they sell, their spot on a small map.</p></div></figure>
+    </article>
+
+    <article class="app flip" style="--app:#66bdf2">
+      <div class="text">
+        <div class="title"><img src="../media/marks/browser.png" alt="" width="256" height="256"><div><h3>Dungeons</h3><span class="tag">Bastian's Browser</span></div></div>
+        <p>Every dungeon has a page: its level, its bosses in order, and its floor maps with the bosses marked. For the dungeons that exist only on WoW Forever, the maps are hand-painted.</p>
+        <ul>
+          <li>City of Dalaran, Dalaran Sewers, Excavation Site: Wetlands, Thane's Rest, Lordaeron: maps by <a href="https://www.artstation.com/sr433_20">Santiago Reyes</a>, used with his kind permission, credited under each map.</li>
+          <li>Click a map to see it large, with the floors as tabs.</li>
+          <li>Each boss opens its own page: what it drops, where it stands.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bb</span></div>
+      </div>
+      <figure class="shot" data-shot="dungeons"><div class="frame"><span class="soon">Picture to come</span><p>The City of Dalaran page in the Browser: the bosses, the two painted floor maps with their numbered bosses, one map opened large with the artist's credit and link under it.</p></div></figure>
+    </article>
+
+    <article class="app" style="--app:#5cc76b">
+      <div class="text">
+        <div class="title"><img src="../media/marks/map.png" alt="" width="256" height="256"><div><h3>Map</h3><span class="tag">Bastian's Map</span></div></div>
+        <p>One seamless map of the world, and every other app draws on it: quests, vendors, trainers, flight masters, gathering spots, your notes, your route.</p>
+        <ul>
+          <li>Type into the map's search, and every match with a place gets a Route button.</li>
+          <li>Right-click anything: route there, open its page, leave a note.</li>
+          <li>Pick a style: the terrain itself, Modern, Pencil, Parchment, or Blizzard's own zone paintings joined into one map.</li>
+          <li>The minimap search finds what the minimap can show, and marks a quest's giver.</li>
+          <li>Timers on the minimap: as many stopwatches and countdowns as you like, kept across reloads.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bmap</span></div>
+      </div>
+      <figure class="shot" data-shot="map"><div class="frame"><span class="soon">Picture to come</span><p>The world map in the Modern style around Stormwind and Elwynn: the layer buttons on top, a search for "apple" with its results, one result's Route button under the cursor.</p></div></figure>
+    </article>
+
+    <figure class="shot wide" data-shot="map-styles"><div class="frame"><span class="soon">Picture to come</span><p>One strip of the same corner of Elwynn Forest in five styles side by side: the terrain, Modern, Pencil, Parchment and Blizzard's painted map.</p></div><figcaption>Five styles. The names on the map grow and shrink like a good paper map's.</figcaption></figure>
+
+    <article class="app flip" style="--app:#4cc7b8">
+      <div class="text">
+        <div class="title"><img src="../media/marks/route.png" alt="" width="256" height="256"><div><h3>Route</h3><span class="tag">Bastian's Route</span></div></div>
+        <p>"Take me to the vendor in Tanaris." Route answers with the fastest way: flight paths, boats, zeppelins, the tram, portals and your hearthstone, each step with its distance and time, a dotted line on the map and an arrow on screen.</p>
+        <ul>
+          <li><b>Home</b> plans the way back to your inn, with every teleport you have ready.</li>
+          <li><b>Quest round</b> plans one trip through all your open quests and hand-ins.</li>
+          <li>No waypoint addon needed: Route has its own arrow.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/broute</span></div>
+      </div>
+      <figure class="shot" data-shot="route"><div class="frame"><span class="soon">Picture to come</span><p>The Route window beside the map: five steps from Stormwind to a vendor in another zone (walk, flight, boat, walk), each with distance, direction and time, and the dotted line drawn on the map.</p></div></figure>
+    </article>
+
+    <article class="app flip" style="--app:#edb82e">
+      <div class="text">
+        <div class="title"><img src="../media/marks/quests.png" alt="" width="256" height="256"><div><h3>Quests</h3><span class="tag">Bastian's Quests</span></div></div>
+        <p>Your quest log, sorted the way you play: what you can do in this zone, what waits elsewhere, and what is ready to hand in. Plus what to do next at your level, here and in the next zone.</p>
+        <ul>
+          <li>Chains and attunements, so you know where a quest leads.</li>
+          <li>What every reward is worth, before you choose.</li>
+          <li>A tracker with buttons for the map and the route, and your quest items one click away.</li>
+          <li>Quest texts read aloud with Spoken.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bq</span></div>
+      </div>
+      <figure class="shot" data-shot="quests"><div class="frame"><span class="soon">Picture to come</span><p>My quests grouped as Here, Elsewhere and Ready to hand in, one quest card open: what it needs first, the reward's worth, and the buttons for giver, targets, hand-in and route.</p></div></figure>
+    </article>
+
+    <article class="app" style="--app:#edb82e">
+      <div class="text">
+        <div class="title"><img src="../media/marks/gold.png" alt="" width="256" height="256"><div><h3>Gold</h3><span class="tag">Bastian's Gold, WoW Forever</span></div></div>
+        <p>What things are worth, today. Prices from your own auction house scans and vendor visits, with the market's recent prices before your first scan. Your income and your gold over time, and how to earn more with the time you have.</p>
+        <p class="quip">Unknown prices say "unknown". We never guess a zero.</p>
+        <div class="meta"><span class="cmd">/bgold</span></div>
+      </div>
+      <figure class="shot" data-shot="gold"><div class="frame"><span class="soon">Picture to come</span><p>The Gold window after an auction house scan: an item's price history, the income of the week, and a bag item's tooltip with its price line.</p></div></figure>
+    </article>
+
+    <article class="app" style="--app:#e07394">
+      <div class="text">
+        <div class="title"><img src="../media/marks/strategies.png" alt="" width="256" height="256"><div><h3>Bastian's Gold Rumours</h3><span class="tag">Bastian's Strategies, WoW Forever</span></div></div>
+        <p>Meet <b>Bastian</b>, treasure hunter, of Goldshire. One day there will be a statue of him in Stormwind's Trade District. Statues cost money, so he is working on that part, and he writes everything down.</p>
+        <ul>
+          <li>A plan for gold on every page, with Bastian's drawing and what happened when he tried it.</li>
+          <li>Today's prices on every page, and the places on your map.</li>
+          <li>Pages open as you reach their level or zone.</li>
+          <li>Every traveller who found a plan first is credited, with a link.</li>
+        </ul>
+        <div class="meta"><span class="cmd">/bbook</span><a href="my-gold-diary/">read it on the web</a></div>
+      </div>
+      <figure class="shot" data-shot="gold-rumours"><div class="frame"><span class="soon">Picture to come</span><p>Bastian's Gold Rumours open in the game on a two-page spread: his drawing, the plan, today's prices and the "Show on map" link.</p></div></figure>
+    </article>
+
+    <div class="grid">
+      <article class="card" style="--app:#edb82e">
+        <div class="title"><img src="../media/marks/notes.png" alt="" width="256" height="256"><h3>Notes</h3></div>
+        <p>Pin a note to a place, an NPC, a quest or an item, with a symbol and a colour. Get a reminder when you come near. Share whole lists with your party, guild or a friend.</p>
+        <div class="meta dim"><span class="cmd">/bnotes</span></div>
+        <figure class="shot" data-shot="notes"><div class="frame"><span class="soon">Picture to come</span><p>The note editor beside the map: a note on a rare spawn with a skull symbol, a list, and "remind me when near".</p></div></figure>
       </article>
-      <article class="app" style="--app:#b8a380">
-        <img src="../media/bastians-map-art.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Map Art</h3>
-          <p>The painted overview map for Bastian's Map: whole continents at a glance. Optional, and the largest download of the suite.</p>
-        </div>
+      <article class="card" style="--app:#66bdf2">
+        <div class="title"><img src="../media/marks/alts.png" alt="" width="256" height="256"><h3>Alts</h3></div>
+        <p>Every bag, bank, mailbox and piece of gear of all your characters in one window: your characters on top, one search over everything they hold, one wide list. Need the linen from your bank alt? Ask them by mail in one click.</p>
+        <div class="meta dim"><span class="cmd">/balts</span></div>
+        <figure class="shot" data-shot="alts"><div class="frame"><span class="soon">Picture to come</span><p>The Alts window: your characters as a row on top, the search, and one character's bags in one wide list.</p></div></figure>
       </article>
-      <article class="app" style="--app:#a335ee">
-        <img src="../media/bastians-browser.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Browser</h3>
-          <p>Look up any quest, NPC, item or zone. Everything links: a quest's giver, an item's drops, an NPC's place on the map.</p>
-          <div class="meta"><span class="cmd">/bb</span></div>
-        </div>
+    </div>
+  </section>
+
+  <section id="ground">
+    <div class="head">
+      <p class="kicker">Chapter four</p>
+      <h2>The common ground</h2>
+      <p>Wanderer or Scholar, everyone stands on the same ground: one core, one search, daily data, and a handful of helpers that just do their job.</p>
+    </div>
+
+    <div class="grid">
+      <article class="card" style="--app:#4cc7b8">
+        <div class="title"><img src="../media/marks/core.png" alt="" width="256" height="256"><h3>Core</h3></div>
+        <p>The settings hub, the button at your minimap, one search over everything, and seven looks for every window: from Modern dark and Glass to Parchment and the game's own frames.</p>
+        <div class="meta dim"><span class="cmd">/bastians</span><span class="cmd">/bs</span></div>
       </article>
-      <article class="app" style="--app:#eda55f">
-        <img src="../media/bastians-gold.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Gold</h3>
-          <p>Prices from your own auction scans and vendor visits, farm spots, and your gold over time.</p>
-          <div class="meta"><span class="cmd">/bgold</span></div>
-        </div>
+      <article class="card" style="--app:#8c9499">
+        <div class="title"><img src="../media/marks/helpers.png" alt="" width="256" height="256"><h3>Helpers</h3></div>
+        <p>The small everyday chores: sell junk, repair, restock your reagents, take all mail, accept and hand in quests, IDs on tooltips, and warnings worth hearing.</p>
+        <div class="meta dim"><span class="cmd">/bhelp</span></div>
       </article>
-      <article class="app" style="--app:#4dccff">
-        <img src="../media/bastians-route.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Route</h3>
-          <p>The way there, step by step: flight paths, boats, zeppelins, the tram, portals and your hearthstone, with a dotted line on the map.</p>
-          <div class="meta"><span class="cmd">/broute</span></div>
-        </div>
+      <article class="card" style="--app:#8c9499">
+        <div class="title"><img src="../media/marks/data.png" alt="" width="256" height="256"><h3>Data, every day</h3></div>
+        <p>Quests, NPCs, vendors, trainers, items, places, prices and the book's pages, built for WoW Forever and refreshed every day. It installs itself with the suite.</p>
       </article>
-      <article class="app" style="--app:#e64d4d">
-        <img src="../media/bastians-strategies.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Strategies</h3>
-          <p>Bastian's Gold Rumours: a book of gold strategies to read in game, with today's prices, the places on the map and the travellers who found them. WoW Forever.</p>
-          <div class="meta"><span class="cmd">/bbook</span></div>
-        </div>
-      </article>
-      <article class="app data" style="--app:#c7c7cf">
-        <img src="../media/bastians-data.svg" alt="" width="512" height="512">
-        <div class="body">
-          <h3>Data, updated daily</h3>
-          <p>The game data behind every app, built for each client: quests with their givers and chains, NPCs, vendors, trainers, flight paths, items, gathering places, recent auction prices and the book's pages. It installs with the suite and gets a new version every day, so prices and the book stay current while the apps change only when their code does.</p>
-        </div>
-      </article>
+    </div>
+
+    <div class="app" style="--app:var(--accent)">
+      <div class="text">
+        <h3>Your language, your look</h3>
+        <ul>
+          <li><b>Seven languages:</b> English, German, French, Spanish, Korean, Simplified and Traditional Chinese. The windows, the names and most quests' whole texts follow your game.</li>
+          <li><b>Seven looks</b> for every window, with your own fonts and colours, saved per character.</li>
+          <li><b>One row in the AddOn list:</b> the whole suite folds under one header. One right click switches it on or off.</li>
+          <li><b>Plays well with others:</b> Titan Panel, Bazooka and ElvUI data bars show the apps; other addons can ask the suite for prices, quests and routes.</li>
+        </ul>
+      </div>
+      <figure class="shot" data-shot="looks"><div class="frame"><span class="soon">Picture to come</span><p>The same Browser page three times, in Modern dark, Parchment and the game's own frames, side by side.</p></div></figure>
+    </div>
+
+    <h3 style="margin-top:20px">Our rules</h3>
+    <ul class="rules" style="margin-top:14px">
+      <li><b>Unknown is not zero.</b>A price we do not know says "unknown". Wrong information is worse than none.</li>
+      <li><b>Every app works alone.</b>Switch off what you do not need; the rest keeps working.</li>
+      <li><b>Light on your game.</b>Data loads when it is needed, nothing polls in the background.</li>
+      <li><b>Nothing plays for you.</b>Helpers do the chores you set them, like selling junk. The playing stays yours: no bots, no auto-posting.</li>
+    </ul>
+  </section>
+
+  <section id="all">
+    <div class="head">
+      <h2>All fifteen at a glance</h2>
+      <p>One install. Turn off what you do not need in the game's AddOn list or in the hub.</p>
+    </div>
+    <div class="scroll">
+      <table class="table">
+        <thead><tr><th>App</th><th>What it does</th><th>Command</th></tr></thead>
+        <tbody>
+          <tr><td><img src="../media/marks/orbiter.png" alt="">Orbiter</td><td>stories around you, read aloud; conversations without windows</td><td><code>/bv</code></td></tr>
+          <tr><td><img src="../media/marks/gestures.png" alt="">Gestures</td><td>a ring of emotes, your own lines and actions; ready thank-yous</td><td><code>/bgest</code></td></tr>
+          <tr><td><img src="../media/marks/campfire.png" alt="">Campfire</td><td>the fire card, the camp ring, shared fires, the camp planner</td><td><code>/bcamp</code></td></tr>
+          <tr><td><img src="../media/marks/chat.png" alt="">Chat</td><td>your own chat windows, the Messenger, a spam filter, roleplay names</td><td><code>/bchat</code></td></tr>
+          <tr><td><img src="../media/marks/browser.png" alt="">Browser</td><td>a page for every NPC, item, quest, object, zone and dungeon</td><td><code>/bb</code></td></tr>
+          <tr><td><img src="../media/marks/map.png" alt="">Map</td><td>one seamless map with every app's layers, in five styles</td><td><code>/bmap</code></td></tr>
+          <tr><td><img src="../media/marks/route.png" alt="">Route</td><td>the fastest way there, step by step, with its own arrow</td><td><code>/broute</code></td></tr>
+          <tr><td><img src="../media/marks/quests.png" alt="">Quests</td><td>your log by place, what to do next, chains, a tracker</td><td><code>/bq</code></td></tr>
+          <tr><td><img src="../media/marks/gold.png" alt="">Gold</td><td>prices, your income, your gold over time</td><td><code>/bgold</code></td></tr>
+          <tr><td><img src="../media/marks/strategies.png" alt="">Gold Rumours</td><td>Bastian's book of gold plans, with today's prices</td><td><code>/bbook</code></td></tr>
+          <tr><td><img src="../media/marks/notes.png" alt="">Notes</td><td>notes on the map, reminders, shared lists</td><td><code>/bnotes</code></td></tr>
+          <tr><td><img src="../media/marks/alts.png" alt="">Alts</td><td>every character's bags, bank, mail and gear; ask one by mail</td><td><code>/balts</code></td></tr>
+          <tr><td><img src="../media/marks/helpers.png" alt="">Helpers</td><td>sell junk, repair, restock, mail, tooltip IDs, warnings</td><td><code>/bhelp</code></td></tr>
+          <tr><td><img src="../media/marks/core.png" alt="">Core</td><td>the hub, the search, the looks, the welcome</td><td><code>/bastians</code></td></tr>
+          <tr><td><img src="../media/marks/data.png" alt="">Data</td><td>the game data behind it all, updated daily</td><td></td></tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -243,18 +574,18 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
       <div>
         <h3>With the CurseForge app</h3>
         <ol class="steps">
-          <li>Search for Bastian's Suite and install it. Bastian's Data comes with it.</li>
+          <li>Search for <b>Bastian's Suite</b> and install it. Bastian's Data comes with it.</li>
           <li>Restart the game fully the first time. A <span class="cmd">/reload</span> does not find new addons.</li>
-          <li>Open the settings with <span class="cmd">/bastians</span>. The first page lists what is installed and which optional addons would add something.</li>
+          <li>Log in and pick your way. The welcome does the rest.</li>
         </ol>
       </div>
       <div>
-        <h3>Recommended addons</h3>
-        <p>On WoW Forever: <b>Questie</b>, for spawns our data lacks, and <b>Spoken</b>, for voiced quest texts. No waypoint addon is needed: Route has its own arrow and the map its own waypoints. The suite works without them and says once what each would add.</p>
+        <h3>Good company</h3>
+        <p><a href="https://www.curseforge.com/wow/addons/spoken"><b>Spoken</b></a> gives the Wanderer's world its voices. <a href="https://www.curseforge.com/wow/addons/questie"><b>Questie</b></a> fills gaps in where NPCs stand. No waypoint addon is needed. Everything works without them, and the hub tells you once what each would add.</p>
       </div>
       <div>
         <h3>Something wrong?</h3>
-        <p>Report it on <a href="https://github.com/drstreit/Bastians-WoW-Forever-Addons/issues/new/choose">GitHub</a> with the client, the addon and, if the game showed one, the Lua error.</p>
+        <p>Tell us on <a href="https://github.com/drstreit/Bastians-WoW-Forever-Addons/issues/new/choose">GitHub</a> with the addon and, if the game showed one, the Lua error.</p>
       </div>
     </div>
   </section>
@@ -262,24 +593,49 @@ footer { padding-block: 30px 46px; border-top: 1px solid var(--line); color: var
   <section id="credits">
     <div class="head">
       <h2>Credits</h2>
-      <p>The suite is free software under the GPL-3.0. Its game data comes from these projects, each under its own licence.</p>
+      <p>The suite is free software under the GPL-3.0. What it knows comes first from your own game client, and from these projects, each under its own licence.</p>
     </div>
     <ul class="credits">
-      <li><b>Everything Quests</b> and <b>AllTheThings</b>: quests, places, items (MIT)</li>
-      <li><b>Questie</b> and <b>QuestieDB</b>: NPC and object spawns (GPL-3.0)</li>
-      <li><b>ForeverDB</b>: vendors, trainers, recipes and gathering places of WoW Forever (GPL-3.0)</li>
-      <li><b>CMaNGOS classic-db</b>: loot tables and NPC data (GPL-3.0)</li>
-      <li><b>ItemDB</b>: retail items (MIT)</li>
+      <li><b>Everything Quests</b> and <b>AllTheThings</b>: quests, places, objective points (MIT)</li>
+      <li><b>QuestieDB</b>: spawns, names and quest titles in other languages (GPL-3.0)</li>
+      <li><b>ForeverDB</b>: dungeons, vendors, trainers and gathering places of WoW Forever (GPL-3.0)</li>
+      <li><b>CMaNGOS classic-db</b>: quest texts, rewards, loot and trainers (GPL-3.0)</li>
+      <li><b>TrinityCore TDB</b>: quest texts in many languages (GPL-2.0 or later)</li>
+      <li><b>NauticusClassic</b>: boat and zeppelin departures (MIT)</li>
+      <li><b>Campfire Tooltips: Forever</b> by GideonWhitlock, after Tweaks Forever by cjber: the camp features (GPL-3.0 or later)</li>
+      <li><b>Spoken</b>: the voices (MIT)</li>
       <li><b>AHledger</b>: auction prices</li>
-      <li>The <b>travellers</b> whose videos and guides the book retells, each credited on its page with the link</li>
+      <li>The <b>travellers</b> whose videos and guides the gold book retells, each credited on its page</li>
+      <li>The welcome's pictures and the book's drawings: made with Google's Gemini image model from our own scene descriptions</li>
       <li>Our own measurements in the game</li>
     </ul>
   </section>
 
   <footer>
-    <p><a href="../">bastians.dev</a> · <a href="https://github.com/drstreit/Bastians-WoW-Forever-Addons">github.com/drstreit/Bastians-WoW-Forever-Addons</a> · GPL-3.0</p>
+    <p><a href="../">bastians.dev</a> · <a href="my-gold-diary/">Bastian's gold diary</a> · <a href="https://github.com/drstreit/Bastians-WoW-Forever-Addons">Source on GitHub</a> · GPL-3.0</p>
     <p>World of Warcraft and Blizzard Entertainment are trademarks of Blizzard Entertainment, Inc. This project is not affiliated with or endorsed by Blizzard Entertainment.</p>
   </footer>
 </div>
+<script>
+// A picture still to come: when media/shots/<name>.jpg (or .png) exists, it replaces the frame,
+// with the frame's text as its description.
+document.querySelectorAll("[data-shot]").forEach(function (fig) {
+  var name = fig.getAttribute("data-shot");
+  var frame = fig.querySelector(".frame");
+  var text = frame ? frame.querySelector("p").textContent : "";
+  function attempt(exts) {
+    if (!exts.length) return;
+    var img = new Image();
+    img.onload = function () {
+      img.alt = text;
+      img.loading = "lazy";
+      if (frame) frame.replaceWith(img);
+    };
+    img.onerror = function () { attempt(exts.slice(1)); };
+    img.src = "../media/shots/" + name + "." + exts[0];
+  }
+  attempt(["jpg", "png", "webp"]);
+});
+</script>
 </body>
 </html>

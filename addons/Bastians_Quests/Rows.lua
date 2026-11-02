@@ -420,6 +420,166 @@ end
 -- Structure rows
 -- ---------------------------------------------------------------------------------------------
 
+-- ---------------------------------------------------------------------------------------------
+-- A progress chain ("hard to figure out where you are in the chain,
+-- what chain quest is available"): the steps numbered with their state in a few words, the step
+-- to act on next marked "you are here", a head line with the count and the next step. One
+-- renderer for quest chains, attunements (quest, reputation and item steps) and dungeon pages.
+-- ---------------------------------------------------------------------------------------------
+
+R.STANDINGS = { "Hated", "Hostile", "Unfriendly", "Neutral", "Friendly", "Honored", "Revered", "Exalted" }
+
+local STATE_WORDS = {
+  available = { "available now", "yellow" },
+  log = { "in your log", "white" },
+  done = { "done", "grey" },
+  level = { "needs level %d", "grey" },
+  skill = { "needs a profession skill", "grey" },
+  rep = { "needs reputation", "grey" },
+  superseded = { "replaced by another quest", "grey" },
+  never = { "not for this character", "grey" },
+}
+
+-- The words of a quest's state on a step; a prerequisite inside the chain reads "after step k".
+local function stateWords(st, qid, missing, pos)
+  if st == "prereq" then
+    local inside = {}
+    for _, m in ipairs(missing or {}) do
+      if pos[m] then
+        inside[#inside + 1] = pos[m]
+      end
+    end
+    if #inside > 0 then
+      table.sort(inside)
+      return string.format(L["after step %d"], inside[1]), C.grey
+    end
+    local m = missing and missing[1]
+    return string.format(L["needs %s"], m and R.questName(m) or "?"), C.grey
+  end
+  local def = STATE_WORDS[st] or STATE_WORDS.never
+  local text = L[def[1]]
+  if st == "level" then
+    local q = Logic.quest(qid)
+    text = string.format(text, q and q.minLevel or 0)
+  end
+  return text, C[def[2]]
+end
+
+local function stepName(step)
+  if step.kind == "quest" then
+    return R.questName(step.id, step.label)
+  end
+  return step.label or "?"
+end
+
+-- steps = { { kind = "quest" | "rep" | "item", id, label, standing } }; ctx = { hasItem(itemID),
+-- rep(factionID) -> { standing } } for the item and reputation steps; opts = { map, key }.
+-- -> the rows (a head line, then one per step) and { total, done, current }.
+function R.progress(steps, state, ctx, opts)
+  ctx, opts = ctx or {}, opts or {}
+  local key = opts.key or "progress"
+  local pos = {}
+  for i, step in ipairs(steps) do
+    if step.kind == "quest" then
+      pos[step.id] = i
+    end
+  end
+  local states, missing, oks = {}, {}, {}
+  local done, current = 0, nil
+  for i, step in ipairs(steps) do
+    local st, ok, miss
+    if step.kind == "quest" then
+      if Logic.quest(step.id) then
+        st, miss = Logic.status(step.id, state)
+      else
+        st = state.done(step.id) and "done" or "available"
+      end
+      ok = st == "done"
+    elseif step.kind == "item" then
+      ok = ctx.hasItem and ctx.hasItem(step.id) or false
+      st = ok and "done" or "available"
+    else
+      local rep = ctx.rep and ctx.rep(step.id) or nil
+      ok = rep ~= nil and (rep.standing or 0) >= (step.standing or 6)
+      st = ok and "done" or "available"
+    end
+    states[i], missing[i], oks[i] = st, miss, ok
+    if ok then
+      done = done + 1
+    end
+    if not current and not ok and (st == "available" or st == "log") then
+      current = i
+    end
+  end
+  if not current then
+    for i, ok in ipairs(oks) do
+      if not ok and states[i] ~= "never" then
+        current = i
+        break
+      end
+    end
+  end
+  local head
+  if #steps > 0 and done == #steps then
+    head = L["The whole chain is done."]
+  elseif current then
+    head = string.format(L["Step %d of %d. Next: %s"], current, #steps, stepName(steps[current]))
+  else
+    head = L["Nothing of it is for this character."]
+  end
+  local rows = { { id = key .. ":head", kind = "para", text = C.grey .. head .. "|r" } }
+  for i, step in ipairs(steps) do
+    local st = states[i]
+    local words, color = stateWords(st, step.id, missing[i], pos)
+    local row
+    if step.kind == "quest" then
+      row = R.quest(step.id, state, {
+        status = st,
+        zone = true,
+        map = opts.map,
+        where = key .. i,
+        title = Logic.quest(step.id) and nil or step.label,
+      })
+    elseif step.kind == "item" then
+      row = {
+        ref = "item:" .. step.id,
+        text = B.UI.Icon(oks[i] and "done" or "waiting") .. C.white .. (step.label or "") .. "|r",
+      }
+      words = oks[i] and L["in your bags"] or L["not in your bags"]
+    else
+      local rep = ctx.rep and ctx.rep(step.id) or nil
+      local now = rep and L[R.STANDINGS[rep.standing] or "?"] or L["unknown"]
+      row = {
+        text = B.UI.Icon(oks[i] and "done" or "waiting")
+          .. C.white
+          .. (step.label or "")
+          .. ": "
+          .. L[R.STANDINGS[step.standing or 6] or "?"]
+          .. "|r",
+      }
+      words = L["now"] .. " " .. now
+    end
+    row.id = key .. ":" .. i
+    -- the number after the state glyph, which stays first on the row (the tree reads it there)
+    local glyph, rest = string.match(row.text, "^(|T[^|]*|t ?)(.*)$")
+    row.text = (glyph or "")
+      .. C.grey
+      .. i
+      .. ".|r "
+      .. (glyph and rest or row.text)
+      .. "  "
+      .. color
+      .. words
+      .. "|r"
+    if i == current then
+      row.text = row.text .. "  " .. accent() .. L["<- you are here"] .. "|r"
+      row.color = B.UI.Style.C.accent
+    end
+    rows[#rows + 1] = row
+  end
+  return rows, { total = #steps, done = done, current = current }
+end
+
 function R.section(key, title, n, children, suffix)
   return {
     id = "s:" .. key,

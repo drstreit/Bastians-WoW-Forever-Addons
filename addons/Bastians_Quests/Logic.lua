@@ -453,6 +453,14 @@ end
 
 -- The chain a quest belongs to for this character: { id, name, quests (in order), pos[qid], line },
 -- or nil. In a component larger than CHAIN_MAX the quests are the line through qid (`line` = true).
+-- The quest after `qid` in its chain's order, or nil (the last step, or no chain): the "next in
+-- chain" line of the log.
+function Logic.nextInChain(qid, state)
+  local ch = Logic.chain(qid, state)
+  local i = ch and ch.pos and ch.pos[qid]
+  return i and ch.quests[i + 1] or nil
+end
+
 function Logic.chain(qid, state)
   chainIndex()
   local root = compOf[qid]

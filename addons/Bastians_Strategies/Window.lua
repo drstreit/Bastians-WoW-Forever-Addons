@@ -522,7 +522,7 @@ local function addNote(page, id)
   page.nedits = page.nedits + 1
   local box = page.edits[page.nedits]
   if not box then
-    box = S.search(page.content, L["Your note on this page (kept for every character)"])
+    box = S.search(page.content, L["Your note on this page (kept for every character)"], true)
     box:SetMultiLine(true)
     box:SetHeight(64)
     box:SetScript("OnTextChanged", function(self, userInput)
@@ -889,6 +889,7 @@ local function renderTitle()
     if B.MarkNewsSeen then
       B:MarkNewsSeen(ns.mod) -- the suite's What's new: the book's lines were read here (ADR 0021)
     end
+    B:UpdateFeed(ns.mod) -- the bar's "2 new" (ADR 0043)
   end
   return L["Bastian's Gold Rumours"]
 end
@@ -1096,12 +1097,11 @@ local function updateBar()
     return
   end
   local unread = Book.Unread(Window.News(), db().global.seen, db().global.seenToday)
-  bar.news.label:SetText(unread > 0 and string.format(L["What's new (%d)"], unread) or L["What's new"])
+  bar.news:SetLabel(unread > 0 and string.format(L["What's new (%d)"], unread) or L["What's new"])
   local isPage = current.kind == "page" and get("page", current.id) ~= nil
   local on = isPage and Book.IsBookmarked(db().char.bookmarks, current.id)
-  bar.mark.label:SetText(on and L["Bookmarked"] or L["Bookmark"])
-  local c = on and S.C.accent or S.C.text
-  bar.mark.label:SetTextColor(c[1], c[2], c[3])
+  bar.mark.spec.label = on and L["Bookmarked"] or L["Bookmark"]
+  bar.mark:SetOn(on) -- the look draws the state (ADR 0046)
   bar.mark:SetEnabledFlat(isPage)
   local order = Window.Order()
   local at
@@ -1278,42 +1278,48 @@ function Window.Build()
   bar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
   bar:SetHeight(26)
   local x = 0
-  local function tab(label, tip, onClick, width)
-    local b = S.button(bar, label, width, 24)
+  -- the tabs as declared actions with their pictograms (ADR 0046): the look sizes them
+  local function tab(icon, label, tip, onClick)
+    local b = S.action(bar, { icon = icon, label = label, boxed = true })
     b.tip = tip
     b:SetPoint("LEFT", bar, "LEFT", x, 0)
     b:SetScript("OnClick", onClick)
-    x = x + width + 4
+    x = x + b:GetWidth() + 4
     return b
   end
-  bar.title = tab(L["Title page"], L["The title page and What's new."], function()
+  bar.title = tab("ledger", L["Title page"], L["The title page and What's new."], function()
     Window.Show({ kind = "title" })
-  end, 80)
+  end)
   bar.contents = tab(
+    "layers",
     L["Contents"],
     L["Every chapter and its pages; sealed pages say when they open."],
     function()
       Window.Show({ kind = "contents" })
-    end,
-    80
+    end
   )
   -- the search page in the index's place ("drop the index page, its
   -- confusing; add a search page instead, full text search of all articles")
-  bar.find = tab(L["Search"], L["Every page of the book by its words."], function()
+  bar.find = tab("search", L["Search"], L["Every page of the book by its words."], function()
     Window.Show({ kind = "search", id = "" })
-  end, 64)
+  end)
   bar.marks = tab(
+    "bookmark",
     L["Bookmarks"],
     L["Your bookmarks (this character) and your notes (every character)."],
     function()
       Window.Show({ kind = "bookmarks" })
-    end,
-    84
+    end
   )
-  bar.news = tab(L["What's new"], L["The book is updated often: what changed, newest first."], function()
-    Window.Show({ kind = "title" })
-  end, 110)
-  bar.mark = S.button(bar, L["Bookmark"], 96, 24)
+  bar.news = tab(
+    "note",
+    L["What's new"],
+    L["The book is updated often: what changed, newest first."],
+    function()
+      Window.Show({ kind = "title" })
+    end
+  )
+  bar.mark = S.action(bar, { icon = "bookmark", label = L["Bookmark"], boxed = true })
   bar.mark.tip = L["Keeps this page in your bookmarks, also when it moves to the back shelf."]
   bar.mark:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
   bar.mark:SetScript("OnClick", function()
@@ -1348,12 +1354,12 @@ function Window.Build()
   folio:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 6, 6)
   folio:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
   folio:SetHeight(24)
-  folio.back = S.button(folio, L["< turn back"], 110, 22)
+  folio.back = S.action(folio, { icon = "back", label = L["< turn back"], boxed = true })
   folio.back:SetPoint("LEFT", folio, "LEFT", 0, 0)
   folio.back:SetScript("OnClick", function()
     Window.Turn(-1)
   end)
-  folio.next = S.button(folio, L["turn the page >"], 120, 22)
+  folio.next = S.action(folio, { icon = "forward", label = L["turn the page >"], boxed = true })
   folio.next:SetPoint("RIGHT", folio, "RIGHT", 0, 0)
   folio.next:SetScript("OnClick", function()
     Window.Turn(1)

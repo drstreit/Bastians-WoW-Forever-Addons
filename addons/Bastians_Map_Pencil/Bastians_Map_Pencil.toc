@@ -1,9 +1,24 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Map: Pencil
+## Title-koKR: Bastian's Map: 연필
+## Title-zhCN: Bastian's Map: 铅笔
+## Title-zhTW: Bastian's Map: 鉛筆
+## Title-deDE: Bastian's Map: Buntstift
+## Title-frFR: Bastian's Map: Crayon
+## Title-esES: Bastian's Map: Lápiz
+## Title-esMX: Bastian's Map: Lápiz
 ## IconTexture: Interface\AddOns\Bastians_Map_Pencil\Icon
 ## Notes: Bastian's coloured pencil map style, drawn stroke by stroke (optional, about 100 MB).
+## Notes-koKR: 한 획 한 획 그린 Bastian's 색연필 지도 스타일 (선택, 약 100 MB).
+## Notes-zhCN: Bastian's 彩色铅笔地图风格，一笔一笔画成（可选，约 100 MB）。
+## Notes-zhTW: Bastian's 彩色鉛筆地圖風格，一筆一筆畫成（選用，約 100 MB）。
+## Notes-deDE: Bastians Buntstift-Kartenstil, Strich für Strich gezeichnet (optional, etwa 100 MB).
+## Notes-frFR: Le style de carte aux crayons de couleur de Bastian, dessiné trait par trait (facultatif, environ 100 Mo).
+## Notes-esES: El estilo de mapa a lápices de colores de Bastian, dibujado trazo a trazo (opcional, unos 100 MB).
+## Notes-esMX: El estilo de mapa a lápices de colores de Bastian, dibujado trazo a trazo (opcional, unos 100 MB).
+## Group: Bastians_Map
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

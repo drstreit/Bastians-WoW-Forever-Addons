@@ -8,11 +8,13 @@ PAINTED = "Bastians.UI.Style.painted"
 
 # the game's colour picker as the retail family has it since 10.2.5 (SetupColorPickerAndShow)
 PICKER = """
-ColorPickerFrame = { r = 1, g = 1, b = 1 }
+ColorPickerFrame = { r = 1, g = 1, b = 1, strata = "DIALOG" }
 function ColorPickerFrame:SetupColorPickerAndShow(info)
   self.info, self.r, self.g, self.b = info, info.r, info.g, info.b
 end
 function ColorPickerFrame:GetColorRGB() return self.r, self.g, self.b end
+function ColorPickerFrame:SetFrameStrata(s) self.strata = s end
+function ColorPickerFrame:Raise() self.raised = true end
 """
 
 
@@ -77,6 +79,9 @@ def test_the_colour_row_uses_the_games_picker_and_goes_back_to_the_theme(app: Wo
     )
     app.execute("ROW.swatch:Click()")
     assert app.eval("ColorPickerFrame.info ~= nil") is True
+    # above the suite's windows (FULLSCREEN_DIALOG): it opened behind the settings (31.10.2026)
+    assert app.eval("ColorPickerFrame.strata") == "TOOLTIP"
+    assert app.eval("ColorPickerFrame.raised") is True
     # a change in the picker goes to the setting at once
     app.execute("ColorPickerFrame.r, ColorPickerFrame.g, ColorPickerFrame.b = 0.4, 0.5, 0.6")
     app.execute("ColorPickerFrame.info.swatchFunc()")

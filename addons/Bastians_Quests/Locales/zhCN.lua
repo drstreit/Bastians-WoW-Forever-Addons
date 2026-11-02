@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("zhCN", {
+  -- plan-second-wave.md S6 (01.11.2026)
+  ["Toggle the tracker"] = "切换追踪器",
   -- Views.lua, Quests.lua: the Library's leads in My quests
   ["Tales"] = "故事",
   ["Click: open the journal"] = "点击: 打开日志",
@@ -106,6 +108,21 @@ ns.L:Register("zhCN", {
   ["Target of"] = "目标于",
   ["Starts quests"] = "开始任务",
   ["Ends quests"] = "结束任务",
+  ["Step %d of %d. Next: %s"] = "第 %d 步，共 %d 步。下一步：%s",
+  ["Nothing of it is for this character."] = "这些都不适用于此角色。",
+  ["available now"] = "现在可接",
+  ["in your log"] = "在你的任务日志中",
+  ["needs level %d"] = "需要 %d 级",
+  ["needs a profession skill"] = "需要专业技能",
+  ["needs reputation"] = "需要声望",
+  ["replaced by another quest"] = "已被另一个任务取代",
+  ["not for this character"] = "不适用于此角色",
+  ["after step %d"] = "在第 %d 步之后",
+  ["needs %s"] = "需要 %s",
+  ["<- you are here"] = "<- 你在这里",
+  ["in your bags"] = "在你的背包中",
+  ["not in your bags"] = "不在你的背包中",
+  ["Attunement"] = "进入条件",
   ["Dungeon quests"] = "地下城任务",
   ["Needed for quests"] = "任务所需",
   ["Status"] = "状态",
@@ -198,6 +215,8 @@ ns.L:Register("zhCN", {
   ["(no quest text)"] = "(无任务文本)",
   ["Use quest item"] = "使用任务物品",
   ["Hand in here"] = "在此交付",
+  ["next in chain"] = "任务链的下一步",
+  ["Next in chain"] = "任务链的下一步",
   ["Objectives here"] = "此处的目标",
   ["Elsewhere"] = "别处",
   ["Complete, hand in elsewhere"] = "已完成,在别处交付",
@@ -295,4 +314,17 @@ ns.L:Register("zhCN", {
   ["quest"] = "任务",
   ["Choice:"] = "选择:",
   ["Quest chain '%s' %d/%d"] = "任务链'%s' %d/%d",
+  -- owner round 5 (31.10.2026): the Quests list's Type filter
+  ["Type"] = "类型",
+  ["Normal"] = "普通",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d in the log"] = "日志中 %d 个",
+  ["%d in the log, %d ready"] = "日志中 %d 个，%d 个可交",
+  ["Click: the quests. Right click: the tracker."] = "点击: 任务。右键: 追踪器。",
+  ["Next here: "] = "此处下一个: ",
+  ["Ready to turn in:"] = "可以交付:",
+  ["This session here: "] = "本次会话在此: ",
+  ["and %d more"] = "还有 %d 个",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: quest items"] = "Bastian's: 任务物品",
 })

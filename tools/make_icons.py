@@ -1,9 +1,11 @@
-"""The addons' icons in the game's AddOns list, from the website art.
+"""The addons' icons in the game's AddOns list: the app marks on their tiles (plan-second-wave.md
+S1, 01.11.2026; before: the website art, ).
 
 Usage: python tools/make_icons.py [--check]
 
-Reads the owner's icons `site/media/bastians-<name>.png` (512 x 512), or for an app without
-website art the suite's tile of a glyph (`GLYPH_ICONS`, tools/glyphs.py), and writes each addon's
+Draws for every app the tile of its app mark (`GLYPH_ICONS`, tools/glyphs.py: the same pictogram
+as its minimap button and feed), and for the map style addons and the developer addons the
+owner's art `site/media/bastians-<name>.png` (512 x 512, `ICONS`), and writes each addon's
 `Icon.tga` (64 x 64, 32-bit uncompressed, top-left origin), which its TOC names with
 `## IconTexture: Interface\\AddOns\\<addon>\\Icon`. The data packs carry the Data icon, the
 developer probe the suite's. `--check` exits 1 when a file on disk differs from what this script
@@ -27,39 +29,51 @@ ART = ROOT / "site" / "media"
 SIZE = 64
 
 ICONS = {
-    "Bastians_Core": "core",
-    "Bastians_Browser": "browser",
-    "Bastians_Data": "data",
-    "Bastians_Data_Items": "data",
-    "Bastians_Data_Market": "data",
-    "Bastians_Data_Nav": "data",
-    "Bastians_Data_Quests": "data",
-    "Bastians_Data_Strategies": "data",
-    "Bastians_Data_Text_enUS": "data",
-    "Bastians_Data_Text_deDE": "data",  # the game data in other languages (ADR 0033)
-    "Bastians_Data_Text_frFR": "data",
-    "Bastians_Data_Text_esES": "data",
-    "Bastians_Data_Text_koKR": "data",
-    "Bastians_Data_Text_zhCN": "data",
-    "Bastians_Data_Text_zhTW": "data",
-    "Bastians_Data_World": "data",
-    "Bastians_Gold": "gold",
-    "Bastians_Map": "map",
     "Bastians_Map_Art": "map-art",
     "Bastians_Map_Blizzard": "map-blizzard",  # ADR 0036: tools/mapstyle/icon.py, gold frame
     "Bastians_Map_Modern": "map-modern",  # the style addons (ADR 0027): tools/mapstyle/icon.py
     "Bastians_Map_Parchment": "map-parchment",
     "Bastians_Map_Pencil": "map-pencil",
     "Bastians_Probe": "suite-black",  # the developer probe: the whole suite
-    "Bastians_Quests": "quests",
-    "Bastians_Route": "route",
-    "Bastians_Strategies": "strategies",
     "Bastians_TalesSpike": "suite-black",  # developer-only like the probe (T1, 27.10.2026)
+    "Bastians_ChatSpike": "suite-black",  # developer-only like the probe (CH0, 31.10.2026)
 }
-# apps without website art wear the tile of a glyph (owner's style of the icons, R25.38)
+# every app wears the tile of its app mark (plan-second-wave.md S1; the kinds of B.APPS' `icon`)
 GLYPH_ICONS = {
-    "Bastians_Notes": "note",
-    "Bastians_Library": "ledger",  # until the Library has website art (L3, 28.10.2026)
+    "Bastians_Core": "app_suite",
+    "Bastians_Quests": "app_quests",
+    "Bastians_Map": "app_map",
+    "Bastians_Browser": "app_browser",
+    "Bastians_Gold": "app_gold",
+    "Bastians_Route": "app_route",
+    "Bastians_Strategies": "ledger",
+    "Bastians_Notes": "app_notes",
+    "Bastians_Alts": "app_alts",
+    "Bastians_Helpers": "app_helpers",
+    "Bastians_Voice": "orbit",  # Bastian's Orbiter
+    "Bastians_Chat": "app_chat",
+    "Bastians_Gestures": "app_gestures",
+    "Bastians_Campfire": "app_campfire",
+    "Bastians_Library": "tale",
+    **{
+        f"Bastians_Data{suffix}": "app_data"
+        for suffix in (
+            "",
+            "_Items",
+            "_Market",
+            "_Nav",
+            "_Quests",
+            "_Strategies",
+            "_World",
+            "_Text_enUS",
+            "_Text_deDE",
+            "_Text_frFR",
+            "_Text_esES",
+            "_Text_koKR",
+            "_Text_zhCN",
+            "_Text_zhTW",
+        )
+    },
 }
 
 

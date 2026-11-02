@@ -11,10 +11,10 @@ ns.L:Register("zhTW", {
   ["Open in the book"] = "在書中開啟",
   ["Read"] = "閱讀",
   ["In the book"] = "在書中",
-  ["In Bastian's book"] = "在 Bastian's 之書中",
-  ["Bastian's Gold Rumours"] = "Bastian's 金幣傳聞",
+  ["In Bastian's book"] = "在巴斯蒂安的書中",
+  ["Bastian's Gold Rumours"] = "巴斯蒂安的金幣傳聞",
   ["the book"] = "這本書",
-  ["Rumours (Bastian's book)"] = "傳聞（Bastian's 之書）",
+  ["Rumours (Bastian's book)"] = "傳聞（巴斯蒂安的書）",
   ["Strategies is disabled"] = "Strategies 已停用",
 
   -- Plate.lua
@@ -52,7 +52,7 @@ ns.L:Register("zhTW", {
   ["%s: %s"] = "%s：%s",
   ["percent at the vendor"] = "商人處的百分比",
   ["Your note on this page (kept for every character)"] = "你在此頁的筆記（所有角色共用）",
-  ["Bastian's verdict"] = "Bastian's 的評斷",
+  ["Bastian's verdict"] = "巴斯蒂安的評斷",
   ["What it pays on your market"] = "在你的市場上的收益",
   ["Today on your market"] = "今日你的市場",
   ["At the vendor"] = "在商人處",
@@ -77,7 +77,7 @@ ns.L:Register("zhTW", {
   ["told by %d channels"] = "由 %d 個頻道傳出",
   ["Rumour mill: %s"] = "傳聞工坊：%s",
   ["Rumour mill: %d rumours I have not tried yet"] = "傳聞工坊：%d 則我尚未試過的傳聞",
-  ["Bastian's Strategies"] = "Bastian's Strategies",
+  ["Bastian's Strategies"] = "巴斯蒂安的攻略",
   ["Every way to get rich I was ever told about, written down by a man who is still not rich"] = "我所聽過的每一種致富之道，由一個至今仍未致富的人寫下",
   ["Printed in Booty Bay, on credit."] = "印於藏寶海灣，賒帳印製。",
   ["What's new"] = "新消息",
@@ -129,4 +129,8 @@ ns.L:Register("zhTW", {
   ["%d updated pages"] = "%d 個已更新的頁面",
   ["%d more changes"] = "另外還有 %d 項變更",
   ["Route there"] = "規劃路線",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d new"] = "%d 條新內容",
+  ["%d pages"] = "%d 頁",
+  ["Click: the book. Right click: its settings."] = "點擊：書。右鍵點擊：設定。",
 })

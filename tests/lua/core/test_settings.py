@@ -101,9 +101,11 @@ def test_blizzard_panel_categories(app: WowRuntime):
     cats = app.eval("Mock.settingsCategories")
     assert len(cats) == 1 and cats[1].name == "Bastians"
     children = sorted(c.name for c in cats[1].children.values())
-    assert children == ["General", "Test App"]  # the root panel is the Suite page (30.10.2026)
+    # the root panel is the Suite page (30.10.2026); Core's own page "Hidden by the key" (F1,
+    # 01.11.2026) is a child like an app
+    assert children == ["General", "Hidden by the key", "Test App"]
     panels = app.eval("Bastians.UI.Settings.Panels()")
-    assert set(panels.keys()) == {"Suite", "Core", "TestApp"}
+    assert set(panels.keys()) == {"Suite", "Core", "Core:screen", "TestApp"}
     app.execute("Bastians.UI.Settings.Open(Bastians:GetModule('TestApp'))")
     assert app.eval("Mock.settingsOpened") == app.eval(
         "Bastians.UI.Settings.Panels().TestApp.category:GetID()"

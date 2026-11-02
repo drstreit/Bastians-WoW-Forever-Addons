@@ -1,9 +1,24 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Data: Navigation
+## Title-koKR: Bastian's Data: 길 찾기
+## Title-zhCN: Bastian's Data: 导航
+## Title-zhTW: Bastian's Data: 導航
+## Title-deDE: Bastian's Data: Navigation
+## Title-frFR: Bastian's Data: Navigation
+## Title-esES: Bastian's Data: Navegación
+## Title-esMX: Bastian's Data: Navegación
 ## IconTexture: Interface\AddOns\Bastians_Data_Nav\Icon
 ## Notes: Generated routing graph for Bastian's Route (loads at startup).
+## Notes-koKR: Bastian's Route용으로 생성된 경로 그래프 (접속 시 불러옴).
+## Notes-zhCN: 为 Bastian's Route 生成的路线图（登录时加载）。
+## Notes-zhTW: 為 Bastian's Route 生成的路線圖（登入時載入）。
+## Notes-deDE: Erzeugtes Wegenetz für Bastian's Route (lädt beim Login).
+## Notes-frFR: Graphe d'itinéraires généré pour Bastian's Route (chargé à la connexion).
+## Notes-esES: Grafo de rutas generado para Bastian's Route (se carga al conectar).
+## Notes-esMX: Grafo de rutas generado para Bastian's Route (se carga al conectar).
+## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

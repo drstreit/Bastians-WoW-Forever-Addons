@@ -1,7 +1,10 @@
 """The shared Lua data loader: runs a source data file in a sandbox and converts its tables."""
 
+from pathlib import Path
+
 import pytest
 
+from bastians_build.sources import luatable
 from bastians_build.sources.luatable import (
     LuaDataError,
     eval_long_string,
@@ -64,3 +67,29 @@ def test_stubbed_globals_and_errors(tmp_path):
 def test_utf8_bom_and_floats():
     assert to_python(3.0) == 3 and to_python(0.27) == 0.27
     assert to_python("x") == "x"
+
+
+def test_other_peoples_files_reach_neither_files_nor_processes_nor_python(tmp_path):
+    """02.11.2026 (the sources update themselves daily, tools/sources_update.py): a data file runs
+    on a Lua without os, io, debug, package, require, dofile, loadfile, load and lupa's python;
+    a file that tries one fails as a data error, the string and table libraries stay."""
+    from bastians_build.sources import allthethings, itemdb, probe
+
+    lua = luatable.new_runtime()
+    for name in luatable.UNSAFE:
+        assert lua.eval(f"rawget(_G, '{name}')") is None, name
+    assert (
+        lua.eval("string.format('%d', 7)") == "7" and lua.eval("type(table.insert)") == "function"
+    )
+    evil = tmp_path / "Evil.lua"
+    evil.write_text('local _, ns = ...\nos.execute("echo pwned")\n', encoding="utf-8")
+    with pytest.raises(luatable.LuaDataError, match="os"):
+        luatable.run_file(lua, evil)
+    sneaky = tmp_path / "Sneaky.lua"
+    sneaky.write_text('local _, ns = ...\nns.f = io.open("x", "w")\n', encoding="utf-8")
+    with pytest.raises(luatable.LuaDataError, match="io"):
+        luatable.run_file(luatable.new_runtime(), sneaky)
+    # the readers that build their own runtime use the same one
+    for module in (allthethings, itemdb, probe):
+        source = Path(module.__file__).read_text(encoding="utf-8")
+        assert "safe_runtime()" in source and "lua51.LuaRuntime(" not in source, module.__name__

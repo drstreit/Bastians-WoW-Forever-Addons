@@ -43,10 +43,21 @@ local function add(roles, role)
   roles[#roles + 1] = role
 end
 
--- "Alchemy Trainer" -> "trainer.alchemy", "First Aid Trainer" -> "trainer.first-aid"; nil otherwise
-local function trainerKind(subname)
+-- "Alchemy Trainer" -> "Alchemy", "First Aid Trainer" -> "First Aid"; nil otherwise (what a
+-- trainer trains, for the map's labels and the summary; "I see the
+-- trainer names - but not what they train").
+function Poi.TrainerWords(subname)
   local words = type(subname) == "string" and subname:match("^(.-)%s+[Tt]rainer$")
   if not words or words == "" then
+    return nil
+  end
+  return words
+end
+
+-- "Alchemy Trainer" -> "trainer.alchemy", "First Aid Trainer" -> "trainer.first-aid"; nil otherwise
+local function trainerKind(subname)
+  local words = Poi.TrainerWords(subname)
+  if not words then
     return nil
   end
   return "trainer." .. words:lower():gsub("%s+", "-")

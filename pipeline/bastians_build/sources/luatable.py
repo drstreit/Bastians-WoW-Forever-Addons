@@ -36,10 +36,47 @@ class LuaDataError(ValueError):
     pass
 
 
-def new_runtime() -> lua51.LuaRuntime:
-    lua = lua51.LuaRuntime(
-        unpack_returned_tuples=True, register_eval=False, register_builtins=False
+# What a data file never needs and what would reach this machine: files and processes, modules
+# and loaders from disk, the debug library, lupa's bridge into Python. The source addons update
+# themselves every day since 02.11.2026 (tools/sources_update.py): a changed file runs here
+# without a person reading it first, so it gets a plain Lua with tables, strings and maths only.
+UNSAFE = (
+    "os",
+    "io",
+    "debug",
+    "package",
+    "require",
+    "module",
+    "dofile",
+    "loadfile",
+    "load",
+    "python",
+)
+
+
+def harden(lua: lua51.LuaRuntime) -> lua51.LuaRuntime:
+    """Remove UNSAFE from the runtime's globals (and from package.loaded, before it goes)."""
+    lua.execute(
+        "local unsafe = {...} "
+        "local loaded = package and package.loaded "
+        "for _, name in ipairs(unsafe) do "
+        "  _G[name] = nil "
+        "  if loaded then loaded[name] = nil end "
+        "end",
+        *UNSAFE,
     )
+    return lua
+
+
+def safe_runtime() -> lua51.LuaRuntime:
+    """A Lua 5.1 for other people's files: no eval, no builtins, nothing of UNSAFE."""
+    return harden(
+        lua51.LuaRuntime(unpack_returned_tuples=True, register_eval=False, register_builtins=False)
+    )
+
+
+def new_runtime() -> lua51.LuaRuntime:
+    lua = safe_runtime()
     lua.execute(SANDBOX)
     return lua
 

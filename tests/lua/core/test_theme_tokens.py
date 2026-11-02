@@ -22,6 +22,8 @@ def test_a_theme_switch_writes_into_the_same_tables_and_recolours(core: WowRunti
         "parchment",
         "blizzard",
         "contrast",
+        "night",
+        "graphite",
     ]
     core.execute(
         f"""
@@ -35,7 +37,7 @@ def test_a_theme_switch_writes_into_the_same_tables_and_recolours(core: WowRunti
         """
     )
     teal_accent = rgb(core, "kept")
-    assert core.eval(f"{S}.H.muted") == "|cff808080"
+    assert core.eval(f"{S}.H.muted") == "|cff858585"  # readable on the panel (H2)
     core.execute(f"{S}.ApplyTheme('parchment')")
     assert core.eval(f"{S}.ThemeId()") == "parchment"
     assert rgb(core, "kept") != teal_accent  # the kept reference follows the theme
@@ -44,7 +46,7 @@ def test_a_theme_switch_writes_into_the_same_tables_and_recolours(core: WowRunti
     assert [round(v, 3) for v in (r, g, b)] == rgb(core, f"{S}.C.panel")
     r, g, b, _ = core.eval("label:GetTextColor()")
     assert [round(v, 3) for v in (r, g, b)] == rgb(core, f"{S}.C.text")
-    assert core.eval(f"{S}.H.muted") != "|cff808080"  # the text codes follow too
+    assert core.eval(f"{S}.H.muted") != "|cff858585"  # the text codes follow too
     assert core.eval(f"{S}.SHAPE.radius") == 6
     core.execute(f"{S}.ApplyTheme('nonsense')")  # unknown: the first theme
     assert core.eval(f"{S}.ThemeId()") == "teal" and rgb(core, "kept") == teal_accent
@@ -90,13 +92,15 @@ RAW = [
     ),
 ]
 ALLOWED = {"Bastians_Core/UI/Themes.lua", "Bastians_Core/UI/Style.lua"}
+DEV_PROBES = ("Bastians_Probe/", "Bastians_ChatSpike/")
 
 
 def test_no_addon_file_carries_a_raw_colour():
     found = []
     for path in sorted((ROOT / "addons").rglob("*.lua")):
         rel = path.relative_to(ROOT / "addons").as_posix()
-        if "/Generated/" in rel or "/Libs/" in rel or rel.startswith("Bastians_Probe/"):
+        # the developer-only probes run without Core and its themes
+        if "/Generated/" in rel or "/Libs/" in rel or rel.startswith(DEV_PROBES):
             continue
         if rel in ALLOWED:
             continue

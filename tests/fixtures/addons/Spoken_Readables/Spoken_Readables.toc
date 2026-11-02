@@ -1,0 +1,6 @@
+## Interface: 16001, 120105
+## Title: Spoken Readables (test double)
+## Notes: Fixture: the readables' corpus, where each one is, and a voice pack, as Spoken Readables keeps them in globals.
+## Dependencies: Spoken
+
+Data.lua

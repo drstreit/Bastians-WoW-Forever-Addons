@@ -28,22 +28,37 @@ Tree.__index = Tree
 local Util = {}
 B.UI.TreeUtil = Util
 
--- Text with the search term in the accent colour. Escape sequences (|c, |r, |T..|t, |H..|h..|h) pass
+-- Text with the query's words in the accent colour (ADR 0045: the plain words the query looks
+-- for; `query` a text or a compiled query). Escape sequences (|c, |r, |T..|t, |H..|h..|h) pass
 -- through untouched; after a highlight the colour that was active comes back.
 function Util.highlight(text, query)
   if not (text and query and query ~= "") then
     return text
   end
+  local words = B.Query.Of(query).words
+  if #words == 0 then
+    return text
+  end
   local out, pos, n, color = {}, 1, #text, nil
   local acc = S.accent()
-  local lowQuery = string.lower(query)
+  -- the earliest of the words from `i` on
+  local function nextHit(low, i)
+    local bestA, bestB
+    for _, w in ipairs(words) do
+      local a, b = string.find(low, w, i, true)
+      if a and (not bestA or a < bestA or (a == bestA and b > bestB)) then
+        bestA, bestB = a, b
+      end
+    end
+    return bestA, bestB
+  end
   local function plain(s)
     if s == "" then
       return
     end
     local low, i, res = string.lower(s), 1, {}
     while true do
-      local a, b = string.find(low, lowQuery, i, true)
+      local a, b = nextHit(low, i)
       if not a then
         res[#res + 1] = string.sub(s, i)
         break
@@ -102,8 +117,13 @@ end
 
 -- Rows to draw. While searching, folds are ignored: a row that matches brings its whole branch,
 -- otherwise only the matching descendants and the way to them. `expanded(row)` decides folds.
+-- `query` is a text or a compiled query (ADR 0045), matched against each row's text.
 function Util.flatten(rows, query, expanded)
   local out = {}
+  local q = query and query ~= "" and B.Query.Of(query) or nil
+  if q and q.empty then
+    q = nil
+  end
   local function all(list, depth)
     for _, r in ipairs(list or {}) do
       r.depth = depth
@@ -116,8 +136,8 @@ function Util.flatten(rows, query, expanded)
     for i, r in ipairs(list or {}) do
       r.id = r.id or ((parentID or "") .. "/" .. tostring(r.ref or r.text or i))
       r.hasChildren = r.children ~= nil and #r.children > 0
-      if query and query ~= "" then
-        if string.find(Util.searchText(r), query, 1, true) then
+      if q then
+        if q:MatchLower(Util.searchText(r), r) then
           r.depth = depth
           out[#out + 1] = r
           all(r.children, depth + 1)
@@ -145,11 +165,10 @@ end
 
 -- Row action icons (ADR 0013 C): small icons at the right of a row with a ref, shown on hover and
 -- always on the focused row, drawn from the registered actions in this order: locate (map.show),
--- route (route.to), play or stop (quests.voice, only where it has a line), open (browser.open),
--- copy the Wowhead link, hide (quests.hide). An app that is
--- not installed simply contributes no icon.
-Tree.ROW_ACTIONS =
-  { "map.show", "route.to", "quests.voice", "browser.open", "browser.wowhead", "quests.hide" }
+-- route (route.to), play or stop (voice.play, only where it has a line; Bastian's Voice since
+-- 01.11.2026, Quests.Spoken before), open (browser.open), copy the Wowhead link (browser.wowhead,
+-- ), hide (quests.hide). An app that is not installed simply contributes no icon.
+Tree.ROW_ACTIONS = { "map.show", "route.to", "voice.play", "browser.open", "browser.wowhead", "quests.hide" }
 
 -- How many row actions are registered now: the space kept free at the right of every ref row.
 function Util.actionSlots()
@@ -325,11 +344,23 @@ function B.UI.Tree(parent, opts)
   return tree
 end
 
+-- The stored folds. A profile switch prunes an empty table out of the old profile while a tree
+-- built before still holds that profile's table (retail 31.10.2026: Quests stopped on
+-- "attempt to index field 'collapsed'"), so the table is made again when it is gone.
+function Tree:Folds()
+  local folds = self.db.collapsed
+  if type(folds) ~= "table" then
+    folds = {}
+    self.db.collapsed = folds
+  end
+  return folds
+end
+
 function Tree:Expanded(row)
   if self.opts.flat then
     return true
   end
-  local c = self.db.collapsed[row.id]
+  local c = self:Folds()[row.id]
   if c ~= nil then
     return not c
   end
@@ -340,9 +371,9 @@ function Tree:Expanded(row)
 end
 
 function Tree:ToggleFold(row)
-  self.db.collapsed[row.id] = self:Expanded(row) or nil
-  if self.db.collapsed[row.id] == nil and row.collapsed then
-    self.db.collapsed[row.id] = false -- the row folds by default, so "open" must be stored
+  self:Folds()[row.id] = self:Expanded(row) or nil
+  if self:Folds()[row.id] == nil and row.collapsed then
+    self:Folds()[row.id] = false -- the row folds by default, so "open" must be stored
   end
   self:Refresh()
 end
@@ -352,9 +383,45 @@ function Tree:SetRows(rows)
   self:Refresh()
 end
 
+-- The search box's text (ADR 0045: the suite's search syntax, so its case stays for OR/AND/NOT).
 function Tree:SetQuery(query)
-  self.query = string.lower(string.gsub(tostring(query or ""), "^%s*(.-)%s*$", "%1"))
+  self.query = string.gsub(tostring(query or ""), "^%s*(.-)%s*$", "%1")
   self:Refresh()
+end
+
+-- The row the keyboard points at (ADR 0038: the arrows in a host's search box); nil clears it.
+-- The row is lit like a hovered one and scrolled into view.
+function Tree:SetKeyRow(row)
+  self.keyRowID = row and row.id or nil
+  if row then
+    for i, r in ipairs(self.flat) do
+      if r == row then
+        local top, h = self.offsets[i] or 0, self.heights[i] or ROW_H
+        local view = self.scroll:GetHeight() or 0
+        local offset = self.scroll:GetVerticalScroll() or 0
+        if top < offset then
+          self:ScrollTo(top)
+        elseif view > 0 and top + h > offset + view then
+          self:ScrollTo(top + h - view)
+        end
+        break
+      end
+    end
+  end
+  self:Render()
+end
+
+-- The flat index of the key row, or nil.
+function Tree:KeyIndex()
+  if not self.keyRowID then
+    return nil
+  end
+  for i, r in ipairs(self.flat) do
+    if r.id == self.keyRowID then
+      return i
+    end
+  end
+  return nil
 end
 
 function Tree:Select(row)
@@ -436,12 +503,7 @@ local function showTooltip(tree, frame)
   elseif tree.opts.tooltip then
     tree.opts.tooltip(GameTooltip, row)
   elseif row.ref then
-    local e = B:Entity(row.ref)
-    GameTooltip:AddLine(e:Name() or row.text or row.ref, 1, 1, 1)
-    local summary = e:Summary()
-    if summary then
-      S.TipLine(GameTooltip, summary, "tipDim")
-    end
+    S.EntityTip(GameTooltip, row.ref, row.text)
   elseif row.hasChildren then
     S.TipLine(GameTooltip, L["Click: fold or unfold"], "tipDim")
   else
@@ -653,7 +715,9 @@ local function makeRow(tree)
     if tree.opts.onHover then
       tree.opts.onHover(self.row, false)
     end
-    self.hl:Hide()
+    if not (self.row and self.row.id == tree.keyRowID) then
+      self.hl:Hide() -- the key row stays lit (ADR 0038)
+    end
     if not (self.row and self.row.id == tree.selectedID) then
       self.bar:Hide()
     end
@@ -745,6 +809,9 @@ function Tree:Render()
         textLeft = left + faceSize + 3
       elseif icon then
         B.UI.PaintIcon(frame.icon, icon)
+        if row.tint and S.C[row.tint] then
+          S.tint(frame.icon, S.C[row.tint]) -- a glyph in the row's own token (Teaches: known by whom)
+        end
         frame.icon:ClearAllPoints()
         frame.icon:SetPoint("LEFT", left, 0)
         frame.icon:Show()
@@ -858,6 +925,11 @@ function Tree:Render()
         frame.sel:Hide()
         frame.bar:Hide()
       end
+      if self.keyRowID ~= nil and row.id == self.keyRowID then
+        frame.hl:Show() -- the keyboard's row (ADR 0038)
+      elseif self.keyRowID ~= nil and not frame:IsMouseOver() then
+        frame.hl:Hide()
+      end
       if row.kind == "section" then
         frame.sec:Show()
       else
@@ -919,6 +991,11 @@ function Tree:SetFilters(dims)
     bar = B.UI.FilterBar(self.chips)
     bar.frame:SetPoint("TOPLEFT", 0, 0)
     bar.frame:SetPoint("TOPRIGHT", 0, 0)
+    -- the rows start under the bar's real height, also after a relayout at another width
+    --
+    bar.onHeight = function(h)
+      self.chips:SetHeight(h)
+    end
     self.filterBar = bar
   end
   bar:SetDims(dims)

@@ -6,6 +6,8 @@
 -- dragging pans, Recentre comes back, Alt+drag moves the frame, Alt+wheel sizes it. The game's
 -- indicators (mail, tracking, calendar, clock, ...) move into the tools row. Nothing is moved in
 -- combat (CLAUDE.md golden rule 6); everything goes back when the setting is off.
+-- The search on top finds only what the minimap shows and marks the place it jumps to (map.md
+-- "The minimap search", L4, ): a quest's mark is its giver.
 local _, ns = ...
 local B = Bastians
 local L = ns.L
@@ -56,10 +58,17 @@ Mini.HIDE = {
   { "AddonCompartmentFrame" },
   -- the suite's own button: the badge on the frame stands in for it
   { "BastiansMinimapButton" },
+  { "LibDBIcon10_Bastians" }, -- the same, made by LibDBIcon when another addon loaded it (ADR 0043)
 }
 Mini.BADGE = 34 -- the Bastian's badge on the frame (the one button on the minimap)
 Mini.OPENER = 26 -- the button of the minimap buttons' box on the rim, bottom left
 Mini.ICON = "Interface\\AddOns\\Bastians_Core\\Icon"
+-- The entity types the minimap's search offers (map.md "The minimap search"); notes on a spot and
+-- the bookmarks come without an entity and are kept by their place.
+Mini.SEARCH_SCOPE = { npc = true, quest = true, zone = true, area = true }
+Mini.SPOT_LAYER = "notes.spots" -- the layer whose pins are the player's notes on a spot (Notes)
+Mini.MARK_SECONDS = 120 -- the search's mark goes after this long
+Mini.FAR = 1e9 -- yards: a view that holds a whole continent
 
 local mod
 local frame, bar, view, clip, catcher, arrow, foot, tools, recentre, warn
@@ -70,6 +79,7 @@ local elapsed = 0
 local taken -- what was moved: { minimap = state, cluster = state, indicators = { ... }, hidden = { ... } }
 local hider -- a hidden frame that holds the game's cluster while ours shows
 local pending -- a take or give back waiting for the end of combat
+local markTimer -- the mark's timeout
 local hookMinimap -- defined with the takeover below
 Mini.stats = { drawn = 0, indicators = 0 }
 
@@ -175,9 +185,9 @@ function Mini.Warn(style)
       .. " your group, quest areas and server pings. Bastian's styles show the map's layers instead"
       .. " (known herb and ore places, quests, NPCs, your route)."
     warn.text:SetText(L[text])
-    warn.ok = S.button(warn.content, L["Switch"], 120, 22, true)
+    warn.ok = S.action(warn.content, { icon = "check", label = L["Switch"], primary = true })
     warn.ok:SetPoint("BOTTOMRIGHT", -12, 12)
-    warn.cancel = S.button(warn.content, L["Keep the game's"], 120, 22)
+    warn.cancel = S.action(warn.content, { icon = "close", label = L["Keep the game's"], boxed = true })
     warn.cancel:SetPoint("RIGHT", warn.ok, "LEFT", -8, 0)
     warn.cancel:SetScript("OnClick", function()
       warn:Hide()
@@ -381,7 +391,7 @@ function Mini.LayoutTools()
   if not tools then
     return
   end
-  local own = { tools.style, tools.layers, tools.map, tools.options, tools.info }
+  local own = { tools.style, tools.layers, tools.map, tools.options, tools.timers, tools.info }
   local width, count = 0, 0
   for _, b in ipairs(own) do
     if b:IsShown() then
@@ -887,7 +897,7 @@ local function iconButton(parent, kind, tip, onClick)
   b.icon = b:CreateTexture(nil, "ARTWORK")
   b.icon:SetAllPoints()
   B.UI.PaintIcon(b.icon, B.UI.IconTexture(kind))
-  b.tip = tip
+  b.tip = tip -- a text, or a function returning title and text (S.TipEnter)
   b:SetScript("OnEnter", S.TipEnter)
   b:SetScript("OnLeave", S.TipLeave)
   b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
@@ -927,33 +937,225 @@ function Mini.LayerMenu(anchor)
   return B.UI.Menu(anchor, L["Layers"], entries, mod)
 end
 
--- Jumps the view to an entity of the search: its nearest place on the view's continent first.
-function Mini.JumpTo(ref)
-  local kind, id = B.Entity.Parse(ref)
-  local c, wx, wy
-  if kind == "zone" then
-    c, wx, wy = B.Coords.ToWorld(tonumber(id), 0.5, 0.5)
-  else
-    local best
-    for _, p in ipairs(B:Entity(ref):Places()) do
-      if p.map and p.wx and p.wy then
-        local d = (p.map == cam.continent) and ((p.wx - cam.wx) ^ 2 + (p.wy - cam.wy) ^ 2) or math.huge
-        if not best or d < best.d then
-          best = { d = d, c = p.map, wx = p.wx, wy = p.wy }
-        end
+-- ---------------------------------------------------------------------------------------------
+-- The search: what it offers, where it jumps, the mark
+-- ---------------------------------------------------------------------------------------------
+
+-- The mark of the search's jump (drawn by the overlay, Minimap.lua MM.SetMark); nil clears it.
+-- It goes on its own after MARK_SECONDS: one timer, nothing ticks.
+function Mini.SetMark(m)
+  if markTimer then
+    markTimer:Cancel()
+    markTimer = nil
+  end
+  ns.Minimap.SetMark(m)
+  if m then
+    markTimer = C_Timer.NewTimer(Mini.MARK_SECONDS, function()
+      markTimer = nil
+      ns.Minimap.SetMark(nil)
+    end)
+  end
+end
+
+function Mini.ClearMark()
+  if markTimer or ns.Minimap.Mark() then
+    Mini.SetMark(nil)
+  end
+end
+
+function Mini.Mark()
+  return ns.Minimap.Mark()
+end
+
+-- The point the search measures from: the view's centre on our styles, the player on the game's.
+local function searchCentre()
+  if Mini.Style() ~= "game" and cam then
+    return cam.continent, cam.wx, cam.wy
+  end
+  local c, px, py = B.Coords.Player()
+  if c then
+    return c, px, py
+  end
+  if cam then
+    return cam.continent, cam.wx, cam.wy
+  end
+  return nil
+end
+
+-- The place of a note on a spot: the pin of Notes' spot layer with the note's title, the
+-- continent the search measures from first. -> { continent, wx, wy, title }, pin; or nil.
+function Mini.SpotPlace(title)
+  if type(title) ~= "string" or title == "" then
+    return nil
+  end
+  local first = searchCentre()
+  local order = {}
+  for c in pairs(B.Coords.Continents()) do
+    if c ~= first then
+      order[#order + 1] = c
+    end
+  end
+  table.sort(order)
+  if first then
+    table.insert(order, 1, first)
+  end
+  local far = Mini.FAR
+  for _, c in ipairs(order) do
+    local whole = { continent = c, x1 = -far, y1 = -far, x2 = far, y2 = far, level = 6, minimap = true }
+    for _, pin in ipairs(B:QueryLayer(Mini.SPOT_LAYER, whole)) do
+      if pin.label == title and pin.wx and pin.wy then
+        return { c, pin.wx, pin.wy, title }, pin
       end
+    end
+  end
+  return nil
+end
+
+-- The minimap's box keeps what the minimap can show: the types of SEARCH_SCOPE, and a result
+-- without an entity when it is a note on a spot (it gets the spot as its point).
+function Mini.KeepResult(res)
+  local kind = B.Entity.Parse(res.ref)
+  if kind then
+    return Mini.SEARCH_SCOPE[kind] and res or nil
+  end
+  if res.point then
+    return res
+  end
+  local point, pin = Mini.SpotPlace(res.label)
+  if not point then
+    return nil -- a row without a place (Quests' "Load quest texts")
+  end
+  return {
+    label = res.label,
+    point = point,
+    icon = pin.icon,
+    color = pin.color,
+    card = pin.card,
+    kindLabel = L["Note"],
+    score = res.score,
+    rank = res.rank,
+  }
+end
+
+-- The map's bookmarks whose name matches (the layer bar's, from Notes or the Map's own list); none
+-- when a type word asks for entities.
+function Mini.SearchBookmarks(query, types)
+  if types or not ns.LayerBar then
+    return {}
+  end
+  local q = B.Query.Compile(query)
+  local out = {}
+  for _, b in ipairs(ns.LayerBar.Bookmarks() or {}) do
+    local score = b.continent and b.wx and b.wy and q:Score(b.name)
+    if score then
+      out[#out + 1] = {
+        label = b.name,
+        point = { b.continent, b.wx, b.wy, b.name },
+        icon = B.UI.IconTexture("spot"),
+        kindLabel = L["Bookmark"],
+        score = score,
+      }
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.score ~= b.score then
+      return a.score > b.score
+    end
+    return a.label < b.label
+  end)
+  return out
+end
+
+-- A type word the minimap cannot show ("item linen"): one line instead of a search.
+function Mini.SearchBlocked(types)
+  if not types then
+    return nil
+  end
+  for kind in pairs(types) do
+    if Mini.SEARCH_SCOPE[kind] then
+      return nil
+    end
+  end
+  return L["The minimap finds NPCs, quests, zones and your notes."]
+end
+
+-- The places a jump to the entity may go: a quest's giver (the giver
+-- must be marked), else the places that matter now.
+local function jumpPlaces(ref, kind)
+  local e = B:Entity(ref)
+  if kind ~= "quest" then
+    return e:Places()
+  end
+  local out = {}
+  for _, p in ipairs(e:AllPlaces()) do
+    if p.kind == "giver" then
+      out[#out + 1] = p
+    end
+  end
+  return out
+end
+
+-- The nearest of the places with a world position, the continent the search measures from first.
+local function nearest(places)
+  local fc, fx, fy = searchCentre()
+  local best
+  for _, p in ipairs(places) do
+    if p.map and p.wx and p.wy then
+      local d = (fx and p.map == fc) and ((p.wx - fx) ^ 2 + (p.wy - fy) ^ 2) or math.huge
+      if not best or d < best.d then
+        best = { d = d, c = p.map, wx = p.wx, wy = p.wy }
+      end
+    end
+  end
+  return best
+end
+
+-- Jumps the view to a result of the search and marks the place: the point the result carries (a
+-- note, a bookmark), a zone's middle (no mark), a quest's giver, else the entity's nearest place.
+-- In the game's style the big map shows the place, marked there too. -> true, or false when there
+-- is no place (one line in the chat says why).
+function Mini.JumpTo(ref, res)
+  local kind, id = B.Entity.Parse(ref)
+  local point = res and res.point
+  local c, wx, wy, mark
+  if point then
+    c, wx, wy = point[1], point[2], point[3]
+    mark = { ref = ref, icon = res.icon, color = res.color, label = res.label, card = res.card }
+  elseif kind == "zone" then
+    c, wx, wy = B.Coords.ToWorld(tonumber(id), 0.5, 0.5)
+  elseif kind then
+    local best = nearest(jumpPlaces(ref, kind))
+    if not best and kind == "quest" then
+      B:Say(L["No known place of the quest giver for %s."], B:Entity(ref):Name() or ref)
+      return false
     end
     if best then
       c, wx, wy = best.c, best.wx, best.wy
+      local e = B:Entity(ref)
+      mark = {
+        ref = ref,
+        icon = e:Icon() or B.UI.IconTexture(kind) or B.UI.IconTexture("other"),
+        label = e:Name(),
+      }
     end
   end
   if not c then
     B:Say(L["No map position here (instance?)"])
     return false
   end
+  if mark then
+    mark.continent, mark.wx, mark.wy = c, wx, wy
+    Mini.SetMark(mark)
+  else
+    Mini.ClearMark()
+  end
   if Mini.Style() == "game" then
-    -- the game's minimap cannot look elsewhere: the big map shows the place
-    Map.Fly(c, wx, wy, ns.Waypoints and ns.Waypoints.ZONE_LEVEL or 4)
+    -- the game's minimap cannot look elsewhere: the big map shows the place, marked as well
+    if mark then
+      B:RunAction("map.show", ref, { source = "minimap.search", point = { c, wx, wy, mark.label } })
+    else
+      Map.Fly(c, wx, wy, ns.Waypoints and ns.Waypoints.ZONE_LEVEL or 4)
+    end
     return true
   end
   following = false
@@ -1020,7 +1222,14 @@ local function build()
   end)
   recentre:SetPoint("RIGHT", 0, 0)
   markRecentre()
-  Mini.search = ns.Search.New({}, bar, L["Search ..."], Mini.JumpTo)
+  -- what the minimap shows, and its mark (map.md "The minimap search")
+  Mini.search = ns.Search.New({
+    keep = Mini.KeepResult,
+    extra = Mini.SearchBookmarks,
+    blocked = Mini.SearchBlocked,
+    onRun = Mini.ClearMark,
+    onEscape = Mini.ClearMark,
+  }, bar, L["Search ..."], Mini.JumpTo)
   Mini.search.box:SetPoint("LEFT", bar, "LEFT", 0, 0)
   Mini.search.box:SetPoint("RIGHT", recentre, "LEFT", -4, 0)
 
@@ -1192,9 +1401,12 @@ local function build()
     end
   end)
   tools.options:SetPoint("LEFT", tools.map, "RIGHT", 2, 0)
+  -- the timers: stopwatches and countdowns
+  tools.timers = ns.Timers.Button(tools, iconButton)
+  tools.timers:SetPoint("LEFT", tools.options, "RIGHT", 2, 0)
   -- the info sign: the two ways to use the minimap and what each gives and takes
-  tools.info = S.button(tools, "i", 20, 20, true)
-  tools.info:SetPoint("LEFT", tools.options, "RIGHT", 2, 0)
+  tools.info = S.action(tools, { icon = "help", only = true, boxed = true })
+  tools.info:SetPoint("LEFT", tools.timers, "RIGHT", 2, 0)
   tools.info:SetScript("OnEnter", function(self)
     S.tint(self.face, S.C.faceHover)
     Mini.ShowInfo(self)
@@ -1218,6 +1430,14 @@ local function build()
     self.ticking = nil
     self:SetScript("OnUpdate", nil)
     drag = nil
+    -- what hung off the minimap goes with it
+    ns.Pins.HideMiniCard()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+    if ns.MiniButtons then
+      ns.MiniButtons.Close()
+    end
   end)
   -- the player's own movement drives the ticks; the frame listens itself (the module's handlers for
   -- these events belong to the overlay, Minimap.lua: one handler per event per module)
@@ -1275,6 +1495,7 @@ function Mini.Apply()
       end
     end)
   elseif frame then
+    Mini.ClearMark()
     deferred(function()
       if ns.MiniButtons then
         ns.MiniButtons.Release()
@@ -1323,6 +1544,10 @@ table.insert(Map.onSetting, function(key, value)
   end
 end)
 table.insert(Map.onDisable, function()
+  if markTimer then
+    markTimer:Cancel()
+    markTimer = nil
+  end
   if frame then
     deferred(function()
       if ns.MiniButtons then

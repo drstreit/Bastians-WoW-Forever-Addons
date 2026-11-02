@@ -59,21 +59,22 @@ def test_a_row_click_keeps_the_list_and_back_walks_both(wow: WowRuntime):
     open_npcs(wow)
     assert wow.eval(f"{BR}.ListEntry().kind") == "list"
     assert band(wow, DS)["name"] == "Elwynn Forest"  # no page yet: the player's zone
-    wow.execute(f"local f = {row_frame(wow, 'npc:448')} f:Click('LeftButton')")
-    assert wow.eval(f"{BR}.Current().ref") == "npc:448" and band(wow, DS)["name"] == "Hogger"
+    wow.execute(f"local f = {row_frame(wow, 'npc:295')} f:Click('LeftButton')")
+    farley = "Innkeeper Farley"
+    assert wow.eval(f"{BR}.Current().ref") == "npc:295" and band(wow, DS)["name"] == farley
     assert wow.eval(f"{BR}.ListEntry().type") == "npc"  # the list stays
-    assert wow.eval(f"{MOD}.tree.selectedID") == "npc:448"  # its row carries the mark
+    assert wow.eval(f"{MOD}.tree.selectedID") == "npc:295"  # its row carries the mark
     assert any(
         strip(r.text).startswith("Corina Steele") for r in wow.eval(f"{MOD}.tree.flat").values()
     )
     # a navigation click changes the list and keeps the page
     nav_click(wow, "nav:list:item")
     wow.run_frames(5)
-    assert wow.eval(f"{BR}.ListEntry().type") == "item" and band(wow, DS)["name"] == "Hogger"
+    assert wow.eval(f"{BR}.ListEntry().type") == "item" and band(wow, DS)["name"] == farley
     assert nav_active(wow) == "nav:list:item"
-    # Back walks both: the NPC list with Hogger, then the list before the page
+    # Back walks both: the NPC list with the innkeeper, then the list before the page
     wow.execute(f"{BR}.Back()")
-    assert wow.eval(f"{BR}.ListEntry().type") == "npc" and band(wow, DS)["name"] == "Hogger"
+    assert wow.eval(f"{BR}.ListEntry().type") == "npc" and band(wow, DS)["name"] == farley
     wow.execute(f"{BR}.Back()")
     assert wow.eval(f"{BR}.Current().kind") == "list"
     assert band(wow, DS)["name"] == "Elwynn Forest"
@@ -84,41 +85,46 @@ def test_a_resting_row_shows_as_a_preview_and_a_click_keeps_it(wow: WowRuntime):
     boot(wow)
     open_npcs(wow)
     wow.execute(f"{BR}.Open('npc:240')")
-    hover(wow, "npc:448")
+    hover(wow, "npc:295")
+    wow.advance(1.2)  # without Shift nothing previews
+    assert band(wow, DS)["name"] == "Marshal Dughan"
+    wow.execute("Mock.shift = true")
+    hover(wow, "npc:295")
     wow.advance(0.5)  # before the tip delay (one second by default): nothing changes
     assert band(wow, DS)["name"] == "Marshal Dughan"
     wow.advance(0.6)
-    assert band(wow, DS)["name"] == "Hogger" and wow.eval(f"{BR}.Previewing()") == "npc:448"
+    assert band(wow, DS)["name"] == "Innkeeper Farley"
+    assert wow.eval(f"{BR}.Previewing()") == "npc:295"
     assert wow.eval(f"{DS}.band.preview:IsShown()") is True
     assert wow.eval(f"{BR}.Current().ref") == "npc:240"  # the history is untouched
-    hover(wow, "npc:448", entering=False)  # leaving: the kept page comes back
+    hover(wow, "npc:295", entering=False)  # leaving: the kept page comes back
     wow.advance(0.2)
     assert band(wow, DS)["name"] == "Marshal Dughan"
     assert wow.eval(f"{DS}.band.preview:IsShown()") is False
     # leaving before the delay: no preview at all
-    hover(wow, "npc:448")
+    hover(wow, "npc:295")
     wow.advance(0.3)
-    hover(wow, "npc:448", entering=False)
+    hover(wow, "npc:295", entering=False)
     wow.advance(1)
     assert band(wow, DS)["name"] == "Marshal Dughan" and wow.eval(f"{BR}.Previewing()") is None
     # rest, then click: the preview is kept as the page
-    hover(wow, "npc:448")
+    hover(wow, "npc:295")
     wow.advance(1.1)
-    wow.execute(f"local f = {row_frame(wow, 'npc:448')} f:Click('LeftButton')")
-    assert wow.eval(f"{BR}.Current().ref") == "npc:448" and wow.eval(f"{BR}.Previewing()") is None
+    wow.execute(f"local f = {row_frame(wow, 'npc:295')} f:Click('LeftButton')")
+    assert wow.eval(f"{BR}.Current().ref") == "npc:295" and wow.eval(f"{BR}.Previewing()") is None
     assert wow.eval(f"{DS}.band.preview:IsShown()") is False
     # R25.32: a preview carried into the detail pane stays there as the page
     wow.execute(f"{BR}.Open('npc:240')")
-    hover(wow, "npc:448")
+    hover(wow, "npc:295")
     wow.advance(1.1)
-    hover(wow, "npc:448", entering=False)
+    hover(wow, "npc:295", entering=False)
     wow.execute(f"Mock.mouseOverFrame = {DS}.frame")
     wow.advance(0.2)
-    assert wow.eval(f"{BR}.Current().ref") == "npc:448" and wow.eval(f"{BR}.Previewing()") is None
+    assert wow.eval(f"{BR}.Current().ref") == "npc:295" and wow.eval(f"{BR}.Previewing()") is None
     wow.execute("Mock.mouseOverFrame = nil")
     # rows passing under the cursor while the list scrolls start no preview
     wow.execute(f"{BR}.Open('npc:240'); {BR}.OnListWheel()")
-    hover(wow, "npc:448")
+    hover(wow, "npc:295")
     wow.advance(1.1)
     assert wow.eval(f"{BR}.Previewing()") is None
     assert wow.errors == []
@@ -152,7 +158,11 @@ def test_list_rows_carry_a_glyph_by_kind(wow: WowRuntime):
     icons = {strip(r.text).split("  ")[0]: r.icon for r in wow.eval(f"{MOD}.tree.flat").values()}
     assert icons["Innkeeper Farley"] == glyphs + "innkeeper"
     assert icons["Marshal Dughan"] == glyphs + "quest"  # a quest giver
-    assert icons["Hogger"] == wow.eval("Bastians.UI.IconTexture('mob')")  # no service: a monster
+    wow.execute(f"{BR}.List('mob')")  # no service: a monster, in the Mobs list
+    wow.run_frames(5)
+    wow.execute(SIZE)
+    icons = {strip(r.text).split("  ")[0]: r.icon for r in wow.eval(f"{MOD}.tree.flat").values()}
+    assert icons["Hogger"] == wow.eval("Bastians.UI.IconTexture('mob')")
     assert wow.eval(f"{BR}.RowGlyph({{ type = 'zone', dims = {{}}, values = {{}} }}, 1)") == "zone"
     assert wow.errors == []
 
@@ -405,4 +415,33 @@ def test_the_newest_showcase_follows_the_page_ctrl_click_opens_another(wow: WowR
     wow.run_frames(2)
     assert wow.eval(f"{second}.ref") == "npc:448"  # the newest follows
     assert wow.eval(f"{first}.ref") == "npc:240"  # the older one stays
+    assert wow.errors == []
+
+
+def test_the_preview_is_a_setting_shift_hover_or_never(wow: WowRuntime):
+    """the Shift preview: a setting now. `shift` (default) as before,
+    `hover` previews every resting row, `off` never."""
+    boot(wow)
+    open_npcs(wow)
+    wow.execute(f"{BR}.Open('npc:240')")
+    wow.execute(f"{MOD}.db.profile.preview = 'hover'")
+    hover(wow, "npc:295")
+    wow.advance(1.2)
+    assert (
+        band(wow, DS)["name"] == "Innkeeper Farley" and wow.eval(f"{BR}.Previewing()") == "npc:295"
+    )
+    hover(wow, "npc:295", entering=False)
+    wow.advance(0.3)
+    assert wow.eval(f"{BR}.Previewing()") is None
+    wow.execute(f"{MOD}.db.profile.preview = 'off'; Mock.shift = true")
+    hover(wow, "npc:295")
+    wow.advance(1.2)
+    assert band(wow, DS)["name"] == "Marshal Dughan" and wow.eval(f"{BR}.Previewing()") is None
+    wow.execute(f"{MOD}.db.profile.preview = nil")  # the default: Shift
+    hover(wow, "npc:295")
+    wow.advance(1.2)
+    assert wow.eval(f"{BR}.Previewing()") == "npc:295"
+    wow.execute("Mock.shift = nil")
+    labels = [o.key for o in wow.eval(f"{MOD}.def.options").values()]
+    assert "preview" in labels
     assert wow.errors == []

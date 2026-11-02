@@ -22,6 +22,8 @@ mapText = "#1a1a1a"     # words on the map, every style: place and zone names, p
 mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
 mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
 accent = "#ffff00"
+wayWanderer = "#ffaa00"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
+wayScholar = "#00c8ff"     # the welcome: the Scholar's picture frame (cool)
 gold = "#ffe600"
 on = "#00ff66"
 good = "#00ff66"
@@ -38,6 +40,7 @@ note4 = "#bb6bd9"
 note5 = "#f2994a"
 note6 = "#eb5757"
 chat = "#ffff00"
+chatEmote = "#ffb366"   # emote lines in the chat, bright (L5)
 tipText = "#ffffff"
 tipDim = "#e6e6e6"
 tipGold = "#ffd100"
@@ -84,6 +87,55 @@ bookInkAmber = "#ffc871"
 bookBlue = "#1f4fa3"
 bookBlueNight = "#9cc2ff"
 
+# round 4 (ADR 0038): colour by meaning. Services (on tiles, chips, badges and counts, never on names),
+# the entity types, depth (the void behind the panes, a raised card, its light edge, the inner
+# highlight), and the title bar's words.
+svcVendor = "#ffe066"
+svcQuest = "#ffff00"
+svcTrainer = "#66b3ff"
+svcInn = "#d9a6ff"
+svcFlight = "#66e6f2"
+svcRepair = "#d9cbb3"
+svcFriendly = "#00ff66"
+svcHostile = "#ff4d4d"
+typeNpc = "#00ff66"
+typeItem = "#66b3ff"
+typeQuest = "#ffff00"
+typeObject = "#ffb380"
+typeNode = "#66e6f2"
+typeZone = "#99ff99"
+typeRecipe = "#ffaa00"
+typeSpot = "#ffe066"
+typeChain = "#d9a6ff"
+typeHere = "#00ffff"
+void = "#000000a6"
+card = "#ffffff14"
+cardEdge = "#ffffff4d"
+inset = "#ffffff1f"
+headerText = "#ffffff"
+
+# the kind tiles' eight groups (ADR 0046): value, hostile, place, nature, people, special, goods, other
+tileGold = "#b98a1c"
+tileRed = "#c84f46"
+tileTeal = "#1fa39a"
+tileGreen = "#45a04f"
+tileBlue = "#4a82d1"
+tilePurple = "#7f5bc4"
+tileBrown = "#92703d"
+tileGrey = "#767f88"
+
 [shape]
 radius = 3
 radiusSmall = 2
+
+# the widget set's sizes in px, the ground's alpha in % (ADR 0046, one look per theme)
+[geometry]
+action = 26
+actionRow = 22
+pill = 26
+tab = 26
+row = 28
+tile = 18
+tileBig = 26
+gap = 6
+groundAlpha = 100

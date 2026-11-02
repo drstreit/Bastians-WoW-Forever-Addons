@@ -1,0 +1,311 @@
+{
+ "table": "UiMapArtTile",
+ "build": "12.1.7.fixture",
+ "rowCount": 37,
+ "columns": [
+  "ID",
+  "RowIndex",
+  "ColIndex",
+  "LayerIndex",
+  "FileDataID",
+  "UiMapArtID"
+ ],
+ "rows": [
+  {
+   "ID": 1,
+   "RowIndex": 0,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 455000,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 2,
+   "RowIndex": 0,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 455001,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 3,
+   "RowIndex": 0,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 455002,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 4,
+   "RowIndex": 0,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 455003,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 5,
+   "RowIndex": 1,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 455004,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 6,
+   "RowIndex": 1,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 455005,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 7,
+   "RowIndex": 1,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 455006,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 8,
+   "RowIndex": 1,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 455007,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 9,
+   "RowIndex": 2,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 455008,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 10,
+   "RowIndex": 2,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 455009,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 11,
+   "RowIndex": 2,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 455010,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 12,
+   "RowIndex": 2,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 455011,
+   "UiMapArtID": 300
+  },
+  {
+   "ID": 13,
+   "RowIndex": 0,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 456000,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 14,
+   "RowIndex": 0,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 456001,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 15,
+   "RowIndex": 0,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 456002,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 16,
+   "RowIndex": 0,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 456003,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 17,
+   "RowIndex": 1,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 456004,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 18,
+   "RowIndex": 1,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 456005,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 19,
+   "RowIndex": 1,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 456006,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 20,
+   "RowIndex": 1,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 456007,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 21,
+   "RowIndex": 2,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 456008,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 22,
+   "RowIndex": 2,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 456009,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 23,
+   "RowIndex": 2,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 456010,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 24,
+   "RowIndex": 2,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 456011,
+   "UiMapArtID": 301
+  },
+  {
+   "ID": 25,
+   "RowIndex": 0,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 457000,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 26,
+   "RowIndex": 0,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 457001,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 27,
+   "RowIndex": 0,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 457002,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 28,
+   "RowIndex": 0,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 457003,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 29,
+   "RowIndex": 1,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 457004,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 30,
+   "RowIndex": 1,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 457005,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 31,
+   "RowIndex": 1,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 457006,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 32,
+   "RowIndex": 1,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 457007,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 33,
+   "RowIndex": 2,
+   "ColIndex": 0,
+   "LayerIndex": 0,
+   "FileDataID": 457008,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 34,
+   "RowIndex": 2,
+   "ColIndex": 1,
+   "LayerIndex": 0,
+   "FileDataID": 457009,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 35,
+   "RowIndex": 2,
+   "ColIndex": 2,
+   "LayerIndex": 0,
+   "FileDataID": 457010,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 36,
+   "RowIndex": 2,
+   "ColIndex": 3,
+   "LayerIndex": 0,
+   "FileDataID": 457011,
+   "UiMapArtID": 302
+  },
+  {
+   "ID": 37,
+   "RowIndex": 0,
+   "ColIndex": 0,
+   "LayerIndex": 1,
+   "FileDataID": 458000,
+   "UiMapArtID": 302
+  }
+ ]
+}

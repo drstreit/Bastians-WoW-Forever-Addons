@@ -34,6 +34,13 @@ ns.L:Register("deDE", {
   ["All"] = "Alle",
   ["Where the rows are: in your zone, on your continent, or everywhere."] = "Wo die Zeilen liegen: in deiner Zone, auf deinem Kontinent oder überall.",
   ["Sort"] = "Sortieren",
+  ["Groups"] = "Gruppen",
+  ["By zone"] = "Nach Zone",
+  ["None"] = "Keine",
+  ["Nearest first, the rows under their zone's name."] = "Die nächsten zuerst, die Zeilen unter dem Namen ihrer Zone.",
+  ["Elsewhere"] = "Anderswo",
+  ["Loading %d of %d ..."] = "Lade %d von %d ...",
+  ["%d loaded"] = "%d geladen",
   ["The order of the rows."] = "Die Reihenfolge der Zeilen.",
   ["No entries. Is the data pack loaded?"] = "Keine Einträge. Ist das Datenpaket geladen?",
   ["Nothing matches these filters. The x on a filter clears it."] = "Nichts passt zu diesen Filtern. Das x an einem Filter löscht ihn.",
@@ -69,6 +76,10 @@ ns.L:Register("deDE", {
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "Zeige in den Zeilen, was Quests und Gegenstände wert sind (Belohnungen, Preise)",
   ["Follow the target: an NPC or object you target becomes the subject"] = "Dem Ziel folgen: Ein anvisierter NPC oder ein Objekt wird zum Thema",
   ["Hide the game's objective tracker in slim mode"] = "Den Zielverfolger des Spiels im schmalen Modus ausblenden",
+  ["Preview a row in the page pane"] = "Vorschau einer Zeile im Seitenbereich",
+  ["While Shift is held"] = "Solange Umschalt gehalten wird",
+  ["On every hover"] = "Bei jedem Überfahren",
+  ["Never"] = "Nie",
   ["Open in Browser"] = "Im Browser öffnen",
   ["Right click: open in the Browser"] = "Rechtsklick: im Browser öffnen",
 
@@ -237,4 +248,12 @@ ns.L:Register("deDE", {
   ["The link is in the chat input: copy it with Ctrl+C."] = "Der Link steht in der Chat-Eingabe: mit Strg+C kopieren.",
   ["Slide the list in"] = "Die Liste einklappen",
   ["Slide the list out"] = "Die Liste ausklappen",
+  -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
+  ["Mobs"] = "Mobs",
+  ["Filter"] = "Filtern",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["Click: the Browser. Right click: the bookmarks."] = "Klick: der Browser. Rechtsklick: die Lesezeichen.",
+  ["Everything the suite knows: quests, NPCs, items, places."] = "Alles, was die Suite weiß: Quests, NPCs, Gegenstände, Orte.",
 })

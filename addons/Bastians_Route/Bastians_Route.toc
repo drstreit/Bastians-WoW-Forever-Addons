@@ -2,8 +2,23 @@
 ## Title: Bastian's Route
 ## IconTexture: Interface\AddOns\Bastians_Route\Icon
 ## Notes: Optional route planner over flight paths, boats, zeppelins, the tram, portals and the hearthstone.
+## Notes-koKR: 비행 경로, 배, 비행선, 지하철, 차원문, 귀환석을 잇는 선택형 경로 계획기.
+## Notes-zhCN: 可选的路线规划，涵盖飞行路线、船只、飞艇、地铁、传送门和炉石。
+## Notes-zhTW: 選用的路線規劃，涵蓋飛行路線、船隻、飛艇、地鐵、傳送門與爐石。
+## Notes-deDE: Optionaler Routenplaner über Flugrouten, Schiffe, Zeppeline, die Tiefenbahn, Portale und den Ruhestein.
+## Notes-frFR: Planificateur d'itinéraire facultatif par les trajets aériens, bateaux, zeppelins, le tram, les portails et la pierre de foyer.
+## Notes-esES: Planificador de rutas opcional por rutas de vuelo, barcos, zepelines, el tranvía, portales y la piedra de hogar.
+## Notes-esMX: Planificador de rutas opcional por rutas de vuelo, barcos, zepelines, el tranvía, portales y la piedra de hogar.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Data_Nav, Bastians_Quests, Bastians_Map
@@ -22,6 +37,7 @@ News.lua
 Graph.lua
 Window.lua
 Arrow.lua
+Feed.lua
 Route.lua
 Death.lua
 Ferries.lua

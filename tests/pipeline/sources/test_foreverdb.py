@@ -199,8 +199,8 @@ def test_dungeons():
     assert (deadmines.name, deadmines.kind, deadmines.size) == ("The Deadmines", "dungeon", 5)
     assert (deadmines.level_lo, deadmines.level_hi, deadmines.level_req) == (15, 25, 10)
     assert deadmines.zone_name == "Elwynn Forest"
-    assert deadmines.bosses[0] == fdb.DungeonBoss(1, 644, "Rhahk'Zor")
-    assert [b.npc_id for b in deadmines.bosses] == [644, 646, 639]
+    assert deadmines.bosses[0] == fdb.DungeonBoss(1, 1144, "Rhahk'Zor")
+    assert [b.number for b in deadmines.bosses] == [1144, 1145, 448]  # encounter ids
     assert deadmines.loot[0] == fdb.DungeonLoot(872, 1, "s")
     assert deadmines.loot[-1] == fdb.DungeonLoot(5187, 0, "c")  # the instance's unassigned loot
     assert deadmines.quests == (6, 166)
@@ -216,3 +216,38 @@ def test_dungeons_file_helper(tmp_path):
     rows = fdb.read_dungeons(path)
     assert rows[0].id == 1 and rows[0].size is None and rows[0].level_lo is None
     assert rows[0].bosses == () and rows[0].loot == () and rows[0].zone_name is None
+
+
+def test_boss_creatures():
+    """Loot.lua names the bosses' creatures per instance, and the instances only Forever has."""
+    b = fdb.parse_boss_creatures(text("Loot.lua"))
+    assert b.npcs[36] == {"rhahk'zor": 644, "edwin vancleef": 639}  # Mr. Smite: none
+    assert b.npcs[249] == {"onyxia": 10184}
+    assert b.forever == frozenset({2999})
+
+
+def test_dungeon_maps():
+    rows = {r.id: r for r in fdb.parse_dungeon_maps(text("DungeonMaps.lua"))}
+    assert sorted(rows) == [36, 249]
+    deadmines = rows[36]
+    assert len(deadmines.floors) == 1 and deadmines.floors[0].name == "Map"
+    assert (deadmines.floors[0].width, deadmines.floors[0].height) == (1125, 725)
+    assert deadmines.floors[0].tiles[0] == fdb.FloorTile(205041, -672, -1025, 1067, 1068, 0)
+    assert deadmines.floors[0].tiles[1].q == 2
+    assert deadmines.boss_spots == ((1, 1, 20.86, 58.69), (3, 1, 34.89, 48.04))
+    # the floor's place in the world: a spot in percent becomes a world point (DG2c)
+    floor = deadmines.floors[0]
+    assert (floor.scale, floor.x0, floor.y0, floor.z_lo, floor.z_hi) == (
+        2.0,
+        21.09,
+        -335.85,
+        6.4,
+        87.4,
+    )
+    wx, wy = floor.world_point(20.86, 58.69)
+    assert (round(wx, 1), round(wy, 1), round(floor.z_mid, 1)) == (-191.7, -453.2, 46.9)
+    assert rows[249].floors[0].world_point(50, 50) == (0 - 75.0, 0 - 100.0)
+    assert deadmines.door == (1, 85.72, 65.22) and deadmines.why is None
+    ony = rows[249]
+    assert [len(f.tiles) for f in ony.floors] == [0, 1]  # the first floor: no readable file
+    assert ony.door is None and ony.why.startswith("The client's file")

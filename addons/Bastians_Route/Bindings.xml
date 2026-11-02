@@ -1,5 +1,5 @@
 <Bindings>
-  <Binding name="BASTIANS_ROUTE" category="ADDONS">
+  <Binding name="BASTIANS_ROUTE" header="BASTIANS_ROUTE" category="ADDONS">
     Bastians:GetModule("Route").Window.Toggle()
   </Binding>
 </Bindings>

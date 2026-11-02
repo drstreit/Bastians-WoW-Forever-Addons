@@ -193,4 +193,19 @@ ns.L:Register("zhCN", {
   ["object"] = "世界物体",
   ["node"] = "采集点",
   ["recipe"] = "配方",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s today"] = "今天 %s",
+  ["AH scan: the window is free"] = "拍卖行扫描: 窗口空闲",
+  ["AH scan: the window is taken for %d more min"] = "拍卖行扫描: 窗口还要占用 %d 分钟",
+  ["Auction house"] = "拍卖行",
+  ["Click: Gold. Right click: the bags."] = "点击: 金币。右键: 背包。",
+  ["Last 7 days: %s"] = "最近 7 天: %s",
+  ["Loot and sales"] = "拾取和出售",
+  ["Spent"] = "花费",
+  ["To post on the AH (%d)"] = "上架拍卖行 (%d)",
+  ["To sell to a vendor (%d)"] = "卖给商人 (%d)",
+  ["Today: %s"] = "今天: %s",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: sell on AH"] = "Bastian's: 拍卖行出售",
+  ["Bastian's: vendor"] = "Bastian's: 商人",
 })

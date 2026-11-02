@@ -56,18 +56,18 @@ def test_the_npc_list_opens_on_the_players_zone_then_widens(wow: WowRuntime):
     current = wow.eval(f"{BR}.Current()")
     assert current.near == "here"
     assert chips(wow)[0] == "Where: Here"
-    assert menu(wow, TREE, "where") == ["All  10", "Here  7", "Continent  8"]
+    assert menu(wow, TREE, "where") == ["All  6", "Here  5", "Continent  6"]
     rows = flat(wow)
-    assert len(rows) == 7 and not any("Gryan" in r for r in rows)  # Westfall's NPC is not here
+    assert len(rows) == 5 and not any("Gryan" in r for r in rows)  # Westfall's NPC is not here
     assert "Corina Steele  15" in rows
     # Continent: Westfall's NPC comes in; All: everything (the fixture has one continent)
     pick(wow, TREE, "where", "Continent")
     wow.execute(SIZE)
     assert wow.eval(f"{BR}.Current().near") == "continent"
-    assert len(flat(wow)) == 8 and any("Gryan" in r for r in flat(wow))
+    assert len(flat(wow)) == 6 and any("Gryan" in r for r in flat(wow))
     clear(wow, TREE, "where")  # the x: All
-    # All: the continent's eight and the two Deadmines bosses, who stand on no map (data.md "Dungeons")
-    assert wow.eval(f"{BR}.Current().near") is None and len(flat(wow)) == 10
+    # All: the continent's six (the Deadmines bosses, on no map, are in the Mobs list)
+    assert wow.eval(f"{BR}.Current().near") is None and len(flat(wow)) == 6
     assert chips(wow)[0] == "Where: All"
     # the choice sticks on a re-render
     wow.execute(f"{BR}.Render()")
@@ -159,6 +159,7 @@ def test_nearest_first_sorts_rows_with_a_place_by_distance(wow: WowRuntime):
     open_list(wow, "npc")
     assert menu(wow, TREE, "sort")[:2] == ["Name", "Nearest"]  # a sort has no All
     pick(wow, TREE, "sort", "Nearest")
+    pick(wow, TREE, "groups", "None")  # the zone groups of ADR 0038 aside: the flat order here
     wow.run_frames(3)
     rows = flat(wow)
     assert rows[0].startswith("Marshal Dughan") and rows[0].endswith(
@@ -221,6 +222,7 @@ def test_the_order_holds_while_the_mouse_is_over_the_list(wow: WowRuntime):
     boot(wow)
     open_list(wow, "npc")
     pick(wow, TREE, "sort", "Nearest")
+    pick(wow, TREE, "groups", "None")
     wow.run_frames(3)
     entry = f"{BR}.Current()"
     wow.execute(f"Mock.mouseOverFrame = {TREE}.scroll")

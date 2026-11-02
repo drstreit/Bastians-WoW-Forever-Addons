@@ -188,28 +188,30 @@ function Book.Index(pages, nameOf)
   return out
 end
 
--- The full-text search (the website has the same, tools/diary_site.js): every word of `query`
--- (two letters or more, any case) must appear in a page's name or its text; a word in the name
--- counts ten, each time in the text one. pages = { [id] = record }; textOf(id, page) -> the
--- page's text as the reader sees it. -> { { page = id, name, score } } best first, then A-Z;
--- retired pages hold no text and are not searched.
+-- The full-text search (the website has the same for plain words, tools/diary_site.js): the
+-- page's name and text must match `query` (the suite's search syntax, ADR 0045; a plain word of
+-- one letter is left out); each plain word in the name counts ten, each time in the text one.
+-- pages = { [id] = record }; textOf(id, page) -> the page's text as the reader sees it. ->
+-- { { page = id, name, score } } best first, then A-Z; retired pages hold no text and are not
+-- searched.
 function Book.Search(pages, query, textOf)
+  local out = {}
   local words = {}
-  for word in string.gmatch(string.lower(query or ""), "%S+") do
+  local q = Bastians.Query.Of(query)
+  for _, word in ipairs(q.words) do
     if #word >= 2 then
       words[#words + 1] = word
     end
   end
-  local out = {}
-  if #words == 0 then
+  if q.empty or (q.plain and #words == 0) then
     return out
   end
   for id, p in pairs(pages) do
     if p.shelf ~= "retired" then
       local name = string.lower(p.name or id)
       local text = string.lower(textOf(id, p) or "")
-      local score = 0
-      for _, word in ipairs(words) do
+      local score = (q.plain or q:MatchLower(name .. "\n" .. text)) and 0 or nil
+      for _, word in ipairs(score and words or {}) do
         local count, at = 0, 1
         while true do
           local s, e = string.find(text, word, at, true)
@@ -219,8 +221,8 @@ function Book.Search(pages, query, textOf)
           count, at = count + 1, e + 1
         end
         local inName = string.find(name, word, 1, true) ~= nil
-        if not inName and count == 0 then
-          score = nil
+        if q.plain and not inName and count == 0 then
+          score = nil -- every plain word is needed; in an OR the words only count
           break
         end
         score = score + (inName and 10 or 0) + count
@@ -243,7 +245,7 @@ end
 -- word, cut at whole words, with "..." where it was cut.
 function Book.Snippet(text, query, width)
   text, width = text or "", width or 120
-  local word = string.match(string.lower(query or ""), "%S%S+")
+  local word = Bastians.Query.Of(query).words[1]
   local s = word and string.find(string.lower(text), word, 1, true)
   local from = 1
   if s and s > width / 2 then

@@ -1,0 +1,14 @@
+{
+ "table": "UiMapAssignment",
+ "build": "12.1.7.fixture",
+ "rowCount": 6,
+ "columns": ["UiMin", "UiMax", "Region", "ID", "UiMapID", "OrderIndex", "MapID", "AreaID", "WMODoodadPlacementID", "WMOGroupID"],
+ "rows": [
+  {"UiMin": [0, 0], "UiMax": [1, 1], "Region": [-11000.0, -8000.0, -10000.0, 2000.0, 4000.0, 1000000.0], "ID": 1, "UiMapID": 52, "OrderIndex": 0, "MapID": 0, "AreaID": 40, "WMODoodadPlacementID": 0, "WMOGroupID": 0},
+  {"UiMin": [0, 0], "UiMax": [1, 1], "Region": [-337.509, -796.622, -10000.0, 35.3335, -237.358, 1000000.0], "ID": 2, "UiMapID": 291, "OrderIndex": 0, "MapID": 36, "AreaID": 0, "WMODoodadPlacementID": 170633, "WMOGroupID": 193},
+  {"UiMin": [0, 0], "UiMax": [1, 1], "Region": [-337.509, -796.622, 27.0, 35.3335, -237.358, 1000000.0], "ID": 3, "UiMapID": 291, "OrderIndex": 1, "MapID": 36, "AreaID": 0, "WMODoodadPlacementID": 170633, "WMOGroupID": 194},
+  {"UiMin": [0, 0], "UiMax": [1, 1], "Region": [-20000.0, -20000.0, -1000000.0, 20000.0, 20000.0, 1000000.0], "ID": 4, "UiMapID": 292, "OrderIndex": 0, "MapID": 36, "AreaID": 0, "WMODoodadPlacementID": 0, "WMOGroupID": 0},
+  {"UiMin": [0, 0], "UiMax": [1, 1], "Region": [-267.509, -1016.62, -10000.0, 65.3333, -517.357, 1000000.0], "ID": 5, "UiMapID": 292, "OrderIndex": 1, "MapID": 36, "AreaID": 0, "WMODoodadPlacementID": 170633, "WMOGroupID": 206},
+  {"UiMin": [0, 0], "UiMax": [1, 1], "Region": [-31.4695, -188.331, -10000.0, 220.633, 189.822, 1000000.0], "ID": 6, "UiMapID": 225, "OrderIndex": 0, "MapID": 34, "AreaID": 0, "WMODoodadPlacementID": 0, "WMOGroupID": 2810}
+ ]
+}

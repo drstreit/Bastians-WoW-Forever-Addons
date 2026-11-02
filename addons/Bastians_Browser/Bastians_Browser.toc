@@ -2,8 +2,23 @@
 ## Title: Bastian's Browser
 ## IconTexture: Interface\AddOns\Bastians_Browser\Icon
 ## Notes: Searchable browser for quests, NPCs, items and zones.
+## Notes-koKR: 퀘스트, NPC, 아이템, 지역을 검색하는 브라우저.
+## Notes-zhCN: 可搜索任务、NPC、物品和区域的浏览器。
+## Notes-zhTW: 可搜尋任務、NPC、物品與區域的瀏覽器。
+## Notes-deDE: Durchsuchbarer Browser für Quests, NSCs, Gegenstände und Zonen.
+## Notes-frFR: Navigateur consultable des quêtes, PNJ, objets et zones.
+## Notes-esES: Navegador con búsqueda de misiones, PNJ, objetos y zonas.
+## Notes-esMX: Navegador con búsqueda de misiones, PNJ, objetos y zonas.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, QuestieDB
@@ -17,4 +32,5 @@ Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
 News.lua
+Feed.lua
 Browser.lua

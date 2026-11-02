@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("koKR", {
+  -- plan-second-wave.md S6 (01.11.2026)
+  ["Route home"] = "집으로 가는 길",
   -- Arrow.lua
   ["Next step"] = "다음 단계",
   ["position unknown"] = "위치 알 수 없음",
@@ -152,4 +154,11 @@ ns.L:Register("koKR", {
   ["Hearth"] = "귀환",
   ["to"] = "목적지:",
   ["approx"] = "약",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s, %s",
+  ["Click: the steps. Right click: clear the route."] = "클릭: 단계. 오른쪽 클릭: 경로 지우기.",
+  ["and %d more"] = "외 %d개",
+
+  -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
+  ["Next: %s"] = "다음: %s",
 })

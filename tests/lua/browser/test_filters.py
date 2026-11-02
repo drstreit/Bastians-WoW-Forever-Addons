@@ -6,7 +6,7 @@ registry's rules, and the kind words of Data."""
 import re
 
 from harness import WowRuntime
-from pages import clear, menu, pick, pills
+from pages import chip, chips, clear, menu, pick, pills
 
 CORE, DATA, QUESTS, GOLD, BROWSER = (
     "Bastians_Core",
@@ -48,33 +48,36 @@ def open_list(wow: WowRuntime, typ: str) -> None:
 def test_choices_are_remembered_per_list_and_fall_back_when_empty(wow: WowRuntime):
     boot(wow)
     open_list(wow, "npc")
-    pick(wow, TREE, "service", "Quest giver")
+    chip(wow, "Quest giver")  # the Service dimension is chips since ADR 0038
     pick(wow, TREE, "where", "Continent")
     open_list(wow, "item")
     assert pills(wow, TREE)[0] == "Class: All"  # another list keeps its own choices
     open_list(wow, "npc")  # a new history entry: the remembered choices
-    assert pills(wow, TREE)[:2] == ["Where: Continent", "Service: Quest giver"]
+    assert pills(wow, TREE)[0] == "Where: Continent"
+    assert [c for c in chips(wow) if c[2]] == [("Quest giver", 2, True)]
     assert flat(wow) == ["Gryan Stoutmantle  20", "Marshal Dughan  10"]
     saved = wow.eval(f"{MOD}.db.profile.listFilters.npc")
-    assert saved.near == "continent" and saved.picks.service == "Quest giver"
+    assert saved.near == "continent" and dict(saved.picks.service) == {"Quest giver": True}
     # a remembered choice that keeps nothing here (no banker in the fixture world): All, and
     # the list is not empty; the memory itself stays
     wow.execute(f"{MOD}.db.profile.listFilters.npc.picks.service = 'Banker'")
     open_list(wow, "npc")
-    assert pills(wow, TREE)[1] == "Service: All" and len(flat(wow)) == 7
+    assert chips(wow)[0] == ("All", 5, True) and len(flat(wow)) == 5
     assert wow.eval(f"{MOD}.db.profile.listFilters.npc.picks.service") == "Banker"
-    # the x clears a choice and the memory follows
+    # the x clears a choice and the memory follows (the Mobs list keeps its own)
+    open_list(wow, "mob")
     pick(wow, TREE, "rank", "Elite")
     assert flat(wow) == ["Hogger  11"]
+    assert wow.eval(f"{MOD}.db.profile.listFilters.mob.picks.rank") == "Elite"
     clear(wow, TREE, "rank")
-    assert wow.eval(f"{MOD}.db.profile.listFilters.npc.picks.rank") is None
+    assert wow.eval(f"{MOD}.db.profile.listFilters.mob.picks.rank") is None
     assert wow.errors == []
 
 
 def test_gold_sorts_npcs_by_loot_per_kill_as_a_job(wow: WowRuntime):
     wow.needs("Bastians_Gold")  # no Gold on retail
     boot(wow)
-    open_list(wow, "npc")
+    open_list(wow, "mob")  # the NPCs' sorts reach the Mobs list: its records are NPCs
     assert "Loot per kill" in menu(wow, TREE, "sort")
     pick(wow, TREE, "sort", "Loot per kill")
     assert "Sorting ..." in strip(wow.eval(f"{MOD}.summary:GetText()"))  # a job, not a freeze
@@ -88,7 +91,7 @@ def test_gold_sorts_npcs_by_loot_per_kill_as_a_job(wow: WowRuntime):
     assert wow.eval("Bastians:FilterGeneration('gold.lootPerKill')") == gen + 1
     # without Gold the sort is gone and a remembered one falls back to the name order
     wow.execute("Bastians:GetModule('Gold'):Disable()")
-    open_list(wow, "npc")
+    open_list(wow, "mob")
     assert "Loot per kill" not in menu(wow, TREE, "sort")
     assert pills(wow, TREE)[-1] == "Sort: Name"
     assert wow.errors == []
@@ -136,7 +139,7 @@ def test_an_app_facet_is_a_pill_and_a_row_may_count_for_two_keys(wow: WowRuntime
     )
     open_list(wow, "npc")
     assert "Side: All" in pills(wow, TREE)
-    assert menu(wow, TREE, "test.side") == ["All  7", "Friend  6", "Foe  1", "Guard  1"]
+    assert menu(wow, TREE, "test.side") == ["All  5", "Friend  5", "Guard  1"]
     pick(wow, TREE, "test.side", "Guard")
     assert flat(wow) == ["Marshal Dughan  10"]
     assert wow.errors == []

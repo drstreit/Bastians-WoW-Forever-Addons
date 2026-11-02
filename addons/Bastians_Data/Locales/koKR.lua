@@ -16,6 +16,10 @@ ns.L:Register("koKR", {
   ["Item level"] = "아이템 레벨",
   ["Requires level"] = "요구 레벨",
   ["Instance entrance"] = "던전 입구",
+  ["Map"] = "지도",
+  ["Floor %d"] = "%d층",
+  ["Click: enlarge"] = "클릭: 확대",
+  ["%d bosses have no place on these maps yet"] = "우두머리 %d명은 아직 이 지도에 자리가 없습니다",
   ["Dungeon"] = "던전",
   ["Raid"] = "공격대",
   ["Bosses"] = "우두머리",
@@ -47,6 +51,10 @@ ns.L:Register("koKR", {
   ["Locations"] = "위치",
   ["Sells"] = "판매",
   ["Teaches"] = "가르침",
+  ["teaches %d"] = "%d개 전수",
+  ["Known by: %s"] = "습득: %s",
+  ["you"] = "나",
+  ["Not known by any of your characters"] = "내 캐릭터 중 아는 캐릭터 없음",
   ["Drops"] = "드랍",
   ["Sources"] = "출처",
   ["Reagents"] = "재료",
@@ -163,4 +171,10 @@ ns.L:Register("koKR", {
   ["World drop"] = "월드 드랍",
   ["creatures level %s"] = "레벨 %s 몬스터",
   ["%d creatures"] = "몬스터 %d마리",
+  -- owner round 5 (31.10.2026): an item's lines and recipes
+  ["Stats"] = "능력치",
+  ["Used in recipes"] = "사용되는 제조법",
+  -- 31.10.2026: what an item disenchants into
+  ["Disenchants into"] = "마력 추출 결과",
+  ["Disenchant"] = "마력 추출",
 })

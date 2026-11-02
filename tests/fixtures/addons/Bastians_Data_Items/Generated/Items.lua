@@ -9,9 +9,12 @@ B.deferred[#B.deferred + 1] = {
   {
     build = "fixture",
     client = "forever",
+    disenchant = {
+      [21] = [=[{ { { 10938, 80, 1, 2 }, { 10940, 20, 1, 2 } }, "classic" }]=],
+    },
     index = {},
     item = {
-      [1185] = [=[{ "Blood Saber", 2, 7, 2, 2, 7, 200, 1000, 1, nil, nil, nil, nil, nil, nil, nil, "classic" }]=],
+      [1185] = [=[{ "Blood Saber", 2, 7, 2, 2, 7, 200, 1000, 1, nil, nil, nil, nil, nil, nil, nil, "classic", 21 }]=],
       [1931] = [=[{ "Huge Gnoll Claw", 1, 1, nil, 12, 0 }]=],
       [2318] = [=[{ "Light Leather", 1, 5, nil, 7, 6, 25, nil, 20, nil, nil, nil, nil, nil, nil, nil, "classic" }]=],
       [2589] = [=[{ "Linen Cloth", 1, 5, nil, 7, 5, 13, 260, 20, nil, nil, nil, nil, { { "npc:448", 45.5, false }, { "npc:327", 12, false } }, "classic", nil, "classic" }]=],
@@ -31,9 +34,10 @@ B.deferred[#B.deferred + 1] = {
       [2152] = [=[{ "Light Armor Kit", "Leatherworking", 1, 2304, 1, { { 2318, 1 } }, "trainer", nil, nil, "forever" }]=],
     },
     schema = {
+      disenchant = { "loot", "src" },
       item = {
         "name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew",
-        "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src",
+        "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src", "disenchant",
       },
       recipe = { "name", "profession", "skill", "item", "count", "reagents", "source", "sourceItem", "foreverNew", "src" },
     },

@@ -42,7 +42,7 @@ def test_the_suite_page_is_first_and_lists_every_app_of_this_client(wow: WowRunt
     wow.slash("/bastians")
     assert wow.eval("Bastians.UI.Hub.current.suite") is True  # opens on the Suite page
     texts = labels(wow)
-    assert texts[0].startswith("Bastian's Suite puts everything you look up")
+    assert texts[0].startswith("Bastian's Suite is Azeroth, told in your own way")
     # every app of this client, installed or not, in the suite's order
     headers = [
         t
@@ -114,7 +114,8 @@ def test_every_apps_own_page_starts_with_its_words(wow: WowRuntime):
     wow.execute("Bastians.UI.Hub.Open('Map')")
     texts = labels(wow)
     assert texts[0].startswith("One seamless map of the world") and texts[0].endswith("/bmap")
-    assert texts[1] == "Enabled"
+    assert texts[1] == "What it does"  # the page skeleton (plan-launch-review O4, 01.11.2026)
+    assert "Enabled" in texts and texts.index("Enabled") > texts.index("What it does")
     # the app's own window colour and opacity follow the Open and minimap rows (30.10.2026)
     assert "Window background" in texts and "Window opacity (%)" in texts
     wow.execute("Bastians.UI.Hub.Open('Core')")

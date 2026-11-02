@@ -1,7 +1,10 @@
 # Bastian's Suite
 
-Addons for **WoW Forever** and **retail**: quests, map, browser, gold, routes and a book of gold
-strategies. Every app works on its own, and together they work as one system.
+Bastian's Suite is Azeroth, told in your own way. You might be the Wanderer, who explores this new world on their own, guided only by the voices of the land. Or you might be the Scholar, with every quest, creature, item and place one click from its page, its spot on the map and the way there.
+
+Addons for **WoW Forever** and **retail**: quests, map, browser, gold, routes, chat, the Orbiter and a
+book of gold strategies. Every app works on its own, and together they work as one system; the first
+start asks which of the two you are and switches the suite accordingly.
 
 **Website:** [bastians.dev/wow](https://bastians.dev/wow/)
 · **Bugs and ideas:** [Issues](https://github.com/drstreit/Bastians-WoW-Forever-Addons/issues/new/choose)
@@ -17,6 +20,10 @@ strategies. Every app works on its own, and together they work as one system.
 | Route | the way there by flight path, boat, zeppelin, tram, portal or hearthstone | `/broute` |
 | Strategies | Bastian's Gold Rumours, a book of gold strategies with today's prices (WoW Forever) | `/bbook` |
 | Notes | your notes on NPCs, quests, items and spots, in lists, with reminders | `/bnotes` |
+| Alts | your characters' bags, bank, mail and equipment, searchable from any of them; ask one for items by mail | `/balts` |
+| Helpers | the small everyday helpers: sell junk, repair, restock, take all mail, quest givers, IDs on tooltips, warnings | `/bhelp` |
+| Orbiter | a round panel of what Spoken can read to you around you: the zone, the dungeon, quest givers and their quests, bosses, books; Play on every such thing; quest conversations without the game's windows (off until you switch it on) | `/orbiter`, `/bv` |
+| Gestures | a ring of emotes, your own lines (placeholders, your character's languages) and the suite's actions on one key; a ready thank-you when someone buffs you | `/bgest` |
 | Data | the game data behind every app, built per client and updated daily | |
 
 ## Install
@@ -34,18 +41,33 @@ pipeline in `pipeline/` from the source addons named below and from files of an 
 client, so a build needs a local client. `python -m pytest` runs the tests, the addon code
 included (on Lua 5.1 against a WoW API mock).
 
+## For addon authors
+
+Your addon can ask the suite for prices, quest states, the active route and travel times, hand
+Bastian's Route a target, and listen to the suite's events: see [API.md](API.md). Each app is
+also a LibDataBroker data source (`Bastian's Quests`, `Bastian's Gold`, ...) for Titan Panel,
+Bazooka, ElvUI and EllesmereUI's data bars.
+
 ## Credits
 
 Game data first from the Blizzard client files read from the installed client (items, recipes,
 quest chains and areas, names in every language, map imagery and tables); what only the servers
 hold from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), Data from ForeverDB.net (https://foreverdb.net; GPL-3.0 with an
 attribution term),
-CMaNGOS classic-db (GPL-3.0), TrinityCore TDB (GPL-2.0 or later, retail), NauticusClassic (MIT,
-ferry departures), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger, voice lines
+CMaNGOS classic-db (GPL-3.0), TrinityCore TDB (GPL-2.0 or later, retail; the Korean and Chinese
+quest texts on Forever), NauticusClassic (MIT,
+ferry departures), Campfire Tooltips: Forever by GideonWhitlock after Tweaks Forever by cjber
+(GPL-3.0 or later, the camp features' auras and values), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger, voice lines
 through Spoken (MIT). Build tools: TACTSharp, DBCD and BLPSharp (MIT), WoWDBDefs (CC BY-SA 4.0).
 Libraries: LibStub, CallbackHandler, LibDataBroker. The book credits every traveller
-whose video or guide it retells, with the link. The book's drawings are made with Google's Gemini
-image model from our own scene descriptions.
+whose video or guide it retells, with the link. The book's drawings and the welcome's pictures are made with Google's
+Gemini image model from our own scene descriptions. The maps of Forever's own dungeons (the City
+of Dalaran, the Excavation Site: Wetlands, the Hall of Thanes, the Ruins of Lordaeron) are by
+Santiago Reyes, from his "Atlas of Azeroth: Forever" (https://www.artstation.com/sr433_20), used
+with his kind permission and not under the GPL: thank you, Santiago! The settings offer five typefaces beside the
+client's own: Inter (Rasmus Andersson), Exo 2 and Cinzel (Natanael Gama), Roboto Condensed
+(Google) and Alegreya (Huerta Tipografica), SIL Open Font License 1.1, their licence texts beside
+the files in `Bastians_Core/Fonts/`.
 
 ## Licence
 

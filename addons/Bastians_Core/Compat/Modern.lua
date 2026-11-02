@@ -16,7 +16,9 @@ define("modern", "GetQuestLogEntries", function()
     if info then
       if info.isHeader then
         header = info.title
-      elseif info.questID and info.questID > 0 then
+      elseif info.questID and info.questID > 0 and not info.isHidden and not info.isInternalOnly then
+        -- the hidden ones are the client's own (retail's "Level 3", "Tracking Quest": never
+        -- accepted, )
         local id = info.questID
         local entry = {
           index = i,

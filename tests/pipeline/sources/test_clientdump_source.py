@@ -237,3 +237,71 @@ def test_the_taxi_speed_is_the_one_measured_on_forever():
 def test_a_taxi_dump_of_another_table_is_refused(tmp_path):
     with pytest.raises(ClientDumpError, match="expected a clientdump TaxiPath dump"):
         read_taxi_paths(FIXTURE / "TaxiNodes.json", FIXTURE / "TaxiPathNode.json")
+
+
+# --- the dungeon floors' map art (DG2c) ------------------------------------------------------
+
+from bastians_build.sources.clientdump import (  # noqa: E402
+    FloorArt,
+    floor_for_point,
+    read_floor_art,
+    read_listfile,
+)
+
+FLOORS = FIXTURE.parent / "clientdump-floors"
+
+
+def test_the_dungeon_floors_come_from_the_ui_map_tables_with_their_art_names():
+    """data.md "Dungeons" (DG2c, 30.10.2026): every UiMap assigned to an instance, by the
+    instance's Map.db2 id in UiMap order, named (floors of one name numbered), with the art
+    files' prefix when the listfile names every tile of the grid, else none; zones are left out;
+    the second art layer is ignored."""
+    art = read_floor_art(FLOORS, "retail", FLOORS / "listfile.csv")
+    assert sorted(art) == [34, 36]
+    one, two = art[36]
+    assert (one.ui_map_id, one.name, one.art, one.cols, one.rows) == (
+        291,
+        "The Deadmines 1",
+        "interface/worldmap/thedeadmines/thedeadmines1_",
+        4,
+        3,
+    )
+    assert one.size == (1002, 668)
+    assert one.regions == (
+        (-337.509, -796.622, -10000.0, 35.3335, -237.358, 1000000.0),
+        (-337.509, -796.622, 27.0, 35.3335, -237.358, 1000000.0),
+    )
+    assert (two.ui_map_id, two.name, two.art) == (292, "The Deadmines 2", None)
+    stockade = art[34][0]
+    assert (stockade.name, stockade.art) == (
+        "The Stockade",
+        "interface/worldmap/thestockade/thestockade1_",
+    )
+    assert read_floor_art(FLOORS, "retail", None)[36][0].art is None  # no listfile: no names
+    names = read_listfile(FLOORS / "listfile.csv")
+    assert names[455000] == "interface/worldmap/thedeadmines/thedeadmines1_1.blp" and 1 not in names
+
+
+def test_a_world_point_finds_its_floor_by_region_and_height_band():
+    """The floor the client shows at a point: the height band with the highest lower edge that
+    holds z wins; without one, the single catch-all region; several catch-alls: none. Regions
+    wider than the world are no floor's extent."""
+    low = FloorArt(1, "Low", None, 0, 0, ((0.0, 0.0, -10000.0, 100.0, 100.0, 1000000.0),))
+    high = FloorArt(
+        2,
+        "High",
+        None,
+        0,
+        0,
+        (
+            (0.0, 0.0, -10000.0, 100.0, 100.0, 1000000.0),
+            (0.0, 0.0, 50.0, 100.0, 100.0, 1000000.0),
+            (-20000.0, -20000.0, -1000000.0, 20000.0, 20000.0, 1000000.0),
+        ),
+    )
+    other = FloorArt(3, "Other", None, 0, 0, ((200.0, 200.0, -10000.0, 300.0, 300.0, 1000000.0),))
+    assert floor_for_point([low, high, other], 10, 10, 60) == 2
+    assert floor_for_point([low, high, other], 10, 10, 10) is None  # both catch-alls hold it
+    assert floor_for_point([low, high, other], 10, 10, None) is None
+    assert floor_for_point([low, other], 250, 250, None) == 2  # the index in the list
+    assert floor_for_point([low, other], 500, 500, 10) is None

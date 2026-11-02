@@ -11,10 +11,12 @@ local L = ns.L
 
 local GAP = 14 -- between grid cells and regions
 local PAD = 6 -- inside the band and the blocks
-local TITLE_H = 18 -- a block's title line
+local TITLE_H = 24 -- a block's title line (room for the block controls, row actions of 22 px)
 local LINE_H = 15 -- a band text line
 local BUTTON_H = 22
-local CHIP_H, CHIP_GAP = 18, 4
+local STAT_H = 34 -- the stats strip under the band's buttons (ADR 0038)
+local CHIP_GAP = 4 -- between link chips; a chip is the kit's pill (ADR 0046), S.G.pill high
+local TRAIL_H = 18 -- a trail entry
 local LABEL_W = 70 -- the relation label of a link row
 local ICON = 40
 local PORTRAIT = 132 -- the 3D portrait of a creature or a wearable item (opts.portrait)
@@ -168,19 +170,18 @@ function Util.caps(text)
   return table.concat(out)
 end
 
--- A section title: in capitals (Modern), in its own case under the Azeroth skin (ADR 0034).
+-- A section title: in capitals, in its own case over an ornament (ADR 0034, ADR 0038).
 function Util.titleText(text)
-  if S.Azeroth() then
+  if S.Ornaments() then
     return tostring(text or "")
   end
   return Util.caps(text)
 end
 
--- The rule under a section title: the 1 px line (Modern) or the gold ornament, no wider than its
--- texture (Azeroth).
+-- The rule under a section title: the 1 px line, or the gold ornament (`ornaments`), no wider
+-- than its texture.
 function Util.rule(line, orn, width)
-  local az = S.Azeroth()
-  if az then
+  if S.Ornaments() then
     line:Hide()
     orn:SetWidth(math.min(width, 256))
     orn:Show()
@@ -190,9 +191,10 @@ function Util.rule(line, orn, width)
   end
 end
 
--- Whether a row or one of its descendants carries the (lower-cased) query in its text.
+-- Whether a row or one of its descendants matches the query (a text or a compiled query, ADR
+-- 0045).
 local function matches(row, query)
-  if string.find(B.UI.TreeUtil.searchText(row), query, 1, true) then
+  if B.Query.Of(query):MatchLower(B.UI.TreeUtil.searchText(row), row) then
     return true
   end
   for _, child in ipairs(row.children or {}) do
@@ -207,7 +209,7 @@ end
 -- and a "+N more" row (`kind = "more"`, `onClick` expands). With a query only the matching rows,
 -- uncapped (the search box filters a page, browser.md).
 function Util.shownRows(block, expanded, onMore, query)
-  if query and query ~= "" then
+  if query and query ~= "" and not B.Query.Of(query).empty then
     local out = {}
     for _, row in ipairs(block.rows) do
       if matches(row, query) then
@@ -253,6 +255,8 @@ end
 --         e.g. the Browser's bookmark), onRender(dossier) (after every layout),
 --         here = true (C4: the Here column, the `here` sections only, a band without buttons),
 --         host (handed to a section's own `onRender(rows, host)` and `onHide(host)`, C4) }
+Dossier.MARGIN = 8
+
 function B.UI.Dossier(parent, opts)
   opts = opts or {}
   local self = setmetatable({
@@ -269,7 +273,9 @@ function B.UI.Dossier(parent, opts)
   }, Dossier)
 
   local frame = CreateFrame("Frame", nil, parent)
-  frame:SetPoint("TOPLEFT", 0, 0)
+  -- a margin from the host's left edge (the Browser's page text touched
+  -- the separator)
+  frame:SetPoint("TOPLEFT", Dossier.MARGIN, 0)
   frame:SetPoint("BOTTOMRIGHT", -14, 0)
   self.frame = frame
   local scroll = CreateFrame("ScrollFrame", nil, frame)
@@ -297,7 +303,7 @@ function B.UI.Dossier(parent, opts)
   band.icon = band:CreateTexture(nil, "ARTWORK")
   band.icon:SetSize(ICON, ICON)
   band.icon:SetPoint("TOPLEFT", band, "TOPLEFT", PAD, -PAD)
-  band.name = S.heading(band, 16, 19, S.C.accent, S.C.gold) -- Morpheus under the Azeroth skin
+  band.name = S.heading(band, 16, 19, S.C.accent) -- the heading font (ADR 0038)
   band.name:SetPoint("TOPLEFT", band, "TOPLEFT", ICON + 2 * PAD, -PAD)
   band.name:SetJustifyH("LEFT")
   band.badge = CreateFrame("Frame", nil, band)
@@ -315,6 +321,21 @@ function B.UI.Dossier(parent, opts)
   band.status:SetJustifyH("LEFT")
   band.worth = S.text(band, 12, S.C.gold)
   band.worth:SetJustifyH("LEFT")
+  -- round 4 (ADR 0038): a 2 px line on top in the subject's colour, a glow behind the plate,
+  -- the stats strip (opts.stats)
+  band.top = S.fill(band, S.C.accent, "OVERLAY")
+  band.top:ClearAllPoints()
+  band.top:SetPoint("TOPLEFT", band, "TOPLEFT", 0, 0)
+  band.top:SetPoint("TOPRIGHT", band, "TOPRIGHT", 0, 0)
+  band.top:SetHeight(2)
+  band.glow = band:CreateTexture(nil, "BACKGROUND", nil, 1)
+  band.glow:SetTexture(S.GLOW)
+  band.glow:Hide()
+  band.statLine = S.fill(band, S.C.line, "BORDER")
+  band.statLine:ClearAllPoints()
+  band.statLine:SetHeight(1)
+  band.statLine:Hide()
+  band.stats = {}
   band:Hide()
   self.band = band
   if opts.portrait then
@@ -323,8 +344,8 @@ function B.UI.Dossier(parent, opts)
 
   -- the links region
   local links = CreateFrame("Frame", nil, content)
-  links.title = S.heading(links, 11, 13, S.C.dim, S.C.gold)
-  links.title:SetPoint("TOPLEFT", links, "TOPLEFT", 0, 0)
+  links.title = S.heading(links, 11, 13, S.C.dim)
+  links.title:SetPoint("TOPLEFT", links, "TOPLEFT", 0, -3)
   links.line = S.fill(links, S.C.line, "BORDER")
   links.line:ClearAllPoints()
   links.line:SetPoint("TOPLEFT", links, "TOPLEFT", 0, -TITLE_H + 3)
@@ -437,7 +458,7 @@ end
 -- The search box of the host: blocks keep only the rows that match (highlighted), empty blocks
 -- and the links go while a query is set.
 function Dossier:SetQuery(query)
-  self.query = string.lower(string.gsub(tostring(query or ""), "^%s*(.-)%s*$", "%1"))
+  self.query = string.gsub(tostring(query or ""), "^%s*(.-)%s*$", "%1")
   if self.data then
     self:Layout()
   end
@@ -480,12 +501,17 @@ end
 local function bandButton(self, n)
   local b = self.buttons[n]
   if not b then
-    b = S.button(self.band, "", 80, BUTTON_H)
-    b:SetScript("OnClick", function(btn)
-      if btn.onClick then
-        btn.onClick()
-      end
-    end)
+    -- a declared action (ADR 0046): the registered action's icon and label, drawn by the look
+    b = S.action(self.band, {
+      label = "",
+      row = true,
+      boxed = true,
+      onClick = function(btn)
+        if btn.onClick then
+          btn.onClick()
+        end
+      end,
+    })
     self.buttons[n] = b
   end
   return b
@@ -669,6 +695,43 @@ function Stage:PutPainting(uiMapID, height, maxWidth)
   return width, height
 end
 
+-- An area on its zone's painting: a cut
+-- around its place, wide enough for its radius, and a soft disc over the area; nil without art.
+Stage.AREA_MIN_SPAN, Stage.AREA_MAX_SPAN = 0.12, 0.5
+function Stage:PutArea(id, size)
+  local place = B.UI.Scenery.FirstPlace("area:" .. id)
+  self.areaArt = self.areaArt or {}
+  local d = B:GetService("data")
+  local r = d and d:Get("area", tonumber(id))
+  if not place then
+    return nil
+  end
+  local c1, x1, y1 = B.Coords.ToWorld(place.map, 0, 0.5)
+  local c2, x2, y2 = B.Coords.ToWorld(place.map, 1, 0.5)
+  local mapYards = (c1 and c1 == c2) and math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2) or nil
+  local radius = r and r.r
+  local span = B.UI.Scenery.CUT_SPAN
+  if mapYards and mapYards > 0 and radius then
+    span = math.max(Stage.AREA_MIN_SPAN, math.min(Stage.AREA_MAX_SPAN, 2.6 * radius / mapYards))
+  end
+  local px, py =
+    B.UI.Scenery.DrawCut(self.frame, self.areaArt, place.map, place.x, place.y, size, size, span, 1)
+  if not px then
+    return nil
+  end
+  if not self.areaDisc then
+    self.areaDisc = self.frame:CreateTexture(nil, "ARTWORK")
+    self.areaDisc:SetTexture(S.DISC)
+  end
+  local discPx = (mapYards and radius) and (radius / (mapYards * span) * size * 2) or size * 0.3
+  S.tint(self.areaDisc, S.C.accent, 0.3)
+  self.areaDisc:SetSize(discPx, discPx)
+  self.areaDisc:ClearAllPoints()
+  self.areaDisc:SetPoint("CENTER", self.frame, "TOPLEFT", px, -py)
+  self.areaDisc:Show()
+  return size
+end
+
 -- The zone's painting behind a creature (the skin's `diorama`, ADR 0034): a cut around its first
 -- place, dimmed; nil or the switch off clears it.
 function Stage:PutScene(npcID, size)
@@ -721,20 +784,38 @@ function Stage:Show(ref, height, icon, maxWidth)
   for _, tex in ipairs(self.art) do
     tex:Hide()
   end
+  for _, tex in ipairs(self.areaArt or {}) do
+    tex:Hide()
+  end
+  if self.areaDisc then
+    self.areaDisc:Hide()
+  end
   if self.model then
     self.model.isCreature = nil
     B.UI.Scenery.StopMotion(self.model) -- the old subject's emotes end here
   end
+  if kind == "recipe" then
+    -- a recipe shows what it makes
+    local d = B:GetService("data")
+    local r = d and d:Get("recipe", id)
+    if r and r.item then
+      kind, id = "item", r.item
+      icon = B:Entity("item:" .. r.item):Icon() or icon
+    end
+  end
   local width, creature
   if kind == "zone" then
     width, height = self:PutPainting(id, height, maxWidth)
+  elseif kind == "area" then
+    width = self:PutArea(id, height)
   elseif self.model and kind == "npc" then
     creature = id
   elseif self.model and kind == "quest" then
     creature = questGiver(id)
   elseif kind == "item" then
     if
-      self.model and self:PutModel(function(m)
+      self.model
+      and self:PutModel(function(m)
         return B.Compat.ShowItem(m, id)
       end, 0.6, height)
     then
@@ -886,6 +967,10 @@ function Dossier:BuildPortrait()
       B:RunAction("map.zone", ref, { source = "dossier" })
       return
     end
+    if B.Entity.Parse(ref) == "area" and B:GetAction("map.show") then
+      B:RunAction("map.show", ref, { source = "dossier" }) -- an area's cut: its place on the map
+      return
+    end
     local card = self.data and self.data.card
     B.UI.Showcase(ref, card and card.name, card and card.icon, IsControlKeyDown and IsControlKeyDown())
   end
@@ -902,6 +987,90 @@ function Dossier:ShowPortrait(ref, icon)
   return stage:Show(ref, PORTRAIT, icon)
 end
 
+-- The stats strip (ADR 0038): Level, Away (the travel time), then the counts of the page's first
+-- two blocks in their order; a value that is unknown is a dash. Pure: { { label, value, kind } }.
+function Util.stats(data)
+  local card = data.card
+  local out = {}
+  local fields = card.ref and B:Entity(card.ref):Fields() or nil
+  local level = type(fields) == "table" and fields.level or nil
+  out[1] = { label = L["Level"], value = level ~= nil and tostring(level) or nil }
+  out[2] = { label = L["Away"], value = card.away, kind = "route" }
+  for _, block in ipairs(data.blocks or {}) do
+    if #out >= 4 then
+      break
+    end
+    out[#out + 1] = { label = block.title, value = tostring(block.count or 0), kind = block.kind }
+  end
+  return out
+end
+
+local function statCell(band, i)
+  local c = band.stats[i]
+  if c then
+    return c
+  end
+  c = CreateFrame("Frame", nil, band)
+  c.icon = c:CreateTexture(nil, "ARTWORK")
+  c.icon:SetSize(14, 14)
+  c.icon:SetPoint("TOP", c, "TOP", 0, -2)
+  c.value = S.text(c, 15, S.C.bright)
+  c.value:SetPoint("TOP", c, "TOP", 0, -4)
+  c.value:SetJustifyH("CENTER")
+  c.label = S.text(c, 10, S.C.muted)
+  c.label:SetPoint("BOTTOM", c, "BOTTOM", 0, 3)
+  c.label:SetJustifyH("CENTER")
+  c.rule = S.fill(c, S.C.line, "BORDER")
+  c.rule:ClearAllPoints()
+  c.rule:SetPoint("TOPRIGHT", c, "TOPRIGHT", 0, 0)
+  c.rule:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", 0, 0)
+  c.rule:SetWidth(1)
+  band.stats[i] = c
+  return c
+end
+
+-- The strip across the band's width at `y`; returns its height (0 when off).
+function Dossier:LayoutStats(y, width)
+  local band = self.band
+  if not (self.opts.stats and self.data) or self.opts.here then
+    for _, c in ipairs(band.stats) do
+      c:Hide()
+    end
+    band.statLine:Hide()
+    return 0
+  end
+  local stats = Util.stats(self.data)
+  self.statsShown = stats
+  band.statLine:SetPoint("TOPLEFT", band, "TOPLEFT", 0, -y)
+  band.statLine:SetPoint("TOPRIGHT", band, "TOPRIGHT", 0, -y)
+  band.statLine:Show()
+  local n = #stats
+  local w = n > 0 and math.floor(width / n) or width
+  for i, st in ipairs(stats) do
+    local c = statCell(band, i)
+    c:ClearAllPoints()
+    c:SetPoint("TOPLEFT", band, "TOPLEFT", (i - 1) * w, -(y + 1))
+    c:SetSize(w, STAT_H)
+    local icon = st.kind and B.UI.IconTexture(st.kind) or nil
+    if icon then
+      B.UI.PaintIcon(c.icon, icon)
+      c.icon:Show()
+      c.value:SetPoint("TOP", c, "TOP", 0, -4)
+    else
+      c.icon:Hide()
+    end
+    c.value:SetText(st.value or "-")
+    S.ink(c.value, st.value and S.C.bright or S.C.muted)
+    c.label:SetText(Util.caps(st.label or ""))
+    c.rule:SetShown(i < n)
+    c:Show()
+  end
+  for i = n + 1, #band.stats do
+    band.stats[i]:Hide()
+  end
+  return STAT_H + 1
+end
+
 -- Lays the band out for the card and returns its height.
 function Dossier:LayoutBand(card, width)
   local band = self.band
@@ -911,6 +1080,23 @@ function Dossier:LayoutBand(card, width)
     B.UI.ShowcaseFollow(card.ref, card.name, card.icon) -- the newest showcase follows the page
   end
   local side = plateW or ICON
+  -- the subject's colour (ADR 0038): the line on top, the plate's edge and the glow behind it
+  local token = S.KindToken(B.UI.IconKind(card.icon))
+  local roleCol = token and S.C[token] or S.C.accent
+  S.tint(band.top, roleCol)
+  local stage = band.stage
+  if stage then
+    S.setEdges(stage.frame.edges, roleCol, plateW and 0.7 or nil)
+  end
+  if plateW and stage then
+    band.glow:ClearAllPoints()
+    band.glow:SetPoint("CENTER", stage.frame, "CENTER", 0, 0)
+    band.glow:SetSize(plateW * 1.9, plateW * 1.9)
+    S.tint(band.glow, roleCol, 0.45)
+    band.glow:Show()
+  else
+    band.glow:Hide()
+  end
   band.icon:SetShown(plateW == nil)
   B.UI.PaintIcon(band.icon, card.icon)
   band.name:ClearAllPoints()
@@ -972,16 +1158,16 @@ function Dossier:LayoutBand(card, width)
     local b = bandButton(self, i)
     b.onClick = a.onClick
     b.tip = a.tip or a.desc -- the button's explanation after the hover delay (Style.TipEnter)
-    b.label:SetText((a.icon and B.UI.InlineTexture(a.icon, 12) or "") .. (a.label or ""))
-    local col = a.accent and S.C.accent or S.C.text
-    b.label:SetTextColor(col[1], col[2], col[3])
+    b.spec.icon = a.icon
+    b.spec.label = a.label or ""
+    b.spec.on = a.accent or nil
+    b:Fit()
     b:SetEnabledFlat(a.enabled ~= false)
-    local w = labelWidth(b.label, a.label) + 14
+    local w = b:GetWidth() or 80
     if bx > x and bx + w > maxX then
       bx = x
       y = y + BUTTON_H + 4
     end
-    b:SetWidth(w)
     b:ClearAllPoints()
     b:SetPoint("TOPLEFT", band, "TOPLEFT", bx, -y)
     b:Show()
@@ -995,6 +1181,10 @@ function Dossier:LayoutBand(card, width)
     y = y + BUTTON_H
   end
   local h = math.max(y + PAD, (plateW and PORTRAIT or ICON) + 2 * PAD)
+  local strip = self:LayoutStats(h, width)
+  if strip > 0 then
+    h = h + strip
+  end
   band:SetHeight(h)
   band:Show()
   return h
@@ -1010,11 +1200,11 @@ local function blockFrame(self, n)
     return bf
   end
   bf = CreateFrame("Frame", nil, self.content)
-  bf.title = S.heading(bf, 11, 13, S.C.dim, S.C.gold)
-  bf.title:SetPoint("TOPLEFT", bf, "TOPLEFT", 0, -3)
+  bf.title = S.heading(bf, 11, 13, S.C.dim)
+  bf.title:SetPoint("TOPLEFT", bf, "TOPLEFT", 0, -6)
   bf.title:SetJustifyH("LEFT")
   bf.count = S.text(bf, 11, S.C.dim)
-  bf.count:SetPoint("TOPRIGHT", bf, "TOPRIGHT", 0, -3)
+  bf.count:SetPoint("TOPRIGHT", bf, "TOPRIGHT", 0, -6)
   bf.count:SetJustifyH("RIGHT")
   bf.controls = {} -- the section's toggles on the title line (layoutControls)
   bf.line = S.fill(bf, S.C.line, "BORDER")
@@ -1022,7 +1212,7 @@ local function blockFrame(self, n)
   bf.line:SetPoint("TOPLEFT", bf, "TOPLEFT", 0, -TITLE_H + 2)
   bf.line:SetPoint("TOPRIGHT", bf, "TOPRIGHT", 0, -TITLE_H + 2)
   bf.line:SetHeight(1)
-  bf.orn = S.ornament(bf) -- the Azeroth skin's rule (Util.rule)
+  bf.orn = S.ornament(bf) -- the WoW look's gilt rule (ornaments, Util.rule)
   bf.orn:SetPoint("LEFT", bf.line, "LEFT", 0, 0)
   bf.tree = B.UI.Tree(bf, {
     flat = true,
@@ -1044,21 +1234,23 @@ end
 
 -- Block controls: a section def
 -- may carry `controls = function(host) -> { { label, on, tooltip, onClick }, ... }`; they draw as
--- small buttons on the title line, right of the title, accented while `on`.
-local CONTROL_H = TITLE_H - 4
-
+-- row actions (ADR 0046) on the title line, right of the title, `on` while on.
 local function controlButton(bf, n)
   local b = bf.controls[n]
   if b then
     return b
   end
-  b = S.button(bf, "", 40, CONTROL_H)
+  b = S.action(bf, {
+    label = "",
+    row = true,
+    boxed = true,
+    onClick = function(btn)
+      if btn.control and btn.control.onClick then
+        btn.control.onClick()
+      end
+    end,
+  })
   S.setSize(b.label, 10)
-  b:SetScript("OnClick", function(btn)
-    if btn.control and btn.control.onClick then
-      btn.control.onClick()
-    end
-  end)
   b.tip = function(btn) -- the control's explanation after the hover delay (Style.TipEnter)
     local c = btn.control
     return c and (c.tipTitle or c.label), c and c.tooltip
@@ -1080,16 +1272,13 @@ local function layoutControls(self, bf, block)
   for i, control in ipairs(controls) do
     local b = controlButton(bf, i)
     b.control = control
-    b.label:SetText(control.label or "")
-    local w = labelWidth(b.label, control.label) + 10
-    b:SetWidth(w)
-    local c = control.on and S.C.accent or S.C.dim
-    b.label:SetTextColor(c[1], c[2], c[3])
-    S.setEdges(b.edges, control.on and S.C.accent or S.C.line, control.on and 0.8 or nil)
+    b.spec.label = control.label or ""
+    b.spec.on = control.on or nil
+    S.Draw(b)
     b:ClearAllPoints()
-    b:SetPoint("TOPLEFT", bf, "TOPLEFT", x, -1)
+    b:SetPoint("TOPLEFT", bf, "TOPLEFT", x, 0)
     b:Show()
-    x = x + w + 4
+    x = x + b:GetWidth() + 4
   end
   for i = #controls + 1, #bf.controls do
     bf.controls[i]:Hide()
@@ -1114,7 +1303,10 @@ end
 -- The height a block needs at `width`: the title line, its shown rows, the padding.
 function Dossier:BlockHeight(block, width)
   local mode, shown = self:CellBlock(block)
-  if mode then
+  if mode == "floors" then
+    local rows = Util.shownRows(shown, self.expanded[block.id], nil, self.query)
+    return TITLE_H + 4 + B.UI.Scenery.FloorsHeight(rows, width) + PAD
+  elseif mode then
     local rows = Util.shownRows(shown, self.expanded[block.id], nil, self.query)
     return TITLE_H + 4 + B.UI.Scenery.CellsHeight(mode, #rows, width) + PAD
   end
@@ -1211,16 +1403,28 @@ local function chipTooltip(chip)
   if row.tooltip then
     row.tooltip(GameTooltip, row)
   elseif row.ref then
-    local e = B:Entity(row.ref)
-    GameTooltip:AddLine(e:Name() or row.text or row.ref, 1, 1, 1)
-    local summary = e:Summary()
-    if summary then
-      S.TipLine(GameTooltip, summary, "tipDim")
-    end
+    S.EntityTip(GameTooltip, row.ref, row.text)
   else
     return
   end
   GameTooltip:Show()
+end
+
+-- The tile of a link chip: the row's own suite icon, else its entity's type (ADR 0046); none on
+-- the "+N more" chip.
+local function chipKind(row)
+  if row.kind == "more" then
+    return nil
+  end
+  local kind = row.icon and B.UI.IconKind(row.icon)
+  if kind then
+    return kind
+  end
+  local typ = row.ref and B.Entity.Parse(row.ref)
+  if typ == "npc" then
+    return "service"
+  end
+  return typ
 end
 
 local function chip(self, n)
@@ -1228,13 +1432,14 @@ local function chip(self, n)
   if c then
     return c
   end
-  c = S.button(self.links, "", 40, CHIP_H)
+  c = S.pill(self.links, {
+    onClick = function(btn, button)
+      if btn.row then
+        self:RowClick(btn.row, button)
+      end
+    end,
+  })
   c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  c:SetScript("OnClick", function(btn, button)
-    if btn.row then
-      self:RowClick(btn.row, button)
-    end
-  end)
   c:HookScript("OnEnter", chipTooltip)
   c:HookScript("OnLeave", function()
     if GameTooltip then
@@ -1281,6 +1486,7 @@ function Dossier:LayoutLinks(links, width, top)
   region.title:SetText(Util.titleText(L["Links"]))
   Util.rule(region.line, region.orn, width)
   local y = TITLE_H + 2
+  local chipH = S.G.pill or 26
   local chips, labels = 0, 0
   for _, link in ipairs(links) do
     labels = labels + 1
@@ -1301,22 +1507,22 @@ function Dossier:LayoutLinks(links, width, top)
       chips = chips + 1
       local c = chip(self, chips)
       c.row = row
-      c.label:SetText(Util.chipText(row))
-      local col = row.kind == "more" and S.C.accent or S.C.text
-      c.label:SetTextColor(col[1], col[2], col[3])
-      local w = labelWidth(c.label, row.text) + 14
+      c.spec.kind = chipKind(row)
+      c.spec.label = Util.chipText(row)
+      c.spec.on = row.kind == "more" or nil
+      S.Draw(c)
+      local w = c:GetWidth()
       if x > LABEL_W + 4 and x + w > width then
         x = LABEL_W + 4
-        y = y + CHIP_H + CHIP_GAP
+        y = y + chipH + CHIP_GAP
       end
-      c:SetWidth(w)
       c:ClearAllPoints()
       c:SetPoint("TOPLEFT", region, "TOPLEFT", x, -y)
       c:Show()
       x = x + w + CHIP_GAP
     end
     link.capped = capped
-    y = y + CHIP_H + CHIP_GAP
+    y = y + chipH + CHIP_GAP
   end
   for i = chips + 1, #self.chipPool do
     self.chipPool[i]:Hide()
@@ -1341,7 +1547,7 @@ local function trailButton(self, n)
     return b
   end
   b = CreateFrame("Button", nil, self.trail)
-  b:SetHeight(CHIP_H)
+  b:SetHeight(TRAIL_H)
   b.label = S.text(b, 12)
   b.label:SetPoint("LEFT", 0, 0)
   b.label:SetJustifyH("LEFT")
@@ -1387,7 +1593,7 @@ function Dossier:LayoutTrail(width, top)
     b.label:SetTextColor(c[1], c[2], c[3])
     local w = labelWidth(b.label, item.name) + 6
     if x > x0 and x + w > width then
-      x, y = x0, y + CHIP_H
+      x, y = x0, y + TRAIL_H
     end
     b:SetWidth(w)
     b:ClearAllPoints()
@@ -1399,9 +1605,9 @@ function Dossier:LayoutTrail(width, top)
     self.trailPool[i]:Hide()
   end
   self.trailCount = #list
-  region:SetHeight(y + CHIP_H)
+  region:SetHeight(y + TRAIL_H)
   region:Show()
-  return y + CHIP_H
+  return y + TRAIL_H
 end
 
 -- ---------------------------------------------------------------------------------------------

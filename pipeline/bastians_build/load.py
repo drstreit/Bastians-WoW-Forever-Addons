@@ -46,6 +46,13 @@ class SourcePaths:
     # the navmesh folder (`clientdump navmesh`, <Map>.navmesh): the subzones' places (data.md
     # "Areas"); default <dumps>/navmesh_<client>
     navmesh: Path | None = None
+    # the dungeon floors' map art (DG2c): the folder with retail's <floor_art_prefix>_UiMap.json,
+    # _UiMapAssignment.json, _UiMapXMapArt.json and _UiMapArtTile.json (both clients read the
+    # retail tables: the Forever client has no dungeon UiMaps), and the community listfile
+    # that names the tiles for the Forever client
+    floor_art: Path | None = None
+    floor_art_prefix: str = "retail"
+    listfile: Path | None = None
 
 
 def load_areas(s: Sources, client: str, paths: SourcePaths) -> None:
@@ -179,6 +186,10 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.fdb_names = foreverdb.read_search_names(fdb / "SearchNames.lua")
             if (fdb / "Dungeons.lua").is_file():  # since ForeverDB 0.44 (data.md "Dungeons")
                 s.fdb_dungeons = foreverdb.read_dungeons(fdb / "Dungeons.lua")
+            if (fdb / "DungeonMaps.lua").is_file():  # the floors (DG2)
+                s.fdb_dungeon_maps = foreverdb.read_dungeon_maps(fdb / "DungeonMaps.lua")
+            if (fdb / "Loot.lua").is_file():  # the bosses' creatures (02.11.2026)
+                s.fdb_boss_creatures = foreverdb.read_boss_creatures(fdb / "Loot.lua")
             s.source_names.append(f"ForeverDB {meta.addon if meta and meta.addon else '?'}")
             if s.build == "unknown" and meta and meta.build:
                 s.build = str(meta.build)  # the client build ForeverDB read its data from
@@ -202,6 +213,20 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
         s.source_names.append(
             "ForeverDB Dungeons.lua (Forever's dungeons, for tests on this client)"
         )
+        loot = paths.dungeons.with_name("Loot.lua")
+        if loot.is_file():
+            s.fdb_boss_creatures = foreverdb.read_boss_creatures(loot)
+        maps = paths.dungeons.with_name("DungeonMaps.lua")
+        if maps.is_file():
+            s.fdb_dungeon_maps = foreverdb.read_dungeon_maps(maps)
+    if paths.floor_art and s.fdb_dungeon_maps:
+        s.floor_art = clientdump.read_floor_art(
+            paths.floor_art, paths.floor_art_prefix, paths.listfile
+        )
+        s.source_names.append(
+            f"clientdump UiMap dungeon floors ({paths.floor_art_prefix}"
+            f"{', listfile' if paths.listfile else ''})"
+        )
     if paths.cmangos:
         dump_path = find_dump(paths.cmangos)
         tables = cmangos.read_tables(dump_path)
@@ -213,6 +238,7 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
         s.cm_trainers = cmangos.trainer_services(tables)
         s.cm_loot = cmangos.loot_rows(tables)
         s.cm_items = cmangos.item_rows(tables)
+        s.cm_disenchant = cmangos.disenchant_lists(tables)
         s.cm_spell_names = {
             int(r["Id"]): str(r["SpellName"])
             for r in tables.get("spell_template", [])

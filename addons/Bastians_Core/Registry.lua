@@ -1195,10 +1195,71 @@ B.SEARCH_TYPES = {
   spots = "spot",
 }
 
+-- The `type:npc` (or `t:npc`) words of a search text (ADR 0045): the text without them, the
+-- entity types, and the other `type:` words as kinds (`type:vendor`, an
+-- NPC's service, an object's kind), lower case; nil for none. ParseSearch leaves the kinds in the
+-- text, Bastians:Search reads them.
+local function typeFields(text, takeKinds)
+  local types, kinds
+  local rest = string.gsub(text, "(%S+)", function(word)
+    local field, value = string.match(word, "^(%a+):(%a+)$")
+    field = field and string.lower(field)
+    if field ~= "type" and field ~= "t" then
+      return nil
+    end
+    local entityType = B.SEARCH_TYPES[string.lower(value)]
+    if entityType then
+      types = types or {}
+      types[entityType] = true
+      return ""
+    elseif takeKinds then
+      kinds = kinds or {}
+      kinds[#kinds + 1] = string.lower(value)
+      return ""
+    end
+  end)
+  return (string.gsub(rest, "^%s*(.-)%s*$", "%1")), types, kinds
+end
+
+-- The results whose entity has every kind word asked for (`type:vendor`): Data's kind words of the
+-- record (KindWords), so a result without a known kind leaves.
+local function keepKinds(results, kinds)
+  if not kinds then
+    return results
+  end
+  local d = B:GetService("data")
+  local out = {}
+  for _, r in ipairs(results) do
+    local entityType, id = Entity.Parse(r.ref or "")
+    local words = d and d.KindWords and entityType and d:KindWords(entityType, id) or nil
+    local all = words ~= nil
+    for _, kind in ipairs(words and kinds or {}) do
+      local found = false
+      for _, w in ipairs(words) do
+        if string.find(w, kind, 1, true) then
+          found = true
+          break
+        end
+      end
+      all = all and found
+    end
+    if all then
+      out[#out + 1] = r
+    end
+  end
+  return out
+end
+
 -- Bastians.ParseSearch("npc wel") -> "wel", { npc = true }; the type word may come first or last
--- ("wel npc" is the same, ADR 0013 F); a plain query gives (query, nil).
+-- ("wel npc" is the same, ADR 0013 F), `type:npc` anywhere (ADR 0045); a plain query gives
+-- (query, nil).
 function B.ParseSearch(text)
   text = string.gsub(tostring(text or ""), "^%s*(.-)%s*$", "%1")
+  local fieldTypes
+  text, fieldTypes = typeFields(text)
+  if fieldTypes then
+    return text, fieldTypes
+  end
   local word, rest = string.match(text, "^(%a+)%s+(.+)$")
   local entityType = word and B.SEARCH_TYPES[string.lower(word)]
   if entityType then
@@ -1227,14 +1288,24 @@ local function keepType(results, types)
 end
 
 -- Bastians:Search(query, { limit = 50, types = { npc = true } }, callback(results, done)) -> handle
--- with :Cancel(). `types` keeps only results of those entity types.
+-- with :Cancel(). `types` keeps only results of those entity types; `type:npc` words in the query
+-- do the same. Providers get the query lower-cased and compiled (ADR 0045):
+-- search(text, limit, yield, q), q a Bastians.Query.
 function B:Search(query, opts, callback)
   if currentSearch then
     currentSearch:Cancel()
     currentSearch = nil
   end
   opts = opts or {}
-  query = string.lower(string.gsub(tostring(query or ""), "^%s*(.-)%s*$", "%1"))
+  local typed, kinds
+  query, typed, kinds = typeFields(string.gsub(tostring(query or ""), "^%s*(.-)%s*$", "%1"), true)
+  opts = typed and not opts.types and setmetatable({ types = typed }, { __index = opts }) or opts
+  -- `type:vendor` alone searches every name of that kind; providers read q.kinds (Data's Find)
+  local q = B.Query.Compile((query == "" and kinds) and "*" or query)
+  if kinds then
+    q = setmetatable({ kinds = kinds }, { __index = q })
+  end
+  query = string.lower(query)
   local handle = { cancelled = false }
   function handle:Cancel()
     self.cancelled = true
@@ -1242,7 +1313,7 @@ function B:Search(query, opts, callback)
       self.job:Cancel()
     end
   end
-  if query == "" then
+  if q.empty then
     callback({}, true)
     return handle
   end
@@ -1257,21 +1328,21 @@ function B:Search(query, opts, callback)
   local collected = {}
   handle.job = B.Jobs:Run(ns.coreOwner, "search", function(yield)
     for _, def in ipairs(ordered) do
-      local results = def.search(query, limit, yield) or {}
+      local results = def.search(query, limit, yield, q) or {}
       for _, r in ipairs(results) do
         r.provider = def.id
         r.rank = (r.score or 0) * (1 + def.priority / 1000)
         collected[#collected + 1] = r
       end
       if not handle.cancelled then
-        callback(keepType(rank(collected), opts.types), false)
+        callback(keepKinds(keepType(rank(collected), opts.types), kinds), false)
       end
       yield()
     end
   end, {
     onDone = function()
       if not handle.cancelled then
-        callback(keepType(rank(collected), opts.types), true)
+        callback(keepKinds(keepType(rank(collected), opts.types), kinds), true)
       end
       if currentSearch == handle then
         currentSearch = nil
@@ -1298,6 +1369,9 @@ B.SERVICES = {
   notes = true,
   facts = true,
   library = true,
+  knowledge = true, -- who knows a spell or recipe (Alts, 01.11.2026)
+  voice = true, -- speaks the suite's own words (the Orbiter, plan-launch-review R5.3, 01.11.2026)
+  camps = true, -- the player's fire, camp buffs and shared fires (Bastian's Campfire, 02.11.2026)
 }
 local services = {} -- name -> array of { owner, impl, priority }
 local active = {} -- name -> impl

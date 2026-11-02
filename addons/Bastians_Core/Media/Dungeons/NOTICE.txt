@@ -1,0 +1,6 @@
+The dungeon maps in this folder are by Santiago Reyes, from his project "Atlas of Azeroth:
+Forever" (https://www.artstation.com/sr433_20). They are used in Bastian's suite with his kind
+permission (02.11.2026). They are NOT covered by the suite's GPL-3.0 licence: to use them in
+another work, ask Santiago Reyes. Thank you, Santiago!
+
+The files are cut into tiles by tools/dungeon_art.py (ADR 0048); the pins on them are ours.

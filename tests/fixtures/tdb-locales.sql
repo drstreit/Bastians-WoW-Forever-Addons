@@ -52,3 +52,33 @@ CREATE TABLE `quest_request_items_locale` (
   PRIMARY KEY (`ID`,`locale`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 INSERT INTO `quest_request_items_locale` VALUES (176,'koKR','발톱은 가져왔습니까?',61000);
+-- the English of the long quest texts (Forever's Asian languages take a text only where it is ours)
+CREATE TABLE `quest_template` (
+  `ID` int unsigned NOT NULL DEFAULT '0',
+  `QuestType` tinyint unsigned NOT NULL DEFAULT '2',
+  `LogTitle` text,
+  `LogDescription` text,
+  `QuestDescription` text,
+  `VerifiedBuild` int DEFAULT '0',
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO `quest_template` VALUES (176,2,'Wanted: \"Hogger\"','Bring Huge Gnoll Claw to Marshal Dughan in Goldshire.','Hogger has terrorised  the farms of Elwynn long enough.',61000),(62,2,'The Fargodeep Mine','Explore the mine.','A retail text.',61000);
+CREATE TABLE `quest_offer_reward` (
+  `ID` int unsigned NOT NULL DEFAULT '0',
+  `RewardText` text,
+  `VerifiedBuild` int DEFAULT '0',
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO `quest_offer_reward` VALUES (176,'You have done Elwynn a great service, $n.',61000);
+CREATE TABLE `quest_request_items` (
+  `ID` int unsigned NOT NULL DEFAULT '0',
+  `CompletionText` text,
+  `VerifiedBuild` int DEFAULT '0',
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO `quest_request_items` VALUES (176,'Have you the claw?',61000);
+INSERT INTO `quest_template_locale` VALUES (176,'zhTW','懸賞：霍格','把巨型豺狼人爪子交給閃金鎮的杜漢元帥。','霍格在艾爾文森林肆虐太久了。',NULL,NULL,NULL,NULL,NULL,NULL,61000);
+INSERT INTO `quest_offer_reward_locale` VALUES (176,'zhTW','你為艾爾文立了大功。',61000);
+-- the Latin languages: French typography to Latin-1, Spanish from esMX where esES has none, German
+-- loses to CMaNGOS
+INSERT INTO `quest_template_locale` VALUES (176,'frFR','Avis de recherche : Lardeur','Apportez la griffe de gnoll énorme au maréchal Dughan à Comté-de-l’Or.','Lardeur terrorise les fermes d’Elwynn depuis trop longtemps… œuvrez !',NULL,NULL,NULL,NULL,NULL,NULL,61000),(176,'esMX','Se busca: Hogger','Lleva la garra de gnoll enorme al alguacil Dughan en Villadorada.','Hogger ha aterrorizado las granjas de Elwynn demasiado tiempo.',NULL,NULL,NULL,NULL,NULL,NULL,61000),(176,'deDE','Gesucht: Hogger','TDB-Ziele.','TDB-Text.',NULL,NULL,NULL,NULL,NULL,NULL,61000);

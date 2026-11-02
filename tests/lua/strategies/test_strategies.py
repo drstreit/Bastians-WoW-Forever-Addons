@@ -471,8 +471,10 @@ def test_the_book_window_searches_its_pages(wow: WowRuntime):
 
 def test_a_page_shows_its_picture_and_none_before_a_restart(wow: WowRuntime):
     boot(wow)
+    # the decoded records live in a weak cache (Data.lua): the test holds this one, so the flag
+    # survives a garbage collection between here and the page's render (30.10.2026)
+    wow.execute("PAGE = Bastians:GetService('data'):Get('page', 'hogger-camp'); PAGE.art = true")
     page = "Bastians:GetService('data'):Get('page', 'hogger-camp')"
-    wow.execute(f"{page}.art = true")
     assert wow.eval(f"{page}.art") is True, "the data service hands out its cached record"
     path = wow.eval(f"{WIN}.ART") + "hogger-camp"
     assert path == r"Interface\AddOns\Bastians_Data_Strategies\Generated\Art\hogger-camp"

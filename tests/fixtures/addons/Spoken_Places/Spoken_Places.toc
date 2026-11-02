@@ -1,0 +1,6 @@
+## Interface: 16001, 120105
+## Title: Spoken Places (test double)
+## Notes: Fixture: the voice pack registry of Spoken Places and Spoken's dungeon table, as the pack addons write them.
+## Dependencies: Spoken
+
+Data.lua

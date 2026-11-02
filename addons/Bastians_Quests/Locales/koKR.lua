@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("koKR", {
+  -- plan-second-wave.md S6 (01.11.2026)
+  ["Toggle the tracker"] = "추적기 켜기/끄기",
   -- Views.lua, Quests.lua: the Library's leads in My quests
   ["Tales"] = "이야기",
   ["Click: open the journal"] = "클릭: 일지 열기",
@@ -106,6 +108,21 @@ ns.L:Register("koKR", {
   ["Target of"] = "목표 대상인 퀘스트",
   ["Starts quests"] = "시작하는 퀘스트",
   ["Ends quests"] = "완료하는 퀘스트",
+  ["Step %d of %d. Next: %s"] = "%d/%d단계. 다음: %s",
+  ["Nothing of it is for this character."] = "이 캐릭터를 위한 것이 없습니다.",
+  ["available now"] = "지금 수락 가능",
+  ["in your log"] = "퀘스트 목록에 있음",
+  ["needs level %d"] = "%d레벨 필요",
+  ["needs a profession skill"] = "전문 기술 필요",
+  ["needs reputation"] = "평판 필요",
+  ["replaced by another quest"] = "다른 퀘스트로 대체됨",
+  ["not for this character"] = "이 캐릭터용 아님",
+  ["after step %d"] = "%d단계 다음",
+  ["needs %s"] = "%s 필요",
+  ["<- you are here"] = "<- 현재 위치",
+  ["in your bags"] = "가방에 있음",
+  ["not in your bags"] = "가방에 없음",
+  ["Attunement"] = "입장 조건",
   ["Dungeon quests"] = "던전 퀘스트",
   ["Needed for quests"] = "필요한 퀘스트",
   ["Status"] = "상태",
@@ -198,6 +215,8 @@ ns.L:Register("koKR", {
   ["(no quest text)"] = "(퀘스트 텍스트 없음)",
   ["Use quest item"] = "퀘스트 아이템 사용",
   ["Hand in here"] = "여기서 완료",
+  ["next in chain"] = "연계 다음 퀘스트",
+  ["Next in chain"] = "연계 다음 퀘스트",
   ["Objectives here"] = "여기의 목표",
   ["Elsewhere"] = "다른 곳",
   ["Complete, hand in elsewhere"] = "완료, 다른 곳에서 보고",
@@ -295,4 +314,17 @@ ns.L:Register("koKR", {
   ["quest"] = "퀘스트",
   ["Choice:"] = "선택:",
   ["Quest chain '%s' %d/%d"] = "연계 퀘스트 '%s' %d/%d",
+  -- owner round 5 (31.10.2026): the Quests list's Type filter
+  ["Type"] = "유형",
+  ["Normal"] = "일반",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d in the log"] = "퀘스트 목록에 %d개",
+  ["%d in the log, %d ready"] = "퀘스트 목록에 %d개, 완료 %d개",
+  ["Click: the quests. Right click: the tracker."] = "클릭: 퀘스트. 오른쪽 클릭: 추적기.",
+  ["Next here: "] = "여기서 다음: ",
+  ["Ready to turn in:"] = "완료 보고 가능:",
+  ["This session here: "] = "이번 세션, 여기: ",
+  ["and %d more"] = "외 %d개",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: quest items"] = "Bastian's: 퀘스트 아이템",
 })

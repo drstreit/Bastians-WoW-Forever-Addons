@@ -19,6 +19,11 @@ Waypoints.FIT_MAX = 12 -- places "Show on map" fits into the view at most
 
 local waypoint -- { continent, wx, wy, label, setAt, map, x, y }
 local loudTimer
+-- What "Show on map" showed last (the map opened on an NPC and nothing
+-- of the NPC was on it): { ref, label, icon, continent, points = { { wx, wy } } }, drawn with the
+-- entity's own icon and name at every place it fitted, whatever layers are on; gone with the next
+-- show, a cleared focus (Esc on the map) or Waypoints.Clear.
+local shown
 
 -- The entity's first location in world yards and map fractions, or nil.
 local function firstLocation(ref)
@@ -68,6 +73,7 @@ end
 
 function Waypoints.Clear()
   waypoint = nil
+  shown = nil
   if loudTimer then
     loudTimer:Cancel()
     loudTimer = nil
@@ -75,30 +81,75 @@ function Waypoints.Clear()
   B:Fire("BASTIANS_LAYER_CHANGED", "map.waypoint")
 end
 
--- Loud: big and bright for the first seconds; then a faint dot.
-local function waypointPins(view)
-  if not (waypoint and waypoint.continent == view.continent) then
-    return {}
+function Waypoints.Shown()
+  return shown
+end
+
+-- The shown entity: its places on the continent, its icon (the entity's own, else its type's), its
+-- name; `label` wins for a point without an entity (a route step's end).
+local function setShown(ref, continent, points, label)
+  if not continent or #points == 0 then
+    shown = nil
+    return
   end
-  local loud = GetTime() - waypoint.setAt < Waypoints.LOUD_SECONDS
-  return {
-    {
+  local e = ref and B.Entity.Parse(ref) and B:Entity(ref) or nil
+  shown = {
+    ref = e and ref or nil,
+    label = label or (e and e:Name()) or nil,
+    icon = (e and e:Icon()) or B.UI.IconTexture(e and e:Type() or "spot") or B.UI.IconTexture("other"),
+    continent = continent,
+    points = points,
+  }
+  -- "show": the layer that draws it switches on when the player had it off (owner, retail
+  -- 01.11.2026: "the map I open per right click still has nothing to show on"; Pins' handler)
+  B:Fire("BASTIANS_LAYER_CHANGED", "map.waypoint", "show")
+end
+
+local function clearShown()
+  if shown then
+    shown = nil
+    B:Fire("BASTIANS_LAYER_CHANGED", "map.waypoint")
+  end
+end
+
+-- The waypoint, loud (big and bright) for the first seconds, then a faint dot; and the shown entity
+-- at every place "Show on map" fitted, above everything else and never clustered.
+local function waypointPins(view)
+  local pins = {}
+  if shown and shown.continent == view.continent then
+    for _, p in ipairs(shown.points) do
+      pins[#pins + 1] = {
+        ref = shown.ref,
+        wx = p.wx,
+        wy = p.wy,
+        icon = shown.icon,
+        size = 24,
+        label = shown.label,
+        priority = 95,
+        cluster = false,
+      }
+    end
+  end
+  if waypoint and waypoint.continent == view.continent then
+    local loud = GetTime() - waypoint.setAt < Waypoints.LOUD_SECONDS
+    pins[#pins + 1] = {
       ref = waypoint.map and ("zone:" .. waypoint.map) or nil,
       wx = waypoint.wx,
       wy = waypoint.wy,
       icon = B.UI.IconTexture(loud and "spot" or "other"),
       color = loud and S.C.waypointLoud or S.C.waypoint,
       size = loud and 32 or 8,
-      label = loud and (waypoint.label or L["Waypoint"]) or nil,
-      priority = 90,
+      label = loud and not shown and (waypoint.label or L["Waypoint"]) or nil,
+      priority = shown and 60 or 90, -- under the shown entity's pin on the same spot
       cluster = false,
       onClick = function(_, button)
         if button == "RightButton" then
           Waypoints.Clear()
         end
       end,
-    },
-  }
+    }
+  end
+  return pins
 end
 
 -- "/way Elwynn Forest 42.0 65.0" for a point, through the zone the point lies in.
@@ -152,6 +203,7 @@ function Waypoints.Register(self)
   B:RegisterAction(self, {
     id = "map.show",
     label = L["Show on map"],
+    short = L["Map"], -- the band's button
     icon = B.UI.IconTexture("zone"),
     types = "*",
     order = 10,
@@ -164,6 +216,13 @@ function Waypoints.Register(self)
       local point = ctx and ctx.point
       local places = ctx and ctx.points -- { { map, x, y } or { continent, wx, wy }, ... } (R7)
       local continent, wx, wy, map, x, y = firstLocation(ref)
+      -- the entity is the focus (ADR 0013 D: the ring, the strip, the Browser's page when it is
+      -- open); the caller's source stays in the context so the Browser does not reopen its own page
+      local function focus()
+        if type(ref) == "string" and B.Entity.Parse(ref) then
+          B:Focus(ref, { source = ctx and ctx.source or "map.show" })
+        end
+      end
       if places and #places > 0 then
         -- the caller names the places (a quest's giver, targets or hand-in): those, not the
         -- entity's own; the first one gets the waypoint
@@ -189,18 +248,23 @@ function Waypoints.Register(self)
         end
         Map.Open()
         Map.FitWorld(continent, pts, math.max(Map.Camera().level, Waypoints.SHOW_LEVEL))
+        setShown(ref, continent, pts)
         Waypoints.Set(continent, wx, wy, nameOf(ref), map, x, y)
+        focus()
         return
       end
       if not (point or continent) then
         return
       end
+      ns.Layers.Reveal(ref) -- a dungeon's layer comes on with it
       Map.Open() -- before the camera is read: the map builds on its first open
       local level = math.max(Map.Camera().level, Waypoints.SHOW_LEVEL)
       if point then
         -- the caller names the place (a route step's end): that point, not the entity's places
         Map.Fly(point[1], point[2], point[3], level)
+        setShown(ref, point[1], { { wx = point[2], wy = point[3] } }, point[4])
         Waypoints.Set(point[1], point[2], point[3], point[4] or nameOf(ref))
+        focus()
         return
       end
       -- every place on that continent (a quest's giver and targets, an NPC's spawn areas,
@@ -217,7 +281,9 @@ function Waypoints.Register(self)
         end
       end
       Map.FitWorld(continent, points, level)
+      setShown(ref, continent, points)
       Waypoints.Set(continent, wx, wy, B:Entity(ref):Name(), map, x, y)
+      focus()
     end,
   })
   -- a zone has no place of its own: "Show on map" opens the map on the whole zone (owner,
@@ -225,6 +291,7 @@ function Waypoints.Register(self)
   B:RegisterAction(self, {
     id = "map.zone",
     label = L["Show on map"],
+    short = L["Map"],
     icon = B.UI.IconTexture("zone"),
     types = { "zone" },
     order = 10,
@@ -255,9 +322,17 @@ function Waypoints.Register(self)
     end,
   })
   table.insert(Map.onFocus, function(ref, ctx)
-    if not ref or not Map.IsShown() or (ctx and ctx.source == "map") then
+    if not ref then
+      clearShown() -- Esc on the map: the shown entity goes with the focus
       return
     end
+    if not Map.IsShown() or (ctx and ctx.source == "map") then
+      return
+    end
+    if shown and shown.ref == ref then
+      return -- map.show placed the waypoint (a step's end, a quest's targets) and focused: keep it
+    end
+    clearShown() -- another entity took the focus (a pin, the Browser): the old one is done
     local continent, wx, wy, map, x, y = firstLocation(ref)
     local cam = Map.Camera()
     if continent and cam and cam.continent == continent and cam:Contains(wx, wy, 0) then

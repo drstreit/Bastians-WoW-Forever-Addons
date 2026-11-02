@@ -5,6 +5,7 @@
 local _, ns = ...
 local B = ns.B
 local S = ns.Style
+local L = ns.L
 
 local Scenery = {}
 B.UI.Scenery = Scenery
@@ -202,6 +203,18 @@ function Scenery.BlockMode(block)
   if #rows == 0 then
     return nil
   end
+  -- a dungeon's floors (data.md "Dungeons", DG2): every row carries a floor, drawn as a plate of
+  -- the client's tiles with the boss pins, whatever the skin's switches say
+  local floors = true
+  for _, row in ipairs(rows) do
+    if type(row.floor) ~= "table" then
+      floors = false
+      break
+    end
+  end
+  if floors then
+    return "floors"
+  end
   if S.Skin("placeCuts") then
     local all = true
     for _, row in ipairs(rows) do
@@ -240,12 +253,7 @@ local function rowTooltip(cell)
   elseif host and host.opts.tooltip then
     host.opts.tooltip(GameTooltip, row)
   elseif row.ref then
-    local e = B:Entity(row.ref)
-    S.TipLine(GameTooltip, e:Name() or row.text or row.ref, "tipText")
-    local summary = e:Summary()
-    if summary then
-      S.TipLine(GameTooltip, summary, "tipDim")
-    end
+    S.EntityTip(GameTooltip, row.ref, row.text)
   else
     S.TipLine(GameTooltip, row.text or "", "tipText")
   end
@@ -284,6 +292,451 @@ local function newCell(bf, host)
   return cell
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- A dungeon's floor as a plate (DG2c, 30.10.2026; owner: "the actual dungeon maps, not our
+-- physical"): the client's own map of the floor laid out in floor pixels and scaled to the
+-- plate's width, the bosses as numbered pins that open the boss (a click) and the door as a pin
+-- of its own; a click on the plate opens the floor enlarged in a window of its own with the
+-- dungeon's other floors as tabs. The art comes from the client: on retail the floor's UiMap art
+-- (C_Map through Coords.MapArt), on Forever the same files by name (`floor.art` .. 1 to 12, the
+-- way the DungeonJournal addon draws them; assumed from that addon, to verify on Forever), else
+-- ForeverDB's minimap tiles (`floor.tiles`, Forever's own dungeons); a floor without any is the
+-- bare plate with its pins.
+-- ---------------------------------------------------------------------------------------------
+
+Scenery.FLOOR_MAX_ASPECT = 1.0 -- a plate is never taller than wide
+Scenery.FLOOR_CAPTION = 16 -- the floor's name under the plate
+Scenery.FLOOR_GAP = 6
+Scenery.FLOOR_TILE = 256 -- the art files' tiles (a 4 x 3 grid, 1002 x 668 of it visible)
+Scenery.FLOOR_WIN_W, Scenery.FLOOR_WIN_H = 820, 620 -- the enlarged floor's window
+Scenery.FLOOR_CREDIT = 24 -- the artist's line under the enlarged floor (ADR 0048)
+Scenery.FLOOR_LINK_W = 240 -- the box with the artist's address to copy
+
+-- The artist of a hand-drawn floor (`floor.by`, ADR 0048): { name, work, url } or nil.
+function Scenery.FloorArtist(floor)
+  local about = B.UI.About
+  return floor and floor.by and about and about.ARTISTS and about.ARTISTS[floor.by] or nil
+end
+
+local artCache = {} -- [uiMapID] = the client's art or false
+
+-- The art of a floor as the client gives it: { w, h, tiles = { {file, x, y, w, h, q, tcRight,
+-- tcBottom} } } in floor pixels, or nil. Retail's UiMap art is asked once per map.
+function Scenery.FloorArt(floor)
+  if floor.uiMap and B.Coords and B.Coords.MapArt then
+    local art = artCache[floor.uiMap]
+    if art == nil then
+      local got = B.Coords.MapArt(floor.uiMap)
+      art = false
+      if got and got.tiles and #got.tiles > 0 then
+        local tiles = {}
+        for _, t in ipairs(got.tiles) do
+          tiles[#tiles + 1] = { t.file, t.px1, t.py1, t.px2 - t.px1, t.py2 - t.py1, 0, t.tcRight, t.tcBottom }
+        end
+        art = { w = got.width, h = got.height, tiles = tiles }
+      end
+      artCache[floor.uiMap] = art
+    end
+    if art then
+      return art
+    end
+  end
+  if floor.art and floor.cols and floor.rows then
+    local tiles, size = {}, Scenery.FLOOR_TILE
+    for r = 0, floor.rows - 1 do
+      for c = 0, floor.cols - 1 do
+        tiles[#tiles + 1] = { floor.art .. (r * floor.cols + c + 1), c * size, r * size, size, size, 0 }
+      end
+    end
+    return { w = floor.w, h = floor.h, tiles = tiles }
+  end
+  if floor.tiles and #floor.tiles > 0 then
+    return { w = floor.w, h = floor.h, tiles = floor.tiles }
+  end
+  return nil
+end
+
+-- The plate of `floor` ({ w, h, uiMap, art, cols, rows, tiles, bosses = { {order, x, y, name,
+-- ref} }, door = { x, y } }) at `width` px: its height, the tiles in plate px (file, x, y, w, h,
+-- q, tcRight, tcBottom), the pins in plate px (x, y, label, kind "boss" | "door", name, ref).
+-- Pure but for the client's art.
+function Scenery.FloorLayout(floor, width)
+  local art = Scenery.FloorArt(floor)
+  local fw = math.max(1, art and art.w or floor.w or 1)
+  local fh = math.max(1, art and art.h or floor.h or 1)
+  local aspect = math.min(Scenery.FLOOR_MAX_ASPECT, fh / fw)
+  local height = math.floor(width * aspect + 0.5)
+  local k = width / fw
+  local tiles, pins = {}, {}
+  for _, t in ipairs(art and art.tiles or {}) do
+    tiles[#tiles + 1] =
+      { t[1], t[2] * k, t[3] * k, math.max(1, t[4] * k), math.max(1, t[5] * k), t[6] or 0, t[7], t[8] }
+  end
+  for _, b in ipairs(floor.bosses or {}) do
+    pins[#pins + 1] = { b[2] / 100 * width, b[3] / 100 * height, tostring(b[1]), "boss", b[4], b[5] }
+  end
+  if floor.door then
+    pins[#pins + 1] = { floor.door[1] / 100 * width, floor.door[2] / 100 * height, "", "door" }
+  end
+  return height, tiles, Scenery.SpreadPins(pins), art ~= nil
+end
+
+Scenery.PIN_GAP = 17 -- px between two pins' centres (a pin is 16 px)
+
+-- Pins that would overlap
+-- move onto a small circle around their middle, in their order, the first on top; everything
+-- within `gap` of a pin of the group joins it. Pure: the pins' x and y change in place.
+function Scenery.SpreadPins(pins, gap)
+  gap = gap or Scenery.PIN_GAP
+  local taken = {}
+  for i = 1, #pins do
+    if not taken[i] then
+      local group = { i }
+      taken[i] = true
+      local k = 1
+      while k <= #group do
+        local a = pins[group[k]]
+        for j = i + 1, #pins do
+          local b = pins[j]
+          if not taken[j] and (a[1] - b[1]) ^ 2 + (a[2] - b[2]) ^ 2 < gap * gap then
+            taken[j] = true
+            group[#group + 1] = j
+          end
+        end
+        k = k + 1
+      end
+      local n = #group
+      if n > 1 then
+        table.sort(group)
+        local cx, cy = 0, 0
+        for _, g in ipairs(group) do
+          cx, cy = cx + pins[g][1], cy + pins[g][2]
+        end
+        cx, cy = cx / n, cy / n
+        local r = gap / (2 * math.sin(math.pi / n))
+        for m, g in ipairs(group) do
+          local angle = -math.pi / 2 + (m - 1) * 2 * math.pi / n
+          pins[g][1] = cx + r * math.cos(angle)
+          pins[g][2] = cy + r * math.sin(angle)
+        end
+      end
+    end
+  end
+  return pins
+end
+
+-- The height `rows` of floors take at `width`: each plate, its caption, the gaps.
+function Scenery.FloorsHeight(rows, width)
+  local h = 0
+  for _, row in ipairs(rows) do
+    local plate = Scenery.FloorLayout(row.floor or {}, width)
+    h = h + plate + Scenery.FLOOR_CAPTION + Scenery.FLOOR_GAP
+  end
+  return h
+end
+
+local function pinTooltip(pin)
+  if not (GameTooltip and pin.name) then
+    return
+  end
+  GameTooltip:SetOwner(pin, "ANCHOR_RIGHT")
+  GameTooltip:SetText(pin.name)
+  if pin.ref then
+    GameTooltip:AddLine(L["Click: open"], 1, 1, 1)
+  end
+  GameTooltip:Show()
+end
+
+local function newPin(cut, cell)
+  local pin = CreateFrame("Button", nil, cut)
+  pin:SetSize(16, 16)
+  pin:SetFrameLevel((cut:GetFrameLevel() or 0) + 2)
+  pin.disc = pin:CreateTexture(nil, "OVERLAY")
+  pin.disc:SetTexture(S.DISC)
+  pin.disc:SetAllPoints(pin)
+  pin.label = S.text(pin, 10, S.C.bright)
+  pin.label:SetPoint("CENTER")
+  pin.label:SetJustifyH("CENTER")
+  pin:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  pin:SetScript("OnEnter", pinTooltip)
+  pin:SetScript("OnLeave", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
+  pin:SetScript("OnClick", function(self, button)
+    if self.ref and cell.host and cell.host.RowClick then
+      cell.host:RowClick({ ref = self.ref, text = self.name, kind = "pin" }, button)
+    end
+  end)
+  return pin
+end
+
+-- Lays a floor's plate into `cell` (a cell of newCell) at `width` px; returns the cell's height.
+local function layoutFloorCell(cell, row, width, bare)
+  local floor = row.floor or {}
+  local height, tiles, pins, hasArt = Scenery.FloorLayout(floor, width)
+  cell:SetSize(width, height + (bare and 0 or Scenery.FLOOR_CAPTION))
+  cell.cut:Show()
+  cell.cut:SetSize(width, height)
+  if cell.cut.SetClipsChildren then
+    cell.cut:SetClipsChildren(true) -- a tile that reaches past the floor is cropped
+  end
+  local n = 0
+  for _, t in ipairs(tiles) do
+    n = n + 1
+    local tex = cell.art[n]
+    if not tex then
+      tex = cell.cut:CreateTexture(nil, "BACKGROUND")
+      cell.art[n] = tex
+    end
+    tex:SetTexture(t[1])
+    tex:SetTexCoord(0, t[7] or 1, 0, t[8] or 1)
+    tex:SetDrawLayer("BACKGROUND", 1)
+    if tex.SetRotation then
+      tex:SetRotation(t[6] * math.pi / 2)
+    end
+    tex:ClearAllPoints()
+    tex:SetPoint("TOPLEFT", cell.cut, "TOPLEFT", t[2], -t[3])
+    tex:SetSize(t[4], t[5])
+    tex:SetAlpha(1)
+    tex:Show()
+  end
+  for i = n + 1, #cell.art do
+    cell.art[i]:Hide()
+  end
+  cell.pin:Hide()
+  cell.pins = cell.pins or {}
+  for i, p in ipairs(pins) do
+    local pin = cell.pins[i]
+    if not pin then
+      pin = newPin(cell.cut, cell)
+      cell.pins[i] = pin
+    end
+    S.tint(pin.disc, p[4] == "door" and S.C.good or S.C.bad)
+    pin.label:SetText(p[3])
+    pin.name = p[5]
+    pin.ref = p[6]
+    pin:EnableMouse(p[5] ~= nil)
+    pin:ClearAllPoints()
+    pin:SetPoint("CENTER", cell.cut, "TOPLEFT", p[1], -p[2])
+    pin:Show()
+  end
+  for i = #pins + 1, #(cell.pins or {}) do
+    cell.pins[i]:Hide()
+  end
+  if bare then
+    cell.caption:Hide()
+    return height
+  end
+  cell.caption:Show()
+  cell.caption:ClearAllPoints()
+  cell.caption:SetPoint("TOPLEFT", cell, "TOPLEFT", 0, -(height + 2))
+  cell.caption:SetWidth(width)
+  S.ink(cell.caption, S.C.dim)
+  local note = (not hasArt and ("  " .. L["(the client has no map of this floor)"])) or ""
+  local artist = Scenery.FloorArtist(floor)
+  if artist then
+    note = note .. "  -  " .. string.format(L["Map by %s"], artist.name)
+  end
+  if floor.note then
+    note = note .. "  " .. floor.note
+  end
+  cell.caption:SetText((row.text or "") .. note)
+  return height + Scenery.FLOOR_CAPTION
+end
+
+-- The enlarged floor: one window for
+-- the suite, the dungeon's floors as tabs on top, the plate below as wide as the window allows.
+local floorWin
+
+local function floorTabs(rows, index)
+  local tabs = floorWin.tabs
+  local x = 0
+  for i, row in ipairs(rows) do
+    local tab = tabs[i]
+    if not tab then
+      tab = S.button(floorWin.bar, "", 120, 22)
+      tab:SetScript("OnClick", function(self)
+        Scenery.OpenFloor(floorWin.rows, self.index, floorWin.host)
+      end)
+      tabs[i] = tab
+    end
+    tab.index = i
+    -- the kit's button draws its own label ("two buttons without any
+    -- text": SetText wrote to a font string the button does not have)
+    tab:SetLabel(row.text or tostring(i))
+    tab:SetWidth(math.max(60, math.min(180, (tab.label:GetStringWidth() or 100) + 24)))
+    tab:ClearAllPoints()
+    tab:SetPoint("LEFT", floorWin.bar, "LEFT", x, 0)
+    tab:SetAlpha(i == index and 1 or 0.6)
+    tab:Show()
+    x = x + tab:GetWidth() + 4
+  end
+  for i = #rows + 1, #tabs do
+    tabs[i]:Hide()
+  end
+end
+
+local function floorRender()
+  if not (floorWin and floorWin.rows) then
+    return
+  end
+  local row = floorWin.rows[floorWin.index]
+  if not row then
+    return
+  end
+  local content = floorWin.win.content
+  local artist = Scenery.FloorArtist(row.floor)
+  local credit = artist and Scenery.FLOOR_CREDIT or 0
+  local width = math.max(100, (content:GetWidth() or Scenery.FLOOR_WIN_W) - 2 * 8)
+  local avail = math.max(100, (content:GetHeight() or Scenery.FLOOR_WIN_H) - 30 - 2 * 8 - credit)
+  -- the plate fits the window: as wide as it can be without growing taller than the room
+  local h = Scenery.FloorLayout(row.floor or {}, width)
+  if h > avail then
+    width = math.floor(width * avail / h)
+  end
+  local cell = floorWin.cell
+  cell.row, cell.host = row, floorWin.host
+  local height = layoutFloorCell(cell, row, width, true)
+  cell:ClearAllPoints()
+  cell:SetPoint("TOP", content, "TOP", 0, -(30 + 8 + math.max(0, (avail - height) / 2)))
+  cell:Show()
+  -- "Dungeon: floor", the dungeon alone when the floor is named after it (02.11.2026: "City of
+  -- Dalaran: City of Dalaran")
+  local dungeon = row.floor and row.floor.dungeon or ""
+  local floorName = row.text or ""
+  if dungeon ~= "" and floorName ~= "" and floorName ~= dungeon then
+    floorWin.win:SetTitle(dungeon .. ": " .. floorName)
+  else
+    floorWin.win:SetTitle(dungeon ~= "" and dungeon or (row.text or L["Dungeon map"]))
+  end
+  floorTabs(floorWin.rows, floorWin.index)
+  -- the artist's thanks under the map, the address in a box to copy ("clearly
+  -- state this with a thank you, directly under the maps, with a link to his site")
+  if artist then
+    floorWin.credit:SetText(
+      string.format(L["Map by %s (%s), used with kind permission. Thank you!"], artist.name, artist.work)
+    )
+    floorWin.link.address = artist.url
+    floorWin.link:SetText(artist.url)
+    floorWin.link:SetCursorPosition(0)
+    floorWin.credit:Show()
+    floorWin.link:Show()
+  else
+    floorWin.credit:Hide()
+    floorWin.link:Hide()
+  end
+end
+
+-- The read-only box with an artist's address: a click selects it for Ctrl+C, a change is undone.
+local function newLinkBox(parent)
+  local box = CreateFrame("EditBox", nil, parent)
+  box:SetSize(Scenery.FLOOR_LINK_W, 20)
+  box:SetAutoFocus(false)
+  box:SetFont(S.font(), S.size(11), "")
+  S.fonts[box] = 11
+  S.ink(box, S.C.accent)
+  box:SetTextInsets(6, 6, 0, 0)
+  box.face = S.roundFill(box, S.C.panel, "radiusSmall")
+  box:SetScript("OnEditFocusGained", function(self)
+    self:HighlightText()
+  end)
+  box:SetScript("OnEscapePressed", function(self)
+    self:ClearFocus()
+  end)
+  box:SetScript("OnEnterPressed", function(self)
+    self:ClearFocus()
+  end)
+  box:SetScript("OnTextChanged", function(self, byUser)
+    if byUser and self.address then
+      self:SetText(self.address)
+      self:HighlightText()
+    end
+  end)
+  box:SetScript("OnEnter", function(self)
+    if GameTooltip then
+      GameTooltip:SetOwner(self, "ANCHOR_TOP")
+      GameTooltip:SetText(L["Click, then Ctrl+C to copy the address"])
+      GameTooltip:Show()
+    end
+  end)
+  box:SetScript("OnLeave", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
+  return box
+end
+
+-- Opens the floor `index` of `rows` (the floor rows of one dungeon page) enlarged; `host` is the
+-- dossier the pins report their clicks to.
+function Scenery.OpenFloor(rows, index, host)
+  if not floorWin then
+    local win = B.UI.Window("BastiansFloorFrame", {
+      title = L["Dungeon map"],
+      width = Scenery.FLOOR_WIN_W,
+      height = Scenery.FLOOR_WIN_H,
+      minWidth = 360,
+      minHeight = 300,
+      db = ns.core and ns.core.db and ns.core.db.profile and ns.core.db.profile.floorWindow,
+      onResize = floorRender,
+    })
+    floorWin = { win = win, tabs = {} }
+    floorWin.bar = CreateFrame("Frame", nil, win.content)
+    floorWin.bar:SetPoint("TOPLEFT", 8, -4)
+    floorWin.bar:SetPoint("TOPRIGHT", -8, -4)
+    floorWin.bar:SetHeight(22)
+    floorWin.cell = newCell(win.content, host)
+    floorWin.cell:SetScript("OnClick", nil) -- the enlarged plate is the end of the road
+    floorWin.cell.hl:Hide()
+    floorWin.link = newLinkBox(win.content)
+    floorWin.link:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", -8, 6)
+    floorWin.credit = S.text(win.content, 11, S.C.dim)
+    floorWin.credit:SetPoint("BOTTOMLEFT", win.content, "BOTTOMLEFT", 8, 10)
+    floorWin.credit:SetPoint("RIGHT", floorWin.link, "LEFT", -8, 0)
+    floorWin.credit:SetJustifyH("LEFT")
+    floorWin.credit:SetWordWrap(false)
+    win.credit, win.link = floorWin.credit, floorWin.link
+    win.floor = floorWin -- the tabs and the rows shown (tests)
+  end
+  floorWin.rows, floorWin.index, floorWin.host = rows, index or 1, host
+  floorWin.win:Show()
+  floorRender()
+end
+
+function Scenery.FloorWindow()
+  return floorWin and floorWin.win or nil
+end
+
+local function renderFloors(bf, rows, width, top, host)
+  bf.cells = bf.cells or {}
+  local y = top
+  for i, row in ipairs(rows) do
+    local cell = bf.cells[i]
+    if not cell then
+      cell = newCell(bf, host)
+      cell:SetScript("OnClick", function(self, button)
+        if self.row and button ~= "RightButton" then
+          Scenery.OpenFloor(self.rows, self.index, self.host)
+        elseif self.row then
+          self.host:RowClick(self.row, button)
+        end
+      end)
+      bf.cells[i] = cell
+    end
+    cell.row, cell.host, cell.rows, cell.index = row, host, rows, i
+    cell:ClearAllPoints()
+    cell:SetPoint("TOPLEFT", bf, "TOPLEFT", 0, -y)
+    y = y + layoutFloorCell(cell, row, width) + Scenery.FLOOR_GAP
+    cell:Show()
+  end
+  for i = #rows + 1, #bf.cells do
+    bf.cells[i]:Hide()
+    bf.cells[i].row = nil
+  end
+end
+
 local function layoutPlaceCell(cell, row)
   local w, h = Scenery.CUT_W, Scenery.CUT_H
   cell.cut:Show()
@@ -313,6 +766,9 @@ end
 -- Lays `rows` out as cells of `mode` in the block frame `bf` from `top` px down at `width`; the
 -- host is the dossier (its RowClick and tooltip).
 function Scenery.RenderCells(bf, mode, rows, width, top, host)
+  if mode == "floors" then
+    return renderFloors(bf, rows, width, top, host)
+  end
   bf.cells = bf.cells or {}
   local cw, ch = Scenery.CellSize(mode)
   local gap = Scenery.CELL_GAP

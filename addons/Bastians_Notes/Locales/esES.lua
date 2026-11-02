@@ -25,7 +25,8 @@ local strings = {
   ["Never"] = "Nunca",
   ["When near"] = "Al estar cerca",
   ["When I target it"] = "Al seleccionarlo",
-  ["Keep"] = "Guardar",
+  ["Save"] = "Guardar",
+  ["(right click: open it)"] = "(clic derecho: abrir)",
   ["Cancel"] = "Cancelar",
   ["Remove"] = "Quitar",
   ["A note needs a title."] = "Una nota necesita un título.",
@@ -83,6 +84,13 @@ local strings = {
   ["Send to my group"] = "Enviar a mi grupo",
   ["No place to send."] = "Ningún lugar que enviar.",
   ["Bookmark: a click shows it on the map, a right click renames it"] = "Marcador: un clic lo muestra en el mapa, un clic derecho lo renombra",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d notes"] = "%d notas",
+  ["%d notes, %d reminders"] = "%d notas, %d recordatorios",
+  ["Click: the lists. Right click: a note here."] = "Clic: las listas. Clic derecho: una nota aquí.",
+  ["Near here:"] = "Cerca de aquí:",
+  ["No notes near here."] = "No hay notas cerca de aquí.",
+  ["and %d more"] = "y %d más",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

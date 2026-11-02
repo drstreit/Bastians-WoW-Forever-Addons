@@ -52,6 +52,8 @@ def read_attunements(path: Path) -> list[dict]:
         if row["id"] in seen:
             raise AttunementError(f"{where}: duplicate id {row['id']!r}")
         seen.add(row["id"])
+        if "instance" in row and not isinstance(row["instance"], int):
+            raise AttunementError(f"{where}: instance must be an integer map id")
         if row["faction"] not in FACTIONS:
             raise AttunementError(f"{where}: faction must be one of {FACTIONS}")
         steps = []
@@ -71,6 +73,7 @@ def read_attunements(path: Path) -> list[dict]:
                 "faction": row["faction"],
                 "verified": bool(row.get("verified", False)),
                 "note": row.get("note"),
+                "instance": row.get("instance"),  # the dungeon's Map.db2 id (DG2b, 30.10.2026)
                 "steps": steps,
                 "src": "config",
             }

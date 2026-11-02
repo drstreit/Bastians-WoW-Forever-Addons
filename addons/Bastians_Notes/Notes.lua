@@ -35,7 +35,9 @@ Notes.SYMBOLS = {
   "grave",
   "other",
 }
-Notes.TYPES = { "npc", "object", "item", "quest", "zone", "node", "flightpath", "transport", "entrance" }
+-- every type, as "Add note" (a note added on a dungeon's page was nowhere
+-- to see, the list missed the types that came later)
+Notes.TYPES = "*"
 Notes.TARGETABLE = { npc = true, object = true }
 
 local mod
@@ -191,27 +193,19 @@ function Model.Reminders(g)
   return out
 end
 
--- Notes whose title or text holds every word of the query (lowercased): { note, score }.
+-- Notes whose title and text match the query (the suite's search syntax, ADR 0045; a text or a
+-- compiled query): { note, score }.
 function Model.Search(g, query)
-  local words = {}
-  for w in tostring(query or ""):lower():gmatch("%S+") do
-    words[#words + 1] = w
-  end
+  local q = B.Query.Of(query)
   local out = {}
-  if #words == 0 then
+  if q.empty then
     return out
   end
   for _, list in pairs(g.lists) do
     for _, n in pairs(list.notes) do
       local title, text = n.title:lower(), (n.text or ""):lower()
-      local all, inTitle = true, true
-      for _, w in ipairs(words) do
-        local t = title:find(w, 1, true) ~= nil
-        inTitle = inTitle and t
-        all = all and (t or text:find(w, 1, true) ~= nil)
-      end
-      if all then
-        local score = title == table.concat(words, " ") and 1 or inTitle and 0.8 or 0.5
+      if q:MatchLower(title .. "\n" .. text) then
+        local score = title == q.joined and 1 or q:MatchLower(title) and 0.8 or 0.5
         out[#out + 1] = { note = n, score = score }
       end
     end
@@ -721,8 +715,13 @@ Notes.SharedPinsLayer = sharedPins
 local ticker
 local spoken = {} -- note id -> true while the character has not been AWAY_YARDS away since
 
+-- A reminder: the chat line, or the voice (Core's Words, plan-launch-review R5.3: the Wanderer
+-- hears the note's title and text).
 local function say(note)
-  B:Say("[%s] %s%s", L["Notes"], Notes.Coloured(note), note.text ~= "" and (": " .. note.text) or "")
+  local words = note.title .. (note.text ~= "" and (". " .. note.text) or "")
+  B:Tell(mod, "reminder", words, function()
+    B:Say("[%s] %s%s", L["Notes"], Notes.Coloured(note), note.text ~= "" and (": " .. note.text) or "")
+  end)
 end
 
 -- The places of a note on a continent in world yards: its spot, or its thing's places.
@@ -935,9 +934,9 @@ mod = B:NewModule("Notes", {
       id = "notes.titles",
       label = L["Notes"],
       priority = 120,
-      search = function(query, limit)
+      search = function(query, limit, _, q)
         local out = {}
-        for _, hit in ipairs(Model.Search(Notes.Global(), query)) do
+        for _, hit in ipairs(Model.Search(Notes.Global(), q or query)) do
           if #out >= (limit or 50) then
             break
           end
@@ -1089,6 +1088,7 @@ mod = B:NewModule("Notes", {
       end
     end)
     C_Timer.After(1, Notes.ArmReminders)
+    ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
   OnDisable = function()
     if ticker then

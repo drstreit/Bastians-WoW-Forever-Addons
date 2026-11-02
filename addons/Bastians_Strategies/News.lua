@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.0.0:1-core",
+    date = "2026-10-30",
+    version = "1.0.0",
+    text = "The book's place maps lie on the zone's map, with a Route there button, and the book window can be as large as you like.",
+  },
+  {
     id = "1.0.0:1",
     date = "2026-10-30",
     version = "1.0.0",

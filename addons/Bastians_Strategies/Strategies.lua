@@ -265,13 +265,13 @@ local mod = B:NewModule("Strategies", {
       id = "strategies.pages",
       label = L["Bastian's Gold Rumours"],
       priority = 60,
-      search = function(query, limit, yield)
+      search = function(query, limit, yield, q)
         local d = data()
         local out = {}
         if not d then
           return out
         end
-        for _, hit in ipairs(d:Find("page", query, limit, yield)) do
+        for _, hit in ipairs(d:Find("page", q or query, limit, yield)) do
           out[#out + 1] =
             { ref = "page:" .. hit.id, label = hit.name, score = hit.score, note = L["the book"] }
         end
@@ -301,6 +301,7 @@ local mod = B:NewModule("Strategies", {
     self:On("BASTIANS_PRICES_UPDATED", Window.Schedule)
     self:On("BASTIANS_THEME_CHANGED", Window.Schedule)
     enter(B.Coords.PlayerMap())
+    ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
   OnDisable = function()
     Window.Hide()

@@ -127,6 +127,11 @@ ns.L:Register("koKR", {
   ["Route"] = "경로",
   ["Plan a route there."] = "그곳으로 가는 경로를 계획합니다.",
   ["No matches."] = "일치하는 항목이 없습니다.",
+  -- Mini.lua: the minimap's search (L4)
+  ["Note"] = "메모",
+  ["Bookmark"] = "책갈피",
+  ["The minimap finds NPCs, quests, zones and your notes."] = "미니맵은 NPC, 퀘스트, 지역과 내 메모를 찾습니다.",
+  ["No known place of the quest giver for %s."] = "%s의 퀘스트 제공자 위치를 알 수 없습니다.",
   ["Search the world ..."] = "월드 검색 ...",
 
   -- Tiles.lua
@@ -205,4 +210,39 @@ ns.L:Register("koKR", {
   ["A frame around the minimap"] = "미니맵 테두리",
   ["Options of this window"] = "이 창의 옵션",
   ["Ctrl+click: put a button on the map, or back into the box."] = "Ctrl+클릭: 버튼을 지도에 두거나 상자에 다시 넣습니다.",
+  -- owner round 5 (31.10.2026): the monster areas
+  ["Monsters"] = "몬스터",
+  -- 31.10.2026: the dungeon doors' own layer
+  ["Dungeons and raids"] = "던전 및 공격대",
+  -- 31.10.2026: how a button moves between the box and the minimap's border
+  ["Ctrl+click: back into the button box. Drag: along the minimap's border."] = "Ctrl+클릭: 버튼 상자로 되돌립니다. 끌기: 미니맵 테두리를 따라 이동합니다.",
+  ["Ctrl+click: onto the minimap's border."] = "Ctrl+클릭: 미니맵 테두리로 옮깁니다.",
+  ["Ctrl+click a button here: it moves onto the minimap's border."] = "여기서 버튼을 Ctrl+클릭: 미니맵 테두리로 옮겨집니다.",
+  ["Ctrl+click it on the border: it comes back into this box."] = "테두리에서 Ctrl+클릭: 이 상자로 돌아옵니다.",
+  ["Drag it on the border: it moves along the border."] = "테두리에서 끌기: 테두리를 따라 이동합니다.",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s, %s",
+  ["Click: the map. Right click: centre on you."] = "클릭: 지도. 오른쪽 클릭: 내 위치로 이동.",
+  ["No waypoint. Right click a place on the map to set one."] = "경유지가 없습니다. 지도의 장소를 오른쪽 클릭하여 설정하세요.",
+
+  -- Timers.lua (02.11.2026)
+  ["Timers"] = "타이머",
+  ["Stopwatch"] = "스톱워치",
+  ["Countdown"] = "카운트다운",
+  ["Start"] = "시작",
+  ["Pause"] = "일시정지",
+  ["Reset"] = "초기화",
+  ["Done"] = "완료",
+  ["Name"] = "이름",
+  ["How long: 5m, 1:30, 90s, 2h"] = "시간: 5m, 1:30, 90s, 2h",
+  ["Add a stopwatch"] = "스톱워치 추가",
+  ["Add a countdown"] = "카운트다운 추가",
+  ["No timers yet. Add a stopwatch or a countdown below."] = "아직 타이머가 없습니다. 아래에서 스톱워치나 카운트다운을 추가하세요.",
+  ["%s is up."] = "%s 시간이 다 되었습니다.",
+  ["%s: %s left"] = "%s: %s 남음",
+  ["%d running"] = "%d개 진행 중",
+  ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "스톱워치와 카운트다운을 원하는 만큼. 버튼이 켜지면 카운트다운이 끝난 것입니다.",
+  ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "시간을 읽을 수 없습니다. 5m, 1:30, 90s 또는 2h로 입력해 보세요.",
 })

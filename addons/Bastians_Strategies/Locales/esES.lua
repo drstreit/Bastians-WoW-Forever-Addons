@@ -129,6 +129,10 @@ local strings = {
   ["%d updated pages"] = "%d páginas actualizadas",
   ["%d more changes"] = "%d cambios más",
   ["Route there"] = "Ruta hasta allí",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d new"] = "%d nuevo(s)",
+  ["%d pages"] = "%d páginas",
+  ["Click: the book. Right click: its settings."] = "Clic: el libro. Clic derecho: sus ajustes.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

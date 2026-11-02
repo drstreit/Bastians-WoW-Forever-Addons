@@ -89,6 +89,8 @@ local function windowLeft()
   return math.max(0, last + WINDOW_S - nowEpoch())
 end
 
+Capture.WindowLeft = windowLeft -- seconds until the 15-minute window is free (the feed, ADR 0043)
+
 local function minutes(seconds)
   return math.ceil(seconds / 60)
 end

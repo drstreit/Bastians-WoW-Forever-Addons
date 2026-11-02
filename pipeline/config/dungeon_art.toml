@@ -1,0 +1,84 @@
+# Hand-drawn dungeon maps (ADR 0048, data.md "Dungeons"): Santiago Reyes' "Atlas of Azeroth:
+# Forever" maps, used with his permission (02.11.2026), replace the floors of Forever's own
+# dungeons, which the client has no map of. The tiles are made by tools/dungeon_art.py into
+# addons/Bastians_Core/Media/Dungeons/<art>_1..12.blp. Read by pipeline/bastians_build/
+# dungeon_art.py for both clients (retail carries Forever's dungeons as a test client).
+#
+# The pins are ours, placed by hand on his maps (x, y in percent of the map, 0..100): the door is
+# his entrance swirl; a boss stands in the room the public guides name for it (warcrafttavern.com,
+# method.gg, read 02.11.2026; a handful of facts, ). A boss whose room the guides
+# do not name or name differently gets no pin: the page counts it ("unknown is not zero").
+# `verified = false` until the owner checked the pins in game on Forever.
+#
+#   [[dungeon]]
+#   id = 2959                  # the instance's Map.db2 id (the dungeon record)
+#   floors = [{ name = "...", art = "<key>", by = "santiago" }]
+#   door = { floor = 1, x = 18.0, y = 85.0 }
+#   bosses = [{ order = 8, name = "...", floor = 1, x = 67.5, y = 58.0 }]
+
+[[dungeon]]
+id = 2959
+name = "City of Dalaran"
+verified = false
+floors = [
+  { name = "Dalaran Sewers", art = "dalaran_sewers", by = "santiago" },
+  { name = "City of Dalaran", art = "dalaran_city", by = "santiago" },
+]
+# the sewers' swirl, the Cantrips & Crows side (method.gg: "the sewers are where you start")
+door = { floor = 1, x = 18.0, y = 85.0 }
+bosses = [
+  # The Underbelly, past the three large pipes (warcrafttavern)
+  { order = 8, name = "Atrexis the Grave Knight", floor = 1, x = 68.0, y = 58.0 },
+  # Krasus' Landing (both guides)
+  { order = 1, name = "Arcane Anomaly", floor = 2, x = 52.5, y = 83.0 },
+  # Runeweaver Square, the city's centre (both guides)
+  { order = 2, name = "Fel Ancient", floor = 2, x = 54.5, y = 55.0 },
+  # the Violet Hold (both guides)
+  { order = 3, name = "Mana Devourer", floor = 2, x = 35.0, y = 82.0 },
+  # the Violet Citadel (both guides)
+  { order = 6, name = "Shade of the Archmage", floor = 2, x = 52.0, y = 20.0 },
+]
+
+[[dungeon]]
+id = 2998
+name = "Excavation Site: Wetlands"
+verified = false
+floors = [{ name = "Excavation Site: Wetlands", art = "wetlands", by = "santiago" }]
+door = { floor = 1, x = 89.0, y = 25.0 }
+bosses = [
+  { order = 1, name = "Saltspine", floor = 1, x = 57.0, y = 42.0 }, # the Lost Marsh
+  { order = 2, name = "Shadetooth", floor = 1, x = 33.0, y = 45.0 }, # Stalker's Thicket
+  { order = 3, name = "Highland Horror", floor = 1, x = 9.0, y = 34.0 }, # north of the Lost Dig Site
+  { order = 4, name = "Relic Guardian", floor = 1, x = 34.0, y = 68.0 }, # the Site of the Guardian
+]
+
+[[dungeon]]
+id = 3065
+name = "The Hall of Thanes"
+verified = false
+floors = [{ name = "The Hall of Thanes", art = "thanes", by = "santiago" }]
+door = { floor = 1, x = 50.5, y = 95.0 }
+bosses = [
+  # Anvilmar's Rest, the great tomb in the middle
+  { order = 1, name = "Faldrim Anvilmar", floor = 1, x = 50.5, y = 67.0 },
+  # the natural cavern with the Dark Iron summoner: the Dark Iron Ingress (the guide calls the
+  # second boss Magmatus; ForeverDB's client order names Infurnus)
+  { order = 2, name = "Infurnus", floor = 1, x = 73.0, y = 47.0 },
+  # patrols the main hall
+  { order = 3, name = "Plunder", floor = 1, x = 50.5, y = 50.0 },
+  # the Reliquary of Kings, the circular arena in the north
+  { order = 4, name = "Durgen Dirgehammer", floor = 1, x = 50.5, y = 15.0 },
+]
+
+[[dungeon]]
+id = 2999
+name = "Ruins of Lordaeron"
+verified = false
+floors = [{ name = "Ruins of Lordaeron", art = "lordaeron", by = "santiago" }]
+door = { floor = 1, x = 61.0, y = 21.5 }
+bosses = [
+  # the fenced-off part of the graveyard (warcrafttavern)
+  { order = 4, name = "Rath'mael", floor = 1, x = 38.0, y = 67.0 },
+  # the north-west section, straight north of Rath'mael
+  { order = 7, name = "Bjork", floor = 1, x = 37.0, y = 24.0 },
+]

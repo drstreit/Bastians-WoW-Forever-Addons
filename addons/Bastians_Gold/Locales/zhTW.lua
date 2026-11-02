@@ -59,7 +59,7 @@ ns.L:Register("zhTW", {
   ["commands: /bgold status | scan [force] | vendors | log | keep <1-30> | keepraw <1-10>"] = "指令：/bgold status | scan [force] | vendors | log | keep <1-30> | keepraw <1-10>",
 
   -- Gold.lua
-  ["Gold"] = "Gold",
+  ["Gold"] = "金幣",
   ["Today"] = "今日",
   ["Play time available (minutes)"] = "可用遊玩時間（分鐘）",
   ["Open the bag advisor at the auction house and at vendors"] = "在拍賣場與商人處開啟背包顧問",
@@ -193,4 +193,19 @@ ns.L:Register("zhTW", {
   ["object"] = "世界物件",
   ["node"] = "採集點",
   ["recipe"] = "配方",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s today"] = "今天 %s",
+  ["AH scan: the window is free"] = "拍賣場掃描：窗口空閒",
+  ["AH scan: the window is taken for %d more min"] = "拍賣場掃描：窗口還要佔用 %d 分鐘",
+  ["Auction house"] = "拍賣場",
+  ["Click: Gold. Right click: the bags."] = "點擊：金幣。右鍵點擊：背包。",
+  ["Last 7 days: %s"] = "最近 7 天：%s",
+  ["Loot and sales"] = "拾取和出售",
+  ["Spent"] = "花費",
+  ["To post on the AH (%d)"] = "上架拍賣場 (%d)",
+  ["To sell to a vendor (%d)"] = "賣給商人 (%d)",
+  ["Today: %s"] = "今天：%s",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: sell on AH"] = "Bastian's：拍賣場出售",
+  ["Bastian's: vendor"] = "Bastian's：商人",
 })

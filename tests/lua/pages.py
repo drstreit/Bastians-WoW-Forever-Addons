@@ -175,6 +175,25 @@ def clear(wow: WowRuntime, tree: str, dim: str) -> None:
 BROWSER = "Bastians:GetModule('Browser')"
 
 
+def chips(wow: WowRuntime, tree: str = "Bastians:GetModule('Browser').tree") -> list[tuple]:
+    """The filter bar's chips (ADR 0038): (label, count, on) in their order."""
+    return [(c.label, c.count, c.on) for c in wow.eval(f"{tree}.filterBar:Chips()").values()]
+
+
+def chip(wow: WowRuntime, label: str, tree: str = "Bastians:GetModule('Browser').tree") -> None:
+    """Clicks the chip with `label` ("All" clears the dimension)."""
+    wow.execute(
+        f"""
+        local bar = {tree}.filterBar
+        for i = 1, bar.chipCount do
+          local c = bar.chips[i]
+          if c.label:GetText() == '{label}' then c:Click() end
+        end
+        """
+    )
+    wow.run_frames(3)
+
+
 def nav_rows(wow: WowRuntime) -> list[tuple[str, str]]:
     """The navigation's visible rows as (id, text), group headers included."""
     return [(str(r.id), strip(r.text)) for r in wow.eval(f"{BROWSER}.navTree.flat").values()]

@@ -41,7 +41,10 @@ teleport = ["name", "kind", "spell", "item", "faction", "class", "reagent", "hea
 # bosses = { {order, npcID, name} }; loot = { {itemID, bossOrder, label} } with order 0 for the
 # instance's unassigned loot and label s (seen in Forever) | c (the client ties it to the instance);
 # quests = the dungeon quests ForeverDB confirmed in Forever
-dungeon = ["name", "kind", "size", "levelLo", "levelHi", "levelReq", "zone", "bosses", "loot", "quests", "src"]
+# floors (DG2, 30.10.2026, from ForeverDB's DungeonMaps.lua): { {name, w, h, tiles = { {fdid, x, y, w, h, q} }} }
+# in floor pixels (q quarter turns of the client's minimap tile); bossSpots = { {order, floor, x, y} } and
+# door = {floor, x, y} in percent of the floor (Classic spawns)
+dungeon = ["name", "kind", "size", "levelLo", "levelHi", "levelReq", "zone", "bosses", "loot", "quests", "src", "floors", "bossSpots", "door"]
 
 [packs.quests]
 addon = "Bastians_Data_Quests"
@@ -63,7 +66,7 @@ indexes = [
 quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon"]
 # attunements (quests.md): hand-written lists from pipeline/config/attunements_<client>.toml; steps are
 # [kind, id, label(, standing)] with kind "quest" | "rep" | "item"
-attunement = ["name", "faction", "verified", "note", "steps", "src"]
+attunement = ["name", "faction", "verified", "note", "steps", "src", "instance"]
 
 [packs.items]
 addon = "Bastians_Data_Items"
@@ -77,8 +80,10 @@ budget_kb_retail = 14336  # 13 MB since 28.10.2026: TrinityCore's loot (11.0 MB)
 indexes = []
 
 [packs.items.schema]
-item = ["name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew", "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src"]
+item = ["name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew", "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src", "disenchant"]
 recipe = ["name", "profession", "skill", "item", "count", "reagents", "source", "sourceItem", "foreverNew", "src"]
+# disenchant lists (CMaNGOS disenchant_loot_template, 31.10.2026): loot = { {item, percent, min, max} }
+disenchant = ["loot", "src"]
 
 # the AHSync market export (ahsync-export.md), read with --export; optional: no export, no pack
 [packs.market]
@@ -165,7 +170,9 @@ object_deDE = ["name"]
 addon = "Bastians_Data_Text_frFR"
 file = "Text_frFR.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-budget_kb = 5120  # was 4096
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): the long-text
+# budget, as German and the Asian languages
+budget_kb = 8192  # was 5120
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
 budget_kb_retail = 6144
@@ -182,7 +189,9 @@ object_frFR = ["name"]
 addon = "Bastians_Data_Text_esES"
 file = "Text_esES.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-budget_kb = 5120  # was 4096
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): the long-text
+# budget, as German and the Asian languages
+budget_kb = 8192  # was 5120
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
 budget_kb_retail = 6144
@@ -199,7 +208,9 @@ object_esES = ["name"]
 addon = "Bastians_Data_Text_koKR"
 file = "Text_koKR.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-budget_kb = 5120  # was 4096
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): measured 5.0 MB;
+# the long-text budget, as German and Simplified Chinese
+budget_kb = 8192  # was 5120
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
 budget_kb_retail = 6144
@@ -234,7 +245,9 @@ object_zhCN = ["name"]
 addon = "Bastians_Data_Text_zhTW"
 file = "Text_zhTW.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-budget_kb = 5120  # was 4096
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): measured 6.0 MB;
+# the long-text budget, as German and Simplified Chinese
+budget_kb = 8192  # was 5120
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
 budget_kb_retail = 6144

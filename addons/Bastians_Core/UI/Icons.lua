@@ -63,6 +63,49 @@ local KINDS = {
   "note",
   "tale", -- Bastian's Library, a tale's journal (28.10.2026)
   "buttons", -- the box of the minimap buttons (Bastian's minimap, 28.10.2026)
+  "play", -- the Orbiter's hub (voice.md, 01.11.2026)
+  "pause",
+  "stop",
+  "replay",
+  "orbit", -- Bastian's Orbiter
+  -- the action pictograms of the widget set (ADR 0046, 01.11.2026), drawn like the glyphs
+  "bookmark",
+  "lock",
+  "close",
+  "filter",
+  "clear",
+  "invite",
+  "more",
+  "plus",
+  "junk",
+  "back",
+  "track",
+  "share",
+  "dock",
+  "undock",
+  "quiet",
+  "layers",
+  "scan",
+  "rename",
+  "remove",
+  "help",
+  -- the app marks (plan-second-wave.md S1, the icon sheet approved 01.11.2026): one pictogram per
+  -- app on its coloured tile; Strategies keeps "ledger", the Orbiter "orbit", the Library "tale"
+  "app_suite",
+  "app_quests",
+  "app_map",
+  "app_browser",
+  "app_gold",
+  "app_route",
+  "app_notes",
+  "app_alts",
+  "app_helpers",
+  "app_chat",
+  "app_gestures",
+  "app_data",
+  -- the campfire (plan-second-wave.md S5, 02.11.2026): a shared fire's pin, the camp ring, the app
+  "campfire",
+  "app_campfire",
 }
 local PATHS = {}
 local GLYPH_PATHS = {}
@@ -169,6 +212,108 @@ function B.UI.PaintIcon(tex, path)
   else
     S.untint(tex)
   end
+end
+
+-- The kind tiles' groups (ADR 0046): a kind's tint token names its group; the group's colour is a
+-- theme token (tileGold ... tileGrey) so the tiles follow the scheme.
+local GROUP_OF_TINT = {
+  gold = "tileGold",
+  bad = "tileRed",
+  accent = "tileTeal",
+  good = "tileGreen",
+  water = "tileBlue",
+  rare = "tilePurple",
+  warn = "tileBrown",
+  on = "tileGreen",
+  dim = "tileGrey",
+}
+local GROUP = {
+  item = "tileBrown",
+  cloth = "tileBrown",
+  object = "tileGrey",
+  trainer = "tileBlue",
+  vendor = "tileGold",
+  service = "tileBlue",
+  innkeeper = "tilePurple",
+  repair = "tileGrey",
+  mine = "tileBrown",
+  chain = "tileGold",
+  tale = "tilePurple",
+  keep = "tileTeal",
+  buttons = "tileTeal",
+  -- the app marks' tiles (the icon sheet's colours)
+  app_suite = "tileTeal",
+  app_quests = "tileGold",
+  app_map = "tileGreen",
+  app_browser = "tileBlue",
+  app_gold = "tileGold",
+  app_route = "tileTeal",
+  app_notes = "tileGold",
+  app_alts = "tileBlue",
+  app_helpers = "tileGrey",
+  app_chat = "tileTeal",
+  app_gestures = "tileGreen",
+  app_data = "tileGrey",
+  campfire = "tileGold",
+  app_campfire = "tileGold",
+}
+function B.UI.TileGroup(kind)
+  if kind == "mob" then
+    kind = B.UI.MobKind()
+  end
+  return GROUP[kind] or GROUP_OF_TINT[TINT[kind] or ""] or "tileGrey"
+end
+
+-- The action pictograms (ADR 0046, Bastians.UI.Pictogram(name)): the suite's own icons for the
+-- widget set, drawn by tools/glyphs.py like the glyphs (E4, 01.11.2026). A name that says the
+-- same as a glyph maps to it; a name without any answers nil and the button draws its text alone.
+-- (Until 01.11.2026 this was B.UI.Icon(name), shadowed by the inline B.UI.Icon(kind, size) below:
+-- every button reserved the space and drew nothing, the words sat right of an empty gap.)
+local PICTOGRAM_GLYPH = {
+  map = "zone",
+  route = "route",
+  note = "note",
+  copy = "copy",
+  open = "open",
+  search = "open",
+  settings = "settings",
+  send = "arrow",
+  forward = "arrow",
+  check = "done",
+  sound = "voice",
+  locate = "spot",
+  page = "ledger",
+  messenger = "service",
+  chat = "service",
+  quest = "quest",
+  gold = "gold",
+  waypoint = "waypoint",
+  hide = "hide",
+}
+B.UI.PICTOGRAMS_TO_DRAW = {} -- every name of the canvas is drawn (E4, 01.11.2026)
+function B.UI.Pictogram(name)
+  local glyph = PICTOGRAM_GLYPH[name]
+  if glyph then
+    return GLYPH_PATHS[glyph]
+  end
+  if type(name) == "number" or (type(name) == "string" and name:find("\\", 1, true)) then
+    return name -- a texture of its own (a registered action's icon, an item's)
+  end
+  return GLYPH_PATHS[name] -- a glyph kind named directly (zone, note, ...)
+end
+
+-- The suite's own mark (its minimap button, its LibDataBroker launcher, its Addon Compartment
+-- entry): one kind, so the suite has one face (plan-launch-review.md I3): the compass star of the
+-- app marks (plan-second-wave.md S1, 01.11.2026; the magnifier until then).
+B.UI.SUITE_ICON = "app_suite"
+
+-- Bastians.UI.AppIcon(module) -> the one icon of an app of the suite (`icon` in B.APPS, the
+-- identity record, plan-launch-review.md I1): its minimap button, its feed and the hub draw this
+-- and nothing else; nil for a module that is no app of the suite.
+function B.UI.AppIcon(module)
+  local settings = B.UI.Settings
+  local app = settings and settings.AppByModule and settings.AppByModule(module)
+  return app and app.icon and B.UI.IconTexture(app.icon) or nil
 end
 
 -- Bastians.UI.IconTexture(kind) -> path or fileID for SetTexture; nil for an unknown kind.

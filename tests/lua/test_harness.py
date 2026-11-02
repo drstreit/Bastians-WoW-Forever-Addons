@@ -148,7 +148,11 @@ def test_saved_variables_round_trip_through_reload(wow: WowRuntime):
     assert list(fresh.g.BastiansCoreDB.list.values()) == [3, 1, 2]
     assert fresh.eval("BastiansCoreCharDB.seen") is True
     fresh.fire("PLAYER_LOGOUT")
-    assert fresh.saved_variables("Bastians_Core") == text  # deterministic
+    text = fresh.saved_variables("Bastians_Core")
+    assert '["__schema"] = 3' in text  # the schema stamp (ADR 0038; 3 since ADR 0046)
+    again = fresh.reload()
+    again.fire("PLAYER_LOGOUT")
+    assert again.saved_variables("Bastians_Core") == text  # deterministic
 
 
 def test_lua_can_load_an_addon_on_demand_through_the_harness(wow: WowRuntime):

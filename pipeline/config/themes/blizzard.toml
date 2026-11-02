@@ -22,14 +22,16 @@ mapText = "#1a1a1a"     # words on the map, every style: place and zone names, p
 mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
 mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
 accent = "#ffd100"
+wayWanderer = "#ff9a3c"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
+wayScholar = "#4fa3ff"     # the welcome: the Scholar's picture frame (cool)
 gold = "#ffd100"
 on = "#1eff00"
 good = "#1eff00"
 bad = "#ff2020"
 warn = "#ff8000"
 neutral = "#b3b3b3"
-rare = "#a335ee"
-water = "#0070dd"
+rare = "#b23bff"
+water = "#0079ee"
 # the six note colours of Bastian's Notes (notes.md, J)
 note1 = "#f2c94c"
 note2 = "#6fcf97"
@@ -38,6 +40,7 @@ note4 = "#bb6bd9"
 note5 = "#f2994a"
 note6 = "#eb5757"
 chat = "#ffd100"
+chatEmote = "#ff8040"   # emote lines in the chat: the game's own emote colour (L5)
 tipText = "#ffffff"
 tipDim = "#cccccc"
 tipGold = "#ffd100"
@@ -84,6 +87,55 @@ bookInkAmber = "#ffc871"
 bookBlue = "#1f4fa3"
 bookBlueNight = "#9cc2ff"
 
+# round 4 (ADR 0038): colour by meaning. Services (on tiles, chips, badges and counts, never on names),
+# the entity types, depth (the void behind the panes, a raised card, its light edge, the inner
+# highlight), and the title bar's words.
+svcVendor = "#ffd100"
+svcQuest = "#ffff00"
+svcTrainer = "#4aa3ff"
+svcInn = "#c58cff"
+svcFlight = "#4fd3e0"
+svcRepair = "#c0b090"
+svcFriendly = "#1eff00"
+svcHostile = "#ff2020"
+typeNpc = "#1eff00"
+typeItem = "#4aa3ff"
+typeQuest = "#ffff00"
+typeObject = "#d9a066"
+typeNode = "#4fd3e0"
+typeZone = "#8fd07a"
+typeRecipe = "#ff8000"
+typeSpot = "#ffd100"
+typeChain = "#c58cff"
+typeHere = "#ffd100"
+void = "#00000080"
+card = "#ffd10009"
+cardEdge = "#ffd10038"
+inset = "#ffd10014"
+headerText = "#ffd100"
+
+# the kind tiles' eight groups (ADR 0046): value, hostile, place, nature, people, special, goods, other
+tileGold = "#b8891f"
+tileRed = "#a4423b"
+tileTeal = "#1f8f87"
+tileGreen = "#3f8a45"
+tileBlue = "#3b6fb6"
+tilePurple = "#6b4aa8"
+tileBrown = "#7a5a2e"
+tileGrey = "#5c6670"
+
 [shape]
 radius = 4
 radiusSmall = 3
+
+# the widget set's sizes in px, the ground's alpha in % (ADR 0046, one look per theme)
+[geometry]
+action = 24
+actionRow = 20
+pill = 26
+tab = 24
+row = 28
+tile = 18
+tileBig = 26
+gap = 6
+groundAlpha = 100

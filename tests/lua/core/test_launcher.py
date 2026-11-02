@@ -69,3 +69,56 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
     ]
     assert "Its own minimap button" in texts
     assert wow.errors == []
+
+
+def test_a_second_click_closes_and_a_switched_off_app_opens_its_page(wow: WowRuntime):
+    """the Browser's and the Campfire's buttons "open but do not close";
+    the Gestures button "should open their options, not the radial menu" and close them again;
+    Chat's button "just says switched off, never on, unclear what it even does": a switched-off
+    app's button opens its page, where its Enabled switch is; the welcome has a button of its own
+    ("I miss the intro page with wanderer and scholar")."""
+    apps = ["Bastians_Core", "Bastians_Data", "Bastians_Browser", "Bastians_Gestures"]
+    apps += ["Bastians_Chat"]
+    camp = wow.made_for("Bastians_Campfire")
+    if camp:
+        apps.append("Bastians_Campfire")
+    wow.start(*apps)
+    wow.run_frames(5)
+    views = "Bastians:GetService('views')"
+    wow.execute("BastiansMinimapButtonBrowser:Click('LeftButton')")
+    assert wow.eval(f"{views}:IsShown()") is True
+    wow.execute("BastiansMinimapButtonBrowser:Click('LeftButton')")
+    assert wow.eval(f"{views}:IsShown()") is False
+    # Gestures: the options page, closed by a second click; the ring stays on its key
+    wow.execute("BastiansMinimapButtonGestures:Click('LeftButton')")
+    assert wow.eval("Bastians.UI.Hub.Shows('Gestures')") is True
+    wow.execute("BastiansMinimapButtonGestures:Click('LeftButton')")
+    assert wow.eval("BastiansHubFrame:IsShown()") is False
+    obj = "Bastians:FeedObject('Gestures')"
+    wow.execute(f"{obj}.OnClick(nil, 'LeftButton')")
+    assert wow.eval("Bastians.UI.Hub.Shows('Gestures')") is True
+    wow.execute(f"{obj}.OnClick(nil, 'LeftButton')")
+    assert wow.eval("BastiansHubFrame:IsShown()") is False
+    if camp:  # the planner in the Browser, closed by a second click
+        wow.execute("Bastians:FeedObject('Campfire').OnClick(nil, 'LeftButton')")
+        assert wow.eval(f"{views}:IsShown('campfire.planner')") is True
+        wow.execute("Bastians:FeedObject('Campfire').OnClick(nil, 'LeftButton')")
+        assert wow.eval(f"{views}:IsShown()") is False
+    # Chat ships off: its button and the Messenger's open Chat's page with the switch
+    assert wow.eval("Bastians:GetModule('Chat'):IsEnabled()") is False
+    wow.execute("Bastians:FeedObject('Chat').OnClick(nil, 'LeftButton')")
+    assert wow.eval("Bastians.UI.Hub.Shows('Chat')") is True
+    wow.execute("BastiansHubFrame:Hide()")
+    wow.execute(
+        f"for _, e in ipairs({LAUNCHER}.ButtonEntries()) do "
+        "if e.name == 'ChatMessenger' then e.open() end end"
+    )
+    assert wow.eval("Bastians.UI.Hub.Shows('Chat')") is True
+    wow.execute("BastiansHubFrame:Hide()")
+    # the welcome's own button
+    assert wow.eval("BastiansMinimapButtonWelcome:IsShown()") is True
+    wow.execute("BastiansMinimapButtonWelcome:Click('LeftButton')")
+    assert wow.eval("Bastians.UI.Welcome.IsShown()") is True
+    wow.execute("BastiansMinimapButtonWelcome:Click('LeftButton')")
+    assert wow.eval("Bastians.UI.Welcome.IsShown()") is False
+    assert wow.errors == []

@@ -266,6 +266,24 @@ end
 
 -- One quest of the log with objectives, the folded quest text and the quest item row below.
 -- opts: { questText(qid) -> details, objectives ; questItem(entry) -> { itemID, icon, link } or nil }
+-- The "next in chain" row of a quest: the following step of its chain, greyed while it cannot
+-- be taken yet, in its own colours once it is available (the predecessor handed in). Nil when
+-- the chain ends with the quest, the next step is done or in the log already.
+function V.nextInChain(qid, state, map)
+  local nextID = Logic.nextInChain(qid, state)
+  if not nextID or state.done(nextID) or state.inLog(nextID) then
+    return nil
+  end
+  local st = Logic.status(nextID, state)
+  local row = R.quest(nextID, state, { status = st, zone = true, map = map, where = "next" .. qid })
+  row.id = "next:" .. qid
+  row.text = C.grey .. L["next in chain"] .. ":|r " .. row.text
+  if st ~= "available" then
+    row.color = S.C.muted -- greyed out until it can be taken
+  end
+  return row
+end
+
 function V.activeRow(e, state, map, px, py, opts)
   opts = opts or {}
   local q = Logic.quest(e.questID)
@@ -308,7 +326,14 @@ function V.activeRow(e, state, map, px, py, opts)
     more.children[1] =
       { id = "pa:" .. e.questID .. ":0", kind = "para", text = C.grey .. L["(no quest text)"] .. "|r" }
   end
+  -- the next quest of the chain under its predecessor ("next in chain
+  -- as a separate entry, greyed out as long as not active"); it turns active when this one is
+  -- handed in (V.active's "Next in chain" section takes it from there)
   children[#children + 1] = more
+  local nextRow = V.nextInChain(e.questID, state, map)
+  if nextRow then
+    children[#children + 1] = nextRow
+  end
   local item = opts.questItem and opts.questItem(e)
   if item then
     row.useItem, row.itemIcon, row.rightPad = item.itemID, item.icon, 24
@@ -383,6 +408,31 @@ function V.active(map, px, py, opts)
   local roots = {}
   if #here > 0 then
     roots[#roots + 1] = R.section("a_turnin", L["Hand in here"], #here, here)
+  end
+  -- the chains the character follows (opts.chainNext: next quest id -> the quest handed in): the
+  -- next step as an entry of its own, active now, with its own successor greyed under it; gone
+  -- once it is in the log or done
+  local following = {}
+  for nextID in pairs(opts.chainNext or {}) do
+    if not state.inLog(nextID) and not state.done(nextID) and Logic.quest(nextID) then
+      local st = Logic.status(nextID, state)
+      local row = R.quest(nextID, state, { status = st, zone = true, map = map, where = "follow" })
+      row.id = "follow:" .. nextID
+      if st ~= "available" then
+        row.color = S.C.muted
+      end
+      local after = V.nextInChain(nextID, state, map)
+      if after then
+        row.children = { after }
+      end
+      following[#following + 1] = row
+    end
+  end
+  table.sort(following, function(a, b)
+    return (a.text or "") < (b.text or "")
+  end)
+  if #following > 0 then
+    roots[#roots + 1] = R.section("a_next", L["Next in chain"], #following, following)
   end
   if #goals > 0 then
     roots[#roots + 1] = R.section("a_goals", L["Objectives here"], #goals, goals)
@@ -526,6 +576,20 @@ local function hasKind(q, kind)
     return Logic.hasFlag(q, "repeatable")
   end
   return true
+end
+
+-- The kinds of a quest (V.KINDS without "any"), "Normal" for none: the Quests list's Type facet.
+function V.KindsOf(q)
+  local out = {}
+  for _, kind in ipairs(V.KINDS) do
+    if kind ~= "any" and hasKind(q, kind) then
+      out[#out + 1] = kind
+    end
+  end
+  if #out == 0 then
+    return "Normal"
+  end
+  return #out == 1 and out[1] or out
 end
 
 local function inBand(q, band)
@@ -704,7 +768,7 @@ end
 -- Attunements: the lists of the character's faction with one row per step
 -- ---------------------------------------------------------------------------------------------
 
-V.STANDINGS = { "Hated", "Hostile", "Unfriendly", "Neutral", "Friendly", "Honored", "Revered", "Exalted" }
+V.STANDINGS = R.STANDINGS -- the names of the standings live with the progress rows (Rows.lua)
 
 -- ctx = { hasItem(itemID) -> bool, rep(factionID) -> { name, standing } or nil }.
 -- Returns rows and a summary table { total, complete }.
@@ -719,47 +783,14 @@ function V.attunements(state, faction, ctx)
   end
   local roots, complete = {}, 0
   for _, a in ipairs(list) do
-    local steps, done = {}, 0
-    for i, step in ipairs(a.steps or {}) do
-      local kind, id, label = step[1], step[2], step[3]
-      local row, ok
-      if kind == "quest" then
-        ok = state.done(id)
-        row = R.quest(id, state, { title = Logic.quest(id) and nil or label, where = "att" })
-        row.id = "att:" .. a.id .. ":" .. i
-      elseif kind == "item" then
-        ok = ctx.hasItem and ctx.hasItem(id) or false
-        row = {
-          id = "att:" .. a.id .. ":" .. i,
-          ref = "item:" .. id,
-          text = (ok and B.UI.Icon("done") or B.UI.Icon("waiting")) .. C.white .. label .. "|r",
-        }
-      else -- rep
-        local want = step[4] or 6
-        local rep = ctx.rep and ctx.rep(id) or nil
-        ok = rep ~= nil and (rep.standing or 0) >= want
-        local current = rep and L[V.STANDINGS[rep.standing] or "?"] or L["unknown"]
-        row = {
-          id = "att:" .. a.id .. ":" .. i,
-          text = (ok and B.UI.Icon("done") or B.UI.Icon("waiting"))
-            .. C.white
-            .. label
-            .. ": "
-            .. L[V.STANDINGS[want] or "?"]
-            .. "|r  "
-            .. C.grey
-            .. "("
-            .. L["now"]
-            .. " "
-            .. current
-            .. ")|r",
-        }
-      end
-      if ok then
-        done = done + 1
-      end
-      steps[#steps + 1] = row
+    -- the progress chain: an attunement is a chain with reputation
+    -- and item steps, drawn by the same renderer as a quest chain
+    local list_ = {}
+    for _, step in ipairs(a.steps or {}) do
+      list_[#list_ + 1] = { kind = step[1], id = step[2], label = step[3], standing = step[4] }
     end
+    local steps, sum = R.progress(list_, state, ctx, { key = "att:" .. a.id })
+    local done = sum.done
     local n = #(a.steps or {})
     if n > 0 and done == n then
       complete = complete + 1

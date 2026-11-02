@@ -65,7 +65,8 @@ def test_loot_and_item_sources_point_at_each_other(wow: WowRuntime):
     assert hogger["data.loot"]["def"]["block"]["table"] is True
     linen = sections(wow, "item:2589")
     # "Where to get it" (guide gaps, 23.10.2026): Hogger drops it in Elwynn
-    assert list(linen) == ["data.overview", "data.sources", "data.where"]
+    # the item's own lines since owner round 5 (31.10.2026): "Stats"
+    assert list(linen) == ["data.overview", "data.stats", "data.sources", "data.where"]
     rows = list(linen["data.sources"].rows.values())
     assert (strip(rows[0].text), rows[0].ref, rows[0].value) == ("Hogger", "npc:448", 45.5)
     assert (strip(rows[1].text), rows[1].ref) == ("Goldtooth", "npc:327")
@@ -90,9 +91,9 @@ def test_recipe_reagents_and_summary(wow: WowRuntime):
         1,
         "number",
     )
-    assert strip(rows[1].text).startswith(
-        "Makes Item 2304"
-    )  # the product is not in the fixture: id shown
+    assert len(rows) == 1  # the product has its own block since owner round 5 (31.10.2026)
+    product = list(sections(wow, "recipe:2152")["data.product"].rows.values())
+    assert product[0].ref == "item:2304" and "2304" in strip(product[0].text)  # not in the fixture
 
 
 def test_sections_are_absent_when_the_record_lacks_the_data(wow: WowRuntime):

@@ -4,6 +4,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("deDE", {
+  -- plan-second-wave.md S6 (01.11.2026)
+  ["Route home"] = "Route nach Hause",
   -- Arrow.lua
   ["Next step"] = "Nächster Schritt",
   ["position unknown"] = "Position unbekannt",
@@ -153,4 +155,11 @@ ns.L:Register("deDE", {
   ["Hearth"] = "Ruhestein",
   ["to"] = "zu",
   ["approx"] = "ca.",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s, %s",
+  ["Click: the steps. Right click: clear the route."] = "Klick: die Schritte. Rechtsklick: Route löschen.",
+  ["and %d more"] = "und %d weitere",
+
+  -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
+  ["Next: %s"] = "Weiter: %s",
 })

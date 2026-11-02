@@ -83,6 +83,10 @@ end
 function securecall(fn, ...)
   return fn(...)
 end
+-- retail family: CallbackHandler-1.0 dispatches through it (LibDataBroker's displays, ADR 0043)
+function securecallfunction(fn, ...)
+  return fn(...)
+end
 function issecurevariable()
   return false
 end
@@ -438,6 +442,9 @@ function Region:SetUserPlaced() end
 function Region:EnableMouse(b)
   self.mouse = b
 end
+function Region:IsMouseEnabled()
+  return self.mouse == true
+end
 function Region:EnableMouseWheel(b)
   self.mouseWheel = b
 end
@@ -715,6 +722,7 @@ function Region:SetText(t)
     error("Usage: SetText(text): text must be a string or a number, got " .. type(t), 2)
   end
   self.text = t == nil and "" or tostring(t)
+  self.cursor = nil -- the client puts the cursor at the end
   -- an EditBox fires OnTextChanged(self, userInput = false) when its text is set by code (client behaviour)
   if self.objectType == "EditBox" then
     local fn = self.scripts.OnTextChanged
@@ -760,7 +768,12 @@ function Region:SetNonSpaceWrap() end
 function Region:SetMaxLines(n)
   self.maxLines = n
 end
-function Region:SetShadowOffset() end
+function Region:SetShadowOffset(x, y)
+  self.shadowX, self.shadowY = x, y
+end
+function Region:GetShadowOffset()
+  return self.shadowX or 0, self.shadowY or 0
+end
 function Region:SetShadowColor() end
 function Region:SetSpacing(n)
   self.spacing = n
@@ -874,7 +887,14 @@ end
 function Region:HasFocus()
   return Mock.focus == self
 end
-function Region:SetCursorPosition() end
+function Region:SetCursorPosition(n)
+  self.cursor = n
+end
+-- the cursor as a byte offset; the end of the text until something sets it (as after SetText)
+function Region:GetCursorPosition()
+  local text = self.text or ""
+  return math.min(self.cursor or #text, #text)
+end
 function Region:HighlightText() end
 function Region:SetTextInsets() end
 function Region:SetMultiLine(on)
@@ -938,7 +958,23 @@ end
 function Region:UpdateScrollChildRect() end
 function Region:SetHorizontalScroll() end
 
--- Cooldown / StatusBar / Model: add when needed.
+-- Cooldown frames (the Lore Orbit's progress ring): what was set, for tests.
+function Region:SetCooldown(start, duration)
+  self.cooldown = { start = start, duration = duration }
+end
+function Region:Clear()
+  self.cooldown = nil
+end
+function Region:SetReverse(b)
+  self.reverse = b
+end
+function Region:SetDrawEdge() end
+function Region:SetDrawBling() end
+function Region:SetHideCountdownNumbers() end
+function Region:SetSwipeColor(r, g, b, a)
+  self.swipeColor = { r, g, b, a }
+end
+-- StatusBar / Model: add when needed.
 
 local anonymous = 0
 newRegion = function(objectType, name, parent, template)
@@ -982,8 +1018,45 @@ newRegion = function(objectType, name, parent, template)
   return f
 end
 
+-- The game's window templates (Blizzard's SharedXML; the look's game frames, 31.10.2026): a test
+-- sets Mock.templates[name] = true and CreateFrame builds the parts the suite uses; without it the
+-- client knows no such template (C_XMLUtil.GetTemplateInfo answers nil, CreateFrame fails).
+Mock.templates = {}
+local TEMPLATE_PARTS = {
+  PortraitFrameTemplate = function(f)
+    f.Bg = f:CreateTexture(nil, "BACKGROUND")
+    f.Bg:SetTexture("Interface\\FrameGeneral\\UI-Background-Rock")
+    f.CloseButton = CreateFrame("Button", nil, f)
+    f.TitleText = f:CreateFontString(nil, "OVERLAY")
+    f.portrait = f:CreateTexture(nil, "OVERLAY")
+    function f.SetTitle(self, text)
+      self.TitleText:SetText(text)
+    end
+    function f.SetPortraitToAsset(self, path)
+      self.portrait:SetTexture(path)
+    end
+  end,
+  InsetFrameTemplate = function(f)
+    f.Bg = f:CreateTexture(nil, "BACKGROUND")
+    f.Bg:SetTexture("Interface\\FrameGeneral\\UI-Background-Marble")
+  end,
+}
 function CreateFrame(objectType, name, parent, template)
-  return newRegion(objectType or "Frame", name, parent, template)
+  if template and TEMPLATE_PARTS[template] and not Mock.templates[template] then
+    error("CreateFrame: Couldn't find inherited node: " .. template, 2)
+  end
+  local f = newRegion(objectType or "Frame", name, parent, template)
+  if template and TEMPLATE_PARTS[template] then
+    TEMPLATE_PARTS[template](f)
+  end
+  return f
+end
+C_XMLUtil = C_XMLUtil or {}
+C_XMLUtil.GetTemplateInfo = function(name)
+  if TEMPLATE_PARTS[name] and not Mock.templates[name] then
+    return nil
+  end
+  return { type = "Frame", width = 0, height = 0 }
 end
 
 UIParent = newRegion("Frame", "UIParent")
@@ -1201,6 +1274,24 @@ function DEFAULT_CHAT_FRAME:AddMessage(msg)
   Mock.chat[#Mock.chat + 1] = tostring(msg)
 end
 ChatFrame1 = DEFAULT_CHAT_FRAME
+-- Chat windows by tab name (GetChatWindowInfo, in both P1 dumps; assumed): window 1 is "General";
+-- Mock.AddChatTab(i, name) opens another, whose lines land in Mock.chatTabs[name].
+NUM_CHAT_WINDOWS = 10
+Mock.chatWindows, Mock.chatTabs = { "General" }, {}
+function GetChatWindowInfo(i)
+  return Mock.chatWindows[i] or "", 14, 1, 1, 1, 1, i == 1, false, false, false
+end
+function Mock.AddChatTab(i, name)
+  Mock.chatWindows[i] = name
+  Mock.chatTabs[name] = {}
+  local frame = newRegion("Frame", "ChatFrame" .. i)
+  function frame:AddMessage(msg)
+    local lines = Mock.chatTabs[name]
+    lines[#lines + 1] = tostring(msg)
+  end
+  _G["ChatFrame" .. i] = frame
+  return frame
+end
 function print(...)
   local parts = {}
   for i = 1, select("#", ...) do
@@ -1233,11 +1324,71 @@ function Mock.Slash(line)
   error("unknown slash command " .. cmd)
 end
 function ChatEdit_GetActiveWindow() end
+-- The chat's own edit box and its send (FrameXML ChatFrame, both clients; assumed): a line sent
+-- through it lands in Mock.chatSent (Gestures runs the client's built-in commands this way). The
+-- box is DEFAULT_CHAT_FRAME's only: no ChatFrame1EditBox global (the ChatSpike and the screen's
+-- hide list look for that one and would take a bare mock box).
+DEFAULT_CHAT_FRAME.editBox = CreateFrame("EditBox", nil, UIParent)
+Mock.chatSent = {}
+function ChatEdit_SendText(box)
+  Mock.chatSent[#Mock.chatSent + 1] = box:GetText()
+  box:SetText("")
+end
+-- The player's macros (GetNumMacros -> account, character; GetMacroInfo(i) -> name, icon, body;
+-- the character's from MAX_ACCOUNT_MACROS + 1): Mock.macros.account / .character, one of each.
+MAX_ACCOUNT_MACROS = 120
+Mock.macros = {
+  account = { { name = "Mount up", icon = 132261, body = "/cast [nomounted] Summon Charger" } },
+  character = { { name = "Hearth home", icon = 134414, body = "/use Hearthstone" } },
+}
+local function macroAt(i)
+  if i > MAX_ACCOUNT_MACROS then
+    return Mock.macros.character[i - MAX_ACCOUNT_MACROS]
+  end
+  return Mock.macros.account[i]
+end
+function GetNumMacros()
+  return #Mock.macros.account, #Mock.macros.character
+end
+function GetMacroInfo(i)
+  local m = type(i) == "number" and macroAt(i) or nil
+  if type(i) == "string" then
+    return GetMacroInfo(GetMacroIndexByName(i))
+  end
+  if not m then
+    return nil
+  end
+  return m.name, m.icon, m.body
+end
+function GetMacroIndexByName(name)
+  for i, m in ipairs(Mock.macros.account) do
+    if m.name == name then
+      return i
+    end
+  end
+  for i, m in ipairs(Mock.macros.character) do
+    if m.name == name then
+      return MAX_ACCOUNT_MACROS + i
+    end
+  end
+  return 0
+end
 StaticPopupDialogs = {}
 function StaticPopup_Show(which, ...)
   Mock.popup = { which = which, ... }
 end
 function StaticPopup_Hide() end
+-- a duel, a trade, a group invite declined (Gestures' courtesy, plan-second-wave S7)
+Mock.declined = {}
+function CancelDuel()
+  Mock.declined[#Mock.declined + 1] = "duel"
+end
+function CloseTrade()
+  Mock.declined[#Mock.declined + 1] = "trade"
+end
+function DeclineGroup()
+  Mock.declined[#Mock.declined + 1] = "invite"
+end
 
 -- ---------------------------------------------------------------------------------------------
 -- Client facts (verified: GetBuildInfo on Forever beta 1.60.1.70450 interface 16001; retail assumed 12.1.5)
@@ -1264,7 +1415,7 @@ function GetCurrentRegion()
 end
 function UnitName(unit)
   if unit == "player" then
-    return "Mockchar"
+    return Mock.playerName or "Mockchar" -- a test logs in another character of the account
   end
   return Mock.unitNames and Mock.unitNames[unit] or nil
 end
@@ -1487,6 +1638,54 @@ end
 function DoEmote(token, target)
   Mock.emotes[#Mock.emotes + 1] = { token = token, target = target }
 end
+-- The client's emote list (FrameXML GlobalStrings, both clients' probe dumps): EMOTE<i>_TOKEN, its
+-- slash commands EMOTE<i>_CMD1.., up to MAXEMOTEINDEX; ten of them here (Gestures' editor v2).
+MAXEMOTEINDEX = 10
+for i, e in ipairs({
+  { "AGREE", "/agree" },
+  { "AMAZE", "/amaze" },
+  { "ANGRY", "/angry" },
+  { "APOLOGIZE", "/apologize" },
+  { "APPLAUD", "/applaud", "/bravo" },
+  { "BASHFUL", "/bashful" },
+  { "BEG", "/beg" },
+  { "DANCE", "/dance" },
+  { "WAVE", "/wave" },
+  { "FLIRT", "/flirt" },
+}) do
+  _G["EMOTE" .. i .. "_TOKEN"] = e[1]
+  for c = 2, #e do
+    _G["EMOTE" .. i .. "_CMD" .. (c - 1)] = e[c]
+  end
+end
+-- Chat messages the player sends (SendChatMessage(text, type, language, target); the language is
+-- one the character knows, retail family, assumed on Forever); Mock.sentChat keeps them.
+Mock.sentChat = {}
+function SendChatMessage(text, chatType, language, target)
+  Mock.sentChat[#Mock.sentChat + 1] =
+    { text = text, type = chatType or "SAY", language = language, target = target }
+end
+-- The character's languages (GetNumLanguages, GetLanguageByIndex(i) -> name, id; assumed on
+-- Forever): Mock.languages = { { name, id } }, a human's Common by default.
+Mock.languages = { { "Common", 7 } }
+function GetNumLanguages()
+  return #Mock.languages
+end
+function GetLanguageByIndex(i)
+  local l = Mock.languages[i]
+  if not l then
+    return nil
+  end
+  return l[1], l[2]
+end
+-- Group membership of a unit token (UnitInParty, UnitInRaid): Mock.groupUnits[unit] = true
+Mock.groupUnits = {}
+function UnitInParty(unit)
+  return Mock.groupUnits[unit] == true
+end
+function UnitInRaid(unit)
+  return Mock.groupUnits[unit] == true and Mock.groupSize > 5 and 1 or nil
+end
 function Screenshot()
   Mock.screenshots = Mock.screenshots + 1
 end
@@ -1498,9 +1697,21 @@ function CombatLogGetCurrentEventInfo()
   return unpack(e, 1, e.n or #e)
 end
 C_UnitAuras = C_UnitAuras or {}
-C_UnitAuras.GetAuraDataByIndex = function(_, i)
-  local a = Mock.auras[i]
-  return a and { name = a.name, spellId = a.spellId } or nil
+-- Mock.auras: the player's helpful auras { name, spellId, expirationTime, duration, sourceUnit };
+-- Mock.unitAuras[unit] the same for another unit (a party member).
+Mock.unitAuras = {}
+C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+  local list = Mock.unitAuras[unit] or ((unit == nil or unit == "player") and Mock.auras) or {}
+  local a = list[i]
+  return a
+      and {
+        name = a.name,
+        spellId = a.spellId,
+        expirationTime = a.expirationTime or 0,
+        duration = a.duration or 0,
+        sourceUnit = a.sourceUnit,
+      }
+    or nil
 end
 C_DeathInfo = {
   GetCorpseMapPosition = function(mapID)
@@ -1527,9 +1738,53 @@ C_Container.GetItemCooldown = GetItemCooldown
 -- teleports (R26.7): Mock.spells[spellID] = true (known), Mock.spellCooldowns[spellID] = { start,
 -- duration }, Mock.worn[itemID] = true, Mock.toys[itemID] = true, Mock.itemSpells[itemID] = spellID
 Mock.spells, Mock.spellCooldowns, Mock.worn, Mock.toys, Mock.itemSpells = {}, {}, {}, {}, {}
+function IsLoggedIn() -- the character is in the world (Alts records at enable after a /reload)
+  return true
+end
 C_SpellBook = C_SpellBook or {}
 C_SpellBook.IsSpellKnown = function(spellID)
   return Mock.spells[spellID] == true
+end
+-- the spell book (alts.md "Knowledge"): one skill line holding every known spell of Mock.spells;
+-- the open profession window: Mock.openRecipes[recipeID] = learned (nil: no window open)
+Enum = Enum or {}
+Enum.SpellBookSpellBank = Enum.SpellBookSpellBank or { Player = 0, Pet = 1 }
+local function knownList()
+  local ids = {}
+  for id, known in pairs(Mock.spells) do
+    if known then
+      ids[#ids + 1] = id
+    end
+  end
+  table.sort(ids)
+  return ids
+end
+C_SpellBook.GetNumSpellBookSkillLines = function()
+  return 1
+end
+C_SpellBook.GetSpellBookSkillLineInfo = function()
+  return { name = "General", itemIndexOffset = 0, numSpellBookItems = #knownList() }
+end
+C_SpellBook.GetSpellBookItemInfo = function(index)
+  local id = knownList()[index]
+  return id and { spellID = id, itemType = 1, isPassive = false } or nil
+end
+Mock.openRecipes = nil
+C_TradeSkillUI = C_TradeSkillUI or {}
+C_TradeSkillUI.GetAllRecipeIDs = function()
+  local ids = {}
+  for id in pairs(Mock.openRecipes or {}) do
+    ids[#ids + 1] = id
+  end
+  table.sort(ids)
+  return ids
+end
+C_TradeSkillUI.GetRecipeInfo = function(id)
+  local learned = Mock.openRecipes and Mock.openRecipes[id]
+  if learned == nil then
+    return nil
+  end
+  return { recipeID = id, learned = learned == true }
 end
 C_Spell = C_Spell or {}
 -- spell names (retail's recipes come without names, 28.10.2026): Mock.spellNames[spellID]
@@ -1616,6 +1871,49 @@ function C_FriendList.GetFriendInfoByIndex(i)
   end
   return { name = f.name, connected = f.online ~= false, area = f.area, level = f.level }
 end
+-- Mock.friends entries may carry className and guid (the Messenger's partner info); a test stub
+-- that replaces the function finds the mock's one again as Mock.GetFriendInfo
+function C_FriendList.GetFriendInfo(name)
+  for _, f in ipairs(Mock.friends or {}) do
+    if f.name == name then
+      return {
+        name = f.name,
+        connected = f.online ~= false,
+        area = f.area,
+        level = f.level,
+        className = f.className,
+        guid = f.guid,
+      }
+    end
+  end
+  return nil
+end
+Mock.GetFriendInfo = C_FriendList.GetFriendInfo
+-- Mock.players[guid] = { class = "Mage", file = "MAGE" } (Mock.guids maps units to GUIDs)
+function GetPlayerInfoByGUID(guid)
+  local g = Mock.players and Mock.players[guid]
+  if not g then
+    return nil
+  end
+  return g.class, g.file, "Human", "Human", 2, g.name, g.realm
+end
+-- Mock.guildRoster = { { name, level, className, zone, online, class }, ... }; Mock.guildName
+function GetNumGuildMembers()
+  return #(Mock.guildRoster or {})
+end
+function GetGuildRosterInfo(i)
+  local m = (Mock.guildRoster or {})[i]
+  if not m then
+    return nil
+  end
+  return m.name, "Member", 1, m.level, m.className, m.zone, "", "", m.online ~= false, 0, m.class
+end
+function GetGuildInfo(unit)
+  if unit == "player" then
+    return Mock.guildName
+  end
+  return nil
+end
 function GetMaxPlayerLevel()
   return Mock.maxLevel
 end
@@ -1642,7 +1940,18 @@ end
 function UnitIsPVP(unit)
   return unit == "player" and Mock.pvp == true
 end
+-- Mock.instanceMap (with Mock.instanceType "party" or "raid") is the dungeon's Map.db2 id
 function GetInstanceInfo()
+  if Mock.instanceType == "party" or Mock.instanceType == "raid" then
+    return Mock.instanceName or "The Deadmines",
+      Mock.instanceType,
+      1,
+      "Normal",
+      5,
+      0,
+      false,
+      Mock.instanceMap or 36
+  end
   return "Azeroth", "none", 0, "", 0, 0, false, 0
 end
 function GetMoney()
@@ -1974,6 +2283,32 @@ InterfaceOptions_AddCategory = nil -- does not exist in the forever/live source 
 
 Enum = Enum or {}
 Enum.TooltipDataType = Enum.TooltipDataType or { Item = 0, Spell = 1, Unit = 2, Object = 11, Macro = 24 }
+-- The game's text to speech (C_VoiceChat.SpeakText, both API docs; the Orbiter's fallback): what was
+-- spoken lands in Mock.tts, a stop counts in Mock.ttsStopped; Mock.ttsVoices = {} means no voice.
+Enum.TtsVoiceType = Enum.TtsVoiceType or { Standard = 0, Alternate = 1 }
+Mock.tts, Mock.ttsStopped = {}, 0
+Mock.ttsVoices = { { voiceID = 2, name = "Microsoft David" }, { voiceID = 3, name = "Microsoft Zira" } }
+C_VoiceChat = C_VoiceChat or {}
+C_VoiceChat.GetTtsVoices = function()
+  return CopyTable(Mock.ttsVoices)
+end
+C_VoiceChat.SpeakText = function(voiceID, text, rate, volume, overlap)
+  Mock.tts[#Mock.tts + 1] = { voice = voiceID, text = text, rate = rate, volume = volume, overlap = overlap }
+  Mock.Fire("VOICE_CHAT_TTS_PLAYBACK_STARTED", #Mock.tts)
+end
+C_VoiceChat.StopSpeakingText = function()
+  Mock.ttsStopped = Mock.ttsStopped + 1
+end
+C_TTSSettings = C_TTSSettings or {}
+C_TTSSettings.GetVoiceOptionID = function()
+  return Mock.ttsVoice or 3
+end
+C_TTSSettings.GetSpeechRate = function()
+  return 1
+end
+C_TTSSettings.GetSpeechVolume = function()
+  return 80
+end
 local tooltipPostCalls = {}
 TooltipDataProcessor = {
   AddTooltipPostCall = function(kind, fn)
@@ -2104,7 +2439,8 @@ function C_Item.GetItemQualityByID(id)
   local it = Mock.items[tonumber(id)]
   return it and it.quality or nil
 end
-Mock.QUALITY_RGB = { [0] = { 0.62, 0.62, 0.62 }, [1] = { 1, 1, 1 }, [2] = { 0.12, 1, 0 }, [3] = { 0, 0.44, 0.87 } }
+Mock.QUALITY_RGB =
+  { [0] = { 0.62, 0.62, 0.62 }, [1] = { 1, 1, 1 }, [2] = { 0.12, 1, 0 }, [3] = { 0, 0.44, 0.87 } }
 function C_Item.GetItemQualityColor(q)
   local c = Mock.QUALITY_RGB[q]
   if c then
@@ -2226,7 +2562,14 @@ C_QuestLog.GetInfo = function(i)
   if e.header then
     return { title = e.header, isHeader = true, questID = 0, questLogIndex = i, level = 0 }
   end
-  return { title = e.title, questID = e.questID, level = e.level, isHeader = false, questLogIndex = i }
+  return {
+    title = e.title,
+    questID = e.questID,
+    level = e.level,
+    isHeader = false,
+    questLogIndex = i,
+    isHidden = e.hidden or false, -- the client's own tracking quests (retail)
+  }
 end
 C_QuestLog.GetQuestObjectives = function(id)
   local e = questByID(id)
@@ -2309,6 +2652,9 @@ end
 Mock.used = {}
 C_Container.UseContainerItem = function(bag, slot)
   Mock.used[#Mock.used + 1] = { bag, slot }
+  if MerchantFrame:IsShown() then
+    Mock.SellSlot(bag, slot) -- with a merchant open the client sells the stack (Helpers)
+  end
 end
 C_Container.GetContainerItemInfo = function(bag, slot)
   local b = Mock.bagSlots[bag]
@@ -2389,6 +2735,266 @@ C_TooltipInfo.GetHyperlink = function(link)
     return nil
   end
   return { type = Enum.TooltipDataType.Unit, lines = { { type = 0, leftText = name } } }
+end
+-- The mailbox and the send tab (the retail family's globals, assumed on Forever; Bastian's Alts):
+-- Mock.inbox = { { money = copper, items = { { itemID, count } } } }; Mock.OpenMailbox() makes the
+-- mail frames and fires MAIL_SHOW and MAIL_INBOX_UPDATE; attaching moves the picked bag stack into
+-- Mock.sendItems and fires MAIL_SEND_INFO_UPDATE; SendMail keeps Mock.sentMail and answers
+-- MAIL_SEND_SUCCESS a frame later.
+Mock.inbox, Mock.sendItems = {}, {}
+ATTACHMENTS_MAX_SEND, ATTACHMENTS_MAX_RECEIVE = 12, 16
+function GetInboxNumItems()
+  return #Mock.inbox
+end
+function GetInboxHeaderInfo(i)
+  local m = Mock.inbox[i]
+  return nil, nil, m.sender or "Someone", m.subject or "", m.money or 0, m.cod or 0, 30, m.items ~= nil
+end
+-- Taking from a mail (Helpers' Take all): the money or the attachments go to the character, an
+-- empty mail goes, and MAIL_INBOX_UPDATE answers a frame later.
+Mock.taken = {}
+local function inboxChanged(i)
+  local m = Mock.inbox[i]
+  if m and (m.money or 0) == 0 and not m.items then
+    table.remove(Mock.inbox, i)
+  end
+  C_Timer.After(0, function()
+    Mock.Fire("MAIL_INBOX_UPDATE")
+  end)
+end
+function TakeInboxMoney(i)
+  local m = Mock.inbox[i]
+  Mock.taken[#Mock.taken + 1] = { "money", i }
+  if m then
+    Mock.money = (Mock.money or 0) + (m.money or 0)
+    m.money = 0
+    inboxChanged(i)
+  end
+end
+function AutoLootMailItem(i)
+  local m = Mock.inbox[i]
+  Mock.taken[#Mock.taken + 1] = { "items", i }
+  if m then
+    for _, it in ipairs(m.items or {}) do
+      Mock.bags[it[1]] = (Mock.bags[it[1]] or 0) + (it[2] or 1)
+    end
+    m.items = nil
+    inboxChanged(i)
+  end
+end
+local function inboxItem(i, a)
+  return Mock.inbox[i] and Mock.inbox[i].items and Mock.inbox[i].items[a]
+end
+function GetInboxItem(i, a)
+  local it = inboxItem(i, a)
+  if not it then
+    return nil
+  end
+  return "Item " .. it[1], it[1], nil, it[2] or 1, 1, true
+end
+function GetInboxItemLink(i, a)
+  local it = inboxItem(i, a)
+  return it and ("item:" .. it[1]) or nil
+end
+C_Container.PickupContainerItem = function(bag, slot)
+  Mock.cursor = { bag, slot }
+end
+function ClickSendMailItemButton(i)
+  local c = Mock.cursor
+  local s = c and Mock.bagSlots[c[1]] and Mock.bagSlots[c[1]][c[2]]
+  Mock.cursor = nil
+  if s then
+    Mock.sendItems[i] = { s.itemID, s.count or 1 }
+    Mock.Fire("MAIL_SEND_INFO_UPDATE")
+  end
+end
+function GetSendMailItem(i)
+  local it = Mock.sendItems[i]
+  if not it then
+    return nil
+  end
+  return "Item " .. it[1], it[1], nil, it[2]
+end
+function SendMail(recipient, subject)
+  local items = {}
+  for i, it in pairs(Mock.sendItems) do
+    items[i] = it
+  end
+  Mock.sentMail = { recipient = recipient, subject = subject, items = items }
+  Mock.sendItems = {} -- the client clears the send tab
+  C_Timer.After(0, function()
+    Mock.Fire("MAIL_SEND_SUCCESS")
+  end)
+end
+function Mock.OpenMailbox()
+  if not MailFrame then
+    MailFrame = CreateFrame("Frame", "MailFrame", UIParent)
+    MailFrame:SetSize(340, 420)
+    MailFrameTab2 = CreateFrame("Button", "MailFrameTab2", MailFrame)
+    MailFrameTab2:SetScript("OnClick", function()
+      Mock.sendTab = true
+    end)
+    SendMailNameEditBox = CreateFrame("EditBox", "SendMailNameEditBox", MailFrame)
+    SendMailSubjectEditBox = CreateFrame("EditBox", "SendMailSubjectEditBox", MailFrame)
+  end
+  MailFrame:Show()
+  Mock.Fire("MAIL_SHOW")
+  Mock.Fire("MAIL_INBOX_UPDATE")
+end
+-- Quest givers (Helpers: the quest frame's globals, the greeting frame's and C_GossipInfo; in both
+-- P1 dumps, behaviour assumed). Test data: Mock.questFrame = { completable, money, auto, choices =
+-- { { itemID, count } } }, Mock.greeting = { active = { { title, complete } }, available = { { title } } },
+-- Mock.gossip = { active = { { questID, title, isComplete } }, available = { { questID, title } },
+-- options = { { gossipOptionID, name } } }; every call the addon makes lands in Mock.npcCalls.
+Mock.questFrame = { completable = false, money = 0, auto = false, choices = {} }
+Mock.greeting = { active = {}, available = {} }
+Mock.gossip = { active = {}, available = {}, options = {} }
+Mock.npcCalls, Mock.pushable = {}, {}
+local function npcCall(...)
+  Mock.npcCalls[#Mock.npcCalls + 1] = table.concat({ ... }, " ")
+end
+function AcceptQuest()
+  npcCall("accept")
+end
+function ConfirmAcceptQuest()
+  npcCall("confirm")
+end
+function QuestGetAutoAccept()
+  return Mock.questFrame.auto == true
+end
+function AcknowledgeAutoAcceptQuest()
+  npcCall("acknowledge")
+end
+function IsQuestCompletable()
+  return Mock.questFrame.completable == true
+end
+function GetQuestMoneyToGet()
+  return Mock.questFrame.money or 0
+end
+function CompleteQuest()
+  npcCall("continue")
+end
+function GetNumQuestChoices()
+  return #Mock.questFrame.choices
+end
+function GetQuestItemLink(kind, i)
+  local c = kind == "choice" and Mock.questFrame.choices[i]
+  return c and ("item:" .. c[1]) or nil
+end
+function GetQuestItemInfo(kind, i)
+  local c = kind == "choice" and Mock.questFrame.choices[i]
+  if not c then
+    return nil
+  end
+  return "Item " .. c[1], 134400, c[2] or 1, 1, true, c[1]
+end
+function GetQuestReward(choice)
+  npcCall("reward", tostring(choice))
+end
+-- The quest frame's texts and id (Bastian's Voice draws the conversation): Mock.questFrame.title,
+-- .text, .objectives, .reward, .progress, .questID
+function GetTitleText()
+  return Mock.questFrame.title or ""
+end
+function GetQuestText()
+  return Mock.questFrame.text or ""
+end
+function GetObjectiveText()
+  return Mock.questFrame.objectives or ""
+end
+function GetRewardText()
+  return Mock.questFrame.reward or ""
+end
+function GetProgressText()
+  return Mock.questFrame.progress or ""
+end
+function GetQuestID()
+  return Mock.questFrame.questID or 0
+end
+function DeclineQuest()
+  npcCall("decline")
+end
+function CloseQuest()
+  npcCall("close quest")
+end
+C_GossipInfo = C_GossipInfo or {}
+C_GossipInfo.CloseGossip = function()
+  npcCall("close gossip")
+end
+function GetNumActiveQuests()
+  return #Mock.greeting.active
+end
+function GetActiveTitle(i)
+  local q = Mock.greeting.active[i]
+  return q and q.title, q and q.complete or false
+end
+function GetNumAvailableQuests()
+  return #Mock.greeting.available
+end
+function GetAvailableTitle(i)
+  local q = Mock.greeting.available[i]
+  return q and q.title
+end
+function SelectActiveQuest(i)
+  npcCall("greeting active", tostring(i))
+end
+function SelectAvailableQuest(i)
+  npcCall("greeting available", tostring(i))
+end
+C_GossipInfo = C_GossipInfo or {}
+C_GossipInfo.GetActiveQuests = function()
+  return CopyTable(Mock.gossip.active)
+end
+C_GossipInfo.GetAvailableQuests = function()
+  return CopyTable(Mock.gossip.available)
+end
+C_GossipInfo.GetOptions = function()
+  return CopyTable(Mock.gossip.options)
+end
+C_GossipInfo.SelectOption = function(id)
+  npcCall("gossip option", tostring(id))
+end
+C_GossipInfo.SelectActiveQuest = function(id)
+  npcCall("gossip active", tostring(id))
+end
+C_GossipInfo.SelectAvailableQuest = function(id)
+  npcCall("gossip available", tostring(id))
+end
+C_QuestLog.IsPushableQuest = function(id)
+  return Mock.pushable[id] == true
+end
+function QuestLogPushQuest()
+  npcCall("push", tostring(C_QuestLog.GetSelectedQuest()))
+end
+-- Durability of the worn items: Mock.durability[slot] = { current, max } (GetInventoryItemDurability)
+Mock.durability = {}
+function GetInventoryItemDurability(slot)
+  local d = Mock.durability[slot]
+  if not d then
+    return nil
+  end
+  return d[1], d[2]
+end
+-- Free slots of a bag (C_Container.GetContainerNumFreeSlots): its slots without an item; family 0
+C_Container.GetContainerNumFreeSlots = function(bag)
+  local slots = C_Container.GetContainerNumSlots(bag)
+  local used = 0
+  for i = 1, slots do
+    if C_Container.GetContainerItemID(bag, i) then
+      used = used + 1
+    end
+  end
+  return slots - used, 0
+end
+-- An item's tooltip lines (C_TooltipInfo.GetItemByID, retail shape assumed): Mock.itemTooltips[id]
+-- = { { leftText, rightText, leftColor = { r, g, b } } }, nil for an item the client lacks.
+Mock.itemTooltips = {}
+C_TooltipInfo.GetItemByID = function(id)
+  local lines = Mock.itemTooltips[id]
+  if not lines then
+    return nil
+  end
+  return { type = Enum.TooltipDataType.Item, id = id, lines = lines }
 end
 -- Objective tracker (C_QuestLog watch functions, documented identically on both clients; assumed).
 Mock.watched = {} -- questIDs in watch order
@@ -2532,9 +3138,92 @@ end
 GossipFrame = newRegion("Frame", "GossipFrame", UIParent)
 GossipFrame:SetSize(384, 512)
 GossipFrame:Hide()
+QuestFrame = newRegion("Frame", "QuestFrame", UIParent)
+QuestFrame:SetSize(384, 512)
+QuestFrame:Hide()
 MerchantFrame = newRegion("Frame", "MerchantFrame", UIParent)
 MerchantFrame:SetSize(336, 444)
 MerchantFrame:Hide()
+-- Bastian's Helpers (helpers.md): selling, repair, buying, the buyback tab (the retail family's
+-- globals, in both P1 dumps; behaviour assumed). Mock.OpenMerchant() shows the frame and fires
+-- MERCHANT_SHOW; a sale moves the stack to Mock.buyback and pays its vendor price; Mock.repair is
+-- what GetRepairAllCost and the guild answer; purchases land in Mock.bought and Mock.bags.
+Mock.buyback, Mock.bought, Mock.repaired, Mock.boughtBack = {}, {}, {}, {}
+Mock.repair = { cost = 0, can = false, merchant = true, guild = false, guildMoney = 0 }
+function Mock.SellSlot(bag, slot)
+  local b = Mock.bagSlots[bag]
+  local s = b and b[slot]
+  if not s then
+    return
+  end
+  local it = Mock.items[s.itemID]
+  local price = (it and it.sell or 0) * (s.count or 1)
+  Mock.money = (Mock.money or 0) + price
+  Mock.buyback[#Mock.buyback + 1] = { itemID = s.itemID, count = s.count or 1, price = price, slot = s }
+  b[slot] = nil
+end
+function Mock.OpenMerchant()
+  MerchantFrame:Show()
+  Mock.Fire("MERCHANT_SHOW")
+end
+function Mock.CloseMerchant()
+  MerchantFrame:Hide()
+  Mock.Fire("MERCHANT_CLOSED")
+end
+function CanMerchantRepair()
+  return Mock.repair.merchant
+end
+function GetRepairAllCost()
+  return Mock.repair.cost, Mock.repair.can
+end
+function CanGuildBankRepair()
+  return Mock.repair.guild
+end
+function GetGuildBankWithdrawMoney()
+  return Mock.repair.guildMoney
+end
+function RepairAllItems(guild)
+  Mock.repaired[#Mock.repaired + 1] = { guild = guild == true }
+  if not guild then
+    Mock.money = (Mock.money or 0) - Mock.repair.cost
+  end
+  Mock.repair.cost, Mock.repair.can = 0, false
+end
+function GetMerchantItemMaxStack(i)
+  local it = Mock.merchant[i]
+  return it and (it.maxStack or it.stackCount * 20) or 0
+end
+function BuyMerchantItem(i, count)
+  local it = Mock.merchant[i]
+  Mock.bought[#Mock.bought + 1] = { i, count }
+  if it then
+    Mock.money = (Mock.money or 0) - it.price * (count or it.stackCount) / it.stackCount
+    Mock.bags[it.itemID] = (Mock.bags[it.itemID] or 0) + (count or it.stackCount)
+  end
+end
+function GetNumBuybackItems()
+  return #Mock.buyback
+end
+function GetBuybackItemLink(i)
+  local e = Mock.buyback[i]
+  return e and ("item:" .. e.itemID) or nil
+end
+function GetBuybackItemInfo(i)
+  local e = Mock.buyback[i]
+  if not e then
+    return nil
+  end
+  return "Item " .. e.itemID, 134400, e.price, e.count
+end
+function BuybackItem(i)
+  local e = table.remove(Mock.buyback, i)
+  if e then
+    Mock.boughtBack[#Mock.boughtBack + 1] = e.itemID
+    Mock.money = (Mock.money or 0) - e.price
+  end
+end
+-- Alt-click on a merchant item: FrameXML's handler, hooked by Helpers
+function MerchantItemButton_OnModifiedClick() end
 C_MerchantFrame = C_MerchantFrame or {}
 C_MerchantFrame.GetItemInfo = function(i)
   local it = Mock.merchant[i]

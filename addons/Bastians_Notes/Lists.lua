@@ -27,16 +27,24 @@ function Lists.Rows()
       return a.title:lower() < b.title:lower()
     end)
     for _, n in ipairs(notes) do
+      -- a note on an entity carries it:
+      -- the entity's tooltip on the row, a right click its menu (Open in Browser, ...)
+      local ref = type(n.on) == "string" and not Notes.Model.IsSpot(n.on) and n.on or nil
       children[#children + 1] = {
         id = "note:" .. n.id,
         text = Notes.Coloured(n),
         icon = Notes.Glyph(n),
-        meta = Notes.Where(n),
+        meta = Notes.Where(n) .. (ref and ("  " .. L["(right click: open it)"]) or ""),
+        ref = ref,
         -- not `note`: the tree draws a row's `note` as a text column, and a table there stopped
         -- the tree at the first note row
         entry = n,
-        onClick = function()
-          ns.Editor.Open(n)
+        onClick = function(_, button)
+          if button == "RightButton" and ref then
+            B.UI.EntityMenu(ref, nil, { source = "notes" })
+          else
+            ns.Editor.Open(n)
+          end
         end,
       }
     end

@@ -420,18 +420,11 @@ function Spots.Register(mod)
     id = "gold.spots",
     label = L["Farm spots and strategies"],
     priority = 60,
-    search = function(query, limit)
+    search = function(query, limit, _, q)
+      q = q or B.Query.Compile(query) -- the suite's search syntax (ADR 0045)
       local out = {}
       local function add(ref, name, note)
-        local low = string.lower(name)
-        local score
-        if low == query then
-          score = 1
-        elseif string.sub(low, 1, #query) == query then
-          score = 0.9
-        elseif string.find(low, query, 1, true) then
-          score = 0.7
-        end
+        local score = q:Score(name)
         if score and #out < (limit or 50) then
           out[#out + 1] = { ref = ref, label = name, score = score, note = note }
         end

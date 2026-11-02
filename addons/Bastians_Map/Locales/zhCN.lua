@@ -127,6 +127,11 @@ ns.L:Register("zhCN", {
   ["Route"] = "路线",
   ["Plan a route there."] = "规划前往那里的路线。",
   ["No matches."] = "没有匹配项。",
+  -- Mini.lua: the minimap's search (L4)
+  ["Note"] = "笔记",
+  ["Bookmark"] = "书签",
+  ["The minimap finds NPCs, quests, zones and your notes."] = "小地图可查找 NPC、任务、区域和你的笔记。",
+  ["No known place of the quest giver for %s."] = "%s 的任务发布者位置未知。",
   ["Search the world ..."] = "搜索世界 ...",
 
   -- Tiles.lua
@@ -205,4 +210,39 @@ ns.L:Register("zhCN", {
   ["A frame around the minimap"] = "小地图周围的边框",
   ["Options of this window"] = "此窗口的选项",
   ["Ctrl+click: put a button on the map, or back into the box."] = "Ctrl+点击: 把按钮放到地图上,或放回盒子。",
+  -- owner round 5 (31.10.2026): the monster areas
+  ["Monsters"] = "怪物",
+  -- 31.10.2026: the dungeon doors' own layer
+  ["Dungeons and raids"] = "地下城与团队副本",
+  -- 31.10.2026: how a button moves between the box and the minimap's border
+  ["Ctrl+click: back into the button box. Drag: along the minimap's border."] = "Ctrl+点击：放回按钮盒。拖动：沿小地图边缘移动。",
+  ["Ctrl+click: onto the minimap's border."] = "Ctrl+点击：移到小地图边缘。",
+  ["Ctrl+click a button here: it moves onto the minimap's border."] = "在此Ctrl+点击按钮：它会移到小地图边缘。",
+  ["Ctrl+click it on the border: it comes back into this box."] = "在边缘Ctrl+点击：它会回到此盒中。",
+  ["Drag it on the border: it moves along the border."] = "在边缘拖动：沿边缘移动。",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s, %s"] = "%s，%s",
+  ["Click: the map. Right click: centre on you."] = "点击: 地图。右键: 以你为中心。",
+  ["No waypoint. Right click a place on the map to set one."] = "没有路径点。右键点击地图上的地点来设置。",
+
+  -- Timers.lua (02.11.2026)
+  ["Timers"] = "计时器",
+  ["Stopwatch"] = "秒表",
+  ["Countdown"] = "倒计时",
+  ["Start"] = "开始",
+  ["Pause"] = "暂停",
+  ["Reset"] = "重置",
+  ["Done"] = "完成",
+  ["Name"] = "名称",
+  ["How long: 5m, 1:30, 90s, 2h"] = "时长：5m、1:30、90s、2h",
+  ["Add a stopwatch"] = "添加秒表",
+  ["Add a countdown"] = "添加倒计时",
+  ["No timers yet. Add a stopwatch or a countdown below."] = "还没有计时器。在下方添加秒表或倒计时。",
+  ["%s is up."] = "%s 时间到。",
+  ["%s: %s left"] = "%s：剩余 %s",
+  ["%d running"] = "%d 个运行中",
+  ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "秒表和倒计时，想要多少都行。按钮亮起：有倒计时结束了。",
+  ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "无法识别这个时间。试试 5m、1:30、90s 或 2h。",
 })

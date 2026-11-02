@@ -77,13 +77,13 @@ def draw_arrow() -> bytes:
     return header + bytes(pixels)
 
 
-def _tga(alphas: list[int]) -> bytes:
-    """White pixels with the given alphas, as a 32-bit TGA of SIZE x SIZE."""
+def _tga(alphas: list[int], size: int = SIZE) -> bytes:
+    """White pixels with the given alphas, as a 32-bit TGA of size x size."""
     header = bytes(
         [
             *(0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-            *SIZE.to_bytes(2, "little"),
-            *SIZE.to_bytes(2, "little"),
+            *size.to_bytes(2, "little"),
+            *size.to_bytes(2, "little"),
             32,
             0x28,
         ]
@@ -91,12 +91,12 @@ def _tga(alphas: list[int]) -> bytes:
     return header + b"".join(bytes((255, 255, 255, a)) for a in alphas)
 
 
-def _coverage(inside) -> list[int]:
+def _coverage(inside, size: int = SIZE) -> list[int]:
     """Alpha per pixel: the share of the 4x4 samples for which `inside(x, y)` holds."""
     out = []
     n = SAMPLES * SAMPLES
-    for py in range(SIZE):
-        for px in range(SIZE):
+    for py in range(size):
+        for px in range(size):
             hits = 0
             for sy in range(SAMPLES):
                 for sx in range(SAMPLES):
@@ -112,11 +112,36 @@ def draw_disc() -> bytes:
     return _tga(_coverage(lambda x, y: (x - r) ** 2 + (y - r) ** 2 <= r * r))
 
 
+def draw_glow() -> bytes:
+    """A soft disc for the glow behind the dossier's plate (ADR 0038): the alpha falls from
+    the centre to the edge with the square of the distance."""
+    r = SIZE / 2
+    out = []
+    for py in range(SIZE):
+        for px in range(SIZE):
+            d = ((px + 0.5 - r) ** 2 + (py + 0.5 - r) ** 2) ** 0.5 / r
+            out.append(round(255 * max(0.0, 1 - d) ** 2))
+    return _tga(out)
+
+
 def draw_ring(width: float) -> bytes:
     """The disc's outline, `width` texels wide on the inside of its edge."""
     r = SIZE / 2
     inner = (r - width) ** 2
     return _tga(_coverage(lambda x, y: inner <= (x - r) ** 2 + (y - r) ** 2 <= r * r))
+
+
+RING_XL = 256
+
+
+def draw_ring_xl() -> bytes:
+    """A big ring for the Orbiter's orbits (voice.md, 01.11.2026): 256 x 256, a 2 texel line, so a
+    circle of 200 to 400 px keeps a line of about one or two pixels."""
+    r = RING_XL / 2
+    inner = (r - 2.0) ** 2
+    return _tga(
+        _coverage(lambda x, y: inner <= (x - r) ** 2 + (y - r) ** 2 <= r * r, RING_XL), RING_XL
+    )
 
 
 ORN_W, ORN_H = 256, 16
@@ -158,6 +183,66 @@ def draw_ornament() -> bytes:
     return header + b"".join(bytes((255, 255, 255, a)) for a in alphas)
 
 
+PARCH = 256  # the parchment's side, texels; it tiles
+
+
+def _lattice(n: int, seed: int) -> list[list[float]]:
+    """An n x n grid of values 0..1 from a fixed linear congruential sequence (reproducible)."""
+    state = seed
+    grid = []
+    for _ in range(n):
+        row = []
+        for _ in range(n):
+            state = (state * 1103515245 + 12345) % 2**31
+            row.append(state / 2**31)
+        grid.append(row)
+    return grid
+
+
+def _noise(x: float, y: float, grid: list[list[float]]) -> float:
+    """Value noise over a periodic grid (smoothstep between its corners): it tiles."""
+    n = len(grid)
+    x0, y0 = int(x) % n, int(y) % n
+    x1, y1 = (x0 + 1) % n, (y0 + 1) % n
+    fx, fy = x - int(x), y - int(y)
+    sx, sy = fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)
+    top = grid[y0][x0] + (grid[y0][x1] - grid[y0][x0]) * sx
+    bottom = grid[y1][x0] + (grid[y1][x1] - grid[y1][x0]) * sx
+    return top + (bottom - top) * sy
+
+
+def draw_parchment() -> bytes:
+    """The Azeroth look's ground inside the game's frames: a warm
+    parchment, 256 x 256, tileable: four octaves of periodic value noise for the cloudy stain
+    and a fine fifth for the grain, opaque, as a 32-bit TGA (BGRA, top-left origin)."""
+    octaves = [(4, 0.45, 7), (8, 0.25, 11), (16, 0.15, 13), (32, 0.08, 17)]
+    grids = [(cells, weight, _lattice(cells, seed)) for cells, weight, seed in octaves]
+    grain = _lattice(128, 23)
+    base = (0.88, 0.74, 0.50)  # the parchment's light colour
+    stain = (0.52, 0.34, 0.15)  # its darkest stain
+    pixels = bytearray()
+    for py in range(PARCH):
+        for px in range(PARCH):
+            v = 0.0
+            for cells, weight, grid in grids:
+                v += weight * _noise(px * cells / PARCH, py * cells / PARCH, grid)
+            g = _noise(px * 128 / PARCH, py * 128 / PARCH, grain)
+            t = min(1.0, max(0.0, (v - 0.35) * 1.1 + (g - 0.5) * 0.12))
+            rgb = [base[i] + (stain[i] - base[i]) * t * 0.85 for i in range(3)]
+            r, gg, b = (round(255 * c) for c in rgb)
+            pixels += bytes((b, gg, r, 255))
+    header = bytes(
+        [
+            *(0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+            *PARCH.to_bytes(2, "little"),
+            *PARCH.to_bytes(2, "little"),
+            32,
+            0x28,
+        ]
+    )
+    return header + bytes(pixels)
+
+
 # A corner drawn d pixels wide shows the 32 texels of a quarter: a one-pixel line needs 32 / d
 # texels. S for corners of about 4 px, M for 6 px, L for 10 px (the pills).
 RING_WIDTHS = {"RingS.tga": 8.0, "RingM.tga": 5.33, "RingL.tga": 3.2}
@@ -176,7 +261,10 @@ TILE_FILES = {f"Tiles/{kind}.tga": (lambda kind=kind: glyphs.tile(kind)) for kin
 FILES = {
     "Arrow.tga": draw_arrow,
     "Disc.tga": draw_disc,
+    "Glow.tga": draw_glow,
     "Ornament.tga": draw_ornament,
+    "Parchment.tga": draw_parchment,
+    "RingXL.tga": draw_ring_xl,
     **{name: (lambda w=w: draw_ring(w)) for name, w in RING_WIDTHS.items()},
     **GLYPH_FILES,
     **TILE_FILES,

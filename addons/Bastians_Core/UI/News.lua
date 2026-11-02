@@ -280,17 +280,19 @@ function News.Check()
   end
   local versions = B.UI.Settings.Fingerprint(true)
   News.checked = true
+  local first = st.versions == nil and not News.ranBefore
+  local updated = not first and st.versions ~= versions and News.Unseen() > 0
   if B.UI.Welcome then
-    -- the welcome window with the guidelines: once per account, at the first
-    -- login that is not in combat (an install from before the window sees it once too)
-    B.UI.Welcome.FirstStart()
+    -- the welcome v2 (plan-launch-version D, 01.11.2026): at every login until switched off; after
+    -- an update with news What's new speaks first and the welcome waits for the next login
+    B.UI.Welcome.AtLogin(updated)
   end
-  if st.versions == nil and not News.ranBefore then
+  if first then
     News.MarkSeen() -- a first start: everything there is counts as seen
     st.versions = versions
     return
   end
-  local updated = st.versions ~= versions
+  updated = st.versions ~= versions
   st.versions = versions
   News.UpdateDot()
   if updated then

@@ -52,6 +52,16 @@ def test_state_facts_read_the_client(core: WowRuntime):
     core.execute("Mock.unitDistance.target = 20; Mock.unitTargets.target = nil")
     tgt = core.eval(f"{F}.Get('target')")
     assert tgt.within == 28 and tgt.targetsPlayer is False
+    # in combat the distance stays unknown: retail blocks CheckInteractDistance there (31.10.2026)
+    core.execute("Mock.SetCombat(true); Mock.distanceAsked = 0")
+    core.execute(
+        "local f = CheckInteractDistance; "
+        "CheckInteractDistance = function(...) Mock.distanceAsked = Mock.distanceAsked + 1 "
+        "return f(...) end"
+    )
+    tgt = core.eval(f"{F}.Get('target')")
+    assert tgt.within is None and core.eval("Mock.distanceAsked") == 0
+    core.execute("Mock.SetCombat(false)")
     assert core.eval(f"{F}.Get('mouseover')") is None  # no such unit
     assert core.eval(f"{F}.Get('no-such-fact')") is None
     assert core.errors == []

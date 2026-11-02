@@ -193,4 +193,19 @@ ns.L:Register("koKR", {
   ["object"] = "월드 오브젝트",
   ["node"] = "채집 지점",
   ["recipe"] = "제조법",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%s today"] = "오늘 %s",
+  ["AH scan: the window is free"] = "경매장 검색: 지금 가능",
+  ["AH scan: the window is taken for %d more min"] = "경매장 검색: %d분 더 사용 중",
+  ["Auction house"] = "경매장",
+  ["Click: Gold. Right click: the bags."] = "클릭: 골드. 오른쪽 클릭: 가방.",
+  ["Last 7 days: %s"] = "최근 7일: %s",
+  ["Loot and sales"] = "전리품과 판매",
+  ["Spent"] = "지출",
+  ["To post on the AH (%d)"] = "경매장에 등록 (%d)",
+  ["To sell to a vendor (%d)"] = "상인에게 판매 (%d)",
+  ["Today: %s"] = "오늘: %s",
+  -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
+  ["Bastian's: sell on AH"] = "Bastian's: 경매장 판매",
+  ["Bastian's: vendor"] = "Bastian's: 상인",
 })

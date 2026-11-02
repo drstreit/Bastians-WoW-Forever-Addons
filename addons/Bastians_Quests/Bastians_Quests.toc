@@ -2,11 +2,26 @@
 ## Title: Bastian's Quests
 ## IconTexture: Interface\AddOns\Bastians_Quests\Icon
 ## Notes: Quest log, recommendations and tracker.
+## Notes-koKR: 퀘스트 목록, 추천, 추적기.
+## Notes-zhCN: 任务日志、推荐和追踪器。
+## Notes-zhTW: 任務日誌、推薦與追蹤器。
+## Notes-deDE: Questlog, Empfehlungen und Tracker.
+## Notes-frFR: Journal de quêtes, recommandations et suivi.
+## Notes-esES: Registro de misiones, recomendaciones y seguimiento.
+## Notes-esMX: Registro de misiones, recomendaciones y seguimiento.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
-## OptionalDeps: Bastians_Data, QuestieDB, Spoken, Spoken_Quests
+## OptionalDeps: Bastians_Data, QuestieDB
 ## SavedVariables: BastiansQuestsDB
 ## SavedVariablesPerCharacter: BastiansQuestsCharDB
 
@@ -28,5 +43,5 @@ Views.lua
 Window.lua
 Tracker.lua
 Registrations.lua
+Feed.lua
 Quests.lua
-Spoken.lua

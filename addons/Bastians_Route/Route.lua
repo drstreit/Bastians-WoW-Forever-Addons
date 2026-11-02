@@ -582,6 +582,25 @@ function Route.Clear()
 end
 
 -- Route to an entity: the fastest of its places from where the player stands.
+-- The area the hearthstone is bound to (GetBindLocation through Compat.GetHearthstone), found by
+-- its name in the world data, as an entity ref; nil without a bind, the data or a match
+-- (plan-second-wave.md S6: Gestures' "Route home").
+function Route.HomeRef()
+  local hearth = B.Compat.GetHearthstone and B.Compat.GetHearthstone()
+  local name = hearth and hearth.bindName
+  local d = B:GetService("data")
+  if type(name) ~= "string" or name == "" or not (d and d.Find) then
+    return nil
+  end
+  local wanted = string.lower(name)
+  for _, hit in ipairs(d:Find("area", name, 5)) do
+    if type(hit.name) == "string" and string.lower(hit.name) == wanted then
+      return "area:" .. tostring(hit.id)
+    end
+  end
+  return nil
+end
+
 function Route.To(ref)
   local start = playerPos()
   if not start then
@@ -912,9 +931,17 @@ tick = function()
     if Graph.Distance(pos.wx, pos.wy, step.to.wx, step.to.wy) <= Route.ARRIVE_YARDS then
       active.index = (active.index or 1) + 1
       if active.index > #active.steps then
-        B:Say(L["You have arrived: %s"], active.goal.name or "")
+        -- the arrival: a chat line, or the voice (Core's Words, plan-launch-review R5.3)
+        B:Tell(mod, "arrival", string.format(L["You have arrived: %s"], active.goal.name or ""), function(t)
+          B:Say("%s", t)
+        end)
         Route.Clear()
       else
+        local following = active.steps[active.index]
+        if following then
+          -- the next step, spoken for the Wanderer; the text form is the step list and the arrow
+          B:Tell(mod, "step", string.format(L["Next: %s"], Graph.StepText(following, L)), function() end)
+        end
         B:Fire("BASTIANS_ROUTE_CHANGED", active)
       end
       return
@@ -1359,6 +1386,23 @@ mod = B:NewModule("Route", {
         Route.To(ref)
       end,
     })
+    -- Gestures' "Route home" (plan-second-wave.md S6): offered to the ring only (ctx.source)
+    B:RegisterAction(self, {
+      id = "route.home",
+      label = L["Route home"],
+      icon = B.UI.IconTexture("innkeeper"),
+      types = "*",
+      order = 16,
+      when = function(_, ctx)
+        return ctx ~= nil and ctx.source == "gestures" and Route.HomeRef() ~= nil
+      end,
+      run = function()
+        local ref = Route.HomeRef()
+        if ref then
+          Route.To(ref)
+        end
+      end,
+    })
     B:RegisterMapLayer(self, {
       id = "route.path",
       icon = "route", -- the layer bar shows its icon (R27.8)
@@ -1404,12 +1448,22 @@ mod = B:NewModule("Route", {
         ns.Arrow.Update()
       end
     end)
+    -- the clear-screen key (plan-round4 F1, plan-launch-review R5.6): the arrow follows, only while
+    -- the page "Hidden by the key" ticks Route; the key's return always passes
+    self:On("BASTIANS_SUITE_HIDDEN", function(_, _, hidden)
+      local Screen = B.UI.Screen
+      if hidden and Screen and Screen.Hides and not Screen.Hides("Route") then
+        return
+      end
+      ns.Arrow.HideByKey(hidden == true)
+    end)
     hookTaxi()
     W.Register(self)
     ns.Arrow.Register(self) -- the arrow to the next step (S6)
     ns.Death.Register(self) -- the place of death and the way back (R26.8)
     ns.Ferries.Register(self) -- the departures of boats and zeppelins (R26.6)
     ns.Explore.Register(self) -- what is worth doing nearby (R26.11)
+    ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
     -- the route service (core-contracts §11): other apps ask for a route without calling Route
     B:ProvideService(self, "route", {
       Tour = function(_, stops, name)
@@ -1421,6 +1475,23 @@ mod = B:NewModule("Route", {
       -- a point on a continent (world yards): the Strategies plates' "Route there" (29.10.2026)
       ToPoint = function(_, continent, wx, wy, name)
         return Route.ToPoint(continent, wx, wy, name)
+      end,
+      -- the active route in plain values (the public API's Route, ADR 0044); nil without one
+      Current = function()
+        local r = Route.Active()
+        if not r then
+          return nil
+        end
+        local goal = r.goal or {}
+        return {
+          goal = r.tour and r.tour.name or goal.name,
+          continent = goal.continent,
+          wx = goal.wx,
+          wy = goal.wy,
+          seconds = Graph.Remaining(r),
+          step = r.index or 1,
+          steps = #r.steps,
+        }
       end,
     }, { priority = 100 })
   end,
@@ -1434,6 +1505,7 @@ ns.mod = mod
 mod.Arrow = ns.Arrow -- the arrow to the next step (Arrow.lua, S6)
 mod.Route, mod.Graph, mod.Window = Route, Graph, W
 
+BINDING_HEADER_BASTIANS_ROUTE = "Bastian's Route" -- one header per addon (plan-launch-review I4)
 BINDING_NAME_BASTIANS_ROUTE = L["Open Bastian's Route"]
 
 SLASH_BASTIANSROUTE1 = "/broute"

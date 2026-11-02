@@ -5,6 +5,30 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.3.0:1",
+    date = "2026-11-02",
+    version = "1.3.0",
+    text = "The map has a Dungeons and raids layer, and it switches on by itself when you pick a dungeon in the Browser.",
+  },
+  {
+    id = "1.3.0:2",
+    date = "2026-11-02",
+    version = "1.3.0",
+    text = "\"Show on map\" now draws what you chose (its icon and name at every place) and selects it, even when its layer is off.",
+  },
+  {
+    id = "1.3.0:3",
+    date = "2026-11-02",
+    version = "1.3.0",
+    text = "The minimap's search finds only NPCs, quests, zones, your notes and bookmarks, and marks the place it jumps to; a quest marks its quest giver.",
+  },
+  {
+    id = "1.0.0-beta.13:8-core",
+    date = "2026-10-29",
+    version = "1.0.0-beta.13",
+    text = "Quest signs on the map show the quest, its chain and all its rewards; the map search works with the arrow keys.",
+  },
+  {
     id = "1.0.0-beta.13:1",
     date = "2026-10-29",
     version = "1.0.0-beta.13",

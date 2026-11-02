@@ -53,6 +53,7 @@ Map.onLogout = {} -- fn() on PLAYER_LOGOUT
 Map.onDisable = {} -- fn() at every disable
 Map.onLayerChanged = {} -- fn() when a layer changed or was registered (Pins holds the bus handler)
 Map.onFocus = {} -- fn(ref, ctx) on BASTIANS_ENTITY_FOCUSED (one bus handler for all; ref nil: cleared)
+Map.onSuiteHidden = {} -- fn(hidden) on BASTIANS_SUITE_HIDDEN, the key ticked for the Map (one handler)
 
 local function db()
   return mod.db.profile
@@ -922,6 +923,7 @@ mod = B:NewModule("Map", {
     {
       id = "minimap",
       title = L["Minimap"],
+      icon = "zone", -- the hub's pictogram (02.11.2026)
       options = {
         {
           type = "toggle",
@@ -966,6 +968,7 @@ mod = B:NewModule("Map", {
         },
         {
           type = "execute",
+          icon = "buttons",
           label = L["Put every minimap button back into the box"],
           func = function()
             ns.MiniButtons.AllIntoBox()
@@ -1007,6 +1010,15 @@ mod = B:NewModule("Map", {
     self:On("BASTIANS_ENTITY_FOCUSED", function(_, _, ref, ctx)
       runAll(Map.onFocus, ref, ctx)
     end)
+    -- the clear-screen key (plan-round4 F1, plan-launch-review R5.6): the minimap pins follow, only
+    -- while the page "Hidden by the key" ticks the Map; the key's return always passes
+    self:On("BASTIANS_SUITE_HIDDEN", function(_, _, hidden)
+      local Screen = B.UI.Screen
+      if hidden and Screen and Screen.Hides and not Screen.Hides("Map") then
+        return
+      end
+      runAll(Map.onSuiteHidden, hidden == true)
+    end)
   end,
   OnDisable = function()
     Map.Hide()
@@ -1017,6 +1029,7 @@ ns.mod = mod
 mod.Map = Map
 mod.Camera = Camera
 
+BINDING_HEADER_BASTIANS_MAP = "Bastian's Map" -- one header per addon (plan-launch-review I4)
 BINDING_NAME_BASTIANS_MAP = L["Open Bastian's Map"]
 
 SLASH_BASTIANSMAP1 = "/bmap"

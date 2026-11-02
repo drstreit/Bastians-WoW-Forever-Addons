@@ -12,7 +12,8 @@ if (args.Length == 0 || args[0] is "-h" or "--help")
 {
     Console.WriteLine("""
         clientdump info    --install <client folder> [--product <name>]
-        clientdump db2     --install <client folder> --table <Name> --out <file.json> [--defs <dir>] [--fdid <id>]
+        clientdump db2     --install <client folder> --table <Name> --out <file.json> [--defs <dir>] [--fdid <id>] [--raw-out <file.db2>] [--hotfixes <DBCache.bin>] [--no-keys]
+        clientdump db2     --db2-file <file.db2> --build <x.y.z.nnnnn> --table <Name> --out <file.json> [--defs <dir>] [--hotfixes <DBCache.bin>]
         clientdump minimap --install <client folder> --map <name or id> --out <folder> [--defs <dir>] [--wdt-fdid <id>] [--listfile <csv>] [--tile x,y]
         clientdump overview --install <client folder> --map <name or id> --out <folder> [--wdt-fdid <id>] [--pixels 64] [--span 8] [--format blp|tga] [--no-mips] [--alpha dxt1|dxt5] [--sea rrggbb] [--art <Dir>_art.json]
         clientdump navgraph --terrain <file.bin.gz> --nodes <nodes.json> --config <config.json> --out <graph.json> [--png <file>]
@@ -29,10 +30,21 @@ if (args.Length == 0 || args[0] is "-h" or "--help")
     return 0;
 }
 
-if (args[0] is "navgraph" or "navmesh-png" or "navmesh-check" or "navmesh-path" or "navnet" or "blp") // work on files, open no client
+if (args[0] is "navgraph" or "navmesh-png" or "navmesh-check" or "navmesh-path" or "navnet" or "blp"
+    || (args[0] == "db2" && Opt(args, "db2-file") != null)) // work on files, open no client
 {
     try
     {
+        if (args[0] == "db2")
+        {
+            Db2.Dump(null, Opt(args, "defs") ?? Path.Combine(".local", "WoWDBDefs", "definitions"),
+                Opt(args, "table") ?? throw new ArgumentException("--table is required"),
+                Opt(args, "out") ?? throw new ArgumentException("--out is required"), null,
+                new DumpOptions(Db2File: Opt(args, "db2-file"),
+                    Build: Opt(args, "build") ?? throw new ArgumentException("--build is required with --db2-file"),
+                    Hotfixes: Opt(args, "hotfixes")));
+            return 0;
+        }
         if (args[0] == "blp")
         {
             BlpCells.Run(Opt(args, "in") ?? throw new ArgumentException("--in is required"),
@@ -103,7 +115,9 @@ try
             Db2.Dump(client, defs,
                 Opt(args, "table") ?? throw new ArgumentException("--table is required"),
                 Opt(args, "out") ?? throw new ArgumentException("--out is required"),
-                Opt(args, "fdid"));
+                Opt(args, "fdid"),
+                new DumpOptions(RawOut: Opt(args, "raw-out"), Hotfixes: Opt(args, "hotfixes"),
+                    Keys: !args.Contains("--no-keys")));
             break;
         case "minimap":
             Minimap.Run(client, defs,

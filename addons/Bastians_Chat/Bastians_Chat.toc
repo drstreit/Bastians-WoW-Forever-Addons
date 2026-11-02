@@ -1,0 +1,42 @@
+## Interface: 16001, 120105
+## Title: Bastian's Chat
+## IconTexture: Interface\AddOns\Bastians_Chat\Icon
+## Notes: The whole chat in movable windows with tabs, a Messenger for whispers, a spam filter, long texts and copying.
+## Notes-koKR: 탭이 있는 이동 가능한 창에 담긴 모든 대화, 귓속말 메신저, 스팸 필터, 긴 글과 복사.
+## Notes-zhCN: 整个聊天放进可移动、带标签页的窗口，另有密语信使、垃圾信息过滤、长文本和复制。
+## Notes-zhTW: 整個聊天放進可移動、帶分頁的視窗，另有密語信使、垃圾訊息過濾、長文字與複製。
+## Notes-deDE: Der ganze Chat in verschiebbaren Fenstern mit Reitern, ein Messenger für Flüstern, ein Spamfilter, lange Texte und Kopieren.
+## Notes-frFR: Toute la discussion dans des fenêtres déplaçables à onglets, une messagerie pour les chuchotements, un filtre anti-spam, les longs textes et la copie.
+## Notes-esES: Todo el chat en ventanas movibles con pestañas, un Messenger para los susurros, un filtro de spam, textos largos y copiar.
+## Notes-esMX: Todo el chat en ventanas movibles con pestañas, un Messenger para los susurros, un filtro de spam, textos largos y copiar.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
+## Author: Bastian
+## Version: 1.3.0
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## SavedVariables: BastiansChatDB
+## SavedVariablesPerCharacter: BastiansChatCharDB
+
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+News.lua
+Model.lua
+Compat.lua
+Rules.lua
+Keys.lua
+View.lua
+Messenger.lua
+Feed.lua
+Junk.lua
+Chat.lua

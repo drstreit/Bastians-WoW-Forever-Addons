@@ -130,4 +130,8 @@ ns.L:Register("deDE", {
   ["%d updated pages"] = "%d aktualisierte Seiten",
   ["%d more changes"] = "%d weitere Änderungen",
   ["Route there"] = "Route dorthin",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d new"] = "%d neu",
+  ["%d pages"] = "%d Seiten",
+  ["Click: the book. Right click: its settings."] = "Klick: das Buch. Rechtsklick: seine Einstellungen.",
 })

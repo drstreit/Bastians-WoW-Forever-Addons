@@ -54,6 +54,7 @@ from bastians_build.corrections import (
     captured_taxi_times,
     read_corrections,
 )
+from bastians_build.dungeon_art import DungeonArtError, add_dungeon_art
 from bastians_build.emit import emit_pack
 from bastians_build.files import write_text
 from bastians_build.groundtruth import GroundTruthError, compare, read_truth, summary
@@ -120,6 +121,16 @@ def build_parser() -> argparse.ArgumentParser:
             help="ForeverDB's Dungeons.lua for a client whose AddOns lack it (retail tests)",
         )
         p.add_argument(
+            "--floor-art",
+            type=Path,
+            help="folder with retail's <prefix>_UiMap/_UiMapAssignment/_UiMapXMapArt/_UiMapArtTile"
+            " JSON: the dungeon floors' maps (data.md Dungeons)",
+        )
+        p.add_argument("--floor-art-prefix", default="retail", help="their prefix (default retail)")
+        p.add_argument(
+            "--listfile", type=Path, help="the community listfile naming the floors' tiles"
+        )
+        p.add_argument(
             "--taxi", type=Path, help="clientdump TaxiNodes JSON (flight masters, route.md)"
         )
         p.add_argument(
@@ -183,6 +194,12 @@ def build_parser() -> argparse.ArgumentParser:
             "with the client's FactionTemplate and ContentTuning)",
         )
         p.add_argument(
+            "--tdb-texts",
+            type=Path,
+            help="Forever: TDB's world dump for the long quest texts in Korean and Chinese, taken "
+            'where its English is ours (data.md "Game data in other languages")',
+        )
+        p.add_argument(
             "--places",
             type=Path,
             help="our places table (default: pipeline/config/places_<client>.toml; ADR 0026)",
@@ -207,6 +224,11 @@ def build_parser() -> argparse.ArgumentParser:
             type=Path,
             help="attunements TOML (default: pipeline/config/attunements_<client>.toml; "
             "the fixture world carries its own)",
+        )
+        p.add_argument(
+            "--dungeon-art",
+            type=Path,
+            help="hand-drawn dungeon maps TOML (default: pipeline/config/dungeon_art.toml)",
         )
         p.add_argument(
             "--report-dir",
@@ -487,6 +509,9 @@ def main(argv: list[str] | None = None) -> int:
                 cmangos=args.cmangos,
                 probe=args.probe,
                 dungeons=args.dungeons,
+                floor_art=args.floor_art,
+                floor_art_prefix=args.floor_art_prefix,
+                listfile=args.listfile,
                 taxi=args.taxi,
                 dumps=args.dumps,
                 dump_prefix=args.dump_prefix,
@@ -504,6 +529,12 @@ def main(argv: list[str] | None = None) -> int:
             )
             if attunements.is_file():
                 add_attunements(world, attunements)
+            # the hand-drawn dungeon maps (ADR 0048): the same file for both clients
+            dungeon_art = args.dungeon_art or (
+                (args.config or CONFIG_DIR / "build.toml").parent / "dungeon_art.toml"
+            )
+            if dungeon_art.is_file():
+                add_dungeon_art(world, dungeon_art)
             places_file = args.places or (
                 (args.config or CONFIG_DIR / "build.toml").parent / f"places_{args.client}.toml"
             )
@@ -531,10 +562,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.dumps and args.client == "forever"
             else {}
         )
-        if args.l10n or args.tdb or client_names:
-            # the game data in other languages (data.md, ADR 0033): QuestieDB's l10n lookups and
-            # CMaNGOS' quest locales (German, Chinese) for Forever, TDB's locale tables for retail
-            added = add_l10n(world, args.l10n, args.cmangos, args.tdb, client_names)
+        if args.l10n or args.tdb or args.tdb_texts or client_names:
+            # the game data in other languages (data.md, ADR 0033): QuestieDB's l10n lookups,
+            # CMaNGOS' quest locales (German, Chinese) and TDB's long quest texts (Korean,
+            # Chinese) for Forever, TDB's locale tables for retail
+            added = add_l10n(world, args.l10n, args.cmangos, args.tdb, client_names, args.tdb_texts)
             for locale, n in added.items():
                 print(f"l10n {locale}: {n} records")
         checks = compare(world, read_truth(args.ground_truth)) if args.ground_truth else None
@@ -602,6 +634,7 @@ def main(argv: list[str] | None = None) -> int:
         BookNewsError,
         ClientDumpError,
         ConfigError,
+        DungeonArtError,
         ExportError,
         FixtureError,
         GroundTruthError,

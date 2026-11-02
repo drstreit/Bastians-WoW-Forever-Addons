@@ -13,18 +13,28 @@ local NAV_W = 150
 local win, nav, canvas, scroll, bar
 local navButtons = {}
 
+-- The settings always in the WoW look ("option fonts are not readable
+-- ... leave the menu out of the styling, it should always be the same - the WoW look"): the
+-- game's frame and insets whatever the look, and the gold scheme's colours as a fixed palette.
+Hub.PALETTE = "blizzard"
+local function palette()
+  return S.Palette(Hub.PALETTE)
+end
+
+-- The menu's entries: the Suite page, General, the apps by name (each with its icon and its own
+-- pages indented under it: Map > Minimap, General > Hidden by the key; plan-launch-review O3,
+-- 01.11.2026), the load-on-demand apps, Help, What's new, About.
 local function entries()
   -- the Suite page first: every app with its switch, then General
-  local list = { { suite = true, title = L["Bastian's Suite"] }, { mod = ns.core, title = ns.core.title } }
+  -- every row carries a pictogram ("some option sections do not have an
+  -- icon but should have"): the apps their own, the others a kind of the icon table
+  local list = {
+    { suite = true, title = L["Bastian's Suite"], icon = B.UI.IconTexture(B.UI.SUITE_ICON) },
+    { mod = ns.core, title = ns.core.title },
+  }
   for _, mod in B:IterateModules() do
     if not mod.parent and mod ~= ns.core then
       list[#list + 1] = { mod = mod, title = mod.title }
-    end
-    -- a module's own pages (core-contracts §8 `pages`): the minimap beside the map
-    if not mod.parent then
-      for _, page in ipairs(mod.def.pages or {}) do
-        list[#list + 1] = { mod = mod, page = page, title = page.title }
-      end
     end
   end
   for addon, title in pairs(Settings_.LodApps()) do
@@ -33,7 +43,7 @@ local function entries()
     end
   end
   local function rank(e)
-    return e.suite and 0 or (e.mod == ns.core and e.page == nil) and 1 or 2
+    return e.suite and 0 or (e.mod == ns.core) and 1 or 2
   end
   table.sort(list, function(a, b)
     if rank(a) ~= rank(b) then
@@ -41,11 +51,37 @@ local function entries()
     end
     return a.title < b.title
   end)
+  -- a module's own pages (core-contracts §8 `pages`) under their owner, indented
+  local out = {}
+  for _, entry in ipairs(list) do
+    out[#out + 1] = entry
+    if entry.mod then
+      local app = Settings_.AppByModule(entry.mod.name)
+      entry.icon = B.UI.AppIcon(entry.mod.name) or B.UI.IconTexture(entry.mod.def.icon or "settings")
+      entry.tip = app and app.about or nil
+      for _, page in ipairs(entry.mod.def.pages or {}) do
+        out[#out + 1] = {
+          mod = entry.mod,
+          page = page,
+          title = page.title,
+          indent = true,
+          icon = page.icon and B.UI.IconTexture(page.icon) or nil, -- a page's own kind (core-contracts §8)
+        }
+      end
+    end
+  end
+  out[#out + 1] = {
+    help = true,
+    title = L["Help"],
+    icon = B.UI.IconTexture("help"),
+    tip = L["The story, the two ways to play, every command and key."],
+  }
   local unseen = B.UI.News and B.UI.News.Unseen() or 0
   local news = L["What's new"] .. (unseen > 0 and (" (" .. unseen .. ")") or "")
-  list[#list + 1] = { news = true, title = news } -- before About (ADR 0021)
-  list[#list + 1] = { about = true, title = L["About"] } -- always last (core.md "About page")
-  return list
+  out[#out + 1] = { news = true, title = news, icon = B.UI.IconTexture("note") } -- before About (ADR 0021)
+  -- always last (core.md "About page")
+  out[#out + 1] = { about = true, title = L["About"], icon = B.UI.IconTexture(B.UI.SUITE_ICON) }
+  return out
 end
 
 local function renderLod(entry)
@@ -75,7 +111,7 @@ local function renderLod(entry)
   bar.SetTotal(80)
 end
 
-local function select(entry)
+local function selectEntry(entry)
   Hub.current = entry
   for _, b in ipairs(navButtons) do
     local on = b.entry
@@ -84,6 +120,7 @@ local function select(entry)
         or (entry.lod and b.entry.lod == entry.lod)
         or (entry.about and b.entry.about)
         or (entry.news and b.entry.news)
+        or (entry.help and b.entry.help)
         or (entry.suite and b.entry.suite)
       )
     local c = on and S.C.accent or S.C.text
@@ -102,9 +139,15 @@ local function select(entry)
     B.UI.About.Render(canvas)
   elseif entry.news then
     B.UI.News.Render(canvas)
+  elseif entry.help then
+    Settings_.RenderHelp(canvas)
   else
     renderLod(entry)
   end
+end
+
+local function select(entry)
+  S.WithPalette(palette(), selectEntry, entry)
 end
 
 local function build()
@@ -113,6 +156,8 @@ local function build()
     width = 620,
     height = 520,
     db = ns.core.db.profile.hub,
+    gameFrames = true,
+    palette = palette(),
     onResize = function()
       Hub.Refresh()
     end,
@@ -121,10 +166,16 @@ local function build()
   nav:SetPoint("TOPLEFT", 0, 0)
   nav:SetPoint("BOTTOMLEFT", 0, 0)
   nav:SetWidth(NAV_W)
-  S.fill(nav, S.C.header)
+  nav.bg = S.fill(nav, S.C.header)
+  S.inset(nav, true) -- the game's marble inset, whatever the look
+  local page = CreateFrame("Frame", nil, win.content)
+  page:SetPoint("TOPLEFT", nav, "TOPRIGHT", 4, 0)
+  page:SetPoint("BOTTOMRIGHT", 0, 0)
+  S.inset(page, true)
+  Hub.page = page
   scroll = CreateFrame("ScrollFrame", nil, win.content)
-  scroll:SetPoint("TOPLEFT", nav, "TOPRIGHT", 0, 0)
-  scroll:SetPoint("BOTTOMRIGHT", -14, 0)
+  scroll:SetPoint("TOPLEFT", nav, "TOPRIGHT", 4, -2)
+  scroll:SetPoint("BOTTOMRIGHT", -14, 2)
   canvas = CreateFrame("Frame", nil, scroll)
   canvas:SetSize(440, 1)
   scroll:SetScrollChild(canvas)
@@ -133,7 +184,7 @@ local function build()
     canvas:SetHeight(math.max(1, height))
     bar.SetTotal(height)
   end
-  Hub.win, Hub.nav, Hub.canvas = win, nav, canvas
+  Hub.win, Hub.nav, Hub.canvas, Hub.navButtons = win, nav, canvas, navButtons
 end
 
 local function navButton(i, entry)
@@ -145,6 +196,9 @@ local function navButton(i, entry)
     b:SetPoint("RIGHT", 0, 0)
     b.hl = S.fill(b, S.C.hover, "ARTWORK")
     b.hl:Hide()
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetSize(14, 14)
+    b.icon:SetPoint("LEFT", 8, 0)
     b.label = S.text(b, 12)
     b.label:SetPoint("LEFT", 10, 0)
     b.label:SetPoint("RIGHT", -4, 0)
@@ -156,9 +210,11 @@ local function navButton(i, entry)
     b.line:Hide()
     b:SetScript("OnEnter", function(self)
       self.hl:Show()
+      S.TipEnter(self)
     end)
     b:SetScript("OnLeave", function(self)
       self.hl:Hide()
+      S.TipLeave(self)
     end)
     b:SetScript("OnClick", function(self)
       select(self.entry)
@@ -166,6 +222,17 @@ local function navButton(i, entry)
     navButtons[i] = b
   end
   b.entry = entry
+  b.tip = entry.tip
+  -- the app's one icon before its name (B.UI.AppIcon); a page sits indented under its owner
+  if entry.icon then
+    B.UI.PaintIcon(b.icon, entry.icon)
+    b.icon:Show()
+  else
+    b.icon:Hide()
+  end
+  b.label:ClearAllPoints()
+  b.label:SetPoint("LEFT", entry.icon and 26 or (entry.indent and 26 or 10), 0)
+  b.label:SetPoint("RIGHT", -4, 0)
   local off = entry.mod and entry.mod.state ~= "enabled" and not entry.mod.def.noSwitch
   b.label:SetText(entry.title .. (off and (" " .. S.H.muted .. "(" .. L["off"] .. ")|r") or ""))
   b:ClearAllPoints()
@@ -175,10 +242,15 @@ local function navButton(i, entry)
   return b
 end
 
+local refresh
 function Hub.Refresh()
   if not win then
     return
   end
+  S.WithPalette(palette(), refresh)
+end
+
+refresh = function()
   canvas:SetWidth(math.max(100, (scroll:GetWidth() or 440)))
   local list = entries()
   for i, entry in ipairs(list) do
@@ -188,13 +260,13 @@ function Hub.Refresh()
     navButtons[i]:Hide()
   end
   local current = Hub.current or list[1]
-  select(current)
+  selectEntry(current)
 end
 
 -- Hub.Open([moduleName[, pageID]]): the module's page, or one of its own pages.
 function Hub.Open(moduleName, pageID)
   if not win then
-    build()
+    S.WithPalette(palette(), build)
   end
   if moduleName == "about" then
     Hub.current = { about = true, title = L["About"] }
@@ -202,6 +274,8 @@ function Hub.Open(moduleName, pageID)
     Hub.current = { suite = true, title = L["Bastian's Suite"] }
   elseif moduleName == "news" then
     Hub.current = { news = true, title = L["What's new"] }
+  elseif moduleName == "help" then
+    Hub.current = { help = true, title = L["Help"] }
   elseif moduleName then
     local mod = ns.modules[moduleName]
     local page = Settings_.Page(mod, pageID)
@@ -223,13 +297,34 @@ function Hub.Toggle()
   end
 end
 
--- /bastians [about | news | addons | log [n] | debug | profile <name> | perf]
+-- Whether the hub shows the module's page now.
+function Hub.Shows(moduleName)
+  local mod = ns.modules[moduleName]
+  return mod ~= nil and win ~= nil and win:IsShown() and Hub.current ~= nil and Hub.current.mod == mod
+end
+
+-- The module's page, or the hub closed when it shows that page already (an app's minimap button
+-- whose window is its page: a second click closes it, ); true when shown.
+function Hub.TogglePage(moduleName)
+  if Hub.Shows(moduleName) then
+    win:Hide()
+    return false
+  end
+  Hub.Open(moduleName)
+  return true
+end
+
+-- /bastians [hub | suite | help | news | about | addons | welcome | log [n] | debug | profile <name> | perf]
+Hub.USAGE =
+  L["/bastians: hub | suite | help | news | about | addons | welcome | log [n] | debug | profile [name] | perf"] -- luacheck: ignore 631 (a locale key stays one literal)
 SLASH_BASTIANS1 = "/bastians"
 SlashCmdList.BASTIANS = function(msg)
   local cmd, arg = string.match(msg or "", "^%s*(%S*)%s*(.-)%s*$")
   cmd = string.lower(cmd or "")
-  if cmd == "" then
+  if cmd == "" or cmd == "hub" then
     Hub.Toggle()
+  elseif cmd == "help" then
+    Hub.Open("help") -- the Help page (plan-launch-review O5)
   elseif cmd == "about" then
     Hub.Open("about")
   elseif cmd == "suite" then
@@ -258,6 +353,6 @@ SlashCmdList.BASTIANS = function(msg)
   elseif cmd == "addons" then
     B.UI.Settings.PrintAddons() -- what this client needs and the optional addons (ADR 0015)
   else
-    B:Say(L["/bastians: hub | news | about | addons | log [n] | debug | profile [name] | perf"])
+    B:Say(Hub.USAGE)
   end
 end

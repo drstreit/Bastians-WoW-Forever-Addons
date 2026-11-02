@@ -29,7 +29,7 @@ from pathlib import Path
 
 from lupa import lua51
 
-from bastians_build.sources.luatable import to_python
+from bastians_build.sources.luatable import safe_runtime, to_python
 
 SEP = "\x1f"
 FLAVORS = ("Retail", "Forever")
@@ -244,9 +244,7 @@ def read_itemdb(itemdb_dir: Path, flavor: str = "Retail", locale: str = "enUS") 
     core_dir = data / "_core"
     if not core_dir.is_dir():
         raise ItemDBError(f"no ItemDB core under {core_dir}")
-    lua = lua51.LuaRuntime(
-        unpack_returned_tuples=True, register_eval=False, register_builtins=False
-    )
+    lua = safe_runtime()  # other people's files: no files, processes or Python (luatable)
     lua.execute(SANDBOX)
     names_file = data / locale / "Names.lua"
     if names_file.is_file():

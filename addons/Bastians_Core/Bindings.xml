@@ -5,4 +5,7 @@
   <Binding name="BASTIANS_HUB" category="ADDONS">
     Bastians.UI.Hub.Toggle()
   </Binding>
+  <Binding name="BASTIANS_CLEAR_SCREEN" category="ADDONS">
+    Bastians.UI.Screen.Toggle()
+  </Binding>
 </Bindings>

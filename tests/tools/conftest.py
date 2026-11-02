@@ -12,3 +12,15 @@ def _released_in_tmp(tmp_path, monkeypatch):
 
     monkeypatch.setattr(curseforge, "RELEASED", tmp_path / "released")
     monkeypatch.setattr(data_update, "LOCAL_ART", tmp_path / "book-art" / "current")
+
+
+@pytest.fixture(autouse=True)
+def _sources_offline(monkeypatch):
+    """The sources step (tools/sources_update.py, run by daily.py) asks neither CurseForge nor the
+    machine's client in a test."""
+    try:
+        import sources_update
+    except ImportError:  # the public snapshot has no daily run (tools/publish.py PRIVATE)
+        return
+    monkeypatch.setattr(sources_update, "latest_on_curseforge", lambda project: None)
+    monkeypatch.setattr(sources_update, "client_build", lambda: None)

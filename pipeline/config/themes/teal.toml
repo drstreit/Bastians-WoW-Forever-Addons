@@ -19,20 +19,22 @@ divider = "#ffffff14"   # between two-line rows
 # text
 text = "#ebebeb"
 dim = "#999999"         # secondary words, hints
-muted = "#808080"       # grey words after a name
+muted = "#858585"       # grey words after a name
 bright = "#ffffff"      # the strongest text (objectives, zone names)
 mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
 mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
 mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
 # accent and states
 accent = "#0cd29d"
+wayWanderer = "#e6a04a"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
+wayScholar = "#5aa8e6"     # the welcome: the Scholar's picture frame (cool)
 gold = "#ffd100"        # worth, money, available quests
 on = "#59e659"          # an icon that is switched on
 good = "#4de666"        # verified, ahead
 bad = "#e64d4d"         # refuted, behind, a loss
 warn = "#ff9933"
 neutral = "#b3b3b3"     # unverified
-rare = "#a335ee"        # rare creatures
+rare = "#c241ff"        # rare creatures
 water = "#6fb6ff"       # fish, flight
 # the six note colours of Bastian's Notes (notes.md, J)
 note1 = "#f2c94c"
@@ -43,6 +45,7 @@ note5 = "#f2994a"
 note6 = "#eb5757"
 # outside our windows (Blizzard's dark chat and tooltips: keep these light in every theme)
 chat = "#66ccff"
+chatEmote = "#ffa66b"   # emote lines in the chat (/e, /wave), the roleplay colour (L5)
 tipText = "#ffffff"
 tipDim = "#cccccc"
 tipGold = "#ffd100"
@@ -51,7 +54,7 @@ diffRed = "#ff2020"
 diffOrange = "#ff8040"
 diffYellow = "#ffff00"
 diffGreen = "#40c040"
-diffGrey = "#808080"
+diffGrey = "#858585"
 # money letters
 coinGold = "#ffd700"
 coinSilver = "#c7c7cf"
@@ -92,6 +95,55 @@ bookInkAmber = "#ffc871"
 bookBlue = "#1f4fa3"
 bookBlueNight = "#9cc2ff"
 
+# round 4 (ADR 0038): colour by meaning. Services (on tiles, chips, badges and counts, never on names),
+# the entity types, depth (the void behind the panes, a raised card, its light edge, the inner
+# highlight), and the title bar's words.
+svcVendor = "#f0ca70"
+svcQuest = "#ffd100"
+svcTrainer = "#6fb6ff"
+svcInn = "#c58cff"
+svcFlight = "#4fd3e0"
+svcRepair = "#b8a48a"
+svcFriendly = "#4de666"
+svcHostile = "#e64d4d"
+typeNpc = "#4de666"
+typeItem = "#6fb6ff"
+typeQuest = "#ffd100"
+typeObject = "#d9a066"
+typeNode = "#4fd3e0"
+typeZone = "#8fd07a"
+typeRecipe = "#ff9933"
+typeSpot = "#f0ca70"
+typeChain = "#c58cff"
+typeHere = "#0cd29d"
+void = "#0a09088c"
+card = "#ffffff09"
+cardEdge = "#ffffff14"
+inset = "#ffffff0f"
+headerText = "#ebebeb"
+
+# the kind tiles' eight groups (ADR 0046): value, hostile, place, nature, people, special, goods, other
+tileGold = "#a67c1e"
+tileRed = "#a4423b"
+tileTeal = "#1f8f87"
+tileGreen = "#3f8a45"
+tileBlue = "#3b6fb6"
+tilePurple = "#6b4aa8"
+tileBrown = "#7a5a2e"
+tileGrey = "#5c6670"
+
 [shape]
 radius = 6       # windows, blocks, menus
 radiusSmall = 4  # buttons, pills, fields
+
+# the widget set's sizes in px, the ground's alpha in % (ADR 0046, one look per theme)
+[geometry]
+action = 26
+actionRow = 22
+pill = 26
+tab = 26
+row = 28
+tile = 18
+tileBig = 26
+gap = 6
+groundAlpha = 88

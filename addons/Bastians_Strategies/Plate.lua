@@ -27,7 +27,7 @@ function Plate.New(parent)
   S.panel(frame, S.C.header, "radiusSmall")
   self.frame = frame
   -- Route there: the way to the farm's centre, while Route offers its service
-  local route = S.button(frame, L["Route there"], 96, 18)
+  local route = S.action(frame, { icon = "route", label = L["Route there"], row = true, boxed = true })
   route:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -6, 1)
   route:SetScript("OnClick", function()
     Plate.RouteTo(self.place, self.name)

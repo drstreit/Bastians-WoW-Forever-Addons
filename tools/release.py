@@ -45,8 +45,13 @@ ROOT = Path(__file__).resolve().parent.parent
 ADDONS_DIR = ROOT / "addons"
 CLIENTS = ("forever", "retail")
 # the Library does not ship with version one;
-# after the launch it is for developers only
-DEV_ONLY = {"Bastians_Probe", "Bastians_TalesSpike", "Bastians_Library"}
+# after the launch it is for developers only; the Chat ships, off by default
+DEV_ONLY = {
+    "Bastians_Probe",
+    "Bastians_TalesSpike",
+    "Bastians_Library",
+    "Bastians_ChatSpike",
+}
 DATA_PREFIX = "Bastians_Data_"
 GENERATED = "Generated"
 BUNDLE = "Bastians"  # the suite's bundle zip is listed under this name
@@ -65,6 +70,11 @@ WINDOW_COMMANDS = {
     "Bastians_Route": "/broute",
     "Bastians_Strategies": "/bbook",
     "Bastians_Notes": "/bnotes",
+    "Bastians_Gestures": "/bgest",
+    "Bastians_Campfire": "/bcamp",
+    "Bastians_Alts": "/balts",
+    "Bastians_Helpers": "/bhelp",
+    "Bastians_Voice": "/bv",
 }
 
 

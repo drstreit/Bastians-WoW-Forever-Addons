@@ -20,6 +20,8 @@ machine-specific build inputs from its optional [build] section:
     retail = "retail"
     [build.tdb]                                         # retail: TrinityCore's world dump
     retail = ".local/sources/retail/tdb/TDB_full_world_<build>.sql"  # (sources.md), or --tdb
+    [build.tdb_texts]                                   # Forever: the Korean and Chinese long
+    forever = "<the same dump>"                         #   quest texts (default: the retail one)
 
 Then runs, in order, `python -m bastians_build data ...` (the packs, MapTransforms.lua, the report)
 and `python -m bastians_build mapart ...` (MinimapTiles.lua and Bastians_Map_Art/Generated, when
@@ -43,6 +45,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / ".local" / "install.toml"
 DUMPS = ROOT / ".local" / "out"
+LISTFILE = ROOT / ".local" / "listfile" / "community-listfile.csv"
 CLIENTS = ("forever", "retail")
 DEFAULT_PREFIX = {"forever": "beta", "retail": "retail"}
 
@@ -57,17 +60,35 @@ class BuildInputs:
     export: Path | None = None
     probe: Path | None = None
     tdb: Path | None = None  # retail: TrinityCore's world dump (sources.md), [build.tdb] or --tdb
+    # Forever: the same dump for the long quest texts in Korean and Chinese ([build.tdb_texts],
+    # else [build.tdb]'s retail dump; data.md "Game data in other languages")
+    tdb_texts: Path | None = None
     # the game data in other languages (ADR 0033): QuestieDB's l10n lookups, [build.l10n] or
     # .local/sources/<client>/questie-l10n (tools/fetch_questie_l10n.py) when it exists
     l10n: Path | None = None
     # retail: ForeverDB's Dungeons.lua from the Forever sources, so the test client shows the
     # dungeon pages too
     dungeons: Path | None = None
+    # the dungeon floors' maps (DG2c): retail's UiMap tables in .local/out and the community
+    # listfile in .local/listfile, for both clients, when they exist
+    floor_art: Path | None = None
+    listfile: Path | None = None
     extra: list[str] = field(default_factory=list)
 
 
 class BuildClientError(Exception):
     pass
+
+
+def _retail_tdb(build: dict) -> Path | None:
+    """[build.tdb]'s retail dump when it exists (Forever reads its long quest texts from it)."""
+    value = build.get("tdb")
+    value = value.get("retail") if isinstance(value, dict) else value
+    if not value:
+        return None
+    path = Path(str(value))
+    path = path if path.is_absolute() else ROOT / path
+    return path if path.is_file() else None
 
 
 def _default_l10n(client: str) -> Path | None:
@@ -125,8 +146,11 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         export=optional("export"),
         probe=optional("probe"),
         tdb=optional("tdb") if client == "retail" else None,
+        tdb_texts=(optional("tdb_texts") or _retail_tdb(build)) if client == "forever" else None,
         l10n=optional("l10n") or _default_l10n(client),
         dungeons=dungeons,
+        floor_art=DUMPS if (DUMPS / "retail_UiMapArtTile.json").is_file() else None,
+        listfile=LISTFILE if LISTFILE.is_file() else None,
     )
 
 
@@ -159,10 +183,16 @@ def commands(inputs: BuildInputs, out: Path, *, skip_mapart: bool = False) -> li
         data += ["--probe", str(inputs.probe)]
     if inputs.tdb:
         data += ["--tdb", str(inputs.tdb)]
+    if inputs.tdb_texts:
+        data += ["--tdb-texts", str(inputs.tdb_texts)]
     if inputs.l10n:
         data += ["--l10n", str(inputs.l10n)]
     if inputs.dungeons:
         data += ["--dungeons", str(inputs.dungeons)]
+    if inputs.floor_art:
+        data += ["--floor-art", str(inputs.floor_art)]
+    if inputs.listfile:
+        data += ["--listfile", str(inputs.listfile)]
     data += inputs.extra
     cmds = [data]
     tiles = DUMPS / f"mm_{inputs.prefix}"

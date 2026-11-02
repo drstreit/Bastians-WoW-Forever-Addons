@@ -33,6 +33,13 @@ ns.L:Register("zhCN", {
   ["All"] = "全部",
   ["Where the rows are: in your zone, on your continent, or everywhere."] = "行所在的位置: 在你的区域、你的大陆或所有地方。",
   ["Sort"] = "排序",
+  ["Groups"] = "分组",
+  ["By zone"] = "按区域",
+  ["None"] = "无",
+  ["Nearest first, the rows under their zone's name."] = "最近的优先，各行列在其区域名称之下。",
+  ["Elsewhere"] = "其他地方",
+  ["Loading %d of %d ..."] = "正在加载 %d / %d ...",
+  ["%d loaded"] = "已加载 %d",
   ["The order of the rows."] = "行的顺序。",
   ["No entries. Is the data pack loaded?"] = "没有条目。数据包是否已加载?",
   ["Nothing matches these filters. The x on a filter clears it."] = "没有符合这些筛选条件的内容。点击筛选条件上的x可清除它。",
@@ -68,6 +75,10 @@ ns.L:Register("zhCN", {
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "在行上显示任务和物品的价值(奖励、价格)",
   ["Follow the target: an NPC or object you target becomes the subject"] = "跟随目标: 你选中的NPC或世界物体成为主题",
   ["Hide the game's objective tracker in slim mode"] = "窄模式下隐藏游戏的目标追踪器",
+  ["Preview a row in the page pane"] = "在页面窗格中预览一行",
+  ["While Shift is held"] = "按住 Shift 时",
+  ["On every hover"] = "每次悬停时",
+  ["Never"] = "从不",
   ["Open in Browser"] = "在浏览器中打开",
   ["Right click: open in the Browser"] = "右键点击: 在浏览器中打开",
 
@@ -87,7 +98,7 @@ ns.L:Register("zhCN", {
 
   -- dimension titles and their values
   ["Service"] = "服务",
-  ["Rank"] = "等级",
+  ["Rank"] = "级别",
   ["Level"] = "等级",
   ["Class"] = "职业",
   ["Quality"] = "品质",
@@ -236,4 +247,12 @@ ns.L:Register("zhCN", {
   ["The link is in the chat input: copy it with Ctrl+C."] = "链接已在聊天输入框中: 用Ctrl+C复制。",
   ["Slide the list in"] = "滑入列表",
   ["Slide the list out"] = "滑出列表",
+  -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
+  ["Mobs"] = "怪物",
+  ["Filter"] = "筛选",
+  -- the search syntax (ADR 0045)
+  ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["Click: the Browser. Right click: the bookmarks."] = "点击: 浏览器。右键: 书签。",
+  ["Everything the suite knows: quests, NPCs, items, places."] = "套件所知的一切: 任务、NPC、物品、地点。",
 })

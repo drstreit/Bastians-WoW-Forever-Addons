@@ -201,6 +201,13 @@ sell = 200
 buy = 1000
 stack = 1
 src = "classic"
+disenchant = 21  # an uncommon weapon's list (CMaNGOS disenchant_loot_template, 31.10.2026)
+
+# the disenchant list it names: [item, percent, min, max], the likeliest first
+[[disenchant]]
+id = 21
+loot = [[10938, 80.0, 1, 2], [10940, 20.0, 1, 2]]
+src = "classic"
 
 [[item]]
 id = 1931
@@ -235,6 +242,7 @@ src = "forever"
 [[attunement]]
 id = "fargodeep"
 name = "The Fargodeep Attunement"
+instance = 36 # the Deadmines' page shows it (DG2b)
 faction = "Alliance"
 verified = true
 note = "fixture: the mine chain"
@@ -441,6 +449,11 @@ bosses = [[1, 644, "Rhahk'Zor"], [2, 639, "Edwin VanCleef"]]
 loot = [[1185, 1, "s"], [2589, 0, "c"]]
 quests = [62]
 src = "forever"
+# the floors (DG2c): the client's maps (retail's UiMaps 291 and 292; the first with the art
+# files' prefix for the Forever client), the boss spots and the door on them in percent
+floors = [{ n = "The Deadmines 1", m = 291, w = 1002, h = 668, a = "interface/worldmap/thedeadmines/thedeadmines1_", g = [4, 3] }, { n = "The Deadmines 2", m = 292, w = 1002, h = 668 }]
+bossSpots = [[1, 1, 38.59, 60.88], [2, 2, 50.0, 50.0]]
+door = [2, 60.22, 84.32]
 
 [[npc]]
 id = 644

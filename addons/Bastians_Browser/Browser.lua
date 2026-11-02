@@ -87,6 +87,40 @@ local function kindGroup(d, typ, kind)
   return group
 end
 
+-- A monster ("NPCs and mobs have different usage in game, and the lists
+-- are long anyway"): an NPC without a service and without a faction it belongs to, the rule of
+-- Data's Monsters section. Elite, rare and boss are ranks, no service: Hogger is a monster.
+local function isMob(r)
+  local d = B:GetService("data")
+  if d and d.IsMonster then
+    return d:IsMonster(r) -- one rule for the suite
+  end
+  if r.faction then
+    return false
+  end
+  for _, flag in ipairs(npcFlags(r)) do
+    if not RANKS[flag] then
+      return false
+    end
+  end
+  return true
+end
+Browser.IsMob = isMob
+
+local RANK_DIM = {
+  id = "rank",
+  title = "Rank",
+  kind = "rare", -- the pill's tile (ADR 0046)
+  value = function(r, d)
+    for _, flag in ipairs(npcFlags(r)) do
+      if RANKS[flag] then
+        return kindGroup(d, "npc", flag) or "Other"
+      end
+    end
+    return "Normal"
+  end,
+}
+
 local LEVEL_DIM = {
   id = "level",
   title = "Level",
@@ -96,15 +130,22 @@ local LEVEL_DIM = {
   sortKey = bandOrder,
 }
 
+-- A list's `type` is its key (the type bar, the saved filters, the cache); `entity` the data type
+-- of its records when the two differ (the Mobs list holds NPCs), `keep(r)` the records it takes.
 Browser.LISTS = {
   {
     type = "npc",
     label = "NPCs",
+    glyph = "service",
     zoneSuffix = true, -- a repeated name says its zone
+    keep = function(r)
+      return not isMob(r)
+    end,
     dims = {
       {
         id = "service",
         title = "Service",
+        chips = true, -- every service as a chip with its count, several at once (ADR 0038)
         value = function(r, d)
           local out = {}
           for _, flag in ipairs(npcFlags(r)) do
@@ -118,20 +159,21 @@ Browser.LISTS = {
           return #out == 1 and out[1] or out
         end,
       },
-      {
-        id = "rank",
-        title = "Rank",
-        value = function(r, d)
-          for _, flag in ipairs(npcFlags(r)) do
-            if RANKS[flag] then
-              return kindGroup(d, "npc", flag) or "Other"
-            end
-          end
-          return "Normal"
-        end,
-      },
+      RANK_DIM,
       LEVEL_DIM,
     },
+  },
+  {
+    type = "mob",
+    entity = "npc",
+    label = "Mobs",
+    glyph = "mob",
+    zoneSuffix = true,
+    keep = isMob,
+    ref = function(id)
+      return "npc:" .. id
+    end,
+    dims = { RANK_DIM, LEVEL_DIM },
   },
   {
     type = "item",
@@ -191,6 +233,10 @@ Browser.LISTS = {
     label = "Zones",
     noNear = true, -- one pill: the continents, Instances, Other (the player's continent first)
     mergeInstances = true,
+    -- retail holds two zone maps of one name (Badlands 15 under Eastern Kingdoms 13 with its
+    -- quests, Badlands 1245 under map 1208 with nothing; measured 31.10.2026): one row, the one
+    -- with content (owner: "the empty one should be gone")
+    mergeNamesakes = true,
     dims = {
       { id = "continent", title = "Continent", value = zoneFacet },
     },
@@ -267,9 +313,10 @@ function Browser.Dims(def)
       title = string.upper(string.sub(name, 1, 1)) .. string.sub(name, 2),
       value = def.value,
       sortKey = name == "level" and bandOrder or nil,
+      chips = def.chips or nil, -- the chains' levels, several at once
     }
   end
-  for _, f in ipairs(B:GetFilters(def.type, "facet")) do
+  for _, f in ipairs(B:GetFilters(def.entity or def.type, "facet")) do
     dims[#dims + 1] = {
       id = f.id,
       title = f.label,
@@ -277,9 +324,21 @@ function Browser.Dims(def)
         return B:FilterValue(f, ref, r)
       end,
       labels = f.labels,
+      sortKey = f.order,
+      chips = f.chips or nil,
     }
   end
   return dims
+end
+
+-- The generations of the facets a list's rows carry: a built list whose facets moved (a quest's
+-- status after a hand-in) is built again.
+local function facetGen(def)
+  local parts = {}
+  for _, f in ipairs(B:GetFilters(def.entity or def.type, "facet")) do
+    parts[#parts + 1] = f.id .. "=" .. B:FilterGeneration(f.id)
+  end
+  return table.concat(parts, ",")
 end
 
 -- Every list of the type bar: the data types above and the lists apps register (Core's
@@ -299,6 +358,8 @@ function Browser.Lists()
 end
 
 local mod, win, tree, summary, toolbar, search
+local filterBox -- the list pane's own filter: narrows the rows shown as you type
+local syncingFilter -- the filter box follows the entry, nobody typed
 local header -- the block above the list: a view's control bar
 local dossier -- the detail pane's dossier: the page of the subject (ADR 0018)
 local hereDossier -- the Here entry in the list pane: the player's zone in `here` mode (C4)
@@ -327,6 +388,10 @@ local listSlide -- { from, to, start } while it slides
 local listTab, slider
 Browser.LIST_SLIDE = 0.18 -- seconds
 local listJob
+local listJobType, listJobGen, listJobMap -- what the running list build builds
+local fillJob, fillGen = nil, 0 -- the staged fill of the shown list (ADR 0038)
+Browser.STAGE = 100 -- rows drawn at once; the rest in steps of as many
+Browser.FILTER_W = 140 -- the list pane's filter box
 
 local function db()
   return mod.db.profile
@@ -511,7 +576,7 @@ function Browser.TellApart(rows, def, d, typ, near, total)
   return out, total
 end
 
-local ROW_DIMS = 8 -- a build row: id, name, unnamed, near, level, suffix, yards, ref, then the dims
+local ROW_DIMS = 9 -- a build row: id, name, unnamed, near, level, suffix, yards, ref, zone, then the dims
 
 -- Builds the rows of a type list; `yield` between slices. Returns the list (compact arrays, every
 -- row), counts ({ near = { here, continent }, distances, default }) and the total.
@@ -519,8 +584,10 @@ function Browser.BuildList(typ, yield)
   local def = listDef(typ)
   local d = data()
   if not (def and d) then
-    return { type = typ, n = 0, dims = {}, values = {} }, {}, 0
+    return { type = typ, entity = typ, n = 0, dims = {}, values = {} }, {}, 0
   end
+  local listType = typ
+  typ = def.entity or typ -- the data type of the records from here on
   local dims = Browser.Dims(def)
   local rows, counts, total = {}, {}, 0
   local near = { here = 0, continent = 0 } -- how many rows each "near" level keeps (C9)
@@ -568,6 +635,25 @@ function Browser.BuildList(typ, yield)
   -- order (ids, texts, dimension values, near levels); row tables exist only for the rows shown.
   local merged = {} -- instances by name: the index of the first floor, the floors counted (R5)
   local floors = {}
+  local namesakes = {} -- zones by name and continent: the row index and the record it shows
+  -- a zone record with something of its own; the namesake without it gives way
+  local function richer(r, than)
+    local a = (r.questsA or r.questsH or r.levelLo) ~= nil
+    local b = (than.questsA or than.questsH or than.levelLo) ~= nil
+    return a and not b
+  end
+  local function uncount(row)
+    total = total - 1
+    if row[4] == "here" then
+      near.here = near.here - 1
+      near.continent = near.continent - 1
+    elseif row[4] == "continent" then
+      near.continent = near.continent - 1
+    end
+    if row[7] then
+      counts.distances = counts.distances - 1
+    end
+  end
   local n = 0
   for _, id in ipairs(def.ids and def.ids() or d:Each(typ)) do
     n = n + 1
@@ -580,11 +666,19 @@ function Browser.BuildList(typ, yield)
     else
       r = d:Get(typ, id)
     end
+    if r and def.keep and not def.keep(r) then
+      r = nil -- another list's record (an NPC with a service, in the Mobs list)
+    end
     if r then
       local instance = def.mergeInstances and r.mapType == UI_MAP_DUNGEON and r.name
+      local sameKey = def.mergeNamesakes
+        and not instance
+        and r.name
+        and (r.name .. "|" .. tostring(r.continent))
+      local same = sameKey and namesakes[sameKey]
       if instance and merged[instance] then
         floors[merged[instance]] = floors[merged[instance]] + 1
-      else
+      elseif not same or richer(r, same.rec) then -- a poorer namesake gets no row
         total = total + 1
         -- the name as the pack holds it (one string, shared), the level as a number, a band or
         -- floors suffix only where one exists: the row text is composed for the rows shown
@@ -612,11 +706,27 @@ function Browser.BuildList(typ, yield)
           counts.distances = counts.distances + 1
         end
         local ref = def.ref and def.ref(id, r) or nil
-        local row = { id, name, unnamed, where, r.level, suffix, dist, ref }
+        -- the zone the row belongs to (ADR 0038: the zone groups of a Nearest list): the first
+        -- spawn's map, a spot's or quest's zone, a zone itself
+        local zone = (r.spawns and r.spawns[1] and r.spawns[1][1])
+          or r.map
+          or r.zone
+          or (typ == "zone" and id)
+          or nil
+        local row = { id, name, unnamed, where, r.level, suffix, dist, ref, zone }
         for k, dim in ipairs(dims) do
           row[ROW_DIMS + k] = facetKey(dim.value(r, d, ref or (typ .. ":" .. tostring(id))))
         end
-        rows[#rows + 1] = row
+        if same then
+          uncount(rows[same.index]) -- the richer namesake takes the poorer one's row
+          rows[same.index] = row
+          same.rec = r
+        else
+          rows[#rows + 1] = row
+          if sameKey then
+            namesakes[sameKey] = { index = #rows, rec = r }
+          end
+        end
         if instance then
           merged[instance] = #rows
           floors[#rows] = 1
@@ -639,7 +749,8 @@ function Browser.BuildList(typ, yield)
     return (a[5] or 0) < (b[5] or 0)
   end)
   local list = {
-    type = typ,
+    type = listType,
+    entity = typ,
     n = #rows,
     dims = dims,
     ids = {},
@@ -650,6 +761,7 @@ function Browser.BuildList(typ, yield)
     levels = {},
     suffixes = {},
     dists = {},
+    zones = {}, -- the zone (map id) of each row, nil without one (ADR 0038)
     refs = def.ref and {} or nil, -- a registered list's rows open their own entity (a chain's quest)
     sorts = {}, -- registered sorts: id -> { order, values }, computed when picked
   }
@@ -671,6 +783,7 @@ function Browser.BuildList(typ, yield)
     list.ids[i], list.names[i], list.nears[i] = row[1], row[2], row[4]
     list.unnamed[i] = row[3] or nil
     list.levels[i], list.suffixes[i], list.dists[i] = row[5], row[6], row[7]
+    list.zones[i] = row[9]
     if list.refs then
       list.refs[i] = row[8]
     end
@@ -718,7 +831,7 @@ end
 
 -- The ref a list row opens.
 local function listRef(list, i)
-  return list.refs and list.refs[i] or (list.type .. ":" .. tostring(list.ids[i]))
+  return list.refs and list.refs[i] or ((list.entity or list.type) .. ":" .. tostring(list.ids[i]))
 end
 
 Browser.NEAR_TIMED = 100 -- the rows nearest by straight line that the Nearest sort orders by time
@@ -757,10 +870,10 @@ end
 
 -- The text of a list row: the name, the level or the band or the floors in grey.
 function Browser.ListText(list, i)
-  if list.unnamed and list.unnamed[i] and not list.refs then
+  if list.unnamed and list.unnamed[i] and (list.entity or not list.refs) then
     -- a shown row without a name: the entity asks the client (the name arrives with its load
     -- event and is kept for the next session)
-    local name = B:Entity(list.type .. ":" .. tostring(list.ids[i])):Name()
+    local name = B:Entity((list.entity or list.type) .. ":" .. tostring(list.ids[i])):Name()
     if name then
       list.names[i], list.unnamed[i] = name, nil
     end
@@ -807,7 +920,19 @@ function Browser.NearOf(typ, id, r, d, map, continent)
   return "all"
 end
 
+-- `want` is one key, or a set { [key] = true } of a chips dimension (any of them matches).
 local function matches(value, want)
+  if type(want) == "table" then
+    if type(value) == "table" then
+      for _, v in ipairs(value) do
+        if want[v] then
+          return true
+        end
+      end
+      return false
+    end
+    return want[value] == true
+  end
   if type(value) == "table" then
     for _, v in ipairs(value) do
       if v == want then
@@ -854,15 +979,40 @@ function Browser.Filter(list, state, order)
   local want = {}
   for k, dim in ipairs(dims) do
     out.counts[k], out.all[k] = {}, 0
-    want[k] = picks[dim.id]
+    local pick = picks[dim.id]
+    if type(pick) == "table" and next(pick) == nil then
+      pick = nil -- an empty set keeps everything
+    end
+    want[k] = pick
   end
   local near = state.near
   local nearCounts = out.near
+  -- the pane's filter text: a row whose name does not match it is no
+  -- row at all, before the cap, so the counts and the "N of M" follow it; the suite's search
+  -- syntax with the list's fields (ADR 0045)
+  local fields = Browser.ListFields(list)
+  local q = state.filterText and B.Query.Compile(state.filterText, { fields = fields })
+  if q and q.empty then
+    q = nil
+  end
+  local low = q and Browser.LowNames(list) or nil
+  -- typed on at the end of the last text: only the rows it kept are tested again (owner, retail
+  -- 31.10.2026: every key took seconds on the full NPC list); `state.textKept` is that set
+  local prev = state.textKept
+  local within = q
+      and prev
+      and prev.list == list
+      and B.Query.Narrows(prev.text, state.filterText, { fields = fields })
+      and prev.set
+    or nil
+  local kept = q and {} or nil
   for kk = 1, list.n do
     local i = order and order[kk] or kk
     local where = list.nears[i]
     local fails, failed = 0, nil
-    if not nearOk(near, where) then
+    if low and ((within and not within[i]) or not q:MatchLower(low[i], i)) then
+      fails, failed = 99, -1
+    elseif not nearOk(near, where) then
       fails, failed = 1, 0
     end
     for k = 1, nd do
@@ -872,6 +1022,9 @@ function Browser.Filter(list, state, order)
           break
         end
       end
+    end
+    if kept and fails ~= 99 then
+      kept[i] = true
     end
     if fails <= 1 and (fails == 0 or failed == 0) then
       nearCounts.all = nearCounts.all + 1
@@ -896,7 +1049,20 @@ function Browser.Filter(list, state, order)
       out.all[failed] = out.all[failed] + 1
     end
   end
+  state.textKept = kept and { list = list, text = state.filterText, set = kept } or nil
   return out
+end
+
+-- The names of a list in lower case, made once per list for the filter text.
+function Browser.LowNames(list)
+  if not list.lowNames then
+    local low = {}
+    for i = 1, list.n do
+      low[i] = string.lower(list.names[i] or "")
+    end
+    list.lowNames = low
+  end
+  return list.lowNames
 end
 
 -- The glyph of a list row (ADR 0018 B), from the list's own facet values, so no record is decoded:
@@ -959,7 +1125,7 @@ end
 -- words in grey (the distance, the loot per kill), the ref a click opens.
 local function rowsOf(list, indexes, sortWords)
   local out = {}
-  local typ = list.type
+  local typ = list.entity or list.type
   for _, i in ipairs(indexes) do
     local ref = list.refs and list.refs[i] or (typ .. ":" .. tostring(list.ids[i]))
     local text = Browser.ListText(list, i)
@@ -1094,12 +1260,20 @@ local function markSelected(ref)
     return
   end
   local id
-  for _, row in ipairs(tree.rows or {}) do
-    if row.ref ~= nil and row.ref == ref then
-      id = row.id
-      break
+  local function find(rows)
+    for _, row in ipairs(rows or {}) do
+      if row.ref ~= nil and row.ref == ref then
+        return row.id
+      end
+      if row.children then
+        local hit = find(row.children)
+        if hit then
+          return hit
+        end
+      end
     end
   end
+  id = find(tree.rows)
   if tree.selectedID ~= id then
     tree.selectedID = id
     tree:Render()
@@ -1132,28 +1306,42 @@ local function renderList(typ)
   -- 22.10.2026: "the lists are always rebuilt"); the entry takes the cached rows at once
   local cached = Browser.listCache[typ]
   local map = B.Coords.PlayerMap()
+  local gen = def and facetGen(def) or ""
   if cached and cached.map == map then -- the near levels and the default facet are per zone
     entry.list, entry.counts, entry.total = cached.list, cached.counts, cached.total
     Browser.ShowList(entry)
-    return
+    if cached.gen == gen then
+      return
+    end
+    -- a facet moved (a quest handed in): the old rows stay while the new ones build
+  else
+    tree:SetFilters({})
+    tree:SetRows({ { text = S.H.muted .. L["Building the list ..."] .. "|r", kind = "para" } })
+    summary:SetText(L["Building the list ..."])
   end
-  tree:SetFilters({})
-  tree:SetRows({ { text = S.H.muted .. L["Building the list ..."] .. "|r", kind = "para" } })
-  summary:SetText(L["Building the list ..."])
   if listJob then
+    if listJobType == typ and listJobGen == gen and listJobMap == map then
+      return -- this build runs already: it shows the list when done (a quest event per loot)
+    end
     listJob:Cancel()
   end
+  listJobType, listJobGen, listJobMap = typ, gen, map
   listJob = B.Jobs:Run(mod, "browser-list-" .. typ, function(yield)
     local list, counts, total = Browser.BuildList(typ, yield)
-    entry.list, entry.counts, entry.total = list, counts, total
-    Browser.listCache[typ] = { list = list, counts = counts, total = total, map = map }
+    Browser.listCache[typ] = { list = list, counts = counts, total = total, map = map, gen = gen }
   end, {
     onDone = function()
       listJob = nil
-      if shownList ~= entry or not (win and win:IsShown()) then
+      local now = shownList
+      if not (now and now.kind == "list" and now.type == typ and win and win:IsShown()) then
         return
       end
-      Browser.ShowList(entry)
+      local built = Browser.listCache[typ]
+      now.list, now.counts, now.total = built.list, built.counts, built.total
+      Browser.ShowList(now)
+      if def and facetGen(def) ~= gen then
+        Browser.Schedule() -- the facets moved again while it built
+      end
     end,
   })
 end
@@ -1183,7 +1371,15 @@ end
 function Browser.SaveFilters(entry)
   local picks = {}
   for k, v in pairs(entry.picks or {}) do
-    picks[k] = v
+    if type(v) == "table" then -- a chips dimension's set, copied (ADR 0038)
+      local set = {}
+      for key in pairs(v) do
+        set[key] = true
+      end
+      picks[k] = set
+    else
+      picks[k] = v
+    end
   end
   savedFilters()[entry.type] = {
     near = entry.nearChosen and (entry.near or false) or nil,
@@ -1200,7 +1396,15 @@ local function restoreFilters(entry)
   entry.picks = {}
   if type(saved) == "table" then
     for k, v in pairs(saved.picks or {}) do
-      entry.picks[k] = v
+      if type(v) == "table" then
+        local set = {}
+        for key in pairs(v) do
+          set[key] = true
+        end
+        entry.picks[k] = set
+      else
+        entry.picks[k] = v
+      end
     end
     entry.sort = saved.sort
     if saved.near ~= nil then
@@ -1223,7 +1427,7 @@ function Browser.Sorts(list, counts)
   if counts and (counts.distances or 0) > 0 then
     out[#out + 1] = { key = "near", label = L["Nearest"] }
   end
-  for _, f in ipairs(B:GetFilters(list.type, "sort")) do
+  for _, f in ipairs(B:GetFilters(list.entity or list.type, "sort")) do
     out[#out + 1] = { key = f.id, label = L[f.label], def = f }
   end
   return out
@@ -1246,12 +1450,12 @@ local function computeSort(list, def, onDone)
       if yield and i % LIST_SLICE == 0 then
         yield()
       end
-      local ref = list.refs and list.refs[i] or (list.type .. ":" .. tostring(list.ids[i]))
+      local ref = listRef(list, i)
       local r
       if ldef and ldef.record then -- a registered list's own record (a chain)
         r = ldef.record(list.ids[i])
       else
-        r = d and d:Get(list.type, list.ids[i]) or nil
+        r = d and d:Get(list.entity or list.type, list.ids[i]) or nil
       end
       local v = B:FilterValue(def, ref, r)
       values[i] = type(v) == "number" and v or nil
@@ -1291,9 +1495,17 @@ local function choicesOf(dim, counts, active)
     local label = dim.labels and dim.labels(key) or L[key]
     choices[#choices + 1] = { key = key, label = label, count = count }
   end
-  if active ~= nil and counts[active] == nil then -- a choice with no rows left stays visible
-    choices[#choices + 1] =
-      { key = active, label = dim.labels and dim.labels(active) or L[active], count = 0 }
+  local function keep(key) -- a choice with no rows left stays visible
+    if counts[key] == nil then
+      choices[#choices + 1] = { key = key, label = dim.labels and dim.labels(key) or L[key], count = 0 }
+    end
+  end
+  if type(active) == "table" then
+    for key in pairs(active) do
+      keep(key)
+    end
+  elseif active ~= nil then
+    keep(active)
   end
   table.sort(choices, function(a, b)
     local oa, ob = OTHER_KEYS[a.key] or false, OTHER_KEYS[b.key] or false
@@ -1325,6 +1537,7 @@ function Browser.FilterDims(entry, result)
     out[#out + 1] = {
       id = "where",
       title = L["Where"],
+      kind = "spot",
       choices = {
         { key = "here", label = L["Here"], count = result.near.here },
         { key = "continent", label = L["Continent"], count = result.near.continent },
@@ -1341,22 +1554,65 @@ function Browser.FilterDims(entry, result)
   end
   for k, dim in ipairs(list.dims or {}) do
     local active = entry.picks[dim.id]
+    if dim.chips and type(active) == "string" then
+      active = { [active] = true } -- a choice remembered before the chips (ADR 0038)
+      entry.picks[dim.id] = active
+    end
     -- a dimension whose rows all share one key (retail objects have no kinds, retail quests no
     -- levels) shows no pill, unless a remembered choice is on it
     if active ~= nil or not list.distinct or (list.distinct[k] or 0) >= 2 then
+      local choices = choicesOf(dim, result.counts[k] or {}, active)
+      if dim.chips then
+        for _, c in ipairs(choices) do -- the service's tile and colour on the chip (ADR 0038)
+          local glyph = KIND_GLYPH[c.key]
+          c.icon = glyph and B.UI.IconTexture(glyph) or nil
+          c.token = S.ServiceToken(c.key)
+        end
+      end
       out[#out + 1] = {
         id = dim.id,
         title = L[dim.title],
-        choices = choicesOf(dim, result.counts[k] or {}, active),
+        kind = dim.kind, -- the pill's tile (ADR 0046); a dimension without one has none
+        chips = dim.chips or nil,
+        choices = choices,
         active = active,
         all = { label = L["All"], count = result.all[k] },
         onSelect = function(key)
-          entry.picks[dim.id] = key
+          if dim.chips then
+            -- a chip toggles its key in the set; All empties it (ADR 0038)
+            local set = type(entry.picks[dim.id]) == "table" and entry.picks[dim.id] or {}
+            if key == nil then
+              set = {}
+            elseif set[key] then
+              set[key] = nil
+            else
+              set[key] = true
+            end
+            entry.picks[dim.id] = next(set) and set or nil
+          else
+            entry.picks[dim.id] = key
+          end
           Browser.SaveFilters(entry)
           Browser.ShowList(entry)
         end,
       }
     end
+  end
+  if entry.sort == "near" and Browser.HasZones(list) then
+    -- the zone groups of a Nearest list (ADR 0038): a toggle, remembered per list type
+    out[#out + 1] = {
+      id = "groups",
+      title = L["Groups"],
+      choices = { { key = "zone", label = L["By zone"] }, { key = "none", label = L["None"] } },
+      active = Browser.GroupsOn(entry) and "zone" or "none",
+      default = "zone",
+      all = false,
+      tip = L["Nearest first, the rows under their zone's name."],
+      onSelect = function(key)
+        Browser.SetGroups(entry, key ~= "none")
+        Browser.ShowList(entry)
+      end,
+    }
   end
   local sorts = Browser.Sorts(list, counts)
   out[#out + 1] = {
@@ -1413,6 +1669,30 @@ local function sortOf(entry)
     end
 end
 
+-- The row the keys point at in the list pane, or nil (ADR 0038).
+function Browser.KeyRow()
+  local i = tree and tree:KeyIndex()
+  return i and tree.flat[i] or nil
+end
+
+-- Moves the lit row by `step` over the rows that open something (not a group's title).
+function Browser.MoveKeyRow(step)
+  if not tree then
+    return
+  end
+  local flat = tree.flat
+  local i = tree:KeyIndex() or (step > 0 and 0 or #flat + 1)
+  local j = i + step
+  while j >= 1 and j <= #flat do
+    local row = flat[j]
+    if row.ref or row.onClick then
+      tree:SetKeyRow(row)
+      return
+    end
+    j = j + step
+  end
+end
+
 -- Whether the mouse is over the list's rows.
 function Browser.ListUnderMouse()
   return tree ~= nil and tree.scroll:IsMouseOver() == true
@@ -1462,23 +1742,257 @@ function Browser.ShowList(entry)
     result = Browser.Filter(list, entry, order)
   end
   tree:SetFilters(Browser.FilterDims(entry, result))
-  local rows = rowsOf(list, result.rows, words)
-  if #rows == 0 then
-    rows = { { text = S.H.muted .. L["No entries. Is the data pack loaded?"] .. "|r", kind = "para" } }
-    if list.n > 0 then
-      rows[1].text = S.H.muted .. L["Nothing matches these filters. The x on a filter clears it."] .. "|r"
+  tree:SetKeyRow(nil)
+  fillGen = fillGen + 1
+  local gen = fillGen
+  local indexes = result.rows
+  local grouped = entry.sort == "near" and Browser.GroupsOn(entry) and Browser.HasZones(list)
+  local rows = {}
+  local function put(from, to)
+    local slice = {}
+    for i = from, to do
+      slice[#slice + 1] = indexes[i]
+    end
+    for _, row in ipairs(rowsOf(list, slice, words)) do
+      rows[#rows + 1] = row
     end
   end
-  tree:SetRows(rows)
-  markSelected(Browser.ShownPage())
-  local text = string.format(L["%d of %d shown"], #result.rows, result.total)
-  if result.total > #result.rows then
-    text = text .. " - " .. L["narrow with a filter or the search"]
+  local function draw(loaded)
+    local shown
+    if grouped then
+      shown = Browser.GroupRows(rows, list, indexes, Browser.ZoneNames(list, indexes))
+    else
+      shown = {} -- a copy: the loading row below never lands in the rows that grow
+      for j, row in ipairs(rows) do
+        shown[j] = row
+      end
+    end
+    if #shown == 0 then
+      shown = { { text = S.H.muted .. L["No entries. Is the data pack loaded?"] .. "|r", kind = "para" } }
+      if list.n > 0 then
+        shown[1].text = S.H.muted .. L["Nothing matches these filters. The x on a filter clears it."] .. "|r"
+      end
+    elseif loaded < #indexes then
+      shown[#shown + 1] = {
+        id = "loading",
+        kind = "para",
+        text = S.H.muted .. string.format(L["Loading %d of %d ..."], loaded, #indexes) .. "|r",
+      }
+    end
+    tree:SetRows(shown)
+    markSelected(Browser.ShownPage())
+    local text = string.format(L["%d of %d shown"], #indexes, result.total)
+    if result.total > #indexes then
+      text = text .. " - " .. L["narrow with a filter or the search"]
+    end
+    if loaded < #indexes then
+      text = text .. " - " .. string.format(L["%d loaded"], loaded)
+    end
+    if pending then
+      text = text .. " - " .. L["Sorting ..."]
+    end
+    summary:SetText(text)
   end
-  if pending then
-    text = text .. " - " .. L["Sorting ..."]
+  -- the staged list (ADR 0038): the first STAGE rows at once, the rest from a job in steps
+  local first = math.min(#indexes, Browser.STAGE)
+  put(1, first)
+  draw(first)
+  if fillJob then
+    fillJob:Cancel()
+    fillJob = nil
   end
-  summary:SetText(text)
+  if first < #indexes then
+    fillJob = B.Jobs:Run(mod, "browser-fill", function(yield)
+      local at = first
+      while at < #indexes and gen == fillGen do
+        local to = math.min(#indexes, at + Browser.STAGE)
+        put(at + 1, to)
+        at = to
+        draw(at)
+        yield()
+      end
+    end, {
+      onDone = function()
+        fillJob = nil
+      end,
+    })
+  end
+end
+
+-- Whether any row of the list has a zone (ADR 0038: the zone groups).
+function Browser.HasZones(list)
+  return list and list.zones and next(list.zones) ~= nil or false
+end
+
+-- The zone groups toggle of a list type, remembered in the profile (on by default).
+function Browser.GroupsOn(entry)
+  local p = db()
+  if type(p.listGroups) ~= "table" then
+    return true -- nothing chosen yet: on
+  end
+  return p.listGroups[entry.type] ~= false
+end
+
+function Browser.SetGroups(entry, on)
+  local p = db()
+  if type(p.listGroups) ~= "table" then
+    p.listGroups = {}
+  end
+  p.listGroups[entry.type] = on and nil or false
+end
+
+-- The fields of a list's filter text (ADR 0045), the record being the row's index: `level`
+-- (number), `zone` (the zone's name) and each dimension by its title in lower case without
+-- spaces (its key and the key's label). Built once per list.
+function Browser.ListFields(list)
+  if list.queryFields then
+    return list.queryFields
+  end
+  local d = data()
+  local zoneNames = {}
+  local fields = {
+    level = {
+      kind = "number",
+      get = function(i)
+        local v = list.levels and list.levels[i]
+        if type(v) == "table" then
+          v = v[1]
+        end
+        return tonumber(v)
+      end,
+    },
+    zone = {
+      get = function(i)
+        local z = list.zones and list.zones[i]
+        if not z then
+          return nil
+        end
+        if zoneNames[z] == nil then
+          local r = d and d:Get("zone", z) or nil
+          zoneNames[z] = r and r.name or false
+        end
+        return zoneNames[z] or nil
+      end,
+    },
+  }
+  fields.lvl = fields.level
+  -- a dimension's words of a row (its keys and their labels), made once per row and dimension:
+  -- the filter asks for them on every key
+  local words = {}
+  local function dimWords(k, dim, i)
+    local memo = words[k]
+    if not memo then
+      memo = {}
+      words[k] = memo
+    end
+    local out = memo[i]
+    if out == nil then
+      local key = list.values[k] and list.values[k][i]
+      if key == nil then
+        out = false
+      else
+        out = {}
+        for _, v in ipairs(type(key) == "table" and key or { key }) do
+          out[#out + 1] = tostring(v)
+          local label = dim.labels and dim.labels(v) or L[v]
+          if label then
+            out[#out + 1] = tostring(label)
+          end
+        end
+      end
+      memo[i] = out
+    end
+    return out or nil
+  end
+  -- `type:vendor`: any dimension's key or label
+  local function anyDim(i)
+    local out = {}
+    for k, dim in ipairs(list.dims or {}) do
+      for _, w in ipairs(dimWords(k, dim, i) or {}) do
+        out[#out + 1] = w
+      end
+    end
+    return out
+  end
+  fields.type = { get = anyDim }
+  fields.is = fields.type
+  for k, dim in ipairs(list.dims or {}) do
+    local name = string.lower(string.gsub(tostring(dim.title or dim.id or ""), "[^%w]", ""))
+    if name ~= "" and not fields[name] then
+      fields[name] = {
+        get = function(i)
+          return dimWords(k, dim, i)
+        end,
+      }
+    end
+  end
+  list.queryFields = fields
+  return fields
+end
+
+-- The fields' names for the filter box's tooltip.
+function Browser.ListFieldNames(list)
+  local names = {}
+  for name in pairs(Browser.ListFields(list)) do
+    if name ~= "lvl" and name ~= "is" then
+      names[#names + 1] = name
+    end
+  end
+  table.sort(names)
+  return table.concat(names, ", ")
+end
+
+-- The names of the zones the rows `indexes` of `list` belong to: { [map] = name }.
+function Browser.ZoneNames(list, indexes)
+  local d = data()
+  local names = {}
+  for _, i in ipairs(indexes) do
+    local z = list.zones[i]
+    if z and names[z] == nil then
+      local r = d and d:Get("zone", z) or nil
+      names[z] = r and r.name or false
+    end
+  end
+  return names
+end
+
+-- The rows of a Nearest list under their zone (ADR 0038): a foldable group row per zone in the
+-- order the zones first appear (nearest first), its name and count, the rows without a zone
+-- under "Elsewhere" last. `rows[j]` is the row of `indexes[j]`. Pure.
+function Browser.GroupRows(rows, list, indexes, names)
+  local out, groups = {}, {}
+  local elsewhere
+  for j, row in ipairs(rows) do
+    local z = list.zones[indexes[j]]
+    local g
+    if z and names[z] then
+      g = groups[z]
+      if not g then
+        g = {
+          id = "zone:" .. tostring(z),
+          group = true,
+          zone = z,
+          children = {},
+          icon = B.UI.IconTexture("zone"),
+        }
+        groups[z] = g
+        out[#out + 1] = g
+      end
+    else
+      elsewhere = elsewhere
+        or { id = "zone:elsewhere", group = true, children = {}, icon = B.UI.IconTexture("zone") }
+      g = elsewhere
+    end
+    g.children[#g.children + 1] = row
+  end
+  if elsewhere then
+    out[#out + 1] = elsewhere
+  end
+  for _, g in ipairs(out) do
+    local name = g.zone and names[g.zone] or L["Elsewhere"]
+    g.text = tostring(name) .. "  " .. S.H.muted .. #g.children .. "|r"
+  end
+  return out
 end
 
 -- The search home: no list on open, results from
@@ -1490,6 +2004,7 @@ local SEARCH_MIN = 2
 local SEARCH_LIMIT = 100
 local HOME_RECENT = 8
 local homeType -- the chip's type, nil for All (per session)
+local homeKeep -- a list's keep rule over the search hits, with its type (Browser.Search)
 
 local function typeTag(ref)
   local entityType = B.Entity.Parse(ref)
@@ -1502,10 +2017,22 @@ end
 
 -- The rows of the home with an empty box: the registered views by group (My quests, All quests,
 -- ...), the bookmarks, the recent pages. The player's zone is the Here column since C4.
+-- The views the Browser offers: all but those a list of its own covers (`coveredBy`, a list type:
+-- Quests' All quests is the Quests list with its Status and Type filters, ).
+local function shownViews()
+  local out = {}
+  for _, def in ipairs(B:GetViews()) do
+    if not (def.coveredBy and listDef(def.coveredBy)) then
+      out[#out + 1] = def
+    end
+  end
+  return out
+end
+
 function Browser.IdleRows()
   local rows = {}
   local groups, order = {}, {}
-  for _, def in ipairs(B:GetViews()) do
+  for _, def in ipairs(shownViews()) do
     local group = tostring(def.group)
     local list = groups[group]
     if not list then
@@ -1620,7 +2147,7 @@ local function onTypeChip(key)
   if text ~= "" and key ~= nil and key == homeType then
     key = nil -- the filtering list once more: the search over every type again (ADR 0018)
   end
-  homeType = key
+  homeType, homeKeep = key, nil
   if text == "" then
     if key then
       Browser.List(key) -- nothing typed: the type's list with its facets
@@ -1665,6 +2192,17 @@ local function renderHome(text)
   searchHandle = B:Search(query, { limit = SEARCH_LIMIT, types = types }, function(results, done)
     if shownList ~= entry or not (win and win:IsShown()) then
       return
+    end
+    if homeKeep then
+      local kept, d = {}, data()
+      for _, r in ipairs(results) do
+        local typ, id = B.Entity.Parse(r.ref)
+        local rec = d and typ and d:Get(typ, id) or nil
+        if rec and homeKeep(rec) then
+          kept[#kept + 1] = r
+        end
+      end
+      results = kept
     end
     local rows = Browser.HomeRows(results, query)
     if #rows == 0 then
@@ -1799,6 +2337,10 @@ function Browser.ShowView(id, args)
   if not (mod and mod:IsEnabled() and B:GetView(id)) then
     return false
   end
+  local covered = B:GetView(id).coveredBy
+  if covered and listDef(covered) then
+    return Browser.List(covered) -- /bq all: the Quests list with its filters
+  end
   local wasShown = win ~= nil and win:IsShown()
   Browser.Show({ kind = "view", id = id, args = args or {} })
   -- a view lives in the list pane: out with it (R25.36); sliding only in a window already open
@@ -1825,6 +2367,78 @@ local function syncSearchBox(entry)
   if dossier and dossier.query and dossier.query ~= "" then
     dossier:SetQuery("")
   end
+  if filterBox and filterBox.entry ~= entry then
+    filterBox.entry = entry -- another entry: its own filter text (Back brings a list's back)
+    local want = entry.filterText or ""
+    if (filterBox:GetText() or "") ~= want then
+      syncingFilter = true
+      filterBox:SetText(want)
+      syncingFilter = false
+    end
+    if want ~= "" and entry.kind ~= "list" then
+      tree:SetQuery(want)
+    end
+    Browser.UpdateFilterCount()
+  end
+end
+
+-- The list pane's filter ("a real time search filter to all listings
+-- in the middle panel"): the rows the pane shows, narrowed to those whose words hold the text, as
+-- you type; the count of the rows left in the box. The Here entry's dossier filters the same way.
+-- A type list filters its built rows by name (all of them, not only the rows the cap shows);
+-- a view, the search and the Here entry filter the rows they show.
+Browser.FILTER_DELAY = 0.15 -- seconds after the last key before a big list filters
+Browser.FILTER_LAZY_N = 1000 -- a list with that many rows waits for the typing to pause
+local filterGen = 0
+
+function Browser.FilterList(text)
+  local entry = shownList or Browser.ListEntry()
+  text = string.gsub(text or "", "^%s*(.-)%s*$", "%1") -- its case stays for OR/AND/NOT (ADR 0045)
+  entry.filterText = text ~= "" and text or nil
+  if entry.kind == "list" and entry.list and win and win:IsShown() then
+    if entry.list.n >= Browser.FILTER_LAZY_N and text ~= "" then
+      -- a big list: once the typing pauses, not on every key
+      filterGen = filterGen + 1
+      local gen = filterGen
+      C_Timer.After(Browser.FILTER_DELAY, function()
+        if gen == filterGen and shownList == entry and win and win:IsShown() then
+          Browser.ShowList(entry)
+          Browser.UpdateFilterCount()
+        end
+      end)
+      return
+    end
+    filterGen = filterGen + 1 -- a pending lazy run is stale now
+    Browser.ShowList(entry)
+  elseif tree then
+    tree:SetQuery(text)
+  end
+  if hereDossier then
+    hereDossier:SetQuery(entry.kind == "here" and text or "")
+  end
+  Browser.UpdateFilterCount()
+end
+
+function Browser.UpdateFilterCount()
+  if not (filterBox and tree) then
+    return
+  end
+  -- the list's fields for the box's tooltip and its query look (ADR 0045)
+  local entry = shownList
+  local list = entry and entry.kind == "list" and entry.list or nil
+  filterBox.queryOpts = list and { fields = Browser.ListFields(list) } or nil
+  filterBox.queryFields = list and Browser.ListFieldNames(list) or nil
+  if (tree.query or "") == "" then
+    filterBox.count:SetText("") -- a type list says its count in the summary
+    return
+  end
+  local n = 0
+  for _, row in ipairs(tree.flat or {}) do
+    if row.ref and not row.group then
+      n = n + 1
+    end
+  end
+  filterBox.count:SetText(tostring(n))
 end
 
 -- The Here entry in the list pane (C4, ADR 0018): the dossier of the player's zone (the `here`
@@ -1873,8 +2487,10 @@ function Browser.Render()
   elseif entry.kind == "home" then
     renderHome(entry.text or "")
   elseif entry.kind == "list" then
-    if entry.list then
-      local def = listDef(entry.type)
+    local def = listDef(entry.type)
+    local cached = Browser.listCache[entry.type]
+    local stale = def and cached and cached.gen ~= facetGen(def) -- a quest's status moved
+    if entry.list and not stale then
       win:SetTitle(L[def and def.label or entry.type])
       noHeader()
       Browser.ShowList(entry)
@@ -1926,15 +2542,34 @@ end
 -- ends a preview. (R25.32: "scrolling a quest's text jumps to another
 -- quest"): rows passing under the cursor while the list scrolls start no preview, and a preview
 -- the mouse carries into the detail pane (to read or scroll it) stays there as the page.
+-- Whether a resting row may preview now: the setting `preview` (a
+-- preview on every hover was "tricky to understand ... we stay on the one clicked", so Shift by
+-- default; 01.11.2026: a setting, every hover or never as well).
+local function previewAllowed()
+  local mode = db().preview or "shift"
+  if mode == "hover" then
+    return true
+  elseif mode == "off" then
+    return false
+  end
+  return IsShiftKeyDown()
+end
+Browser.PreviewAllowed = previewAllowed
+
 function Browser.OnRowHover(row, entering)
   if entering and row and row.ref then
     local ref = row.ref
     hovered = ref
-    if db().slim or ref == Browser.PageRef() or GetTime() - lastWheel < Browser.WHEEL_QUIET then
+    if
+      db().slim
+      or ref == Browser.PageRef()
+      or GetTime() - lastWheel < Browser.WHEEL_QUIET
+      or not previewAllowed()
+    then
       return
     end
     mod:Coalesce("preview", S.TipDelay() or 1, function()
-      if hovered == ref and win and win:IsShown() then
+      if hovered == ref and win and win:IsShown() and previewAllowed() then
         Browser.Preview(ref)
       end
     end)
@@ -1996,7 +2631,7 @@ function Browser.NavRows()
     nav = { kind = "here" },
   }
   local groups, order = {}, {}
-  for _, def in ipairs(B:GetViews()) do
+  for _, def in ipairs(shownViews()) do
     local text = tostring(def.title)
     if def.summary then
       local ok, words = pcall(def.summary)
@@ -2351,7 +2986,8 @@ local function build(self)
   toolbar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
   -- the bar is 26 px with 30 px arrows: the owner wanted Back and Forward prominent (22.10.2026)
   toolbar:SetHeight(TOOLBAR_H)
-  toolbar.lists = S.button(toolbar, L["Lists"], 46, 22) -- a narrow window's navigation (ADR 0018 E)
+  -- a narrow window's navigation (ADR 0018 E)
+  toolbar.lists = S.action(toolbar, { icon = "buttons", label = L["Lists"], boxed = true, row = true })
   toolbar.lists.tip = function()
     return L["Lists"], L["Here, your quests, the lists, bookmarks and recent pages."]
   end
@@ -2359,20 +2995,19 @@ local function build(self)
   toolbar.lists:SetScript("OnClick", function()
     Browser.ToggleNav()
   end)
-  toolbar.back = S.button(toolbar, "<", 30, TOOLBAR_H)
+  -- Back and Forward as declared actions (ADR 0046): the pictogram and the word in every look
+  toolbar.back = S.action(toolbar, { icon = "back", label = L["Back"], boxed = true, row = true })
   toolbar.back.tip = function()
     return L["Back"], L["The page before. Also: hold the right mouse button and drag to the left."]
   end
-  S.setSize(toolbar.back.label, 16)
   toolbar.back:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
   toolbar.back:SetScript("OnClick", function()
     Browser.Back()
   end)
-  toolbar.forward = S.button(toolbar, ">", 30, TOOLBAR_H)
+  toolbar.forward = S.action(toolbar, { icon = "forward", label = L["Forward"], boxed = true, row = true })
   toolbar.forward.tip = function()
     return L["Forward"], L["The page after. Also: hold the right mouse button and drag to the right."]
   end
-  S.setSize(toolbar.forward.label, 16)
   toolbar.forward:SetPoint("LEFT", toolbar.back, "RIGHT", 2, 0)
   toolbar.forward:SetScript("OnClick", function()
     Browser.Forward()
@@ -2381,8 +3016,28 @@ local function build(self)
   -- clear); following the target stays a setting (followTarget, on by default)
   -- the search box fills the bar after the arrows; typing searches the world
   search = S.search(toolbar, L["Search: a name, or a type first (npc wel)"])
+  search.queryFields = L["type (npc, item, quest, zone, ...)"] -- the world search's (ADR 0045)
   search:SetPoint("LEFT", toolbar.forward, "RIGHT", 8, 0)
   search:SetPoint("RIGHT", toolbar, "RIGHT", 0, 0)
+  -- the keys (ADR 0038): while the box has focus, Up and Down move a lit row through the list,
+  -- Enter opens it, Escape clears the box; the rows take no keys of their own
+  search:SetScript("OnKeyDown", function(_, key)
+    if key == "DOWN" or key == "UP" then
+      Browser.MoveKeyRow(key == "DOWN" and 1 or -1)
+    end
+  end)
+  search:SetScript("OnEnterPressed", function(box)
+    local row = Browser.KeyRow()
+    if row then
+      rowClick(row, "LeftButton", tree)
+    else
+      box:ClearFocus()
+    end
+  end)
+  search:SetScript("OnEscapePressed", function(box)
+    box:SetText("")
+    box:ClearFocus()
+  end)
   search:SetScript("OnTextChanged", function(box)
     local text = box:GetText() or ""
     if text == "" then
@@ -2399,19 +3054,36 @@ local function build(self)
       Browser.SetListOpen(true, true) -- the results show in the list (R25.36)
     end
     local entry = shownList or Browser.ListEntry()
-    if entry.kind == "home" then
+    local before = history[cursor - 1]
+    if
+      entry.kind == "home"
+      and text == ""
+      and before
+      and (before.kind == "list" or before.kind == "here")
+    then
+      -- the search was typed on a list: emptied, the list shows whole again (owner, retail
+      -- 31.10.2026: "the middle tile should again show the full list ... but it stays empty")
+      Browser.Back()
+    elseif entry.kind == "home" then
       entry.text = text
       renderHome(text) -- the search entry searches as you type
     elseif text ~= "" then
       -- typing anywhere searches the world; on a list the search
-      -- keeps its type
-      Browser.Search(text, entry.kind == "list" and entry.type or nil)
+      -- keeps its type: the data type of its records, narrowed by its keep rule (owner, retail
+      -- 31.10.2026: "wolf" on Mobs found nothing, no provider knows "mob")
+      local def = entry.kind == "list" and listDef(entry.type) or nil
+      Browser.Search(
+        text,
+        entry.kind == "list" and (def and def.entity or entry.type) or nil,
+        def and def.keep or nil
+      )
     end
   end)
 
   -- the navigation (ADR 0018 A): a tree of entries, its folds remembered
   nav = CreateFrame("Frame", nil, content)
   S.panel(nav, S.C.panel)
+  S.inset(nav) -- the game's inset under its frames
   -- the navigation's right edge: a grip as the list's splitter, dragging widens the navigation
   navGrip = CreateFrame("Frame", nil, content)
   navGrip:SetWidth(8)
@@ -2467,6 +3139,7 @@ local function build(self)
   -- the list pane: a view's control bar, the summary, the filter bar and the rows (the tree), or
   -- the Here entry (the player's zone as a dossier)
   listPane = CreateFrame("Frame", nil, content)
+  S.inset(listPane)
   header = CreateFrame("Frame", nil, listPane)
   header:SetPoint("TOPLEFT", listPane, "TOPLEFT", 0, 0)
   header:SetPoint("TOPRIGHT", listPane, "TOPRIGHT", 0, 0)
@@ -2475,10 +3148,42 @@ local function build(self)
   controlBar:SetPoint("TOPLEFT", header, "TOPLEFT", 0, 0)
   controlBar:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, 0)
   controlBar:Hide()
+  -- the filter of the rows shown, beside the summary
+  filterBox = S.search(listPane, L["Filter"])
+  filterBox:SetHeight(20)
+  filterBox:SetWidth(Browser.FILTER_W)
+  filterBox:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -14, -2)
+  filterBox.count = S.text(filterBox, 10, S.C.muted)
+  filterBox.count:SetPoint("RIGHT", filterBox.clear, "LEFT", -2, 0)
+  filterBox:SetScript("OnTextChanged", function(box)
+    local text = box:GetText() or ""
+    box.hint:SetShown(text == "")
+    box.clear:SetShown(text ~= "")
+    if not syncingFilter then
+      Browser.FilterList(text)
+    end
+  end)
+  filterBox:SetScript("OnKeyDown", function(_, key)
+    if key == "DOWN" or key == "UP" then
+      Browser.MoveKeyRow(key == "DOWN" and 1 or -1)
+    end
+  end)
+  filterBox:SetScript("OnEnterPressed", function(box)
+    local row = Browser.KeyRow()
+    if row then
+      rowClick(row, "LeftButton", tree)
+    else
+      box:ClearFocus()
+    end
+  end)
+  filterBox:SetScript("OnEscapePressed", function(box)
+    box:SetText("")
+    box:ClearFocus()
+  end)
   summary = S.text(listPane, 11, S.C.dim)
-  summary:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 2, -4)
-  summary:SetPoint("TOPRIGHT", header, "BOTTOMRIGHT", -2, -4)
-  summary:SetHeight(14)
+  summary:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 2, -2)
+  summary:SetPoint("RIGHT", filterBox, "LEFT", -6, 0)
+  summary:SetHeight(20)
   tree = B.UI.Tree(listPane, {
     db = db().tree,
     twoLine = true, -- rows with `meta` (views: My quests) take two lines; list rows have none
@@ -2579,11 +3284,13 @@ local function build(self)
 
   -- the detail pane: the dossier of the kept page or the preview (ADR 0018)
   detailPane = CreateFrame("Frame", nil, content)
+  S.inset(detailPane)
   detailPane:SetPoint("TOPLEFT", splitter, "TOPRIGHT", 4, 0)
   detailPane:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
   dossier = B.UI.Dossier(detailPane, {
     iconsAlways = true,
     portrait = true, -- the 3D model of a creature or a wearable item
+    stats = true, -- the stats strip under the band (ADR 0038)
     worth = Browser.ShowWorth,
     ctx = { source = "browser" },
     buttons = Browser.BandButtons,
@@ -2591,7 +3298,7 @@ local function build(self)
   })
 
   -- the Slim / Wide toggle in the title bar (C8)
-  toolbar.slim = S.button(win.head, L["Slim"], 44, 20)
+  toolbar.slim = S.action(win.head, { icon = "undock", label = L["Slim"], row = true })
   toolbar.slim.tip = function()
     local text = "Slim keeps only your quests (the tracker) in a narrow window and hides the"
       .. " game's quest tracker; Wide brings the lists and the page back."
@@ -2604,7 +3311,7 @@ local function build(self)
   end)
   -- Dock beside the map (ADR 0013 E) lives in the title bar too, so slim mode has it
   --
-  toolbar.dock = S.button(win.head, L["Dock"], 46, 20)
+  toolbar.dock = S.action(win.head, { icon = "dock", label = L["Dock"], row = true })
   toolbar.dock.tip = function()
     return L["Dock to the map"],
       L["The window sits beside the map at its height and moves with it. Click again to undock."]
@@ -2616,6 +3323,7 @@ local function build(self)
   end)
 
   self.win, self.tree, self.toolbar, self.summary, self.search = win, tree, toolbar, summary, search
+  self.filterBox = filterBox
   self.header, self.controlBar, self.dossier, self.hereDossier = header, controlBar, dossier, hereDossier
   self.nav, self.navTree, self.listPane, self.detailPane = nav, navTree, listPane, detailPane
   self.listTab = listTab
@@ -2766,6 +3474,16 @@ function Browser.OpenWindow()
   return Browser.ShowHere()
 end
 
+-- The minimap button: the window, or closed when it shows already ("opens
+-- but does not close"); true when shown.
+function Browser.ToggleWindow()
+  if win and win:IsShown() then
+    win:Hide()
+    return false
+  end
+  return Browser.OpenWindow()
+end
+
 show = function(entry, record)
   if not win then
     build(mod)
@@ -2788,12 +3506,13 @@ end
 -- The world search for `text`, filtered by a type (`typ`, nil keeps the current filter, false
 -- clears it): a search entry in the list pane with the text in the box. Back returns to where it
 -- was typed; the detail keeps its page.
-function Browser.Search(text, typ)
+function Browser.Search(text, typ, keep)
   if not (mod and mod:IsEnabled()) then
     return false
   end
   if typ ~= nil then
     homeType = typ or nil
+    homeKeep = keep -- a list's keep rule over the hits (Mobs: the NPCs without a service)
   end
   local entry = Browser.ListEntry()
   if entry.kind == "home" and win and win:IsShown() and shownList == entry then
@@ -2904,7 +3623,7 @@ mod = B:NewModule("Browser", {
   news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
   open = function()
-    Browser.OpenWindow()
+    Browser.ToggleWindow()
   end,
   title = L["Browser"],
   apiVersion = 1,
@@ -2941,8 +3660,30 @@ mod = B:NewModule("Browser", {
       label = L["Hide the game's objective tracker in slim mode"],
       default = true,
     },
+    {
+      -- the hover preview
+      type = "select",
+      key = "preview",
+      label = L["Preview a row in the page pane"],
+      default = "shift",
+      values = {
+        shift = L["While Shift is held"],
+        hover = L["On every hover"],
+        off = L["Never"],
+      },
+    },
   },
   OnEnable = function(self)
+    -- a note saved on the shown page shows at once ("it does not
+    -- show up without reloading the node")
+    self:On("BASTIANS_NOTES_CHANGED", function()
+      -- a frame later: the registry drops the section's cache on the same message first
+      C_Timer.After(0, function()
+        if win and win:IsShown() and dossier and Browser.PageRef() then
+          renderDetail()
+        end
+      end)
+    end)
     listening = {
       BASTIANS_DATA_LOADED = true,
       BASTIANS_ENTITY_CHANGED = true,
@@ -3093,6 +3834,7 @@ mod = B:NewModule("Browser", {
         Browser.Open(ref)
       end
     end)
+    ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
   OnDisable = function()
     if win then

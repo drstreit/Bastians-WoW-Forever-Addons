@@ -185,6 +185,23 @@ function State.IsQuestDone(questID)
   return State.done[questID] == true
 end
 
+-- In the log and done: ready to turn in.
+function State.IsReady(questID)
+  local e = State.log[questID]
+  return e ~= nil and (e.readyForTurnIn == true or e.isComplete == true)
+end
+
+-- The log entries ready to turn in, in log order.
+function State.Ready()
+  local out = {}
+  for _, id in ipairs(State.order or {}) do
+    if State.IsReady(id) then
+      out[#out + 1] = State.log[id]
+    end
+  end
+  return out
+end
+
 -- The `state` table the pure Logic layer takes (Logic.lua header). One table, kept current, so views
 -- build it once; `skills` and `rep` stay unknown until the profession reader exists (B5.3+).
 local logicState
@@ -257,6 +274,16 @@ ns.Progress = {
   end,
   IsInLog = function(_, questID)
     return State.IsInLog(questID)
+  end,
+  IsReady = function(_, questID)
+    return State.IsReady(questID)
+  end,
+  -- the quests in the log and how many can be turned in; nil before the first snapshot
+  LogCounts = function()
+    if State.count == nil then
+      return nil
+    end
+    return State.count, #State.Ready()
   end,
   -- The live table; consumers read it and never modify it.
   KnownFlightPaths = function()

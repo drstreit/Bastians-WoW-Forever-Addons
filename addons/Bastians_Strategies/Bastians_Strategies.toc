@@ -2,8 +2,23 @@
 ## Title: Bastian's Strategies
 ## IconTexture: Interface\AddOns\Bastians_Strategies\Icon
 ## Notes: Bastian's Gold Rumours: a book of gold strategies to read in game, with live prices, places on the map and the travellers who found them.
+## Notes-koKR: 바스티안의 골드 소문: 게임 안에서 읽는 골드 전략 책, 실시간 시세, 지도의 장소, 그것을 찾아낸 여행자들.
+## Notes-zhCN: 巴斯蒂安的金币传闻：一本在游戏中阅读的赚金策略之书，附实时价格、地图上的地点和发现它们的旅人。
+## Notes-zhTW: 巴斯蒂安的金幣傳聞：一本在遊戲中閱讀的賺金策略之書，附即時價格、地圖上的地點與發現它們的旅人。
+## Notes-deDE: Bastian's Gold Rumours: ein Buch mit Goldstrategien zum Lesen im Spiel, mit aktuellen Preisen, Orten auf der Karte und den Reisenden, die sie fanden.
+## Notes-frFR: Bastian's Gold Rumours : un livre de stratégies pour l'or à lire en jeu, avec les prix du moment, les lieux sur la carte et les voyageurs qui les ont trouvées.
+## Notes-esES: Bastian's Gold Rumours: un libro de estrategias de oro para leer en el juego, con precios al día, lugares en el mapa y los viajeros que las encontraron.
+## Notes-esMX: Bastian's Gold Rumours: un libro de estrategias de oro para leer en el juego, con precios al día, lugares en el mapa y los viajeros que las encontraron.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
 ## Author: Bastian
-## Version: 1.1.2
+## Version: 1.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Data_Strategies
@@ -20,4 +35,5 @@ News.lua
 Book.lua
 Plate.lua
 Window.lua
+Feed.lua
 Strategies.lua

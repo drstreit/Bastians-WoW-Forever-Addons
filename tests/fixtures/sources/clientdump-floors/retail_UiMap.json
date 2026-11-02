@@ -1,0 +1,12 @@
+{
+ "table": "UiMap",
+ "build": "12.1.7.fixture",
+ "rowCount": 4,
+ "columns": ["Name_lang", "ID", "ParentUiMapID", "Flags", "System", "Type"],
+ "rows": [
+  {"Name_lang": "Westfall", "ID": 52, "ParentUiMapID": 13, "Flags": 6, "System": 0, "Type": 3},
+  {"Name_lang": "The Deadmines", "ID": 291, "ParentUiMapID": 52, "Flags": 0, "System": 0, "Type": 4},
+  {"Name_lang": "The Deadmines", "ID": 292, "ParentUiMapID": 52, "Flags": 0, "System": 0, "Type": 4},
+  {"Name_lang": "The Stockade", "ID": 225, "ParentUiMapID": 84, "Flags": 0, "System": 0, "Type": 4}
+ ]
+}

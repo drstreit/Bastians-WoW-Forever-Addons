@@ -104,12 +104,14 @@ local function makeItemBar()
   S.panel(itemBar, S.C.panel)
   itemBar:Hide()
   itemBar.buttons = {}
-  local down = C_CVar.GetCVarBool("ActionButtonUseKeyDown")
   for i = 1, ITEM_BUTTONS do
     local b = CreateFrame("Button", "BastiansQuestsItem" .. i, itemBar, "SecureActionButtonTemplate")
     b:SetSize(26, 26)
     b:SetPoint("TOP", itemBar, "TOP", 0, -2 - (i - 1) * 28)
-    b:RegisterForClicks(down and "AnyDown" or "AnyUp")
+    -- both, as Blizzard's action buttons: a mouse click always acts on its release, a key binding
+    -- on the press when "cast on key down" is on (SecureActionButton_OnClick); only "AnyDown"
+    -- left a mouse click without effect for players with that setting (01.11.2026)
+    b:RegisterForClicks("AnyUp", "AnyDown")
     b:SetAttribute("type", "item")
     b.icon = b:CreateTexture(nil, "ARTWORK")
     b.icon:SetAllPoints()
@@ -223,7 +225,11 @@ W.QuestItemOf = questItemOf
 -- table for Views.active with the filters set.
 function W.LogFilters()
   local p = db()
-  return { hideDone = p.logHideDone == true, trackedOnly = p.logTrackedOnly == true }
+  return {
+    hideDone = p.logHideDone == true,
+    trackedOnly = p.logTrackedOnly == true,
+    chainNext = mod.FollowedChains and mod.FollowedChains() or nil,
+  }
 end
 
 -- The open leads of the Library's tales for My quests (quests.md "Tales in the tracker"), through
@@ -340,7 +346,6 @@ local function renderAll(host)
       end,
     },
   })
-  local state = State.ForLogic()
   local filter = { status = db().allStatus, kind = db().allKind, band = db().allBand }
   local d = data()
   local textOf
@@ -350,11 +355,24 @@ local function renderAll(host)
       return rec and rec.details or nil
     end
   end
+  -- a build that runs for these filters shows its rows when done: a quest event per loot started
+  -- it again and again, so it never finished
+  local buildKey = table.concat(
+    { tostring(filter.status), tostring(filter.kind), tostring(filter.band) },
+    "|"
+  ) .. (textOf and "|text" or "")
+  local job = W.allJob
+  if job and not (job:IsDone() or job:IsCancelled()) and W.allKey == buildKey then
+    host:SetSummary(L["Building the list ..."])
+    return
+  end
+  local state = State.ForLogic()
   host:SetSummary(L["Building the list ..."])
   host:SetChips({}, nil, nil)
   host:SetRows({ R.note("note:building", L["Building the list ..."]) })
   local rows, counts
-  host:Job("quests-all", function(yield)
+  W.allKey = buildKey
+  W.allJob = host:Job("quests-all", function(yield)
     local shown
     rows, counts, shown = V.all(state, filter, yield, textOf)
     counts.shown = shown
@@ -831,13 +849,18 @@ function W.Register(self)
       group = L["Quests"],
       order = i * 10,
       pinned = key == "log" or nil, -- "My quests" is a toolbar button of the host
+      -- All quests is the Browser's Quests list with its Status and Type filters (owner, retail
+      -- 31.10.2026); a host with that list leaves the view out, this addon's own window keeps it
+      coveredBy = key == "all" and "quest" or nil,
       render = function(host, args)
         RENDER[key](host, args)
       end,
       summary = key == "log" and function()
         return tostring(State.count or 0) .. " " .. L["in the log"]
       end or nil,
-      invalidateOn = {
+      -- All quests does not follow the names arriving (BASTIANS_ENTITY_CHANGED): each one built
+      -- the whole list again, and its rows asked for the next names (retail 31.10.2026)
+      invalidateOn = key == "all" and { "BASTIANS_QUESTS_CHANGED", W.REFRESH } or {
         "BASTIANS_QUESTS_CHANGED",
         "BASTIANS_TRACKED_CHANGED", -- the "Tracked" filter and the tracked tag of a row
         "BASTIANS_ENTITY_CHANGED",
@@ -888,6 +911,7 @@ function W.Register(self)
   self:On("BASTIANS_PLAYER_MOVED_ZONE", W.Schedule)
   self:On("BASTIANS_GRAPH_TIMES", W.Schedule) -- the ranking's ways from the character got times
   self:On("BASTIANS_TRACKED_CHANGED", W.Schedule)
+  self:On("BASTIANS_ACTION_STATE", W.Schedule) -- Voice's play buttons turn into stop and back
   self:On("BASTIANS_TALE_CHANGED", W.Schedule) -- the Tales section: the tracker frame too
   self:On("BASTIANS_THEME_CHANGED", function() -- the colour codes of the rows (ST3)
     W.Schedule()
@@ -919,6 +943,7 @@ function W.Register(self)
 end
 
 -- Key binding name (the binding system reads this global; see Bindings.xml)
+BINDING_HEADER_BASTIANS_QUESTS = "Bastian's Quests" -- one header per addon (plan-launch-review I4)
 BINDING_NAME_BASTIANS_QUESTS = L["Open Bastian's Quests"]
 
 SLASH_BASTIANSQUESTS1 = "/bq"

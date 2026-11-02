@@ -583,6 +583,253 @@ def _tale() -> Shape:  # a closed book, its ribbon hanging out below: Bastian's 
     return union(cut(book, box(34, 44, 46, 52), gap=0), title, ribbon)
 
 
+def _play() -> Shape:  # the Orbiter's hub (voice.md, 01.11.2026): a triangle to the right
+    return polygon([(18, 10), (54, 32), (18, 54)])
+
+
+def _pause() -> Shape:  # two bars
+    return union(box(15, 11, 27, 53, 2.5), box(37, 11, 49, 53, 2.5))
+
+
+def _stop() -> Shape:  # a square
+    return box(14, 14, 50, 50, 4)
+
+
+def _replay() -> Shape:  # a bar and a triangle to the left: back to the start
+    return union(box(11, 11, 19, 53, 2), polygon([(53, 10), (22, 32), (53, 54)]))
+
+
+def _orbit() -> Shape:  # two orbits around a hub, a moon on the outer one: Bastian's Orbiter
+    return union(
+        circle(32, 32, 7), ring(32, 32, 15, 3.0), ring(32, 32, 25, 3.0), circle(48, 15, 5.5)
+    )
+
+
+# ---- the action pictograms of the widget set (ADR 0046 E4, 01.11.2026: "created by us") -----
+
+
+def _bookmark() -> Shape:  # a ribbon
+    return polygon([(18, 6), (46, 6), (46, 58), (32, 46), (18, 58)])
+
+
+def _lock() -> Shape:  # a padlock
+    body = box(14, 28, 50, 58, 5)
+    shackle = intersect(ring(32, 27, 11, 5.5), halfplane(0, 1, 28))
+    hole = union(circle(32, 41, 3.6), box(30.4, 41, 33.6, 50, 1))
+    return union(cut(body, hole), shackle)
+
+
+def _close() -> Shape:  # a cross
+    return union(capsule(15, 15, 49, 49, 4.5), capsule(49, 15, 15, 49, 4.5))
+
+
+def _filter() -> Shape:  # a funnel
+    return polygon([(8, 10), (56, 10), (37, 32), (37, 54), (27, 48), (27, 32)])
+
+
+def _clear() -> Shape:  # a cross in a disc: empty the box
+    return cut(circle(32, 32, 24), capsule(22, 22, 42, 42, 3.4), capsule(42, 22, 22, 42, 3.4))
+
+
+def _invite() -> Shape:  # a person and a plus
+    person = union(circle(24, 20, 9), intersect(circle(24, 60, 17), halfplane(0, 1, 56)))
+    plus = union(capsule(48, 14, 48, 30, 2.8), capsule(40, 22, 56, 22, 2.8))
+    return union(person, plus)
+
+
+def _more() -> Shape:  # three dots
+    return union(circle(14, 32, 6), circle(32, 32, 6), circle(50, 32, 6))
+
+
+def _plus() -> Shape:
+    return union(capsule(32, 10, 32, 54, 4.5), capsule(10, 32, 54, 32, 4.5))
+
+
+def _junk() -> Shape:  # a bin with its lid
+    lid = union(box(12, 12, 52, 18, 2), box(26, 6, 38, 13, 2))
+    body = polygon([(16, 21), (48, 21), (45, 58), (19, 58)])
+    slots = [capsule(x, 28, x, 51, 1.4) for x in (26, 38)]
+    return union(lid, cut(body, *slots))
+
+
+def _back() -> Shape:  # a chevron to the left
+    return polyline([(40, 10), (18, 32), (40, 54)], 4.5)
+
+
+def _track() -> Shape:  # an eye with its pupil
+    eye = intersect(circle(32, 50, 32), circle(32, 14, 32))
+    return union(cut(eye, circle(32, 32, 9.5)), circle(32, 32, 5))
+
+
+def _share() -> Shape:  # three nodes joined
+    nodes = union(circle(48, 14, 7), circle(16, 32, 7), circle(48, 50, 7))
+    lines = union(capsule(16, 32, 48, 14, 2.6), capsule(16, 32, 48, 50, 2.6))
+    return union(nodes, lines)
+
+
+def _dock() -> Shape:  # two panes side by side
+    return union(box(6, 12, 29, 52, 3), box(35, 12, 58, 52, 3))
+
+
+def _undock() -> Shape:  # a pane and an arrow out of it
+    arrow = union(capsule(38, 26, 56, 8, 3.2), polyline([(44, 8), (56, 8), (56, 20)], 3.2))
+    return union(box(6, 22, 36, 58, 3), arrow)
+
+
+def _quiet() -> Shape:  # a bell, struck through
+    bell = union(intersect(circle(32, 30, 17), halfplane(0, 1, 30)), box(15, 30, 49, 45, 2))
+    bell = union(bell, circle(32, 51, 5))
+    slash = capsule(10, 54, 54, 10, 2.8)
+    return union(cut(bell, slash, gap=2.5), slash)
+
+
+def _layers() -> Shape:  # three layers stacked
+    top = polygon([(32, 10), (56, 23), (32, 36), (8, 23)])
+    mids = [polyline([(8, y), (32, y + 12), (56, y)], 3.2) for y in (33, 43)]
+    return union(top, *mids)
+
+
+def _scan() -> Shape:  # four corner brackets and a line: a scan
+    corners = [
+        polyline([(8, 22), (8, 8), (22, 8)], 3.2),
+        polyline([(42, 8), (56, 8), (56, 22)], 3.2),
+        polyline([(56, 42), (56, 56), (42, 56)], 3.2),
+        polyline([(22, 56), (8, 56), (8, 42)], 3.2),
+    ]
+    return union(capsule(16, 32, 48, 32, 2.4), *corners)
+
+
+def _rename() -> Shape:  # a pencil
+    pencil = union(box(26, 6, 38, 44, 2), polygon([(26, 44), (38, 44), (32, 57)]))
+    return rotate(cut(pencil, capsule(26, 14, 38, 14, 1.0)), 32, 32, 45)
+
+
+def _remove() -> Shape:  # a minus in a disc
+    return cut(circle(32, 32, 24), capsule(18, 32, 46, 32, 3.6))
+
+
+def _help() -> Shape:  # a question mark
+    hook = cut(ring(32, 23, 11, 6), box(10, 23, 32, 44))
+    return union(hook, capsule(32, 30, 32, 43, 3), circle(32, 53, 4))
+
+
+# ---- the app marks:
+# one pictogram per app, on its coloured tile the app's minimap button, feed, compartment entry,
+# hub page and TOC icon. Strategies keeps `ledger`, the Orbiter `orbit`, the Library `tale`.
+
+
+def _half_disc(cx: float, cy: float, r: float, lower: bool) -> Shape:
+    """The lower (or upper) half of a disc, cut along y = cy."""
+    return intersect(circle(cx, cy, r), halfplane(0, -1 if lower else 1, -cy if lower else cy))
+
+
+def _quad(p0, c, p1, n: int = 7) -> list[tuple[float, float]]:
+    """Points along a quadratic Bezier curve."""
+    pts = []
+    for i in range(n + 1):
+        t = i / n
+        pts.append(
+            (
+                (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0],
+                (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1],
+            )
+        )
+    return pts
+
+
+def _app_suite() -> Shape:  # the suite: a compass star in a ring, the needle's eye a hole
+    star_ = polygon([(32, 9), (37, 27), (55, 32), (37, 37), (32, 55), (27, 37), (9, 32), (27, 27)])
+    return cut(union(ring(32, 32, 24.5, 4), star_), circle(32, 32, 4))
+
+
+def _app_quests() -> Shape:  # Quests: a scroll with the quest's mark
+    scroll = union(box(19, 12, 45, 52, 3), box(13, 8, 51, 17, 4.5), box(13, 47, 51, 56, 4.5))
+    return cut(scroll, box(29.5, 21, 34.5, 36, 2.5), circle(32, 41.5, 3))
+
+
+def _app_map() -> Shape:  # Map: a pin standing on the land
+    land = polyline(_quad((9, 51), (20, 43), (32, 51)) + _quad((32, 51), (44, 59), (55, 51))[1:], 2)
+    pin = cut(union(circle(32, 21, 13), polygon([(20, 26), (44, 26), (32, 45)])), circle(32, 21, 5))
+    return union(cut(land, pin, gap=2.5), pin)
+
+
+def _app_browser() -> Shape:  # Browser: a page under a lens
+    page = cut(box(12, 8, 44, 50, 3), box(18, 16, 38, 19), box(18, 23, 38, 26), box(18, 30, 30, 33))
+    lens = union(ring(42, 42, 8, 4), capsule(48, 48, 55.5, 55.5, 2.75))
+    return union(cut(page, circle(42, 42, 10), gap=2.5), lens)
+
+
+def _app_gold() -> Shape:  # Gold: a balance
+    frame = union(box(30, 10, 34, 52, 1), box(20, 50, 44, 56, 2), box(10, 15, 54, 19, 1))
+    strings = union(capsule(14, 19, 14, 36, 1), capsule(50, 19, 50, 36, 1))
+    pans = union(_half_disc(14, 36, 9, True), _half_disc(50, 36, 9, True))
+    return union(frame, strings, pans)
+
+
+def _app_route() -> Shape:  # Route: a signpost with two arms
+    post = box(30, 6, 35, 58, 1)
+    left = polygon([(6, 21), (15, 12), (46, 12), (46, 30), (15, 30)])
+    right = polygon([(58, 42), (49, 33), (18, 33), (18, 51), (49, 51)])
+    return cut(union(post, left, right), box(19, 19.5, 39, 22.5), box(25, 40.5, 45, 43.5))
+
+
+def _app_notes() -> Shape:  # Notes: a sheet and a quill
+    sheet = cut(
+        polygon([(14, 10), (36, 10), (44, 18), (44, 54), (14, 54)]),
+        box(20, 24, 34, 27),
+        box(20, 32, 30, 35),
+    )
+    quill = polygon([(24, 56), (50, 12), (57, 17), (31, 58), (23, 58.5)])
+    return union(cut(sheet, quill, gap=2.5), quill)
+
+
+def _app_alts() -> Shape:  # Alts: two characters, one behind the other
+    back = union(circle(43, 18, 8), _half_disc(43, 48, 14, False))
+    front = union(circle(24, 23, 10), _half_disc(24, 56, 18, False))
+    return union(cut(back, front, gap=2.5), front)
+
+
+def _app_helpers() -> Shape:  # Helpers: a wrench
+    wrench = union(capsule(14, 50, 36, 28, 5), circle(42, 22, 14))
+    return cut(wrench, polygon([(45, 6), (60, 6), (52, 22), (44, 16)]))
+
+
+def _app_chat() -> Shape:  # Chat: two speech bubbles in conversation
+    back = union(box(22, 5, 56, 33, 8), polygon([(46, 31), (52, 42), (38, 31)]))
+    front = union(box(8, 22, 42, 50, 8), polygon([(24, 50), (12, 58), (17, 50)]))
+    dots = [circle(x, 32, 2.6) for x in (18, 25, 32)]
+    return union(cut(back, front, gap=2.5), cut(front, *dots))
+
+
+def _app_gestures() -> Shape:  # Gestures: a waving hand
+    fingers = union(
+        box(20, 11, 27.5, 38, 3.75),
+        box(29.5, 6, 37, 37, 3.75),
+        box(39, 9, 46.5, 38, 3.75),
+        box(48, 16, 55.5, 39, 3.75),
+    )
+    thumb = capsule(12, 27, 25, 42, 4.5)
+    return union(fingers, thumb, box(20, 30, 55.5, 58, 10))
+
+
+def _app_data() -> Shape:  # Data: a database cylinder
+    body = union(box(12, 16, 52, 48), ellipse(32, 48, 20, 7), ellipse(32, 16, 20, 7))
+    grooves = []
+    for cy in (30, 41):
+        e = ellipse(32, cy, 20, 7)
+        grooves.append(intersect(lambda x, y, e=e: abs(e(x, y)) - 1.5, halfplane(0, -1, -cy)))
+    return cut(body, *grooves)
+
+
+def _campfire() -> Shape:  # Campfire: a flame with its inner tongue over two crossed logs
+    flame = union(circle(32, 34, 12.5), polygon([(19.6, 34), (31.5, 7), (44.4, 34)]))
+    tongue = union(circle(32, 37, 5.2), polygon([(26.9, 37), (33, 22), (37.1, 37)]))
+    logs = union(
+        rotate(box(10, 44, 54, 52, 1.6), 32, 48, -11), rotate(box(10, 44, 54, 52, 1.6), 32, 48, 11)
+    )
+    return union(cut(flame, tongue, gap=0.0), cut(logs, flame, gap=2.5))
+
+
 GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "quest": (_quest, "available quest"),
     "questActive": (_quest_active, "quest in the log; Track"),
@@ -633,6 +880,51 @@ GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "grave": (_grave, "the place of death, the corpse (new, 26.10.2026)"),
     "note": (_note, "a note, Bastian's Notes (new, 26.10.2026)"),
     "buttons": (_buttons, "the box of the minimap buttons (new, 28.10.2026)"),
+    "play": (_play, "play (the Orbiter's hub, 01.11.2026)"),
+    "pause": (_pause, "pause (the Orbiter's hub)"),
+    "stop": (_stop, "stop (the Orbiter's hub)"),
+    "replay": (_replay, "back to the start (the Orbiter's hub)"),
+    "orbit": (_orbit, "Bastian's Orbiter (its icon and minimap button)"),
+    # the action pictograms of the widget set (ADR 0046, 01.11.2026)
+    "bookmark": (_bookmark, "bookmark a page"),
+    "lock": (_lock, "lock a window in place"),
+    "close": (_close, "close"),
+    "filter": (_filter, "filter the rows"),
+    "clear": (_clear, "clear a box"),
+    "invite": (_invite, "invite to the group"),
+    "more": (_more, "more (a menu)"),
+    "plus": (_plus, "new: a tab, a conversation, a list"),
+    "junk": (_junk, "the junk, remove"),
+    "back": (_back, "back"),
+    "track": (_track, "track a quest"),
+    "share": (_share, "share with the group"),
+    "dock": (_dock, "dock two windows"),
+    "undock": (_undock, "undock, own window"),
+    "quiet": (_quiet, "quiet a tab"),
+    "layers": (_layers, "the map's layers"),
+    "scan": (_scan, "scan the auction house"),
+    "rename": (_rename, "rename"),
+    "remove": (_remove, "remove from a list"),
+    "help": (_help, "help, the syntax"),
+    # the app marks (plan-second-wave.md S1, 01.11.2026)
+    "app_suite": (
+        _app_suite,
+        "the suite: its minimap button, launcher, compartment entry, Core's icon",
+    ),
+    "app_quests": (_app_quests, "Bastian's Quests"),
+    "app_map": (_app_map, "Bastian's Map"),
+    "app_browser": (_app_browser, "Bastian's Browser"),
+    "app_gold": (_app_gold, "Bastian's Gold"),
+    "app_route": (_app_route, "Bastian's Route"),
+    "app_notes": (_app_notes, "Bastian's Notes"),
+    "app_alts": (_app_alts, "Bastian's Alts"),
+    "app_helpers": (_app_helpers, "Bastian's Helpers"),
+    "app_chat": (_app_chat, "Bastian's Chat"),
+    "app_gestures": (_app_gestures, "Bastian's Gestures"),
+    "app_data": (_app_data, "Bastian's Data and its packs"),
+    # the campfire (plan-second-wave.md S5, 02.11.2026): a fire's pin and wedge, the app's mark
+    "campfire": (_campfire, "a campfire: a shared fire, the camp ring"),
+    "app_campfire": (_campfire, "Bastian's Campfire"),
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -682,6 +974,26 @@ TILE_COLOR: dict[str, tuple[float, float, float]] = {
     "grave": _GREY,
     "note": _AMBER,
     "buttons": _TEAL,
+    "play": _TEAL,
+    "pause": _TEAL,
+    "stop": _TEAL,
+    "replay": _TEAL,
+    "orbit": _PURPLE,
+    # the app marks: the tile colours of the approved icon sheet (01.11.2026)
+    "app_suite": _TEAL,
+    "app_quests": _GOLD,
+    "app_map": _GREEN,
+    "app_browser": _BLUE,
+    "app_gold": _GOLD,
+    "app_route": _TEAL,
+    "app_notes": _GOLD,
+    "app_alts": _BLUE,
+    "app_helpers": _GREY,
+    "app_chat": _TEAL,
+    "app_gestures": _GREEN,
+    "app_data": _GREY,
+    "campfire": _AMBER,
+    "app_campfire": _AMBER,
 }
 
 

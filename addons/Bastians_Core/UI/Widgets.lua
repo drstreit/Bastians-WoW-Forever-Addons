@@ -40,10 +40,10 @@ function W.Checkbox(parent, label, onChange)
     end
   end)
   b:SetScript("OnEnter", function(self)
-    S.setEdges(self.box.edges, S.C.accent, 0.8)
+    S.setEdges(self.box.edges, S.Tok(self, "accent"), 0.8)
   end)
   b:SetScript("OnLeave", function(self)
-    S.setEdges(self.box.edges, S.C.line)
+    S.setEdges(self.box.edges, S.Tok(self, "line"))
   end)
   return b
 end
@@ -101,6 +101,7 @@ end
 
 -- Select: a button showing the current label; click opens a flat list below. values = { key = label }.
 -- onChange(key) when the player picks one. SetValues(values) replaces the choices.
+W.SELECT_MIN, W.SELECT_MAX = 160, 320
 function W.Select(parent, label, values, onChange)
   local f = CreateFrame("Frame", nil, parent)
   f:SetHeight(ROW)
@@ -129,8 +130,25 @@ function W.Select(parent, label, values, onChange)
     return out
   end
 
+  -- As wide as the longest choice ("the Skin button in options needs to
+  -- be wider, it's overflown"), between W.SELECT_MIN and W.SELECT_MAX; the list as wide.
+  function f.Fit(self)
+    local widest = 0
+    for _, text in pairs(self.values) do
+      self.button.label:SetText(tostring(text))
+      widest = math.max(widest, self.button.label:GetStringWidth() or 0)
+    end
+    local w = math.max(W.SELECT_MIN, math.min(W.SELECT_MAX, math.ceil(widest) + 28))
+    self.button:SetWidth(w)
+    self.list:SetWidth(w)
+    self.button.label:SetText(
+      self.current ~= nil and tostring(self.values[self.current] or self.current) or ""
+    )
+  end
+
   function f.SetValues(self, v)
     self.values = v or {}
+    self:Fit()
     self:SetValue(self.current)
   end
 
@@ -174,7 +192,7 @@ function W.Select(parent, label, values, onChange)
       end
       item.key = key
       item.label:SetText(tostring(self.values[key]))
-      local c = key == self.current and S.C.accent or S.C.text
+      local c = key == self.current and S.Tok(self, "accent") or S.Tok(self, "text")
       item.label:SetTextColor(c[1], c[2], c[3])
       item:ClearAllPoints()
       item:SetPoint("TOPLEFT", 1, -(1 + (i - 1) * (ROW - 2)))
@@ -189,6 +207,8 @@ function W.Select(parent, label, values, onChange)
   end
 
   -- a click anywhere else closes the list
+  f:Fit()
+
   f.list:SetScript("OnShow", function(list)
     list:RegisterEvent("GLOBAL_MOUSE_DOWN")
   end)
@@ -205,7 +225,7 @@ function W.Select(parent, label, values, onChange)
     if f.list:IsShown() then
       f.list:Hide()
     else
-      f:Open()
+      S.WithPalette(S.PaletteOf(f), f.Open, f) -- the list in its window's palette (the settings)
     end
   end)
   return f
@@ -291,7 +311,7 @@ end
 
 -- Text field with a hint (the kit's search box without the clear button semantics).
 function W.Edit(parent, hint, onEnter)
-  local box = S.search(parent, hint)
+  local box = S.search(parent, hint, true)
   box:SetScript("OnEnterPressed", function(self)
     self:ClearFocus()
     if onEnter then

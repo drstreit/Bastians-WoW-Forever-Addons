@@ -209,14 +209,15 @@ def test_quest_sections_status_chain_prerequisites_objectives_rewards_text(wow: 
     jasper = sections(wow, "quest:76")
     assert texts(jasper["quests.status"].rows) == ["Needs: The Fargodeep Mine"]
     assert texts(jasper["quests.chain"].rows) == [
-        # where to go on: the first quest of the chain the player can act on (62 is in the log)
-        "Continue the chain with: [7] The Fargodeep Mine  Chain 1/3  (Elwynn Forest)",
-        "[7] The Fargodeep Mine  Chain 1/3",
-        "[9] The Jasperlode Mine  Chain 2/3 - > Westfall",
-        "[10] Riverpaw Gnoll Bounty  Chain 3/3  (Westfall)",
+        # the progress chain: where the player stands (62 in the log),
+        # what each step needs
+        "Step 1 of 3. Next: The Fargodeep Mine",
+        "1. [7] The Fargodeep Mine  Chain 1/3  in your log  <- you are here",
+        "2. [9] The Jasperlode Mine  Chain 2/3 - > Westfall  after step 1",
+        "3. [10] Riverpaw Gnoll Bounty  Chain 3/3  (Westfall)  after step 2",
     ]
-    assert jasper["quests.chain"].rows[1].ref == "quest:62"
-    assert jasper["quests.chain"].rows[3].color is not None  # the quest itself, accented
+    assert jasper["quests.chain"].rows[2].ref == "quest:62"
+    assert jasper["quests.chain"].rows[2].color is not None  # the step to act on, accented
     assert texts(jasper["quests.after"].rows) == [
         "one of: [7] The Fargodeep Mine  Chain 1/3",
     ]

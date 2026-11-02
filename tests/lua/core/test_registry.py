@@ -486,15 +486,19 @@ def test_facets_answer_by_priority_and_type_and_cache_per_generation(app: WowRun
     assert list(app.eval("Bastians:Entity('quest:5'):Facet('poi').roles").values()) == ["fallback"]
     assert app.eval("Bastians:Entity('npc:1'):Facet('activity')") is None
     assert "facet:poi:true" in events(app)
+    # the cache lives on the facade, which a weak table holds (cheap to rebuild): keep it alive
+    # here, or a collection between two calls rebuilds it and the count depends on the GC
+    app.execute("held = Bastians:Entity('npc:1'); held:Facet('poi')")
     calls = app.eval("calls")
-    app.eval("Bastians:Entity('npc:1'):Facet('poi')")
+    app.eval("held:Facet('poi')")
     assert app.eval("calls") == calls  # cached
     app.execute("Bastians:Fire('TEST_POI')")
-    app.eval("Bastians:Entity('npc:1'):Facet('poi')")
+    app.eval("held:Facet('poi')")
     assert app.eval("calls") == calls + 1  # the message bumped the facet's generation
     app.execute("Bastians:InvalidateFacet(nil)")
-    app.eval("Bastians:Entity('npc:1'):Facet('poi')")
+    app.eval("held:Facet('poi')")
     assert app.eval("calls") == calls + 2
+    app.execute("held = nil")
     assert app.eval("Bastians:HasFacet('poi', 'npc')") is True
     app.execute("Bastians:GetModule('Low'):Disable()")
     assert app.eval("Bastians:Entity('npc:2'):Facet('poi')") is None

@@ -129,4 +129,8 @@ ns.L:Register("frFR", {
   ["%d updated pages"] = "%d pages mises à jour",
   ["%d more changes"] = "%d autres modifications",
   ["Route there"] = "Itinéraire",
+  -- the broker displays' feed (ADR 0043, 31.10.2026)
+  ["%d new"] = "%d nouveau(x)",
+  ["%d pages"] = "%d pages",
+  ["Click: the book. Right click: its settings."] = "Clic : le livre. Clic droit : ses réglages.",
 })
