@@ -87,6 +87,8 @@ def test_the_page_ids_are_the_books_pages():
 def test_the_books_own_pages_bring_their_pictures(tmp_path):
     """the title page, What's new, the index and the bookmarks have pictures,
     fixed ones from content/strategies/art/front; the pages' pictures stay as they were."""
+    if not book_art.FRONT.is_dir():
+        pytest.skip("the book's art folder is private (tools/publish.py PRIVATE): the public copy")
     assert {p.stem for p in book_art.FRONT.glob("*.jpg")} == set(book_art.FRONT_IDS)
     assert not book_art.FRONT_IDS & book_art.page_ids()  # never a page's id
     art = tmp_path / "art"
