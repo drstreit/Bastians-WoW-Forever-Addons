@@ -5,11 +5,17 @@ search with OR and NOT, the Map's button box. Every name is invented (CLAUDE.md 
 import sys
 from pathlib import Path
 
+import pytest
 from harness import WowRuntime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "chat"))
-from test_chat import M as CHAT
-from test_chat import boot as boot_chat
+try:
+    from test_chat import M as CHAT
+    from test_chat import boot as boot_chat
+except ImportError:  # Bastian's Chat's tests stay private (tools/publish.py PRIVATE): skip theirs
+    CHAT = boot_chat = None
+
+needs_chat = pytest.mark.skipif(boot_chat is None, reason="Bastian's Chat's tests are private")
 
 BR = "Bastians:GetModule('Browser').Browser"
 
@@ -42,6 +48,7 @@ def test_the_browser_list_filter_reads_the_lists_fields(wow: WowRuntime):
     assert wow.errors == []
 
 
+@needs_chat
 def test_chat_filters_read_the_line(wow: WowRuntime):
     boot_chat(wow)
     m = f"{CHAT}.Model"

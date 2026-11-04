@@ -101,7 +101,7 @@ B.COMPANIONS = {
   },
 }
 
--- The companion versions the suite was tested with (plan-second-wave.md S2, 
+-- The companion versions the suite was tested with (plan-second-wave.md S2,
 -- "an addon we depend 100% on"): the Orbiter's note says when Spoken is newer or older than this,
 -- and tools/companion_watch.py checks the launch client's copy against the same number every day.
 -- 3.8.0 since 04.11.2026 (the launch client's copy; companion_watch: its API only grew, the

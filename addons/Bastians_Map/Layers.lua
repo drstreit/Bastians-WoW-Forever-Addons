@@ -272,7 +272,7 @@ local function poiQuery(types, prefixes, fallbackIcon, priority)
       end
       local name = B:Entity(ref):Name()
       if role and string.sub(role, 1, 7) == "trainer" then
-        -- what the trainer trains, from its subname ("Alchemy Trainer"; 
+        -- what the trainer trains, from its subname ("Alchemy Trainer";
         -- "I see the trainer names - but not what they train")
         local rec = d:Get("npc", id)
         local words = type(rec) == "table"
