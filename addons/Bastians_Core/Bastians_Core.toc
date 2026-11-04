@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.4.0
+## Version: 1.5.0
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB

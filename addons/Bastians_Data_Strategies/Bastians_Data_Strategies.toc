@@ -22,7 +22,7 @@
 ## Notes-ptBR: Livro de estratégias gerado: as páginas, os rumores em que se baseiam e as novidades (carrega junto com o Bastian's Strategies).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.4.0
+## Version: 1.5.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

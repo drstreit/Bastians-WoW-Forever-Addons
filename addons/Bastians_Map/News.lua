@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.5.0:1",
+    date = "2026-11-04",
+    version = "1.5.0",
+    text = "Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row.",
+  },
+  {
     id = "1.3.0:1",
     date = "2026-11-02",
     version = "1.3.0",

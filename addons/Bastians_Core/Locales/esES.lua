@@ -552,6 +552,7 @@ local strings = {
   ["Click: its page, to switch it on."] = "Clic: su página, para activarlo.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "El minimapa de Bastian muestra también, en sus propios estilos, las hierbas, minerales y criaturas que encuentra tu rastreo, y el botón de rastreo del juego vuelve a su barra de herramientas.",
   ["The session plan (what fits into the next 30 to 180 minutes) moved from Route's Explore to Bastian's Gold and is off until you switch it on in Gold's settings."] = "El plan de sesión (lo que cabe en los próximos 30 a 180 minutos) pasó de Explorar de Route a Bastian's Gold y queda apagado hasta que lo actives en los ajustes de Gold.",
   ["Other addons can ask Bastian's for any thing's name and places, your notes near a spot and your gold income through Bastians.API."] = "Otros addons pueden preguntar a Bastian's, a través de Bastians.API, el nombre y los lugares de cualquier cosa, tus notas cerca de un punto y tus ingresos de oro.",
   ["When Bastian's Helpers restocks an item, it tells you if another vendor sells it cheaper and where."] = "Cuando Bastian's Helpers repone un objeto, te dice si otro vendedor lo vende más barato y dónde.",

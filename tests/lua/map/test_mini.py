@@ -313,16 +313,31 @@ def test_the_game_minimap_takes_our_size_and_stays_in_our_view(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_no_blizzard_style_and_no_tracking_on_the_minimap(wow: WowRuntime):
+def test_no_blizzard_style_and_the_tracking_button_in_the_tools_row(wow: WowRuntime):
     """ "Game minimap" beside "Blizzard" confused, and Blizzard's
-    paintings show no detail at a minimap's zoom; the game's tracking is replaced by the map's
-    layers, which show the travel and service places on every style now."""
+    paintings show no detail at a minimap's zoom. (undoing R28.15): the game's
+    tracking menu is where Find Herbs and Find Minerals are switched on, so its button stays
+    reachable in the tools row, under both of its names (Mainline and Classic)."""
     boot(wow)
     assert "blizzard" not in list(wow.eval(f"{MINI}.StyleList()").values())
     assert wow.eval(f"{MINI}.Style()") == "game"
     paths = [list(p.values()) for p in wow.eval(f"{MINI}.INDICATORS").values()]
-    assert ["MinimapCluster", "Tracking"] not in paths and ["MiniMapTracking"] not in paths
-    assert ["MiniMapTracking"] in [list(p.values()) for p in wow.eval(f"{MINI}.HIDE").values()]
+    assert ["MinimapCluster", "Tracking"] in paths and ["MiniMapTracking"] in paths
+    assert ["MiniMapTracking"] not in [list(p.values()) for p in wow.eval(f"{MINI}.HIDE").values()]
+    assert wow.errors == []
+
+
+def test_the_tracking_button_moves_into_the_tools_row_and_back(wow: WowRuntime):
+    boot(wow)
+    wow.execute(
+        "MinimapCluster.Tracking = CreateFrame('Frame', nil, MinimapCluster); "
+        "MinimapCluster.Tracking:SetSize(32, 32); "
+        f"{MOD}.db.profile.miniMap = false; {MINI}.Apply(); {MOD}.db.profile.miniMap = true; {MINI}.Apply()"
+    )
+    assert wow.eval(f"MinimapCluster.Tracking:GetParent() == {MINI}.tools") is True
+    assert wow.eval(f"{MINI}.stats.indicators") == 2
+    setting(wow, "miniMap", "false")
+    assert wow.eval("MinimapCluster.Tracking:GetParent() == MinimapCluster") is True
     assert wow.errors == []
 
 

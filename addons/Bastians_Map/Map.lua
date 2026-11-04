@@ -872,6 +872,7 @@ mod = B:NewModule("Map", {
       miniButtonBox = true,
       miniBorder = true, -- the frame around the view
       miniWarned = false, -- the warning before the first of our styles was shown and accepted
+      miniTracked = true, -- the game's tracking dots read back onto our styles (Tracked.lua)
       buttonBox = {},
     },
     global = { characters = {} }, -- the last place of every character of the account (R26.16)
@@ -987,6 +988,18 @@ mod = B:NewModule("Map", {
           min = 5,
           max = 40,
           step = 5,
+        },
+        {
+          type = "toggle",
+          key = "miniTracked",
+          label = L["On Bastian's styles, show what the game's tracking finds (herbs, ore, creatures)"],
+          default = true,
+        },
+        {
+          type = "note",
+          text = function()
+            return ns.Tracked.Note()
+          end,
         },
       },
     },

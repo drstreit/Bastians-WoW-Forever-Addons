@@ -312,6 +312,9 @@ table.insert(Map.onEnable, function(self)
     if ns.Layers then
       ns.Layers.Reset() -- the zones of the map's own layers (Layers.lua)
     end
+    if ns.Tracked then
+      ns.Tracked.Reset() -- the node names the tracked dots are matched against
+    end
     Map.ViewChanged()
   end)
 end)

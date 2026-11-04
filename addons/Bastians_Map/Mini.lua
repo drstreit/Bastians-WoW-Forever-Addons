@@ -41,6 +41,10 @@ Mini.INDICATORS = {
   { "ExpansionLandingPageMinimapButton" },
   { "MiniMapBattlefieldFrame" },
   { "MiniMapLFGFrame" },
+  -- the game's tracking menu (, undoing R28.15: Find Herbs and Find Minerals are
+  -- switched on there, and only the game's minimap shows what they find; Tracked.lua reads it back)
+  { "MinimapCluster", "Tracking" },
+  { "MiniMapTracking" },
 }
 -- The game's minimap art and buttons that would float without the cluster: parked while ours shows.
 Mini.HIDE = {
@@ -52,8 +56,6 @@ Mini.HIDE = {
   { "MinimapBorderTop" },
   { "MinimapCompassTexture" },
   { "MiniMapWorldMapButton" },
-  -- the game's tracking: the map's layers do that on every style
-  { "MiniMapTracking" },
   -- the number of addons in the compartment: no value
   { "AddonCompartmentFrame" },
   -- the suite's own button: the badge on the frame stands in for it
@@ -663,10 +665,12 @@ function Mini.Render()
     if ns.Minimap.Host() then
       ns.Minimap.SetHost(nil)
     end
+    ns.Tracked.Sync() -- stops: the game's minimap shows its own dots
     return
   end
   catcher:Hide()
   clip:Show()
+  ns.Tracked.Sync() -- our tiles cover the game's dots: read them back (Tracked.lua)
   if following then
     local c, px, py = B.Coords.Player()
     if c then
@@ -1430,6 +1434,7 @@ local function build()
     self.ticking = nil
     self:SetScript("OnUpdate", nil)
     drag = nil
+    ns.Tracked.Stop()
     -- what hung off the minimap goes with it
     ns.Pins.HideMiniCard()
     if GameTooltip then

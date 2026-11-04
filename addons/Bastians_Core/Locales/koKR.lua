@@ -552,6 +552,7 @@ ns.L:Register("koKR", {
   ["Click: its page, to switch it on."] = "클릭: 켜려면 해당 페이지로.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Bastian의 미니맵이 자체 스타일에서도 추적이 찾은 약초, 광석, 생물을 표시하며, 게임의 추적 버튼이 도구 줄에 돌아왔습니다.",
   ["The session plan (what fits into the next 30 to 180 minutes) moved from Route's Explore to Bastian's Gold and is off until you switch it on in Gold's settings."] = "세션 계획(앞으로 30~180분에 할 수 있는 일)이 Route의 탐험에서 Bastian's Gold로 옮겨졌고, Gold 설정에서 켤 때까지 꺼져 있습니다.",
   ["Other addons can ask Bastian's for any thing's name and places, your notes near a spot and your gold income through Bastians.API."] = "다른 애드온이 Bastians.API를 통해 Bastian's에 모든 것의 이름과 위치, 특정 지점 근처의 메모, 골드 수입을 물을 수 있습니다.",
   ["When Bastian's Helpers restocks an item, it tells you if another vendor sells it cheaper and where."] = "Bastian's Helpers가 아이템을 다시 채울 때, 다른 상인이 더 싸게 파는지와 어디서 파는지 알려 줍니다.",

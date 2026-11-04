@@ -6,7 +6,7 @@ from pathlib import Path
 
 from bastians_build.book import add_book, plain
 from bastians_build.candidates import Strategy, candidates
-from bastians_build.mill import add_mill, best_claim, mill_index, within_cap
+from bastians_build.mill import add_mill, best_claim, last_told, mill_index, within_cap
 from bastians_build.model import World
 from bastians_build.sources.ahsync_export import read_export
 from bastians_build.sources.fixture import read_fixture
@@ -109,6 +109,30 @@ def test_the_mill_keeps_strong_rumours_no_page_tells(tmp_path):
     assert r["claim"] == "Murlocs in the Wetlands." and len(r["sources"]) == 2
     assert world.get("mill", 30) is None and world.get("rumour", 30) is None
     assert add_mill(World(client="forever"), found) == []  # no book, no mill
+
+
+def test_only_rumours_told_in_the_last_20_days_reach_the_mill():
+    def told(cid: int, text: str, day: str) -> dict:
+        c = claim(cid, text)
+        for s in c["sources"]:
+            s["published"] = day
+        return c
+
+    world = book_world()
+    found = {
+        "farming": [
+            strategy("farming", told(40, "Boars in Elwynn.", "2026-10-14")),  # 21 days old
+            strategy("farming", told(41, "Crabs on the coast.", "2026-10-15")),  # 20 days old
+            strategy("farming", told(42, "Murlocs in the Wetlands.", "2026-11-04")),
+            strategy("farming", {**claim(43, "No date at all."), "sources": []}),
+        ]
+    }
+    add_mill(world, found)
+    assert mill_index(world) == {"farming": [41, 42]}
+    world = book_world()
+    add_mill(world, found, days=30)
+    assert mill_index(world) == {"farming": [40, 41, 42]}
+    assert last_told({"last_seen": 1.5e9, "sources": []}) == 1.5e9  # the export's own stamp
 
 
 def test_the_fixture_build_mills_the_two_channel_claim():

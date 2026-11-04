@@ -552,6 +552,7 @@ ns.L:Register("zhCN", {
   ["Click: its page, to switch it on."] = "点击：打开其页面以开启。",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Bastian的小地图在自己的样式中也会显示追踪找到的草药、矿石和生物，游戏的追踪按钮回到了工具栏。",
   ["The session plan (what fits into the next 30 to 180 minutes) moved from Route's Explore to Bastian's Gold and is off until you switch it on in Gold's settings."] = "会话计划（接下来30到180分钟能做的事）从Route的探索移到了Bastian's Gold，在Gold的设置中开启前保持关闭。",
   ["Other addons can ask Bastian's for any thing's name and places, your notes near a spot and your gold income through Bastians.API."] = "其他插件可以通过Bastians.API向Bastian's询问任何事物的名称与位置、某地附近的笔记以及你的金币收入。",
   ["When Bastian's Helpers restocks an item, it tells you if another vendor sells it cheaper and where."] = "当Bastian's Helpers补货一件物品时，会告诉你是否有别的商人卖得更便宜，以及在哪里。",

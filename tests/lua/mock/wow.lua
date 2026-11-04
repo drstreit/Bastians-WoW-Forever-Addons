@@ -1075,6 +1075,36 @@ end
 function Minimap:SetMaskTexture(path)
   self.maskPath = path
 end
+-- The minimap's dots (Find Herbs, Find Minerals): the client tells no addon where they are; it only
+-- answers what the minimap's tooltip would say at a point (Minimap:UpdateMouseoverAtPoint in screen
+-- pixels, then C_TooltipInfo.GetMinimapMouseover; Forever 1.60.1, both in the P1 dump). A test puts
+-- dots into Mock.minimapBlips = { { u = 20, v = -5, name = "Peacebloom", reach = 12 } }: pixels right
+-- and up from the minimap's centre; a point within `reach` of a dot answers its name (one line each).
+Mock.minimapBlips = {}
+Mock.minimapProbe = nil
+Mock.minimapProbes = 0
+function Minimap:SetUsingSoftCursor(on)
+  self.softCursor = on
+end
+function Minimap:UpdateMouseoverAtPoint(x, y)
+  local scale = self:GetEffectiveScale()
+  local w, h = self:GetWidth(), self:GetHeight()
+  Mock.minimapProbe = { u = x / scale - (self:GetLeft() + w / 2), v = y / scale - (self:GetBottom() + h / 2) }
+  Mock.minimapProbes = Mock.minimapProbes + 1
+end
+C_TooltipInfo = C_TooltipInfo or {}
+C_TooltipInfo.GetMinimapMouseover = function()
+  local p = Mock.minimapProbe
+  local lines = {}
+  for _, b in ipairs(p and Mock.minimapBlips or {}) do
+    local du, dv = p.u - b.u, p.v - b.v
+    local reach = b.reach or 12
+    if du * du + dv * dv <= reach * reach then
+      lines[#lines + 1] = { leftText = b.name }
+    end
+  end
+  return { lines = lines }
+end
 function Minimap:SetZoom(zoom)
   -- the client fires MINIMAP_UPDATE_ZOOM when the zoom changes, on a later frame (an addon
   -- that probes the zoom from that event loops forever, seen on Forever 23.10.2026)

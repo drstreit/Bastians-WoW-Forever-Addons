@@ -9,11 +9,16 @@ it, no profession skill above what the cap allows (`SKILL_AT_CAP`). The line is
 AHSync's own sentence (a claim, never a quote), its stamp from the export's status and the
 sources, so the mill needs no prose and changes with every scan: a rumour that gains travellers
 climbs, one that a page now tells leaves, a strong one is the next page's candidate.
+
+Only fresh rumours: a claim a video last
+told more than `MILL_DAYS` days before the export's newest claim is left out, so the mill follows
+the live market rather than the beta. A claim without a date is left out too.
 """
 
 from __future__ import annotations
 
 import re
+from datetime import UTC, datetime
 
 from bastians_build.book import plain, rumour_record
 from bastians_build.candidates import DEFAULT_CAP, DIGIT, Strategy
@@ -21,6 +26,7 @@ from bastians_build.model import World
 
 MILL_CAP = 6  # lines per chapter
 MIN_CHANNELS = 2  # a rumour one traveller tells is not in the mill yet
+MILL_DAYS = 20  # a rumour no video told in this many days leaves the mill
 SKILL_AT_CAP = {30: 225}  # the highest profession skill a character of the cap can train
 TRADES = (
     "skill|fishing|cooking|first aid|alchemy|blacksmithing|enchanting|engineering|herbalism|"
@@ -42,9 +48,22 @@ def within_cap(claim: dict, cap: int = DEFAULT_CAP) -> bool:
     )
 
 
-def best_claim(s: Strategy, cap: int = DEFAULT_CAP) -> dict | None:
-    """The claim that carries a strategy best among those inside the cap: verified, the most
-    sources, a number, the reach; the lowest id where nothing decides (deterministic)."""
+def last_told(claim: dict) -> float | None:
+    """When a video last told the claim (unix seconds): the export's `last_seen`, else the newest
+    source's `published` day."""
+    seen = claim.get("last_seen")
+    if isinstance(seen, (int, float)):
+        return float(seen)
+    days = [str(s["published"])[:10] for s in claim.get("sources") or [] if s.get("published")]
+    if not days:
+        return None
+    return datetime.fromisoformat(max(days)).replace(tzinfo=UTC).timestamp()
+
+
+def best_claim(s: Strategy, cap: int = DEFAULT_CAP, since: float | None = None) -> dict | None:
+    """The claim that carries a strategy best among those inside the cap (and told since `since`):
+    verified, the most sources, a number, the reach; the lowest id where nothing decides
+    (deterministic)."""
 
     def key(c: dict) -> tuple:
         return (
@@ -55,7 +74,11 @@ def best_claim(s: Strategy, cap: int = DEFAULT_CAP) -> dict | None:
             -int(c["claim_id"]),
         )
 
-    inside = [c for c in s.claims if within_cap(c, cap)]
+    def fresh(c: dict) -> bool:
+        told = last_told(c)
+        return since is None or (told is not None and told >= since)
+
+    inside = [c for c in s.claims if within_cap(c, cap) and fresh(c)]
     return max(inside, key=key) if inside else None
 
 
@@ -64,12 +87,17 @@ def add_mill(
     found: dict[str, list[Strategy]],
     cap: int = MILL_CAP,
     level_cap: int = DEFAULT_CAP,
+    days: int = MILL_DAYS,
 ) -> list[str]:
     """Adds the `mill` records (by claim id: chapter, rank, zone or the claim's own place) and the
-    rumour records they show. Nothing without a book."""
+    rumour records they show. Nothing without a book. Fresh means told in the `days` before the
+    newest claim of `found` (the export's day, not the clock: the same export builds the same
+    mill)."""
     chapters = world.records.get("chapter", {})
     if not chapters:
         return []
+    stamps = [t for ss in found.values() for s in ss for c in s.claims if (t := last_told(c))]
+    since = max(stamps) - days * 86400 if stamps else None
     counts = []
     for chapter in sorted(found):
         if chapter not in chapters:
@@ -80,7 +108,7 @@ def add_mill(
                 break
             if s.page or s.low_value or len(s.channels) < MIN_CHANNELS:
                 continue
-            claim = best_claim(s, level_cap)
+            claim = best_claim(s, level_cap, since)
             if claim is None:
                 continue
             cid = int(claim["claim_id"])

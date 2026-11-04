@@ -553,6 +553,7 @@ ns.L:Register("deDE", {
   ["Click: its page, to switch it on."] = "Klick: seine Seite, zum Einschalten.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Bastians Minikarte zeigt die Kräuter, Erze und Kreaturen, die dein Aufspüren findet, nun auch in ihren eigenen Stilen, und der Aufspüren-Knopf des Spiels ist zurück in ihrer Werkzeugleiste.",
   ["The session plan (what fits into the next 30 to 180 minutes) moved from Route's Explore to Bastian's Gold and is off until you switch it on in Gold's settings."] = "Der Sitzungsplan (was in die nächsten 30 bis 180 Minuten passt) ist von Routes Erkunden zu Bastian's Gold gewandert und bleibt aus, bis du ihn in Golds Einstellungen einschaltest.",
   ["Other addons can ask Bastian's for any thing's name and places, your notes near a spot and your gold income through Bastians.API."] = "Andere Addons können Bastian's über Bastians.API nach Namen und Orten jeder Sache, deinen Notizen in der Nähe eines Punkts und deinem Goldeinkommen fragen.",
   ["When Bastian's Helpers restocks an item, it tells you if another vendor sells it cheaper and where."] = "Wenn Bastian's Helpers einen Gegenstand nachkauft, sagt es dir, ob ein anderer Händler ihn billiger verkauft und wo.",
