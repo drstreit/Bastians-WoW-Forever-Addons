@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Texte (anglais)
 ## Title-esES: Bastian's Data: Texto (inglés)
 ## Title-esMX: Bastian's Data: Texto (inglés)
+## Title-ruRU: Bastian's Data: Текст (английский)
+## Title-ptBR: Bastian's Data: Texto (inglês)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_enUS\Icon
 ## Notes: Generated quest texts in English (loads at startup).
 ## Notes-koKR: 생성된 영어 퀘스트 텍스트 (접속 시 불러옴).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Textes de quêtes en anglais générés (chargé à la connexion).
 ## Notes-esES: Textos de misiones en inglés generados (se carga al conectar).
 ## Notes-esMX: Textos de misiones en inglés generados (se carga al conectar).
+## Notes-ruRU: Сгенерированные тексты заданий на английском (загружаются при входе).
+## Notes-ptBR: Textos de missões em inglês gerados (carregam ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

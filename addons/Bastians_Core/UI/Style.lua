@@ -17,7 +17,12 @@ S.WHITE = WHITE
 -- the Azeroth headings stay in it.
 local CJK = { koKR = true, zhCN = true, zhTW = true }
 S.CJK = CJK[type(GetLocale) == "function" and GetLocale() or ""] or false
-S.DEFAULT_FONT = S.CJK and rawget(_G, "STANDARD_TEXT_FONT") or "Fonts\\ARIALN.TTF"
+-- Russian (04.11.2026, assumed, forever-api.md): Cyrillic is not verified in ARIALN, Morpheus,
+-- Friz Quadrata or the suite's own fonts, so ruRU keeps the client's font too. S.CLIENT_FONT is
+-- true for every client that does (the Asian ones and ruRU); S.CJK stays true for the Asian ones only.
+local CLIENT_FONT = { koKR = true, zhCN = true, zhTW = true, ruRU = true }
+S.CLIENT_FONT = CLIENT_FONT[type(GetLocale) == "function" and GetLocale() or ""] or false
+S.DEFAULT_FONT = S.CLIENT_FONT and rawget(_G, "STANDARD_TEXT_FONT") or "Fonts\\ARIALN.TTF"
 -- The suite's own textures (tools/make_media.py): a 64x64 white arrow with a dark rim pointing
 -- east, tinted with SetVertexColor and turned with SetRotation.
 S.ARROW = "Interface\\AddOns\\Bastians_Core\\Media\\Arrow"
@@ -334,7 +339,7 @@ S.SKIN_DEFAULTS = {
 }
 S.HEADING_FONT = "Fonts\\MORPHEUS.TTF"
 -- The suite's own fonts (ADR 0038, owner: "add 5 more"; SIL Open Font License, Fonts/):
--- { path, name }, listed after the client's four. None has Hangul or Han (S.CJK keeps the client's).
+-- { path, name }, listed after the client's four. None has Hangul or Han (S.CLIENT_FONT keeps the client's).
 local FONT_DIR = "Interface\\AddOns\\Bastians_Core\\Fonts\\" -- beside Media, like the Library's
 S.ADDON_FONTS = {
   { FONT_DIR .. "Inter.ttf", "Inter" },
@@ -438,10 +443,10 @@ function S.GameButtons()
   return S.Skin("gameButtons") == true
 end
 
--- The heading font: the profile's `headingFont`, else the text font; a CJK client keeps its own
--- (Morpheus and the suite's fonts carry no Hangul or Han).
+-- The heading font: the profile's `headingFont`, else the text font; a client with its own script
+-- keeps its own (Morpheus and the suite's fonts carry no Hangul or Han, Cyrillic is unverified).
 function S.headingFont()
-  if S.CJK then
+  if S.CLIENT_FONT then
     return S.font()
   end
   return S.Skin("headingFont") or S.font()

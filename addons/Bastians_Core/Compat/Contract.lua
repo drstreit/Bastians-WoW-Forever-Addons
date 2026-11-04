@@ -74,7 +74,11 @@ Compat.CONTRACT = {
     .. " empty",
   RegisterAddonPrefix = "prefix -> bool ; the prefix may be used for addon messages (registered or"
     .. " already registered), false without the addon message API",
-  SendAddonMessage = "prefix, text, channel ('PARTY' | 'RAID' | 'GUILD' | 'WHISPER'), target -> bool"
+  JoinChannel = "name -> the channel's number or nil ; joins a temporary custom channel (not saved in the"
+    .. " chat settings) and keeps it out of every chat window",
+  LeaveChannel = "name -> bool ; leaves that custom channel",
+  ChannelNumber = "name -> the number of that joined channel, or nil",
+  SendAddonMessage = "prefix, text, channel ('PARTY' | 'RAID' | 'GUILD' | 'WHISPER' | 'CHANNEL'), target"
     .. " (handed to the client)",
   GetCorpsePosition = "-> uiMapID, x, y (map fractions) of the player's corpse, or nil (alive, no"
     .. " answer, or the corpse on no map of the player's map chain)",

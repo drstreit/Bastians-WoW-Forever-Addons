@@ -14,7 +14,7 @@ ns.NEWS = {
     id = "1.3.0:2",
     date = "2026-11-02",
     version = "1.3.0",
-    text = "\"Show on map\" now draws what you chose (its icon and name at every place) and selects it, even when its layer is off.",
+    text = '"Show on map" now draws what you chose (its icon and name at every place) and selects it, even when its layer is off.',
   },
   {
     id = "1.3.0:3",

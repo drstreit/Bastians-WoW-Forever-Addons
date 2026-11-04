@@ -104,7 +104,9 @@ B.COMPANIONS = {
 -- The companion versions the suite was tested with (plan-second-wave.md S2, 
 -- "an addon we depend 100% on"): the Orbiter's note says when Spoken is newer or older than this,
 -- and tools/companion_watch.py checks the launch client's copy against the same number every day.
-B.TESTED_WITH = { Spoken = "3.7.0" }
+-- 3.8.0 since 04.11.2026 (the launch client's copy; companion_watch: its API only grew, the
+-- bridge's calls all still there; forever-api.md "Spoken in the launch client")
+B.TESTED_WITH = { Spoken = "3.8.0" }
 
 -- The data packs by the pack name the apps declare in `data` (core-contracts §11; Data loads them).
 -- Market and Nav are optional: built only when their source exists, no app fails without them.
@@ -753,15 +755,15 @@ local function modern(theme)
   }
 end
 -- the built-ins, in the order of the choice; `font` and `headingFont` are the client's on a CJK
--- client (Friz Quadrata and Morpheus carry no Hangul or Han)
+-- or Russian client (Friz Quadrata and Morpheus carry no Hangul or Han, Cyrillic is unverified)
 -- The game's look on a scheme (, "a clearly skinned style according to
 -- Blizzard examples"): the game's own windows and insets, its buttons, Friz Quadrata and Morpheus.
 local function game(theme)
   local v = modern(theme)
   v.look = "wow"
   v.gameFrames = true
-  v.font = S.CJK and S.DEFAULT_FONT or S.BLIZZARD_FONT
-  v.headingFont = (not S.CJK) and S.HEADING_FONT or nil
+  v.font = S.CLIENT_FONT and S.DEFAULT_FONT or S.BLIZZARD_FONT
+  v.headingFont = (not S.CLIENT_FONT) and S.HEADING_FONT or nil
   v.gameButtons = true
   v.ornaments = true
   return v
@@ -771,7 +773,7 @@ end
 local function styled(theme, lookId, headingFont)
   local v = modern(theme)
   v.look = lookId
-  v.headingFont = (not S.CJK) and headingFont or nil
+  v.headingFont = (not S.CLIENT_FONT) and headingFont or nil
   return v
 end
 -- The seven (plan-round4 H5, 01.11.2026): the Modern renderer on four schemes, Glass, Parchment, WoW.

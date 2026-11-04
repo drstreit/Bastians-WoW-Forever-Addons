@@ -60,7 +60,17 @@ arrives after `PLAYER_LOGIN`: until then, and whenever an app is missing, the an
 | `RouteTo(uiMapID, x, y, name)` | `true` when Bastian's Route started planning a route to that point, the same as the player choosing "Route to"; `nil` without Route or for a point it cannot place. `name` is optional | Bastian's Route |
 | `Known(spellID)` | `{ me, others, names }`: whether this character knows the spell or recipe (`true`, `false`, or `nil` when the client does not say), how many other characters of the account know it, and their names (`"Marla, Tobb"`); or `nil` | Bastian's Alts |
 | `Speak(text)` | `true` when the Orbiter spoke the text in the player's chosen voice; `false` when it did not (another line plays, the voice is off); `nil` without the Orbiter | Bastian's Orbiter |
-| `Camp()` | `{ nearby, state, warmIn, left, buffs, readyIn, fires }`: whether a campfire is near the character, the state (`"away"`, `"near"`, `"warming"`, `"warm"`, `"fading"`), the seconds until warm and left of the camp's buffs (`nil` when unknown), how many camp buffs are on the character, the seconds until the character's camp features can be placed again (`nil` when unknown), how many fires shared by the group or guild are on the map; or `nil` | Bastian's Campfire (Forever) |
+| `Camp()` | `{ nearby, state, warmIn, left, buffs, readyIn, fires }`: whether a campfire is near the character, the state (`"away"`, `"near"`, `"warming"`, `"warm"`, `"fading"`), the seconds until warm and left of the camp's buffs (`nil` when unknown), how many camp buffs are on the character, the seconds until the character's camp features can be placed again (`nil` when unknown), how many fires shared by the group or guild (and the public channel when switched on) are on the map; or `nil` | Bastian's Campfire (Forever) |
+| `Entity(ref)` | `{ ref, type, id, name, summary }` for any thing of the suite by its ref: `"npc:299"`, `"quest:7"`, `"item:2589"`, `"zone:1429"`, `"node:herb:2"`. The name is in the client's language where the data has it; `nil` for a ref nothing knows | Core (names from Bastian's Data) |
+| `Where(ref, max)` | `{ { uiMapID, x, y } }` (`x`, `y` in 0..1): the places of the thing that matter now (an NPC's spawns, a quest's giver, a node's spots), at most `max` (10 by default); `nil` without a place | Core (places from Bastian's Data) |
+| `NotesNear(uiMapID, x, y, yards)` | `{ { title, text, yards } }`, nearest first: the player's notes on a spot within `yards` (40 by default, at most 500) of that point; an empty table when there are none; `nil` without Notes | Bastian's Notes |
+| `Income(days)` | `{ ah, loot, spent }` in copper over the last `days` days, today included (1 by default, at most 30): gold from the auction house, gold from everything else (loot, quests, vendor sales), and what was spent, for the whole account | Bastian's Gold |
+| `Waypoint()` | `{ uiMapID, x, y, label }` (`x`, `y` in 0..1): the player's own waypoint on Bastian's Map; `nil` when there is none | Bastian's Map |
+| `SetWaypoint(uiMapID, x, y, label)` | `true` when the Map set the waypoint there (it shows on the map and the minimap; it replaces the one before); `nil` without the Map or for a point on no known map | Bastian's Map |
+| `ClearWaypoint()` | `true` when the waypoint is gone; `nil` without the Map | Bastian's Map |
+| `AccountGold()` | `{ copper, characters }`: the money of the account's characters as last seen, and how many characters that covers; `nil` before any is known | Bastian's Alts |
+| `ItemSets()` | `{ { id, label, kind } }` by `id`: the item sets the suite gives bag addons (`kind` `"category"`, `"junk"` or `"mark"`); an empty table when none is registered | Core (sets from the apps) |
+| `ItemSet(id)` | `{ itemID, ... }` sorted: the items of that set now; `nil` for an unknown `id` | Core |
 | `Play()` | the play preset: `"wanderer"`, `"scholar"`, `"everything"` or `"custom"`; what the player chose at the first start or on the Suite page, so your addon can follow the Wanderer (nearly no UI) or the Scholar | Core |
 | `Open(name)` | `true` when the app `name` (as `Apps()` names it) opened its window, or its settings page when it has no window; `false` in combat; `nil` for an unknown or switched-off app | Core |
 | `RegisterCallback(target, event, fn)` | calls `fn(event, ...)` on each `event` of `EVENTS`. With a method name instead of `fn`, it calls `target[method](target, event, ...)`. One registration per `target` and `event` (CallbackHandler-1.0) | Core |
@@ -85,9 +95,10 @@ arrives after `PLAYER_LOGIN`: until then, and whenever an app is missing, the an
 | `BASTIANS_PLAY_CHANGED` | `id` | the player chose a play preset: read `Play` again |
 | `BASTIANS_CHAT_UNREAD` | `count` | the number of whisper conversations with unread lines in Bastian's Chat changed |
 | `BASTIANS_VOICE_CHANGED` | none | what the Orbiter plays, or its heard list, changed |
-| `BASTIANS_CAMP_SHARED` | `uiMapID`, `x`, `y` | a player of the group or guild shared a campfire (Bastian's Campfire) |
+| `BASTIANS_CAMP_SHARED` | `uiMapID`, `x`, `y` | a player of the group or guild, or of the public channel when switched on, shared a campfire (Bastian's Campfire) |
 | `BASTIANS_CAMP_WARMED` | `host` or `nil` | the camp's buffs landed on the character; `host` is the name of the one whose camp it is when the game says |
 | `BASTIANS_CAMP_FADING` | `seconds` | the camp's buffs end in `seconds` (said ten minutes before) |
+| `BASTIANS_WAYPOINT_CHANGED` | `uiMapID`, `x`, `y`, or nothing | the player's waypoint was set there, or cleared (no arguments) |
 
 ## Examples
 
@@ -136,13 +147,13 @@ A test in the suite's repository fails when a new app forgets one.
 | App (`name`) | Data source | Slash | Calls and events |
 |---|---|---|---|
 | Quests | Bastian's Quests | `/bq` | `Quest`, `QuestLog`; `BASTIANS_QUESTS_CHANGED`, `BASTIANS_TRACKED_CHANGED` |
-| Map | Bastian's Map | `/bmap` | `BASTIANS_PLAYER_MOVED_ZONE` (Core) |
+| Map | Bastian's Map | `/bmap` | `Waypoint`, `SetWaypoint`, `ClearWaypoint`; `BASTIANS_WAYPOINT_CHANGED`, `BASTIANS_PLAYER_MOVED_ZONE` (Core) |
 | Browser | Bastian's Browser | `/bb` | `Open("Browser")` |
-| Gold | Bastian's Gold | `/bgold` | `Price`; `BASTIANS_PRICES_UPDATED` |
+| Gold | Bastian's Gold | `/bgold` | `Price`, `Income`; `BASTIANS_PRICES_UPDATED` |
 | Route | Bastian's Route | `/broute` | `Route`, `RouteTo`; `BASTIANS_ROUTE_CHANGED` |
 | Strategies | Bastian's Strategies | `/bbook` | `Open("Strategies")` |
-| Notes | Bastian's Notes | `/bnotes` | `BASTIANS_NOTES_CHANGED` |
-| Alts | Bastian's Alts | `/balts` | `Known`; `BASTIANS_ALTS_CHANGED` |
+| Notes | Bastian's Notes | `/bnotes` | `NotesNear`; `BASTIANS_NOTES_CHANGED` |
+| Alts | Bastian's Alts | `/balts` | `Known`, `AccountGold`; `BASTIANS_ALTS_CHANGED` |
 | Helpers | Bastian's Helpers | `/bhelp` | `Open("Helpers")` |
 | Voice (the Orbiter) | Bastian's Orbiter | `/bv` | `Speak`; `BASTIANS_VOICE_CHANGED` |
 | Chat | Bastian's Chat | `/bchat` | `BASTIANS_CHAT_UNREAD` |
@@ -155,7 +166,7 @@ A test in the suite's repository fails when a new app forgets one.
 The suite's addons talk to each other's players through addon messages with the prefix
 `Bastians`: `<version>|<id>|<part>/<parts>|<kind>|<chunk>`, version `1`, at most 200 characters of
 payload per message, one message per 0.25 s, to `PARTY`, `RAID`, `GUILD` or a whispered player,
-never to a public channel. The payload is a plain value (strings, numbers, booleans, tables of
+~~never to a public channel~~ and, for `camp` only, the custom channel `BastiansCamp` when the player switched Campfire's public beacon on (04.11.2026). The payload is a plain value (strings, numbers, booleans, tables of
 them) in a serialization without code: `s<len>:<text>`, `n<number>;`, `T`, `F`, `t <key> <value>
 ... e`, keys sorted. Your addon can read a kind the suite put together, already deserialized:
 
@@ -170,7 +181,7 @@ end)
 | `notes.list` | a shared list of Bastian's Notes: `{ v, id, name, notes = { ... }, bookmarks = { ... } }` | a player shares a list |
 | `notes.pin` | one place: `{ name, continent, wx, wy, ref }` (world yards on that continent; `ref` the entity when there is one) | "Send my spot" |
 | `route.ferry` | a measured ferry loop: `{ v, id, cycle0, at }` | a ferry's time was measured |
-| `camp` | a campfire's place: `{ v = 1, map, x, y, size, features, age }`: `map` the uiMapID, `x` and `y` in 0..1, `size` 3, 5 or 10 features or `nil`, `features` the camp's buffs by name (`"stamina"`, `"fish"`, `"mana"`, `"strength"`, `"lute"`, `"intellect"`, `"attack"`, `"chair"`, `"spirit"`, `"tent"`), `age` the seconds since the sender first saw the fire (players' clocks differ); no names | "Share the fire" in Bastian's Campfire, to the group and the guild |
+| `camp` | a campfire's place: `{ v = 1, map, x, y, size, features, age }`: `map` the uiMapID, `x` and `y` in 0..1, `size` 3, 5 or 10 features or `nil`, `features` the camp's buffs by name (`"stamina"`, `"fish"`, `"mana"`, `"strength"`, `"lute"`, `"intellect"`, `"attack"`, `"chair"`, `"spirit"`, `"tent"`), `age` the seconds since the sender first saw the fire (players' clocks differ); no names | "Share the fire" in Bastian's Campfire, to the group and the guild, and to the channel `BastiansCamp` when the player switched the public beacon on (join it with `JoinTemporaryChannel("BastiansCamp")` to read it; one fire per player in five minutes) |
 
 A kind's value may gain fields (ignore what you do not know); a field that changes meaning bumps
 the value's `v`. New kinds are listed here before they are sent.

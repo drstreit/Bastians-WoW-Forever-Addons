@@ -39,17 +39,6 @@ ns.L:Register("koKR", {
   ["XP per hour"] = "시간당 경험치",
   ["Gold per hour"] = "시간당 골드",
   ["Way"] = "길",
-  -- the session plan (W10 step 3)
-  ["List"] = "목록",
-  ["Plan %d min"] = "%d분 계획",
-  ["arrive in %s, %s there, +%s"] = "%s 후 도착, 그곳에서 %s, +%s",
-  ["(way estimated)"] = "(길은 추정)",
-  ["Nothing fits into %d min from here."] = "여기서 %d분 안에 할 수 있는 일이 없습니다.",
-  ["Plan for %d min: %d stops, %s, %s"] = "%d분 계획: 경유지 %d곳, %s, %s",
-  ["Route the plan"] = "계획 경로 만들기",
-  ["A route through the plan's stops, in order."] = "계획의 경유지를 순서대로 잇는 경로입니다.",
-  ["My plan"] = "내 계획",
-  ["XP"] = "경험치",
 
   -- departures (R26.6)
   ["Learned when %s leaves; shared with your group and guild."] = "%s이(가) 출발할 때 기록되며, 파티와 길드에 공유됩니다.",

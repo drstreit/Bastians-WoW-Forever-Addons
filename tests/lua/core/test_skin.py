@@ -4,6 +4,7 @@ frames as a switch of their own; loot as a grid of icon cells, places as cuts of
 zone's painting behind a creature, creatures that greet, faces in NPC rows, page sounds. Each
 switch changes what it names; off gives back today's look."""
 
+import pytest
 from harness import WowRuntime
 
 CORE, DATA, QUESTS, BROWSER = (
@@ -415,3 +416,31 @@ def test_a_floor_plate_lays_its_tiles_and_pins_out_by_the_width(core: WowRuntime
         "Bastians.UI.Scenery.FloorsHeight({ { floor = floor }, { floor = tall } }, 400)"
     ) == (200 + 16 + 6 + 400 + 16 + 6)
     assert core.errors == []
+
+
+@pytest.mark.parametrize(
+    ("locale", "want"),
+    [
+        ("enUS", (False, False, False)),
+        ("deDE", (False, False, False)),
+        ("ptBR", (False, False, False)),
+        ("koKR", (True, True, True)),
+        ("zhTW", (True, True, True)),
+        ("ruRU", (True, False, True)),
+    ],
+)
+def test_a_client_with_its_own_script_keeps_its_fonts(wow: WowRuntime, locale: str, want: tuple):
+    """ADR 0033: the Asian clients and ruRU (Cyrillic unverified in ARIALN and Morpheus, assumed
+    04.11.2026) draw in STANDARD_TEXT_FONT and keep it for headings; S.CJK stays Asian only; a
+    Latin client (de, pt) keeps the suite's fonts."""
+    wow.mock.locale = locale
+    wow.start(CORE)
+    wow.run_frames(3)
+    got = wow.eval(
+        f"{{ {S}.CLIENT_FONT, {S}.CJK, {S}.DEFAULT_FONT == STANDARD_TEXT_FONT,"
+        f" {S}.headingFont() == {S}.font() }}"
+    )
+    assert (got[1], got[2], got[3]) == want
+    if want[0]:
+        assert got[4] is True
+    assert wow.errors == []

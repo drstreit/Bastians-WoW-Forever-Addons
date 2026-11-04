@@ -70,9 +70,10 @@ Names.DETAIL_MIN, Names.DETAIL_MAX = 15, 250 -- yards
 Names.DETAIL_LEVEL = 3 -- with Blizzard's labels: the other subzones from this level on
 Names.DETAIL_TEXT = 50 -- yards: a taller subzone name in the text ink, a smaller one in the dim
 
--- The words in the client's font where it writes Hangul or Han (S.CJK), else the style's face.
+-- The words in the client's font where it writes Hangul, Han or Cyrillic (S.CLIENT_FONT), else the style's
+-- face.
 local function face(st)
-  if B.UI.Style.CJK then
+  if B.UI.Style.CLIENT_FONT then
     return nil
   end
   return st and st.font or nil

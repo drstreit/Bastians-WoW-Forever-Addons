@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Objets
 ## Title-esES: Bastian's Data: Objetos
 ## Title-esMX: Bastian's Data: Objetos
+## Title-ruRU: Bastian's Data: Предметы
+## Title-ptBR: Bastian's Data: Itens
 ## IconTexture: Interface\AddOns\Bastians_Data_Items\Icon
 ## Notes: Generated item data pack (loads at startup).
 ## Notes-koKR: 생성된 아이템 데이터 팩 (접속 시 불러옴).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Paquet de données des objets généré (chargé à la connexion).
 ## Notes-esES: Paquete de datos de objetos generado (se carga al conectar).
 ## Notes-esMX: Paquete de datos de objetos generado (se carga al conectar).
+## Notes-ruRU: Сгенерированный пакет данных о предметах (загружается при входе).
+## Notes-ptBR: Pacote de dados de itens gerado (carrega ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

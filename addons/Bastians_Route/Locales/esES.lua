@@ -39,17 +39,6 @@ local strings = {
   ["XP per hour"] = "PX por hora",
   ["Gold per hour"] = "Oro por hora",
   ["Way"] = "Trayecto",
-  -- the session plan (W10 step 3)
-  ["List"] = "Lista",
-  ["Plan %d min"] = "Plan %d min",
-  ["arrive in %s, %s there, +%s"] = "llegada en %s, %s allí, +%s",
-  ["(way estimated)"] = "(trayecto estimado)",
-  ["Nothing fits into %d min from here."] = "Nada cabe en %d min desde aquí.",
-  ["Plan for %d min: %d stops, %s, %s"] = "Plan para %d min: %d paradas, %s, %s",
-  ["Route the plan"] = "Trazar la ruta del plan",
-  ["A route through the plan's stops, in order."] = "Una ruta por las paradas del plan, en orden.",
-  ["My plan"] = "Mi plan",
-  ["XP"] = "PX",
 
   -- departures (R26.6)
   ["Learned when %s leaves; shared with your group and guild."] = "Se aprende cuando %s zarpa; compartido con tu grupo y tu hermandad.",

@@ -13,6 +13,7 @@ local function ensure(db)
   local tables = {
     { db.global, "characters" },
     { db.global, "neverSell" },
+    { db.global, "mailRules" },
     { db.char, "restock" },
     { db.char, "recent" },
     { db.profile, "window" },
@@ -128,6 +129,26 @@ local function register(self)
   })
 end
 
+-- one edit row per mail rule kind (#18), set on Enter, an empty name removes the rule
+local function mailRuleRows()
+  local rows = {}
+  for _, kind in ipairs(Helpers.MAIL_KINDS) do
+    rows[#rows + 1] = {
+      type = "edit",
+      label = string.format(L["%s go to (a name, Enter; empty removes the rule)"], L[kind.label]),
+      set = function(text)
+        local to = Helpers.SetMailRule(kind.id, text)
+        Helpers.Notice(
+          to and string.format(L["%s go to %s"], L[kind.label], to)
+            or string.format(L["%s: no mail rule"], L[kind.label])
+        )
+        changed()
+      end,
+    }
+  end
+  return rows
+end
+
 local OPTIONS = {
   { type = "header", label = L["Merchant"] },
   { type = "toggle", key = "sellJunk", label = L["Sell grey items (Undo in the notice)"] },
@@ -139,6 +160,14 @@ local OPTIONS = {
   { type = "toggle", key = "takeAll", label = L["Take all button on the mailbox"] },
   { type = "toggle", key = "sendTo", label = L["Your characters and recent recipients beside the mail"] },
   { type = "toggle", key = "lastRecipient", label = L["Start the send tab with the last recipient"] },
+  { type = "header", label = L["Mail rules"] },
+  {
+    type = "note",
+    text = function()
+      return Helpers.MailRulesText()
+        or L["No rules yet: name a character below, for example your alchemist for herbs."]
+    end,
+  },
   { type = "header", label = L["Quests"] },
   { type = "toggle", key = "autoQuest", label = L["Accept and hand in quests automatically"] },
   { type = "toggle", key = "skipGossip", label = L["Skip the gossip of NPCs with one option"] },
@@ -156,6 +185,17 @@ local OPTIONS = {
     values = { shift = L["Shift"], ctrl = L["Ctrl"], alt = L["Alt"] },
   },
 }
+do -- the rule rows go right after the rules' note
+  local at
+  for i, option in ipairs(OPTIONS) do
+    if option.type == "header" and option.label == L["Mail rules"] then
+      at = i + 2
+    end
+  end
+  for n, row in ipairs(mailRuleRows()) do
+    table.insert(OPTIONS, at + n - 1, row)
+  end
+end
 
 mod = B:NewModule("Helpers", {
   news = ns.NEWS, -- What's new (ADR 0021)

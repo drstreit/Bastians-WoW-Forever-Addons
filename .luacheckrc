@@ -159,13 +159,15 @@ local handwritten_globals = {
 
 exclude_files = { "addons/**/Generated/**", "addons/**/Libs/**" } -- generated packs and vendored libraries
 -- The translations are one `["English key"] = "text"` per line; a string cannot be wrapped
--- (German, and French and Spanish since ADR 0033).
+-- (German, and French, Spanish, Korean, Chinese, Russian and Portuguese since ADR 0033).
 files["addons/*/Locales/deDE.lua"] = { max_line_length = false }
 files["addons/*/Locales/frFR.lua"] = { max_line_length = false }
 files["addons/*/Locales/esES.lua"] = { max_line_length = false }
 files["addons/*/Locales/koKR.lua"] = { max_line_length = false }
 files["addons/*/Locales/zhCN.lua"] = { max_line_length = false }
 files["addons/*/Locales/zhTW.lua"] = { max_line_length = false }
+files["addons/*/Locales/ruRU.lua"] = { max_line_length = false }
+files["addons/*/Locales/ptBR.lua"] = { max_line_length = false }
 -- What's new (ADR 0021): an entry's text is one sentence for players, written by
 -- tools/suite_release.py; a string cannot be wrapped either.
 files["addons/*/News.lua"] = { max_line_length = false }

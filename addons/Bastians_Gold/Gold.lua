@@ -39,6 +39,16 @@ local mod = B:NewModule("Gold", {
       label = L["Open the bag advisor at the auction house and at vendors"],
       default = true,
     },
+    {
+      type = "toggle",
+      key = "sessionPlan",
+      label = L["Show the session plan in the Browser"],
+      desc = L["what fits into the next 30 to 180 minutes"],
+      default = false, -- owner: a plan to the minute spoils the fun of exploring
+      set = function()
+        ns.Plan.Apply()
+      end,
+    },
     { type = "header", label = L["Prices"] },
     {
       type = "toggle",
@@ -82,10 +92,12 @@ local mod = B:NewModule("Gold", {
     ns.Capture.Register(self)
     ns.Income.Register(self) -- gold per day, AH apart from loot (R9)
     ns.Advisor.Register(self) -- the bag advisor (S4)
+    ns.History.Register(self) -- the own scans' medians per day (#19)
     ns.Prices.Register(self)
     ns.Sections.Register(self)
     ns.Spots.Register(self)
     ns.Signals.Register(self) -- the signals as things and activities (W10 step 2)
+    ns.Plan.Register(self) -- the session plan, off by default (W10 step 3)
     ns.Window.Register(self)
     ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
@@ -99,9 +111,11 @@ mod.Prices = ns.Prices
 mod.Sections = ns.Sections
 mod.Today = ns.Today
 mod.Spots = ns.Spots
+mod.History = ns.History -- the price history, the sparkline (History.lua, #19)
 mod.Income = ns.Income -- gold per day (Income.lua, R9)
 mod.Advisor = ns.Advisor -- the bag advisor (Advisor.lua, S4)
 mod.Window = ns.Window
+mod.Plan = ns.Plan -- the session plan (Plan.lua)
 
 SLASH_BASTIANSGOLD1 = "/bgold"
 SlashCmdList.BASTIANSGOLD = function(msg)
@@ -116,6 +130,10 @@ SlashCmdList.BASTIANSGOLD = function(msg)
     ns.Window.Open("spots", nil)
   elseif cmd == "bags" then
     ns.Window.Open("bags")
+  elseif cmd == "plan" then
+    if not ns.Plan.Open() then
+      B:Say(L["Switch on the session plan in Gold's settings first."])
+    end
   elseif cmd == "item" then
     ns.Window.Open("price", tonumber(string.match(msg, "%d+")))
   else

@@ -9,6 +9,8 @@
 ## Notes-frFR: Les sacs, la banque, le courrier et l'équipement de vos personnages, consultables depuis chacun ; demandez des objets à l'un d'eux par courrier.
 ## Notes-esES: Las bolsas, el banco, el correo y el equipo de tus personajes, buscables desde cualquiera; pide objetos a uno por correo.
 ## Notes-esMX: Las bolsas, el banco, el correo y el equipo de tus personajes, buscables desde cualquiera; pide objetos a uno por correo.
+## Notes-ruRU: Сумки, банк, почта и экипировка ваших персонажей с поиском из любого из них; можно запросить предметы у другого персонажа по почте.
+## Notes-ptBR: As bolsas, o banco, o correio e o equipamento dos seus personagens, com busca a partir de qualquer um; peça itens a um deles por correio.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -17,8 +19,10 @@
 ## Category-frFR: Suite de Bastian
 ## Category-esES: Suite de Bastian
 ## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Browser
@@ -30,6 +34,8 @@ Locales\esES.lua
 Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
 News.lua
 Feed.lua
 Alts.lua

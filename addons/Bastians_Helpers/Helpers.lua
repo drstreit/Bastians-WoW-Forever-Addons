@@ -86,8 +86,67 @@ function Model.Restock(want, have, offers, money)
   return out
 end
 
+-- The cheapest other vendor of an item (issue #15): `here` the unit price paid, `offers`
+-- { { npc, name, zone, price, stack } } from the packs' vendor lists. A unit price is known only
+-- with the stack; an offer without one, or not cheaper, is left out (unknown is never cheaper).
+-- -> { npc, name, zone, unit } or nil.
+function Model.CheaperVendor(here, offers)
+  local best
+  for _, o in ipairs(offers or {}) do
+    local unit = o.price and o.stack and o.stack > 0 and o.price / o.stack or nil
+    if unit and here and unit < here then
+      if not best or unit < best.unit or (unit == best.unit and tostring(o.name) < tostring(best.name)) then
+        best = { npc = o.npc, name = o.name, zone = o.zone, unit = unit }
+      end
+    end
+  end
+  return best
+end
+
 -- The buyback indices that undo this visit's sales (`sold` { { itemID, count } }), highest first
 -- (a buyback moves the later entries down). `buyback` is Compat.GetBuybackItems()'s array.
+-- The kinds a mail rule names (#18, helpers.md "Mail rules"): the class and subclass the client
+-- answers for an item (GetItemInfoInstant: classID, subclassID; Trade Goods = 7, Recipe = 9; the
+-- retail family's numbers, assumed on Forever). `sub` nil takes the whole class.
+Helpers.MAIL_KINDS = {
+  { id = "herb", label = "Herbs", class = 7, sub = 9 },
+  { id = "ore", label = "Metal and stone", class = 7, sub = 7 },
+  { id = "leather", label = "Leather", class = 7, sub = 6 },
+  { id = "cloth", label = "Cloth", class = 7, sub = 5 },
+  { id = "meat", label = "Meat and fish", class = 7, sub = 8 },
+  { id = "enchanting", label = "Enchanting materials", class = 7, sub = 12 },
+  { id = "elemental", label = "Elemental", class = 7, sub = 10 },
+  { id = "recipe", label = "Recipes", class = 9 },
+}
+
+-- What the mail rules would send now: { { kind, to, slots, count } } in the kinds' order, one per
+-- kind with a rule and unbound stacks in the bags, never to me. `rules` = { [kind id] = name },
+-- `classOf(itemID)` -> classID, subclassID or nil (unknown items are never sent).
+function Model.MailBatches(slots, rules, kinds, classOf, me)
+  local out = {}
+  me = string.lower(me or "")
+  for _, kind in ipairs(kinds) do
+    local to = rules and rules[kind.id]
+    if to and to ~= "" and string.lower(to) ~= me then
+      local batch = { kind = kind, to = to, slots = {}, count = 0 }
+      for _, slot in ipairs(slots or {}) do
+        local class, sub = nil, nil
+        if slot.itemID and not slot.bound then
+          class, sub = classOf(slot.itemID)
+        end
+        if class == kind.class and (kind.sub == nil or sub == kind.sub) then
+          batch.slots[#batch.slots + 1] = slot
+          batch.count = batch.count + (slot.count or 1)
+        end
+      end
+      if #batch.slots > 0 then
+        out[#out + 1] = batch
+      end
+    end
+  end
+  return out
+end
+
 function Model.Undo(sold, buyback)
   local want = {}
   for _, s in ipairs(sold or {}) do
@@ -312,6 +371,34 @@ function Helpers.SetRestock(itemID, amount)
   end
   Helpers.Char().restock[itemID] = amount > 0 and amount or nil
   return Helpers.Char().restock[itemID]
+end
+
+-- The mail rules (#18): account-wide, a kind id -> the recipient's name; "" or nil removes it.
+function Helpers.SetMailRule(kind, name)
+  name = string.match(name or "", "^%s*(.-)%s*$")
+  Helpers.Global().mailRules[kind] = name ~= "" and name or nil
+  return Helpers.Global().mailRules[kind]
+end
+
+function Helpers.MailKind(id)
+  for _, kind in ipairs(Helpers.MAIL_KINDS) do
+    if kind.id == id then
+      return kind
+    end
+  end
+  return nil
+end
+
+-- The rules in words for the settings page, or nil without any.
+function Helpers.MailRulesText()
+  local parts = {}
+  for _, kind in ipairs(Helpers.MAIL_KINDS) do
+    local to = Helpers.Global().mailRules[kind.id]
+    if to then
+      parts[#parts + 1] = string.format(L["%s go to %s"], L[kind.label], to)
+    end
+  end
+  return #parts > 0 and table.concat(parts, "; ") or nil
 end
 
 function Helpers.Restock(itemID)

@@ -747,6 +747,17 @@ function B:GetView(id)
   return views[id]
 end
 
+-- Takes a view back before its owner is disabled (an option switched it off, 04.11.2026); true
+-- when it was registered.
+function B:UnregisterView(id)
+  if views[id] == nil then
+    return false
+  end
+  views[id] = nil
+  changed("view", id, false)
+  return true
+end
+
 -- ---------------------------------------------------------------------------------------------
 -- Lists: an app
 -- adds a list to the Browser's type bar beside the data types. def = { type, label, ids = fn() ->
@@ -1372,6 +1383,9 @@ B.SERVICES = {
   knowledge = true, -- who knows a spell or recipe (Alts, 01.11.2026)
   voice = true, -- speaks the suite's own words (the Orbiter, plan-launch-review R5.3, 01.11.2026)
   camps = true, -- the player's fire, camp buffs and shared fires (Bastian's Campfire, 02.11.2026)
+  income = true, -- gold per day, AH apart from loot (Gold's Income.lua, 04.11.2026)
+  waypoint = true, -- the player's own waypoint on Bastian's Map (#14, 04.11.2026)
+  account = true, -- the account's gold over its characters (Alts, #14, 04.11.2026)
 }
 local services = {} -- name -> array of { owner, impl, priority }
 local active = {} -- name -> impl

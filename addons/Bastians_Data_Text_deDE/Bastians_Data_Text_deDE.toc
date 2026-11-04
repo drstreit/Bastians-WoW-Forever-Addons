@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Texte (allemand)
 ## Title-esES: Bastian's Data: Texto (alemán)
 ## Title-esMX: Bastian's Data: Texto (alemán)
+## Title-ruRU: Bastian's Data: Текст (немецкий)
+## Title-ptBR: Bastian's Data: Texto (alemão)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_deDE\Icon
 ## Notes: Generated names and quest texts in German; builds its tables only on a German client.
 ## Notes-koKR: 생성된 독일어 이름과 퀘스트 텍스트; 독일어 클라이언트에서만 테이블을 만듭니다.
@@ -16,9 +18,11 @@
 ## Notes-frFR: Noms et textes de quêtes en allemand générés ; ne construit ses tables que sur un client en allemand.
 ## Notes-esES: Nombres y textos de misiones en alemán generados; solo construye sus tablas en un cliente en alemán.
 ## Notes-esMX: Nombres y textos de misiones en alemán generados; solo construye sus tablas en un cliente en alemán.
+## Notes-ruRU: Сгенерированные названия и тексты заданий на немецком языке; создаёт таблицы только на клиенте с таким языком.
+## Notes-ptBR: Nomes e textos de missões em alemão gerados; só monta suas tabelas em um cliente em alemão.
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

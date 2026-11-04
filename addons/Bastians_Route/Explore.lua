@@ -11,7 +11,6 @@ ns.Explore = Explore
 
 Explore.VIEW = "route.explore"
 Explore.MINUTES = { 5, 10, 20, 30, 60 } -- the way limits on offer (minutes)
-Explore.PLANS = { 30, 60, 90, 120, 180 } -- the session plans on offer (minutes)
 Explore.KIND_WORDS =
   { quest = "quest", spot = "farm spot", flip = "sale at the auction house", craft = "craft" }
 
@@ -95,91 +94,16 @@ function Explore.Build(minutes, by)
   return rows, summary
 end
 
--- The plan for the next `minutes` (W10 step 3): the stops in order, each with its arrival, its
--- stay and its gain; the summary the whole. Returns rows, summary, plan (nil while the ways are
--- still being timed).
-function Explore.BuildPlan(minutes, by)
-  local g = graph()
-  if not g then
-    return {}, L["Explore needs Bastian's Data."], nil
-  end
-  local plan, why = g:Session(minutes, { by = by })
-  if not plan then
-    return {}, why == "timing" and L["Timing the ways from here..."] or tostring(why), nil
-  end
-  local rows = {}
-  for k, s in ipairs(plan.stops) do
-    local e = B:Entity(s.ref)
-    local name = e:Name() or s.ref
-    local gainText = by == "xp" and string.format("%d %s", math.floor(s.gain + 0.5), L["XP"])
-      or B.UI.MoneyShort(s.gain)
-    local meta = string.format(
-      L["arrive in %s, %s there, +%s"],
-      B.UI.Duration(s.arrive),
-      B.UI.Duration(s.stay),
-      gainText
-    )
-    if s.approx then
-      meta = meta .. " " .. L["(way estimated)"]
-    end
-    rows[#rows + 1] = {
-      ref = s.ref,
-      title = string.format("%d. %s", k, name),
-      icon = e:Icon(),
-      meta = meta,
-      text = string.format("%d. %s", k, name) .. "  " .. S.H.muted .. meta .. "|r",
-      value = by == "xp" and gainText or s.gain,
-      valueKind = by == "xp" and "text" or "money",
-    }
-  end
-  local total = by == "xp" and string.format("%d %s", math.floor(plan.value + 0.5), L["XP"])
-    or B.UI.MoneyShort(plan.value)
-  local summary = #plan.stops == 0 and string.format(L["Nothing fits into %d min from here."], minutes)
-    or string.format(
-      L["Plan for %d min: %d stops, %s, %s"],
-      minutes,
-      #plan.stops,
-      B.UI.Duration(plan.total),
-      total
-    )
-  if (plan.waiting or 0) > 0 then
-    summary = summary .. ", " .. string.format(L["%d ways still being timed"], plan.waiting)
-  end
-  return rows, summary, plan
-end
-
--- Hands the plan's stops to the route service as a tour; false without one.
-function Explore.RoutePlan(plan)
-  local route = B:GetService("route")
-  if not (route and route.Tour and plan and #plan.stops > 0) then
-    return false
-  end
-  local stops = {}
-  for k, s in ipairs(plan.stops) do
-    stops[k] = {
-      id = k,
-      name = B:Entity(s.ref):Name() or s.ref,
-      ref = s.ref,
-      place = { map = s.place.map, wx = s.place.wx, wy = s.place.wy, wz = s.place.wz },
-    }
-  end
-  return route:Tour(stops, L["My plan"]) ~= false
-end
-
 local function render(host)
   local p = db()
   local minutes = p.exploreMinutes or 10
   local by = p.exploreBy or Explore.DefaultOrder()
-  local planMinutes = p.explorePlan or 0
   local chips = {}
   for _, m in ipairs(Explore.MINUTES) do
     chips[#chips + 1] = { key = m, label = string.format(L["%d min"], m) }
   end
-  local planOptions = { { key = 0, label = L["List"] } }
-  for _, m in ipairs(Explore.PLANS) do
-    planOptions[#planOptions + 1] = { key = m, label = string.format(L["Plan %d min"], m) }
-  end
-  local controls = {
+  -- the session plan moved to Gold, off by default
+  host:SetControls({
     {
       kind = "select",
       value = by,
@@ -189,38 +113,12 @@ local function render(host)
         host:Render()
       end,
     },
-    {
-      kind = "select",
-      value = planMinutes,
-      options = planOptions,
-      onChange = function(key)
-        p.explorePlan = key
-        host:Render()
-      end,
-    },
-  }
-  local rows, summary, plan
-  if planMinutes > 0 then
-    rows, summary, plan = Explore.BuildPlan(planMinutes, by)
-    if plan and #plan.stops > 0 and B:GetService("route") then
-      controls[#controls + 1] = {
-        kind = "button",
-        label = L["Route the plan"],
-        tooltip = L["A route through the plan's stops, in order."],
-        onClick = function()
-          Explore.RoutePlan(plan)
-        end,
-      }
-    end
-    host:SetChips({}, nil, nil, nil)
-  else
-    host:SetChips(chips, minutes, function(key)
-      p.exploreMinutes = key
-      host:Render()
-    end, L["Way"])
-    rows, summary = Explore.Build(minutes, by)
-  end
-  host:SetControls(controls)
+  })
+  host:SetChips(chips, minutes, function(key)
+    p.exploreMinutes = key
+    host:Render()
+  end, L["Way"])
+  local rows, summary = Explore.Build(minutes, by)
   host:SetRows(rows)
   host:SetSummary(summary)
 end

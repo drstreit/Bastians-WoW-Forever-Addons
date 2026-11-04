@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Texte (espagnol)
 ## Title-esES: Bastian's Data: Texto (español)
 ## Title-esMX: Bastian's Data: Texto (español)
+## Title-ruRU: Bastian's Data: Текст (испанский)
+## Title-ptBR: Bastian's Data: Texto (espanhol)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_esES\Icon
 ## Notes: Generated names and quest texts in Spanish; builds its tables only on a Spanish client.
 ## Notes-koKR: 생성된 스페인어 이름과 퀘스트 텍스트; 스페인어 클라이언트에서만 테이블을 만듭니다.
@@ -16,9 +18,11 @@
 ## Notes-frFR: Noms et textes de quêtes en espagnol générés ; ne construit ses tables que sur un client en espagnol.
 ## Notes-esES: Nombres y textos de misiones en español generados; solo construye sus tablas en un cliente en español.
 ## Notes-esMX: Nombres y textos de misiones en español generados; solo construye sus tablas en un cliente en español.
+## Notes-ruRU: Сгенерированные названия и тексты заданий на испанском языке; создаёт таблицы только на клиенте с таким языком.
+## Notes-ptBR: Nomes e textos de missões em espanhol gerados; só monta suas tabelas em um cliente em espanhol.
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

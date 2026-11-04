@@ -109,7 +109,7 @@ def test_a_command_slot_runs_its_lines_and_refuses_a_protected_one(wow: WowRunti
     assert wow.eval(f"{E}.Form().kind") == "command"
     wow.execute(
         f"{E}.Form().title = 'Party'; "
-        f"{E}.Form().text = '#showtooltip\\n/dance\\n/say Hello %t, a fine %h.\\n/cast Hearthstone\\n"
+        f"{E}.Form().text = '#showtooltip\\n/dance\\n/say Hello %t, a fine %h.\\n"
         "/frobnicate\\n/e smiles at %t.'"
     )
     wow.execute("GetGameTime = function() return 8, 15 end")
@@ -126,7 +126,8 @@ def test_a_command_slot_runs_its_lines_and_refuses_a_protected_one(wow: WowRunti
         ("Hello Thalendra, a fine morning.", "SAY", None),
         ("smiles at Thalendra.", "EMOTE", None),
     ]
-    assert any("/cast is a protected command" in line for line in wow.chat)
+    # (a protected line such as /cast makes the whole command a secure wedge since #24:
+    # test_macros_and_chat.py)
     # a command the app does not know goes to the client's chat, which answers an unknown one itself
     assert list(wow.eval("Mock.chatSent").values()) == ["/frobnicate"]
     # an addon's registered slash command runs (here the app's own: the next ring)

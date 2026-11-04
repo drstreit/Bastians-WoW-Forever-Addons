@@ -34,7 +34,9 @@ local SEARCH_SLICE = 200 -- records between yields in the search provider
 
 -- The game data in the client's language (data.md "Game data in other languages", ADR 0033): the
 -- pack `text_<locale>` carries `<type>_<locale>` records with the local name (and an NPC's
--- subname, a quest's objectives); esMX reads the Spanish pack. nil on an English client.
+-- subname, a quest's objectives); esMX reads the Spanish pack. nil on an English
+-- client, and on ruRU and ptBR (04.11.2026: no pack is built for them yet, they read the English
+-- texts without a warning).
 local LOCALE_PACKS = {
   deDE = "deDE",
   frFR = "frFR",

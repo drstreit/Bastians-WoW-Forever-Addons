@@ -78,6 +78,14 @@ class Companion:
 
 
 @dataclass
+class Library:
+    """An embedded library (LibStub): every addon may carry a copy, the highest minor loads."""
+
+    name: str
+    about: str = ""
+
+
+@dataclass
 class Report:
     lines: list[str] = field(default_factory=list)
     alerts: list[str] = field(default_factory=list)
@@ -105,6 +113,13 @@ def load_companions(path: Path = CONFIG) -> list[Companion]:
             )
         )
     return out
+
+
+def load_libraries(path: Path = CONFIG) -> list[Library]:
+    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    return [
+        Library(name=row["name"], about=row.get("about", "")) for row in data.get("library", [])
+    ]
 
 
 def client_folders(install: Path = INSTALL) -> dict[str, Path]:
@@ -148,7 +163,7 @@ def read_toc(folder: Path) -> dict:
                 out[key] += [v.strip() for v in value.split(",") if v.strip()]
             else:
                 out[key] = value
-    for key in ("deps", "optdoeps", "saved"):
+    for key in ("deps", "optdeps", "saved"):
         if key in out:
             out[key] = sorted(set(out[key]))
     return out
@@ -223,6 +238,98 @@ def snapshot(folder: Path, companion: Companion, client: str) -> dict | None:
     }
 
 
+NEWLIB_RE = re.compile(r"NewLibrary\(\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)")
+
+
+def library_minor(text: str, name: str) -> int | None:
+    """The minor a library file registers with LibStub: a literal, or the local it names
+    (`X_MINOR = 55`, `local MAJOR, MINOR = "Name", 4`); None when it is computed."""
+    for major, minor in NEWLIB_RE.findall(text):
+        if major != f'"{name}"' and not re.search(
+            rf'\b{re.escape(major)}\b[\w\s,]*=\s*"{re.escape(name)}"', text
+        ):
+            continue
+        if minor.isdigit():
+            return int(minor)
+        m = re.search(rf"\b{re.escape(minor)}\s*=\s*(\d+)", text)
+        if m:
+            return int(m.group(1))
+        for names, values in re.findall(r"local\s+([\w\s,]+?)\s*=\s*([^\n]+)", text):
+            names = [n.strip() for n in names.split(",")]
+            values = [v.strip() for v in values.split("--")[0].split(",")]
+            if minor in names and names.index(minor) < len(values):
+                value = values[names.index(minor)]
+                return int(value) if value.isdigit() else None
+        return None
+    return None
+
+
+def library_snapshot(addons: Path, library: Library, client: str) -> dict | None:
+    """Every copy of the library in the client's addons (carrier -> minor), or None without one."""
+    if not addons.is_dir():
+        return None
+    copies: dict[str, int | None] = {}
+    for path in sorted(addons.rglob(f"{library.name}.lua")):
+        carrier = path.relative_to(addons).parts[0]
+        minor = library_minor(path.read_text(encoding="utf-8", errors="replace"), library.name)
+        if carrier not in copies or (minor or 0) > (copies[carrier] or 0):
+            copies[carrier] = minor
+    if not copies:
+        return None
+    known = [m for m in copies.values() if m is not None]
+    return {
+        "name": library.name,
+        "client": client,
+        "minor": max(known) if known else None,
+        "copies": dict(sorted(copies.items())),
+    }
+
+
+def library_diff(old: dict | None, new: dict | None) -> list[str]:
+    if old is None and new is None:
+        return []
+    if old is None:
+        n = len(new["copies"])
+        return [f"new: minor {new.get('minor', '?')} ({n} {'copy' if n == 1 else 'copies'})"]
+    if new is None:
+        return ["missing: no addon carries it any more"]
+    out = []
+    if old.get("minor") != new.get("minor"):
+        out.append(f"the loaded minor {old.get('minor', '?')} -> {new.get('minor', '?')}")
+    a, b = old.get("copies", {}), new.get("copies", {})
+    plus = [f"+{k} ({b[k]})" for k in sorted(set(b) - set(a))]
+    minus = [f"-{k}" for k in sorted(set(a) - set(b))]
+    moved = [f"{k} {a[k]} -> {b[k]}" for k in sorted(set(a) & set(b)) if a[k] != b[k]]
+    if plus or minus or moved:
+        out.append("copies: " + ", ".join(plus + minus + moved))
+    return out
+
+
+def render_library_page(
+    library: Library, states: dict[str, dict | None], changes: str, today: str
+) -> str:
+    lines = [f"# {library.name}", ""]
+    lines.append(
+        f"*Written by `tools/companion_watch.py` (plan-second-wave.md S4); last run {today}. "
+        "An embedded library: LibStub loads the copy with the highest minor, whichever addon "
+        "carries it. Nothing here is verified in game.*"
+    )
+    if library.about:
+        lines += ["", library.about]
+    lines += ["", "## State", "", "| Client | Loaded minor | Copies |", "|---|---|---|"]
+    for client, snap in states.items():
+        if snap is None:
+            lines.append(f"| {client} | missing | |")
+            continue
+        copies = ", ".join(f"{k} ({'?' if v is None else v})" for k, v in snap["copies"].items())
+        minor = "?" if snap.get("minor") is None else str(snap["minor"])
+        lines.append(f"| {client} | {minor} | {copies} |")
+    lines += ["", CHANGELOG_HEADING, ""]
+    if changes:
+        lines.append(changes)
+    return "\n".join(lines).rstrip("\n") + "\n"
+
+
 # -- comparing ------------------------------------------------------------------------------------
 
 
@@ -281,11 +388,16 @@ def diff(old: dict | None, new: dict | None) -> list[str]:
     return out
 
 
+# the snapshot of a folder that is gone, so the next run does not report it again
+GONE = {"gone": True}
+
+
 def newest_snapshot(folder: Path) -> tuple[Path | None, dict | None]:
     files = sorted(folder.glob("*.json")) if folder.is_dir() else []
     if not files:
         return None, None
-    return files[-1], json.loads(files[-1].read_text(encoding="utf-8"))
+    snap = json.loads(files[-1].read_text(encoding="utf-8"))
+    return files[-1], None if snap == GONE else snap
 
 
 def same(a: dict | None, b: dict | None) -> bool:
@@ -411,9 +523,31 @@ def watch(
     pages: Path = PAGES,
     alert: Path = ALERT,
     today: str | None = None,
+    libraries: list[Library] | None = None,
 ) -> Report:
     today = today or datetime.now(UTC).strftime("%Y-%m-%d")
     report = Report()
+    for library in libraries or []:
+        states: dict[str, dict | None] = {}
+        entries: list[str] = []
+        for client, addons in clients.items():
+            snap = library_snapshot(addons, library, client)
+            states[client] = snap
+            _, previous = newest_snapshot(snapshots / client / library.name)
+            what = library_diff(previous, snap)
+            if what and not same(previous, snap):
+                write_atomic(
+                    snapshots / client / library.name / f"{today}.json",
+                    json.dumps(GONE if snap is None else snap, indent=1, sort_keys=True) + "\n",
+                )
+                report.changed.append(f"{library.name}@{client}")
+                report.lines.append(f"  {library.name} ({client}): " + "; ".join(what))
+                entries.append(f"- {today}, {client}: " + "; ".join(what))
+        if any(states.values()) or entries:
+            page = pages / f"{library.name}.md"
+            old = page_changes(page)
+            changes = "\n".join(entries + ([old] if old else []))
+            write_atomic(page, render_library_page(library, states, changes, today))
     for companion in companions:
         states: dict[str, dict | None] = {}
         entries: list[str] = []
@@ -421,16 +555,15 @@ def watch(
         for client, addons in clients.items():
             snap = snapshot(addons / companion.folder, companion, client)
             states[client] = snap
-            _, previous = newest_snapshot(snapshots / client / companion.folder)
+            seen, previous = newest_snapshot(snapshots / client / companion.folder)
             what = diff(previous, snap)
-            if previous is None and snap is None:
+            if seen is None and snap is None:
                 continue  # never there, nothing to say
             if what and not same(previous, snap):
-                if snap is not None:
-                    write_atomic(
-                        snapshots / client / companion.folder / f"{today}.json",
-                        json.dumps(snap, indent=1, sort_keys=True) + "\n",
-                    )
+                write_atomic(
+                    snapshots / client / companion.folder / f"{today}.json",
+                    json.dumps(GONE if snap is None else snap, indent=1, sort_keys=True) + "\n",
+                )
                 report.changed.append(f"{companion.folder}@{client}")
                 head = f"{companion.folder} ({client}): " + "; ".join(what)
                 report.lines.append(("! " if companion.required else "  ") + head)
@@ -477,7 +610,8 @@ def daily_lines(root: Path = ROOT, today: str | None = None) -> list[str]:
             return [
                 "companions: no client folders in .local/install.toml ([companions] or [clients])"
             ]
-        companions = load_companions(root / "tools" / "companions.toml")
+        config = root / "tools" / "companions.toml"
+        companions = load_companions(config)
         report = watch(
             clients,
             companions,
@@ -485,6 +619,7 @@ def daily_lines(root: Path = ROOT, today: str | None = None) -> list[str]:
             pages=root / "docs" / "reference" / "companions",
             alert=root / ".local" / "companions" / "ALERT.md",
             today=today,
+            libraries=load_libraries(config),
         )
         return [
             "companions: " + line.lstrip() if line.startswith("  ") else "companions " + line
@@ -517,7 +652,7 @@ def main(argv: list[str] | None = None) -> int:
             'no client folders: add [companions] forever = "<client folder>" to .local/install.toml'
         )
         return 2
-    report = watch(clients, load_companions(), today=args.today)
+    report = watch(clients, load_companions(), today=args.today, libraries=load_libraries())
     for line in report.lines:
         print(line)
     return 1 if report.alerts else 0

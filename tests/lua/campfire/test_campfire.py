@@ -314,6 +314,59 @@ def test_share_sends_a_camp_message_and_a_received_fire_is_a_pin_for_an_hour(wow
     assert errors(wow) == []
 
 
+PUBLIC = f"{MOD}.Public"
+FIRE = "1|{id}|1/1|camp|" + "t" + "s1:vn1;" + "s3:mapn1453;" + "s1:xn{x};" + "s1:yn0.7;" + "e"
+
+
+def channel_fire(wow: WowRuntime, sender: str, i: int, x: float = 0.3) -> None:
+    text = FIRE.replace("{id}", str(i)).replace("{x}", str(x))
+    wow.execute(f"Bastians.Comm.Receive('Bastians', {text!r}, 'CHANNEL', {sender!r})")
+
+
+def test_the_public_channel_is_off_until_switched_on_then_capped_and_blockable(wow: WowRuntime):
+    """#20: off by default, no channel joined; switched on it joins a hidden temporary channel
+    after a delay, a share goes there too (at most once in five minutes), a stranger's fire comes
+    in once per five minutes with the name in memory only, a blocked name is dropped, twenty at
+    most; switched off it leaves."""
+    boot(wow)
+    wow.advance(20)
+    assert wow.eval(f"{MOD}.db.profile.public") is False
+    assert wow.eval("Mock.channels.BastiansCamp") is None
+    channel_fire(wow, "Stranger-Realm", 1)
+    assert list(wow.eval(f"{BEACON}.Fires()").values()) == []  # off: nothing comes in
+    wow.execute(f"{MOD}.db.profile.public = true; {PUBLIC}.Apply()")
+    assert wow.eval(f"{PUBLIC}.Number()") == 1
+    assert wow.eval("Mock.removedFrom.BastiansCamp") >= 1  # kept out of the chat windows
+    channel_fire(wow, "Stranger-Realm", 2)
+    channel_fire(wow, "Stranger-Realm", 3)  # the same sender again at once: dropped
+    fires = list(wow.eval(f"{BEACON}.Fires()").values())
+    assert len(fires) == 1 and fires[0].public is True
+    saved = wow.eval(f"{MOD}.db.global.fires")
+    assert all(getattr(f, "sender", None) is None for f in saved.values())  # no name saved
+    pins = list(
+        wow.eval("Bastians:GetMapLayer('campfire.fires').query({ continent = 0 })").values()
+    )
+    assert pins[0].label == "A fire burns here (since 0 min, shared by Stranger)"
+    wow.execute(f"{MOD}.Campfire.Slash('block Pest')")
+    assert wow.eval(f"{PUBLIC}.Blocked('Pest-OtherRealm')") is True
+    channel_fire(wow, "Pest-OtherRealm", 4)
+    assert len(list(wow.eval(f"{BEACON}.Fires()").values())) == 1
+    assert wow.eval(f"{PUBLIC}.BlockedText()") == "pest"
+    for n in range(30):  # many strangers: twenty at most
+        channel_fire(wow, f"Many{n}-Realm", 100 + n, x=round(0.02 * n + 0.32, 2))
+    assert len(list(wow.eval(f"{BEACON}.Fires()").values())) == 20
+    # a share goes to the channel too, once in five minutes
+    wow.execute("Mock.addonMessages = {}")
+    assert wow.eval(f"{BEACON}.Share()") == 1
+    assert wow.eval(f"({BEACON}.Share())") is None  # nobody else and the channel waits
+    wow.advance(2)
+    sent = [m for m in wow.eval("Mock.addonMessages").values() if "|camp|" in m.text]
+    assert [(m.channel, m.target) for m in sent] == [("CHANNEL", 1)]
+    wow.execute(f"{MOD}.db.profile.public = false; {PUBLIC}.Apply()")
+    assert wow.eval("Mock.channels.BastiansCamp") is None and wow.eval(f"{PUBLIC}.Number()") is None
+    assert errors(wow) == []
+
+
 def test_a_camp_posted_in_chat_becomes_a_faded_pin(wow: WowRuntime):
     boot(wow)
     wow.fire("CHAT_MSG_SAY", "camp here |Hworldmap:1429:5000:5000|h[Map Pin]|h", "Grimtok")

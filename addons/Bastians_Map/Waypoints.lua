@@ -69,9 +69,11 @@ function Waypoints.Set(continent, wx, wy, label, map, x, y)
     B:Fire("BASTIANS_LAYER_CHANGED", "map.waypoint") -- the pin turns into the faint dot
   end)
   B:Fire("BASTIANS_LAYER_CHANGED", "map.waypoint")
+  B:Fire("BASTIANS_WAYPOINT_CHANGED", map, x, y)
 end
 
 function Waypoints.Clear()
+  local had = waypoint ~= nil
   waypoint = nil
   shown = nil
   if loudTimer then
@@ -79,6 +81,9 @@ function Waypoints.Clear()
     loudTimer = nil
   end
   B:Fire("BASTIANS_LAYER_CHANGED", "map.waypoint")
+  if had then
+    B:Fire("BASTIANS_WAYPOINT_CHANGED") -- no arguments: there is none now
+  end
 end
 
 function Waypoints.Shown()
@@ -189,8 +194,25 @@ local function onRightClick(sx, sy)
   Waypoints.PointMenu(cam.continent, wx, wy)
 end
 
+-- The `waypoint` service (core-contracts section 11, #14): the public API reads and sets the
+-- player's own waypoint through it.
+local service = {
+  Get = function()
+    return waypoint
+  end,
+  Set = function(_, continent, wx, wy, label, map, x, y)
+    Waypoints.Set(continent, wx, wy, label, map, x, y)
+    return true
+  end,
+  Clear = function()
+    Waypoints.Clear()
+    return true
+  end,
+}
+
 function Waypoints.Register(self)
   Map.OnRightClick = onRightClick
+  B:ProvideService(self, "waypoint", service, { priority = 100 })
   B:RegisterMapLayer(self, {
     id = "map.waypoint",
     icon = "waypoint", -- the layer bar shows its icon (R27.8)
@@ -342,4 +364,8 @@ function Waypoints.Register(self)
 end
 
 table.insert(Map.onEnable, Waypoints.Register)
+
+-- the player's waypoint was set (uiMapID, x, y; x and y nil off every map) or cleared (no
+-- arguments); public (Bastians.API.EVENTS)
+B:DeclareMessage("BASTIANS_WAYPOINT_CHANGED")
 ns.mod.Waypoints = Waypoints

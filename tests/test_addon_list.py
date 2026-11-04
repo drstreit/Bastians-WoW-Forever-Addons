@@ -3,7 +3,8 @@ shipped addon is either an app under the one category "Bastian's Suite" or a chi
 (the data packs under Bastian's Data, the map's art and styles under Bastian's Map), so the list
 shows one folded header and one row per app. Both clients read `## Group` and `## Category`
 (Blizzard_AddOnList, read from Forever 1.60.1.70707 and retail 12.1.5, 02.11.2026). Every shipped
-addon carries its notes in German, French, Spanish (esMX reads esES's), Korean and both Chinese,
+addon carries its notes in German, French, Spanish (esMX reads esES's), Russian, Brazilian
+Portuguese, Korean and both Chinese,
 and a title in them where it has a part to translate (core.md "The AddOn list")."""
 
 import re
@@ -20,6 +21,7 @@ ADDONS = ROOT / "addons"
 CATEGORY = "Bastian's Suite"
 ASIAN = ("koKR", "zhCN", "zhTW")
 LATIN = ("deDE", "frFR", "esES", "esMX")
+CYRILLIC = re.compile(r"[\u0410-\u044f]")
 CJK = re.compile(r"[ᄀ-ᇿ぀-ヿ㐀-鿿가-힣]")
 
 
@@ -76,3 +78,21 @@ def test_every_addon_speaks_german_french_and_spanish_in_the_list():
             assert (title is None) == (meta.get("Title-koKR") is None), (name, loc)
             if title is not None:
                 assert title.startswith("Bastian's "), (name, loc)
+
+
+def test_every_addon_speaks_russian_and_brazilian_portuguese_in_the_list():
+    for name, meta in shipped().items():
+        assert CYRILLIC.search(meta.get("Notes-ruRU", "")), name
+        notes = meta.get("Notes-ptBR", "")
+        assert notes and notes != meta["Notes"], name
+        assert notes != meta["Notes-esES"], name  # Portuguese, not Spanish
+        for loc in ("ruRU", "ptBR"):
+            title = meta.get(f"Title-{loc}")
+            assert (title is None) == (meta.get("Title-koKR") is None), (name, loc)
+            if title is not None:
+                assert title.startswith("Bastian's "), (name, loc)
+        if "Group" not in meta:
+            category = meta.get("Category-ptBR", "")
+            assert category.startswith(("Bastian's", "Suite")), name
+            ru = meta.get("Category-ruRU", "")
+            assert CYRILLIC.search(ru) or ru.startswith("Bastian's"), name

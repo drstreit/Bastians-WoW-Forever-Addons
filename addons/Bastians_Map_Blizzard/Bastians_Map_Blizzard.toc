@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Map: Blizzard
 ## Title-esES: Bastian's Map: Blizzard
 ## Title-esMX: Bastian's Map: Blizzard
+## Title-ruRU: Bastian's Map: Blizzard
+## Title-ptBR: Bastian's Map: Blizzard
 ## IconTexture: Interface\AddOns\Bastians_Map_Blizzard\Icon
 ## Notes: The game's own zone paintings as one seamless map, every zone explored, the names sharp at every zoom (optional, WoW Forever).
 ## Notes-koKR: 게임의 지역 그림을 하나로 이은 지도, 모든 지역 탐험 완료, 어느 확대에서나 선명한 이름 (선택, WoW Forever).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Les peintures de zones du jeu en une seule carte sans raccord, chaque zone explorée, les noms nets à tous les zooms (facultatif, WoW Forever).
 ## Notes-esES: Las pinturas de zonas del juego como un solo mapa continuo, cada zona explorada, los nombres nítidos con cualquier zoom (opcional, WoW Forever).
 ## Notes-esMX: Las pinturas de zonas del juego como un solo mapa continuo, cada zona explorada, los nombres nítidos con cualquier zoom (opcional, WoW Forever).
+## Notes-ruRU: Собственные рисунки зон игры в виде одной бесшовной карты, все зоны исследованы, названия чёткие при любом масштабе (необязательно, WoW Forever).
+## Notes-ptBR: As pinturas de zonas do próprio jogo como um único mapa contínuo, todas as zonas exploradas, nomes nítidos em qualquer zoom (opcional, WoW Forever).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

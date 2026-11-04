@@ -147,6 +147,7 @@ function Prices.Rebuild(source, onDone)
       end
       scan =
         { ts = rawScan.ts, realm = rawScan.realm, faction = rawScan.faction, items = items, count = count }
+      ns.History.Record(scan) -- the day's line of the price history (#19)
       if onDone then
         onDone(scan)
       end

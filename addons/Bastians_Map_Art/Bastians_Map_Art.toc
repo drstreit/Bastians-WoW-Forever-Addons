@@ -9,9 +9,11 @@
 ## Notes-frFR: Textures de la carte d'ensemble pour Bastian's Map (chargé à la connexion).
 ## Notes-esES: Texturas del mapa general para Bastian's Map (se carga al conectar).
 ## Notes-esMX: Texturas del mapa general para Bastian's Map (se carga al conectar).
+## Notes-ruRU: Текстуры обзорной карты для Bastian's Map (загружаются при входе).
+## Notes-ptBR: Texturas do mapa geral para o Bastian's Map (carregam ao entrar no jogo).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Texte (chinois simplifié)
 ## Title-esES: Bastian's Data: Texto (chino simplificado)
 ## Title-esMX: Bastian's Data: Texto (chino simplificado)
+## Title-ruRU: Bastian's Data: Текст (китайский упрощённый)
+## Title-ptBR: Bastian's Data: Texto (chinês simplificado)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_zhCN\Icon
 ## Notes: Generated names and quest texts in Simplified Chinese; builds its tables only on a Simplified Chinese client.
 ## Notes-koKR: 생성된 중국어 간체 이름과 퀘스트 텍스트; 중국어 간체 클라이언트에서만 테이블을 만듭니다.
@@ -16,9 +18,11 @@
 ## Notes-frFR: Noms et textes de quêtes en chinois simplifié générés ; ne construit ses tables que sur un client en chinois simplifié.
 ## Notes-esES: Nombres y textos de misiones en chino simplificado generados; solo construye sus tablas en un cliente en chino simplificado.
 ## Notes-esMX: Nombres y textos de misiones en chino simplificado generados; solo construye sus tablas en un cliente en chino simplificado.
+## Notes-ruRU: Сгенерированные названия и тексты заданий на упрощённом китайском языке; создаёт таблицы только на клиенте с таким языком.
+## Notes-ptBR: Nomes e textos de missões em chinês simplificado gerados; só monta suas tabelas em um cliente em chinês simplificado.
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

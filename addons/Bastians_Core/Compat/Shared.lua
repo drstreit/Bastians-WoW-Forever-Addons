@@ -749,6 +749,40 @@ define("shared", "SendAddonMessage", function(prefix, text, channel, target)
   return false
 end)
 
+-- Custom chat channels (#20, Campfire's public beacon; JoinTemporaryChannel, LeaveChannelByName,
+-- GetChannelName, ChatFrame_RemoveChannel as the retail FrameXML has them, assumed on Forever).
+define("shared", "ChannelNumber", function(name)
+  if type(_G.GetChannelName) ~= "function" then
+    return nil
+  end
+  local number = _G.GetChannelName(name)
+  return type(number) == "number" and number > 0 and number or nil
+end)
+
+define("shared", "JoinChannel", function(name)
+  if type(_G.JoinTemporaryChannel) ~= "function" then
+    return nil
+  end
+  _G.JoinTemporaryChannel(name)
+  if type(_G.ChatFrame_RemoveChannel) == "function" then
+    for i = 1, rawget(_G, "NUM_CHAT_WINDOWS") or 10 do
+      local frame = rawget(_G, "ChatFrame" .. i)
+      if frame then
+        _G.ChatFrame_RemoveChannel(frame, name)
+      end
+    end
+  end
+  return Compat.ChannelNumber(name)
+end)
+
+define("shared", "LeaveChannel", function(name)
+  if type(_G.LeaveChannelByName) ~= "function" then
+    return false
+  end
+  _G.LeaveChannelByName(name)
+  return true
+end)
+
 -- Bag slots (C_Container: 47 functions present on Forever, P1 of 20.10.2026; the info table is the
 -- retail shape, assumed on Forever until the bag advisor ran there). Bags 0 to the last equipped one.
 local function containerRows(bags)

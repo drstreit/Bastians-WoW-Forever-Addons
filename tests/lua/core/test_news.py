@@ -5,6 +5,7 @@ fingerprint that keeps a Data edition from listing the optional addons again."""
 
 import re
 
+import pytest
 from harness import WowRuntime
 
 CORE = "Bastians_Core"
@@ -173,4 +174,33 @@ def test_a_data_edition_does_not_list_the_optional_addons_again(wow: WowRuntime)
     full = wow.eval("Bastians.UI.Settings.Fingerprint(true)")
     assert "Bastians_Data=1.0.0-beta.10;" in short + ";" and "+data" not in short
     assert "Bastians_Data=1.0.0-beta.10+data.20261024.2" in full
+    assert wow.errors == []
+
+
+def test_an_entry_reads_in_the_clients_language(wow: WowRuntime):
+    """LG5 (04.11.2026): Core's locale file translates an entry by its English text; a text it
+    does not know stays English."""
+    wow.mock.locale = "deDE"
+    wow.start(CORE)
+    wow.run_frames(5)
+    wow.execute("Bastians.L['A brand new view.'] = 'Eine brandneue Ansicht.'")
+    add(wow, "2026-11-05", "A brand new view.", "9.9.9")
+    add(wow, "2026-11-05", "Not translated.", "9.9.9")
+    texts = {strip(e.text) for e in wow.eval(f"{NEWS}.Entries()").values()}
+    assert "Eine brandneue Ansicht." in texts and "Not translated." in texts
+    assert "A brand new view." not in texts
+    assert wow.errors == []
+
+
+@pytest.mark.parametrize("locale", ["deDE", "ruRU", "ptBR"])
+def test_every_entry_of_the_launch_release_is_translated(wow: WowRuntime, locale: str):
+    """LG5: 1.3.0's entries read in the client's language (every language carries the same keys:
+    tests/lua/core/test_locales.py; Russian and Portuguese since #21, 04.11.2026)."""
+    wow.mock.locale = locale
+    wow.start(CORE)
+    wow.run_frames(5)
+    english = [e.text for e in wow.eval(CORE_NEWS).values() if e.version == "1.3.0"]
+    shown = [e.text for e in wow.eval(f"{NEWS}.Entries()").values() if e.version == "1.3.0"]
+    assert len(english) == len(shown) >= 20
+    assert not set(english) & set(shown)  # none left in English
     assert wow.errors == []

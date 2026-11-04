@@ -1514,6 +1514,30 @@ C_ChatInfo.SendAddonMessage = function(prefix, text, channel, target)
   Mock.addonMessages[#Mock.addonMessages + 1] =
     { prefix = prefix, text = text, channel = channel, target = target }
 end
+-- custom channels (#20): Mock.channels[name] = number while joined; Mock.removedFrom[name] = frames
+Mock.channels, Mock.removedFrom = {}, {}
+function JoinTemporaryChannel(name)
+  if not Mock.channels[name] then
+    local n = 1
+    for _, used in pairs(Mock.channels) do
+      n = math.max(n, used + 1)
+    end
+    Mock.channels[name] = n
+  end
+end
+function LeaveChannelByName(name)
+  Mock.channels[name] = nil
+end
+function GetChannelName(name)
+  local n = Mock.channels[name]
+  if n then
+    return n, name
+  end
+  return 0, nil
+end
+function ChatFrame_RemoveChannel(frame, name)
+  Mock.removedFrom[name] = (Mock.removedFrom[name] or 0) + 1
+end
 -- death (R26.8): Mock.deathState "alive" | "dead" | "ghost"; Mock.corpse = { map, x, y }
 Mock.deathState = "alive"
 function UnitIsGhost(unit)
@@ -2487,7 +2511,7 @@ C_Item.GetItemInfoInstant = function(idOrLink)
   local id = tonumber(idOrLink) or tonumber(string.match(tostring(idOrLink), "item:(%d+)"))
   local it = id and Mock.items[id]
   if it then
-    return id, "Tradeskill", "Cloth", it.equipLoc or "INVTYPE_NON_EQUIP", it.icon, 7, 0
+    return id, "Tradeskill", "Cloth", it.equipLoc or "INVTYPE_NON_EQUIP", it.icon, it.classID or 7, it.subclassID or 0
   end
 end
 -- which items can be worn (the Browser's portrait tries them on): Mock.equippable[itemID] = true

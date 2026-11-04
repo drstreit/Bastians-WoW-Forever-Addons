@@ -300,8 +300,9 @@ end
 -- The ring kit's items of a ring: `available(slot) -> ok, why` says whether an action's app is
 -- there. A line's tooltip is its text and language.
 -- A macro wedge carries `secure` (Core's ring kit lays a secure button over it); with `hold` (the
--- key held, fired on its release) its tip says that only a click runs it.
-function Model.Items(ring, available, hold)
+-- key held, fired on its release) its tip says that only a click runs it. `secureText(slot)` gives
+-- a command slot with a protected line its macro text (#24): it gets a secure button too.
+function Model.Items(ring, available, hold, secureText)
   local items = {}
   for i = 1, Model.WEDGES do
     local slot = ring.slots[i]
@@ -320,11 +321,14 @@ function Model.Items(ring, available, hold)
           item.tip = why
         end
       end
+      local text = not item.disabled and slot.kind == "command" and secureText and secureText(slot)
       if slot.kind == "macro" and not item.disabled then
         item.secure = { type = "macro", macro = slot.name }
-        if hold then
-          item.tip = L["Click the wedge (a macro runs only on a click)"]
-        end
+      elseif text then
+        item.secure = { type = "macro", macrotext = text }
+      end
+      if item.secure and hold then
+        item.tip = L["Click the wedge (a macro runs only on a click)"]
       end
       items[i] = item
     else

@@ -9,6 +9,8 @@
 ## Notes-frFR: Prix, relevé de l'hôtel des ventes et suivi de l'or.
 ## Notes-esES: Precios, registro de la casa de subastas y seguimiento del oro.
 ## Notes-esMX: Precios, registro de la casa de subastas y seguimiento del oro.
+## Notes-ruRU: Цены, запись данных аукциона и учёт золота.
+## Notes-ptBR: Preços, registro da Casa de Leilões e acompanhamento do ouro.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -17,8 +19,10 @@
 ## Category-frFR: Suite de Bastian
 ## Category-esES: Suite de Bastian
 ## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data
@@ -31,13 +35,17 @@ Locales\esES.lua
 Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
 News.lua
 Capture.lua
 Prices.lua
+History.lua
 Sections.lua
 Today.lua
 Spots.lua
 Signals.lua
+Plan.lua
 Worth.lua
 Income.lua
 Advisor.lua

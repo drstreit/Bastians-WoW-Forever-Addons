@@ -54,6 +54,44 @@ function Merchant.Repair()
   return who
 end
 
+-- The vendors the packs know for an item, as Model.CheaperVendor wants them (the Data index
+-- npc.bySoldItem); empty without Bastian's Data or while no app has loaded the packs (Helpers
+-- never loads them for a hint).
+local function vendorsOf(itemID)
+  local d = B:GetService("data")
+  local out = {}
+  for _, npc in ipairs(d and d:Index("npc.bySoldItem", itemID) or {}) do
+    local r = d:Get("npc", npc)
+    for _, v in ipairs(r and r.vendor or {}) do
+      if v[1] == itemID then
+        local zone = r.zone and B:Entity("zone:" .. r.zone):Name() or nil
+        out[#out + 1] = { npc = npc, name = r.name, zone = zone, price = v[2], stack = v[3] }
+      end
+    end
+  end
+  return out
+end
+
+-- One sentence per restocked item another vendor sells cheaper, or nil.
+local function cheaperWords(bought, unitHere)
+  local words = {}
+  for id in pairs(bought) do
+    local best = Model.CheaperVendor(unitHere[id], vendorsOf(id))
+    if best then
+      local who = best.zone and (best.name .. " (" .. best.zone .. ")") or tostring(best.name)
+      words[#words + 1] = string.format(
+        L["%s is cheaper at %s: %s each, here %s."],
+        Helpers.ItemName(id),
+        who,
+        B.UI.Money(math.floor(best.unit + 0.5)),
+        B.UI.Money(math.floor(unitHere[id] + 0.5))
+      )
+    end
+  end
+  table.sort(words)
+  return #words > 0 and table.concat(words, " ") or nil
+end
+
 function Merchant.Restock()
   local want = Helpers.Char().restock
   if not next(want) then
@@ -64,11 +102,12 @@ function Merchant.Restock()
     have[id] = B.Compat.GetItemCount(id)
   end
   local buys = Model.Restock(want, have, offers(), B.Compat.GetMoney())
-  local spent, names = 0, {}
+  local spent, names, unit = 0, {}, {}
   for _, b in ipairs(buys) do
     if B.Compat.MerchantBuy(b.index, b.count) then
       spent = spent + b.cost
       names[b.itemID] = (names[b.itemID] or 0) + b.count
+      unit[b.itemID] = b.cost / b.count
     end
   end
   if spent > 0 then
@@ -77,7 +116,9 @@ function Merchant.Restock()
       parts[#parts + 1] = Helpers.ItemName(id) .. " x" .. n
     end
     table.sort(parts)
-    Helpers.Notice(string.format(L["Restocked %s for %s"], table.concat(parts, ", "), B.UI.Money(spent)))
+    local text = string.format(L["Restocked %s for %s"], table.concat(parts, ", "), B.UI.Money(spent))
+    local cheaper = cheaperWords(names, unit) -- issue #15: another vendor sells it cheaper
+    Helpers.Notice(cheaper and (text .. ". " .. cheaper) or text)
   end
   return buys
 end

@@ -46,7 +46,9 @@ local function entriesOf(mod)
 end
 
 -- Every enabled module's entries, newest first: { key, owner, source, date, version, text, open }.
--- `key` is "<module>:<id>" (the id defaults to the version or date and the text).
+-- `key` is "<module>:<id>" (the id defaults to the version or date and the text). The text in the
+-- client's language where Core's locale file has it (LG5, 04.11.2026: tools/suite_release.py writes
+-- the release notes' translations there, keyed by the English text), else the English one.
 function News.Entries()
   local out = {}
   for _, mod in B:IterateModules() do
@@ -60,7 +62,7 @@ function News.Entries()
             source = e.source or mod.title,
             date = tostring(e.date),
             version = e.version,
-            text = e.text,
+            text = L[e.text],
             open = e.open,
           }
         end

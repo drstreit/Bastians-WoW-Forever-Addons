@@ -71,10 +71,10 @@ end
 -- Fonts
 -- ---------------------------------------------------------------------------------------------
 
--- Every font to choose: "" is the game's chat font; on Korean and Chinese clients only that one.
+-- Every font to choose: "" is the game's chat font; on Korean, Chinese and Russian clients only that one.
 function View.FontChoices()
   local out = { [""] = L["The game's chat font"] }
-  if S.CJK then
+  if S.CLIENT_FONT then
     return out
   end
   local core = B.UI.Settings and B.UI.Settings.FontChoices

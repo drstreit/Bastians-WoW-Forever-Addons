@@ -3,6 +3,7 @@
 -- while the mailbox is open is AH (sales arrive as mail), any other gain is loot (drops, quests,
 -- vendor sales), a loss is spent. Kept per day in BastiansGoldDB.global.income, the last 60 days.
 local _, ns = ...
+local B = Bastians
 
 local Income = {}
 ns.Income = Income
@@ -128,4 +129,10 @@ function Income.Register(self)
   self:RegisterEvent("MAIL_CLOSED", function()
     mailOpen = false
   end)
+  -- the income service (core-contracts section 11): Bastians.API.Income reads it
+  B:ProvideService(self, "income", {
+    Total = function(_, days)
+      return Income.Total(days)
+    end,
+  }, { priority = 100 })
 end

@@ -95,6 +95,7 @@ local function priceRows(ref)
         text = L["30-day range"] .. "  " .. B.UI.Money(p.low30d) .. " - " .. B.UI.Money(p.high30d),
       }
     end
+    rows[#rows + 1] = ns.History.Row(itemID) -- the sparkline of the own scans (#19), nil below two days
   else
     local why = service and L["no scan, no market data"] or L["Gold is disabled"]
     rows[#rows + 1] = { text = L["AH price"] .. ": " .. L["unknown"] .. " (" .. why .. ")", color = S.C.dim }

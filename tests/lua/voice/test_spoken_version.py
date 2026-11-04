@@ -5,7 +5,7 @@ Spoken's line or another addon's text to speech (Spoken Players); the Orbiter ha
 from harness import WowRuntime
 from test_voice import CORE, DATA, QUESTS, SPOKEN, VOICE, V, boot, run
 
-TESTED = "3.7.0"
+TESTED = "3.8.0"
 
 
 def test_the_note_names_a_newer_or_older_spoken(wow: WowRuntime):
@@ -13,13 +13,13 @@ def test_the_note_names_a_newer_or_older_spoken(wow: WowRuntime):
     assert wow.eval("Bastians.TESTED_WITH.Spoken") == TESTED
     assert wow.eval(f"{V}.options[1].text()") == (
         "Spoken reads: quests, zones and areas, readables, boss stories"
-    )  # the double is 3.7.0: nothing to say
+    )  # the double is 3.8.0: nothing to say
     wow.execute("Spoken.ADDON_VERSION = '3.10.1'")
     assert wow.eval(f"{V}.options[1].text()").endswith(
-        "Spoken 3.10.1 is newer than the suite was tested with (3.7.0)"
+        "Spoken 3.10.1 is newer than the suite was tested with (3.8.0)"
     )
     wow.execute("Spoken.ADDON_VERSION = '3.5.1'")
-    assert "older than 3.7.0: boss stories" in wow.eval(f"{V}.options[1].text()")
+    assert "older than 3.8.0: boss stories" in wow.eval(f"{V}.options[1].text()")
     wow.execute("Spoken.ADDON_VERSION = nil")
     assert wow.eval(f"{V}.options[1].text()").endswith("boss stories")
     assert wow.eval(f"{V}.Voice.VersionCompare('3.7.0', '3.10.0')") == -1

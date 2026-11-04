@@ -39,17 +39,6 @@ ns.L:Register("zhTW", {
   ["XP per hour"] = "每小時經驗值",
   ["Gold per hour"] = "每小時金幣",
   ["Way"] = "路線",
-  -- the session plan (W10 step 3)
-  ["List"] = "列表",
-  ["Plan %d min"] = "規劃 %d 分鐘",
-  ["arrive in %s, %s there, +%s"] = "%s 後抵達，在那裡 %s，+%s",
-  ["(way estimated)"] = "（路線為估計值）",
-  ["Nothing fits into %d min from here."] = "從這裡出發，%d 分鐘內沒有可行的項目。",
-  ["Plan for %d min: %d stops, %s, %s"] = "%d 分鐘的規劃：%d 個停靠點，%s，%s",
-  ["Route the plan"] = "為規劃設定路線",
-  ["A route through the plan's stops, in order."] = "依序通過規劃中各停靠點的路線。",
-  ["My plan"] = "我的規劃",
-  ["XP"] = "經驗值",
 
   -- departures (R26.6)
   ["Learned when %s leaves; shared with your group and guild."] = "%s 離開時得知；與你的隊伍和公會共享。",

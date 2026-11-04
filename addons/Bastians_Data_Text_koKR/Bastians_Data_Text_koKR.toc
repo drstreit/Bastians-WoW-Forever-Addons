@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Texte (coréen)
 ## Title-esES: Bastian's Data: Texto (coreano)
 ## Title-esMX: Bastian's Data: Texto (coreano)
+## Title-ruRU: Bastian's Data: Текст (корейский)
+## Title-ptBR: Bastian's Data: Texto (coreano)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_koKR\Icon
 ## Notes: Generated names and quest texts in Korean; builds its tables only on a Korean client.
 ## Notes-koKR: 생성된 한국어 이름과 퀘스트 텍스트; 한국어 클라이언트에서만 테이블을 만듭니다.
@@ -16,9 +18,11 @@
 ## Notes-frFR: Noms et textes de quêtes en coréen générés ; ne construit ses tables que sur un client en coréen.
 ## Notes-esES: Nombres y textos de misiones en coreano generados; solo construye sus tablas en un cliente en coreano.
 ## Notes-esMX: Nombres y textos de misiones en coreano generados; solo construye sus tablas en un cliente en coreano.
+## Notes-ruRU: Сгенерированные названия и тексты заданий на корейском языке; создаёт таблицы только на клиенте с таким языком.
+## Notes-ptBR: Nomes e textos de missões em coreano gerados; só monta suas tabelas em um cliente em coreano.
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

@@ -1,11 +1,13 @@
 """The session plan (world-graph.md §10, W10 step 3): Graph.PlanSession is pure (greedy by gain per
 second within the budget, hourly stops worked for what is left, adjacent swaps that shorten the
 way, nothing beyond the budget); g:Session plans over the activities in reach on the network
-fixture and Explore shows the plan and hands it to the route service as a tour."""
+fixture and Gold's plan view (off by default) shows the plan and hands it to the route service
+as a tour."""
 
 import sys
 from pathlib import Path
 
+import pytest
 from harness import WowRuntime
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "route"))
@@ -83,22 +85,36 @@ def test_the_service_plans_over_the_activities_in_reach(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_explore_shows_the_plan_and_routes_it(wow: WowRuntime):
-    boot(wow, "Bastians_Core", "Bastians_Data", "Bastians_Map", "Bastians_Route")
-    explore = "Bastians:GetModule('Route').Explore"
+def test_golds_plan_is_off_by_default_shows_the_plan_and_routes_it(wow: WowRuntime):
+    if wow.client != "forever":
+        pytest.skip("Gold is Forever's only (tests/lua/gold/conftest.py)")
+    boot(wow, "Bastians_Core", "Bastians_Data", "Bastians_Map", "Bastians_Route", "Bastians_Gold")
+    plan = "Bastians:GetModule('Gold').Plan"
+    profile = "Bastians:GetModule('Gold').db.profile"
+    # off by default: no view, and the command says how to switch it on
+    assert wow.eval("Bastians:GetView('gold.plan')") is None
+    wow.slash("/bgold plan")
+    assert any("Gold's settings" in line for line in wow.chat[-2:])
+    # Route's Explore lists, it no longer plans
+    assert wow.eval("Bastians:GetModule('Route').Explore.BuildPlan") is None
+    wow.execute(f"{profile}.sessionPlan = true; {plan}.Apply()")
+    assert wow.eval("Bastians:GetView('gold.plan').group") == "Gold"
     settle(wow)
-    rows, summary, _ = wow.eval(f"{explore}.BuildPlan(60, 'gold')")
+    rows, summary, _ = wow.eval(f"{plan}.Build(60, 'gold')")
     assert summary.startswith("Plan for 60 min: 1 stops")
     assert (
         rows[1].title == "1. Thing 2"
         and "arrive in" in rows[1].meta
         and rows[1].valueKind == "money"
     )
-    rows, _, _ = wow.eval(f"{explore}.BuildPlan(10, 'xp')")
+    rows, _, _ = wow.eval(f"{plan}.Build(10, 'xp')")
     assert rows[1].title == "1. Thing 1" and rows[1].valueKind == "text"
     # the plan as a tour through the route service
-    assert wow.eval(f"{explore}.RoutePlan(select(3, {explore}.BuildPlan(60, 'gold')))") is True
+    assert wow.eval(f"{plan}.Route(select(3, {plan}.Build(60, 'gold')))") is True
     wow.run_frames(40)
     active = wow.eval("Bastians:GetModule('Route').Route.Active()")
     assert active and active.tour and active.tour.name == "My plan" and len(active.tour.stops) == 1
+    # switched off again: the view is taken back
+    wow.execute(f"{profile}.sessionPlan = false; {plan}.Apply()")
+    assert wow.eval("Bastians:GetView('gold.plan')") is None
     assert wow.errors == []

@@ -9,6 +9,8 @@
 ## Notes-frFR: La narration de Spoken pour chaque quête, zone, boss et livre autour de vous, sur un panneau rond ; les dialogues de quête sans les fenêtres du jeu.
 ## Notes-esES: La narración de Spoken de cada misión, zona, jefe y libro a tu alrededor, en un panel redondo; diálogos de misión sin las ventanas del juego.
 ## Notes-esMX: La narración de Spoken de cada misión, zona, jefe y libro a tu alrededor, en un panel redondo; diálogos de misión sin las ventanas del juego.
+## Notes-ruRU: Озвучка Spoken для каждого задания, зоны, босса и книги вокруг вас на круглой панели; диалоги заданий без окон игры.
+## Notes-ptBR: A narração do Spoken em cada missão, zona, chefe e livro ao seu redor, em um painel redondo; conversas de missão sem as janelas do jogo.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -17,8 +19,10 @@
 ## Category-frFR: Suite de Bastian
 ## Category-esES: Suite de Bastian
 ## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Browser, Bastians_Quests, Bastians_Route, Spoken, Spoken_Quests, Spoken_Places, Spoken_Readables, Spoken_NPCs, SpokenPlacesAudio, SpokenZonesAudio, SpokenReadablesAudio, SpokenBooksAudio
@@ -31,6 +35,8 @@ Locales\esES.lua
 Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
 News.lua
 Voice.lua
 SpokenData.lua

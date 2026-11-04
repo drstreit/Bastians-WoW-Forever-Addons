@@ -9,6 +9,8 @@
 ## Notes-frFR: Les petits assistants du quotidien : vendre la camelote, réparer, réapprovisionner, prendre tout le courrier, donneurs de quêtes, ID dans les infobulles, alertes.
 ## Notes-esES: Los pequeños ayudantes de cada día: vender chatarra, reparar, reponer, recoger todo el correo, dadores de misiones, ID en las descripciones, avisos.
 ## Notes-esMX: Los pequeños ayudantes de cada día: vender chatarra, reparar, reponer, recoger todo el correo, dadores de misiones, ID en las descripciones, avisos.
+## Notes-ruRU: Маленькие повседневные помощники: продажа серого хлама, ремонт, пополнение запасов, забрать всю почту, квестодатели, ID в подсказках, предупреждения.
+## Notes-ptBR: Os pequenos ajudantes do dia a dia: vender lixo, reparar, reabastecer, pegar todo o correio, doadores de missões, IDs nas dicas, avisos.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -17,8 +19,10 @@
 ## Category-frFR: Suite de Bastian
 ## Category-esES: Suite de Bastian
 ## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Browser
@@ -31,6 +35,8 @@ Locales\esES.lua
 Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
 News.lua
 Helpers.lua
 Merchant.lua

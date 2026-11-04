@@ -185,4 +185,14 @@ ns.L:Register("frFR", {
   ["Tanning Rack"] = "Râtelier de tannage",
   ["Toxin Study"] = "Étude des toxines",
   ["Trapper's Workbench"] = "Établi de trappeur",
+  -- the public channel (#20, 04.11.2026)
+  ["You shared the fire, also on the public channel."] = "Vous avez partagé le feu, aussi sur le canal public.",
+  ["A fire burns here (since %d min, shared by %s)"] = "Un feu brûle ici (depuis %d min, partagé par %s)",
+  ["Also on a public channel: share with everyone of the suite and see their fires"] = "Aussi sur un canal public : partager avec tous ceux de la suite et voir leurs feux",
+  ["Off by default. Joins a hidden chat channel; fires from it come at most one per player in five minutes, twenty at once."] = "Désactivé par défaut. Rejoint un canal de discussion caché ; il en vient au plus un feu par joueur en cinq minutes, vingt à la fois.",
+  ["Block a name on the public channel (Enter; the same name again unblocks it)"] = "Bloquer un nom sur le canal public (Entrée ; le même nom à nouveau le débloque)",
+  ["%s is blocked on the public channel."] = "%s est bloqué sur le canal public.",
+  ["%s is no longer blocked."] = "%s n'est plus bloqué.",
+  ["Blocked: %s"] = "Bloqués : %s",
+  ["Nobody is blocked."] = "Personne n'est bloqué.",
 })

@@ -69,6 +69,36 @@ local function inCombat()
   return type(lock) == "function" and lock() and true or false
 end
 
+Ring.LINE_MAX = 255 -- characters of one macro line the client takes (assumed as for a typed line)
+
+-- A command slot with a protected line (/cast, /use, /target, ...; #24, 04.11.2026): its text with
+-- the placeholders filled now, for the secure button over the wedge, which runs it as a macro on
+-- the player's click. Nil for any other slot, and for a text with a line too long for the client
+-- (that one keeps the old way: the app reads it and refuses the protected line with a note).
+function Ring.SecureText(slot)
+  if not (slot and slot.kind == "command" and type(slot.text) == "string") then
+    return nil
+  end
+  local protected = false
+  for line in (slot.text .. "\n"):gmatch("(.-)\r?\n") do
+    local step = Compat.ParseLine(line)
+    if step and step.kind == "secure" then
+      protected = true
+      break
+    end
+  end
+  if not protected then
+    return nil
+  end
+  local text = Model.Fill(slot.text, Ring.Context())
+  for line in (text .. "\n"):gmatch("(.-)\r?\n") do
+    if #line > Ring.LINE_MAX then
+      return nil
+    end
+  end
+  return text
+end
+
 -- Whether a slot can fire now: an action needs its app's action in the registry, a game control
 -- the client's call.
 function Ring.Available(slot)
@@ -81,6 +111,9 @@ function Ring.Available(slot)
       return false, L["Not in combat."]
     end
     return true
+  end
+  if slot and slot.kind == "command" and inCombat() and Ring.SecureText(slot) then
+    return false, L["Not in combat."] -- its secure button is laid out of combat only
   end
   if slot and slot.kind == "game" then
     if not Model.GameDef(slot.id) or not Compat.HasGame(slot.id) then
@@ -340,7 +373,7 @@ function Ring.Fire(i, button)
   if not Ring.Available(slot) then
     return false
   end
-  if slot.kind == "macro" then
+  if slot.kind == "macro" or Ring.SecureText(slot) then
     return false -- only the secure button over the wedge runs it, on the player's click
   end
   Ring.Close()
@@ -379,7 +412,7 @@ function Ring.Refresh()
   if ring.plugin then
     items = ring.plugin.items() or {}
   else
-    items = Model.Items(ring, Ring.Available, not profile().toggle)
+    items = Model.Items(ring, Ring.Available, not profile().toggle, Ring.SecureText)
   end
   kit:SetItems(items, title, page, Ring.Pages())
 end

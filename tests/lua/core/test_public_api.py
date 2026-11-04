@@ -142,3 +142,85 @@ def test_the_functions_and_events_are_the_documented_ones(wow: WowRuntime):
     assert events == re.findall(r"^\| `(BASTIANS_\w+)`", doc, flags=re.M)  # same order too
     assert f"`Bastians.API.VERSION` is `{wow.eval(f'{API}.VERSION')}`" in doc
     assert "docs/" not in doc  # public: no links into the private documents
+
+
+def test_entity_where_notes_near_and_income(wow: WowRuntime):
+    # Quests asks for the packs (Data loads them for an app that needs them)
+    wow.start("Bastians_Core", "Bastians_Data", "Bastians_Quests", "Bastians_Notes")
+    wow.run_frames(10)
+    for call in ("Entity(7)", "Entity('nothing')", "Where('npc:999999')", "Income()"):
+        assert wow.eval(f"({API}.{call})") is None, call
+    # an entity of the fixture world, by its ref: a copy of plain values, with its places
+    ref = 54  # the fixture world's vendor in Elwynn Forest
+    e = dict(wow.eval(f"{API}.Entity('npc:{ref}')").items())
+    assert e["ref"] == f"npc:{ref}" and e["type"] == "npc" and e["id"] == ref
+    assert e["name"] == wow.eval("Bastians:Entity('npc:54'):Name()") and e["name"]
+    where = [dict(p.items()) for p in wow.eval(f"{API}.Where('npc:{ref}', 2)").values()]
+    assert 1 <= len(where) <= 2
+    assert all(
+        isinstance(p["uiMapID"], int) and 0 <= p["x"] <= 1 and 0 <= p["y"] <= 1 for p in where
+    )
+    # a note on a spot: found within its yards, nearest first, nothing elsewhere
+    p = where[0]
+    wow.execute(
+        f"""local c, wx, wy = Bastians.Coords.ToWorld({p["uiMapID"]}, {p["x"]}, {p["y"]})
+        local Model = Bastians:GetModule('Notes').Model
+        Model.Save(Bastians:GetModule('Notes').Notes.Global(),
+          {{ title = "Herbs here", text = "Peacebloom", on = {{ map = c, wx = wx + 10, wy = wy }} }},
+          nil, 1)"""
+    )
+    near = [
+        dict(n.items())
+        for n in wow.eval(f"{API}.NotesNear({p['uiMapID']}, {p['x']}, {p['y']})").values()
+    ]
+    assert near == [{"title": "Herbs here", "text": "Peacebloom", "yards": 10}]
+    assert len(wow.eval(f"{API}.NotesNear({p['uiMapID']}, {p['x']}, {p['y']}, 5)")) == 0
+    assert wow.eval(f"{API}.NotesNear({p['uiMapID']}, 2, 0.5)") is None
+    # Gold's income through its service, the days clamped
+    wow.execute(
+        """Asked = nil
+        Bastians:ProvideService(Bastians:GetModule("Core"), "income",
+          { Total = function(_, days) Asked = days; return { ah = 500, loot = 120, spent = 30, x = {} } end },
+          { priority = 999 })"""
+    )
+    assert dict(wow.eval(f"{API}.Income(90)").items()) == {"ah": 500, "loot": 120, "spent": 30}
+    assert wow.eval("Asked") == 30
+    assert wow.errors == []
+
+
+def test_waypoint_account_gold_and_item_sets(wow: WowRuntime):
+    """#14: the waypoint through the Map's service (set, read, cleared, with its event), the
+    account's gold through Alts, the bag item sets from Core's registry."""
+    wow.execute("Mock.money = 123456")
+    wow.start("Bastians_Core", "Bastians_Map", "Bastians_Alts")
+    wow.run_frames(10)
+    wow.execute(
+        f"""Got = {{}}
+        {API}.RegisterCallback(Got, "BASTIANS_WAYPOINT_CHANGED", function(_, ...)
+          Got[#Got + 1] = {{ n = select("#", ...), ... }}
+        end)"""
+    )
+    assert wow.eval(f"{API}.Waypoint()") is None
+    assert wow.eval(f"{API}.SetWaypoint(1429, 2, 0.5)") is None  # not a map fraction
+    assert wow.eval(f"{API}.SetWaypoint(1429, 0.4, 0.6, 'Herbs')") is True
+    w = dict(wow.eval(f"{API}.Waypoint()").items())
+    assert w["uiMapID"] == 1429 and w["label"] == "Herbs"
+    assert abs(w["x"] - 0.4) < 1e-9 and abs(w["y"] - 0.6) < 1e-9
+    assert wow.eval(f"{API}.ClearWaypoint()") is True
+    assert wow.eval(f"{API}.Waypoint()") is None
+    got = [list(g.values()) for g in wow.eval("Got").values()]
+    assert got[0][0] == 1429 and len(got) == 2  # set, then cleared (no arguments)
+    # the account's gold: this character's money as Alts saw it
+    gold = dict(wow.eval(f"{API}.AccountGold()").items())
+    assert gold == {"copper": 123456, "characters": 1}
+    # the item sets of every app, a copy of the items
+    assert len(wow.eval(f"{API}.ItemSets()")) >= 0
+    wow.execute(
+        """Bastians:RegisterItemSet(Bastians:GetModule("Core"), { id = "test.set", label = "Test",
+          items = function() return { [2589] = true, [1185] = true, [7] = false } end })"""
+    )
+    sets = {s.id: dict(s.items()) for s in wow.eval(f"{API}.ItemSets()").values()}
+    assert sets["test.set"] == {"id": "test.set", "label": "Test", "kind": "category"}
+    assert list(wow.eval(f"{API}.ItemSet('test.set')").values()) == [1185, 2589]
+    assert wow.eval(f"{API}.ItemSet('nothing')") is None
+    assert wow.errors == []

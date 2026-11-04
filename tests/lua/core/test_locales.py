@@ -1,10 +1,11 @@
-"""French, Spanish, Korean and Chinese: every addon of the suite but
-the Library registers its strings from Locales/frFR.lua, esES.lua, koKR.lua, zhCN.lua and
-zhTW.lua, right after the German file. One Spanish text serves both Spanish clients: esES.lua
-registers its table for esES and esMX. The files are checked as the German ones
-(test_locale_dede.py): they load, keep the format directives of the English key, and translate
-every literal L["..."] of the addon's sources; the Latin languages stay Latin-1 (the game fonts),
-the Asian ones are drawn by their client's own fonts."""
+"""French, Spanish, Korean, Chinese, Russian and Brazilian Portuguese (
+04.11.2026, ADR 0033): every addon of the suite but the Library registers its strings from
+Locales/frFR.lua, esES.lua, koKR.lua, zhCN.lua, zhTW.lua, ruRU.lua and ptBR.lua, right after the
+German file. One Spanish text serves both Spanish clients: esES.lua registers its table for esES and
+esMX. The files are checked as the German ones (test_locale_dede.py): they load, keep the format
+directives of the English key, and translate every literal L["..."] of the addon's sources; the
+Latin languages stay Latin-1 (the game fonts),
+the Asian ones and Russian are drawn by their client's own fonts (S.CLIENT_FONT)."""
 
 import re
 
@@ -37,8 +38,10 @@ LOCALES = {
     "koKR": ("koKR",),
     "zhCN": ("zhCN",),
     "zhTW": ("zhTW",),
+    "ruRU": ("ruRU",),
+    "ptBR": ("ptBR",),  # the client reports ptBR for every Portuguese, there is no ptPT
 }
-LATIN1 = {"frFR", "esES"}  # the Asian clients bring the fonts for their scripts
+LATIN1 = {"frFR", "esES", "ptBR"}  # the Asian and Russian clients bring the fonts for their scripts
 CASES = [(app, loc) for app in APPS for loc in LOCALES]
 
 
@@ -76,7 +79,13 @@ def test_the_file_loads_registers_its_clients_and_stays_latin1(app: str, locale:
         assert value.strip(), key
         if locale in LATIN1:
             assert all(ord(c) < 256 for c in key + value), f"outside Latin-1: {key!r}: {value!r}"
-    written = re.findall(r'^\s*\["((?:[^"\\]|\\.)*)"\] =', path.read_text(encoding="utf-8"), re.M)
+    # both quote styles (StyLua puts a key with more double than single quotes in single quotes)
+    pairs = re.findall(
+        r"""^\s*\[(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')\] =""",
+        path.read_text(encoding="utf-8"),
+        re.M,
+    )
+    written = [a or b for a, b in pairs]
     assert len(written) == len(set(written)), sorted(k for k in written if written.count(k) > 1)
 
 
@@ -99,13 +108,12 @@ def test_every_literal_key_has_a_text(app: str, locale: str):
 
 @pytest.mark.parametrize(("app", "locale"), CASES)
 def test_every_german_key_has_a_text_too(app: str, locale: str):
-    # words that reach L[variable] (kinds, statuses, types) are listed in the German file only
-    german = ADDONS / app / "Locales" / "deDE.lua"
-    keys = set(
-        re.findall(r'^\s*\["((?:[^"\\]|\\.)*)"\] =', german.read_text(encoding="utf-8"), re.M)
-    )
+    # words that reach L[variable] (kinds, statuses, types) are listed in the German file only;
+    # its keys as Lua loads them, so a key StyLua wrote in single quotes counts too (04.11.2026:
+    # four What's new entries with double quotes slipped through the old pattern)
+    keys = set(registered(app, "deDE")["deDE"])
     strings = registered(app, locale)[locale]
-    missing = sorted(k for k in keys if k.replace('\\"', '"') not in strings)
+    missing = sorted(k for k in keys if k not in strings)
     assert missing == []
 
 
@@ -113,16 +121,18 @@ def test_the_toc_loads_them_right_after_the_german_file(wow: WowRuntime):
     for app in APPS:
         files = [f for f in wow.mock.addons[app].files.values() if f.lower().endswith(".lua")]
         i = files.index("Locales\\deDE.lua")
-        assert files[i + 1 : i + 6] == [
+        assert files[i + 1 : i + 8] == [
             "Locales\\frFR.lua",
             "Locales\\esES.lua",
             "Locales\\koKR.lua",
             "Locales\\zhCN.lua",
             "Locales\\zhTW.lua",
+            "Locales\\ruRU.lua",
+            "Locales\\ptBR.lua",
         ], app
 
 
-@pytest.mark.parametrize("locale", ["frFR", "esES", "esMX", "koKR", "zhCN", "zhTW"])
+@pytest.mark.parametrize("locale", ["frFR", "esES", "esMX", "koKR", "zhCN", "zhTW", "ruRU", "ptBR"])
 def test_a_client_in_that_language_sees_it(wow: WowRuntime, locale: str):
     wow.mock.locale = locale
     wow.start(

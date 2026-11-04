@@ -9,6 +9,8 @@
 ## Notes-frFR: Système de modules, bus de messages, registres, centre de réglages et kit d'interface de la suite de Bastian.
 ## Notes-esES: Sistema de módulos, bus de mensajes, registros, centro de ajustes y kit de interfaz de la suite de Bastian.
 ## Notes-esMX: Sistema de módulos, bus de mensajes, registros, centro de ajustes y kit de interfaz de la suite de Bastian.
+## Notes-ruRU: Система модулей, шина сообщений, реестры, центр настроек и набор элементов интерфейса для набора Bastian's.
+## Notes-ptBR: Sistema de módulos, barramento de mensagens, registros, central de configurações e kit de interface da suite do Bastian.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -17,8 +19,10 @@
 ## Category-frFR: Suite de Bastian
 ## Category-esES: Suite de Bastian
 ## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB
@@ -35,6 +39,8 @@ Locales\esES.lua
 Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
 News.lua
 Log.lua
 Core.lua

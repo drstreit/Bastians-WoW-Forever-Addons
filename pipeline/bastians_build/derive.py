@@ -75,6 +75,19 @@ def quests_by_item(world: World) -> Index:
     return _grouped(pairs())
 
 
+def npcs_by_sold_item(world: World) -> Index:
+    """NPC IDs per item ID they sell (`vendor` rows [item, price, stack, ...]): Helpers' hint at a
+    cheaper vendor for a restocked item (helpers.md, 04.11.2026)."""
+
+    def pairs():
+        for npc_id, rec in world.records.get("npc", {}).items():
+            for row in rec.get("vendor") or []:
+                if row and row[0] is not None:
+                    yield int(row[0]), npc_id
+
+    return _grouped(pairs())
+
+
 # The quest graph as Quests' Logic.lua reads it (quests.md "Logic layer"). Shipped since 21.10.2026
 # (B11.1): without these the first zone page decoded every quest record to build them, 0.5 s on the
 # retail pack (31,234 quests) plus 0.6 s for the chain components; the Forever pack took a fifth.
@@ -214,6 +227,7 @@ def area_to_map(world: World) -> dict[object, list[int]]:
 BUILDERS: dict[str, Callable[[World], Index]] = {
     "area.toMap": area_to_map,
     "npc.byZone": lambda w: by_zone(w, "npc"),
+    "npc.bySoldItem": npcs_by_sold_item,
     "object.byZone": lambda w: by_zone(w, "object"),
     "node.byZone": lambda w: by_zone(w, "node"),
     "entrance.byZone": lambda w: by_zone(w, "entrance"),

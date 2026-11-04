@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Quêtes
 ## Title-esES: Bastian's Data: Misiones
 ## Title-esMX: Bastian's Data: Misiones
+## Title-ruRU: Bastian's Data: Задания
+## Title-ptBR: Bastian's Data: Missões
 ## IconTexture: Interface\AddOns\Bastians_Data_Quests\Icon
 ## Notes: Generated quest data pack (loads at startup).
 ## Notes-koKR: 생성된 퀘스트 데이터 팩 (접속 시 불러옴).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Paquet de données des quêtes généré (chargé à la connexion).
 ## Notes-esES: Paquete de datos de misiones generado (se carga al conectar).
 ## Notes-esMX: Paquete de datos de misiones generado (se carga al conectar).
+## Notes-ruRU: Сгенерированный пакет данных о заданиях (загружается при входе).
+## Notes-ptBR: Pacote de dados de missões gerado (carrega ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

@@ -15,7 +15,7 @@ if (args.Length == 0 || args[0] is "-h" or "--help")
         clientdump db2     --install <client folder> --table <Name> --out <file.json> [--defs <dir>] [--fdid <id>] [--raw-out <file.db2>] [--hotfixes <DBCache.bin>] [--no-keys]
         clientdump db2     --db2-file <file.db2> --build <x.y.z.nnnnn> --table <Name> --out <file.json> [--defs <dir>] [--hotfixes <DBCache.bin>]
         clientdump minimap --install <client folder> --map <name or id> --out <folder> [--defs <dir>] [--wdt-fdid <id>] [--listfile <csv>] [--tile x,y]
-        clientdump overview --install <client folder> --map <name or id> --out <folder> [--wdt-fdid <id>] [--pixels 64] [--span 8] [--format blp|tga] [--no-mips] [--alpha dxt1|dxt5] [--sea rrggbb] [--art <Dir>_art.json]
+        clientdump overview --install <client folder> --map <name or id> --out <folder> [--wdt-fdid <id>] [--pixels 64] [--span 8] [--format blp|tga] [--no-mips] [--alpha dxt1|dxt5] [--sea rrggbb] [--art <Dir>_art.json] [--soften]
         clientdump navgraph --terrain <file.bin.gz> --nodes <nodes.json> --config <config.json> --out <graph.json> [--png <file>]
         clientdump terrain --install <client folder> --map <name or id> --wdt-fdid <id> --out <folder> [--roads <fdid list>] [--tile x,y]
         clientdump navmesh --install <client folder> --map <name or id> --wdt-fdid <id> --out <folder> [--roads <fdid list>] [--tiles x0,y0,x1,y1] [--blocked <words>] [--threads n] [--listfile <csv>] [--read-only]
@@ -132,7 +132,7 @@ try
                 Opt(args, "wdt-fdid"), Opt(args, "listfile"),
                 int.Parse(Opt(args, "pixels") ?? "64"), int.Parse(Opt(args, "span") ?? "8"),
                 Opt(args, "format") ?? "blp", !args.Contains("--no-mips"), Opt(args, "alpha") ?? "dxt1", Opt(args, "sea"),
-                Opt(args, "art"));
+                Opt(args, "art"), args.Contains("--soften"));
             break;
         case "terrain":
             Terrain.Run(client, defs,

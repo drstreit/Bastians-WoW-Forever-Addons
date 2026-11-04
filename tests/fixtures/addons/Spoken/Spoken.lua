@@ -2,7 +2,7 @@
 -- 01.11.2026). Sources are tables with Enqueue, PlayNow, Remove and StopAll; the queue is one list of
 -- clips, each carrying its `source`; Spoken.Finish() ends the head as the player would when the
 -- clip has played out (stopCallback(clip, true)).
-Spoken = { API_VERSION = 1, ADDON_VERSION = "3.7.0", callbacks = {}, queue = {}, stoppedAll = 0, sources = {}, paused = false }
+Spoken = { API_VERSION = 1, ADDON_VERSION = "3.8.0", callbacks = {}, queue = {}, stoppedAll = 0, sources = {}, paused = false }
 Spoken.SITE_URL = "https://spoken.rusty.one"
 
 function Spoken:IsCompatible(required)

@@ -81,3 +81,34 @@ def test_a_long_value_goes_out_in_parts_and_comes_back_whole(core: WowRuntime):
     assert core.eval(f"{C}.Receive('Other', '1|1|1/1|test.list|s1:a', 'PARTY', 'X')") is None
     assert core.eval(f"{C}.Receive('Bastians', 'garbage', 'PARTY', 'X')") is None
     assert core.errors == []
+
+
+def test_a_custom_channel_reaches_only_a_kind_registered_as_public(core: WowRuntime):
+    """#20: CHANNEL takes the channel's number; strangers can send there, so a kind that did not
+    register as public drops what comes from a channel."""
+    core.execute(
+        """GOT = {}
+        local m = Bastians:GetModule("Core")
+        Bastians.Comm.Register(m, "test.private", function(value, sender, channel)
+          GOT[#GOT + 1] = "private " .. channel
+        end)
+        Bastians.Comm.Register(m, "test.public", function(value, sender, channel)
+          GOT[#GOT + 1] = "public " .. channel
+        end, { public = true })"""
+    )
+    assert core.eval(f"{C}.Send('test.public', 1, 'CHANNEL')") == (None, "target")
+    assert core.eval(f"{C}.Send('test.public', 1, 'CHANNEL', 4)") == 1
+    sent = core.eval("Mock.addonMessages[1]")
+    assert (sent.channel, sent.target) == ("CHANNEL", 4)
+    core.execute(
+        f"{C}.Receive('Bastians', '1|9|1/1|test.private|n1;', 'CHANNEL', 'Stranger-Realm')"
+        f"; {C}.Receive('Bastians', '1|8|1/1|test.public|n1;', 'CHANNEL', 'Stranger-Realm')"
+        f"; {C}.Receive('Bastians', '1|7|1/1|test.private|n1;', 'GUILD', 'Friend-Realm')"
+    )
+    assert list(core.eval("GOT").values()) == ["public CHANNEL", "private GUILD"]
+    # the channel wrappers: joined, kept out of the chat windows, its number, left
+    assert core.eval("Bastians.Compat.JoinChannel('BastiansCamp')") == 1
+    assert core.eval("Bastians.Compat.ChannelNumber('BastiansCamp')") == 1
+    assert core.eval("Bastians.Compat.LeaveChannel('BastiansCamp')") is True
+    assert core.eval("Bastians.Compat.ChannelNumber('BastiansCamp')") is None
+    assert core.errors == []

@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Map: Moderne
 ## Title-esES: Bastian's Map: Moderno
 ## Title-esMX: Bastian's Map: Moderno
+## Title-ruRU: Bastian's Map: Современный
+## Title-ptBR: Bastian's Map: Moderno
 ## IconTexture: Interface\AddOns\Bastians_Map_Modern\Icon
 ## Notes: Bastian's modern map style: clear colours, woods, white roads, every house (optional, about 100 MB).
 ## Notes-koKR: Bastian's 모던 지도 스타일: 선명한 색, 숲, 흰 길, 모든 집 (선택, 약 100 MB).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Le style de carte moderne de Bastian : couleurs nettes, bois, routes blanches, chaque maison (facultatif, environ 100 Mo).
 ## Notes-esES: El estilo de mapa moderno de Bastian: colores claros, bosques, caminos blancos, cada casa (opcional, unos 100 MB).
 ## Notes-esMX: El estilo de mapa moderno de Bastian: colores claros, bosques, caminos blancos, cada casa (opcional, unos 100 MB).
+## Notes-ruRU: Современный стиль карты Bastian's: чистые цвета, леса, белые дороги, каждый дом (необязательно, около 100 МБ).
+## Notes-ptBR: O estilo de mapa moderno do Bastian: cores claras, florestas, estradas brancas, cada casa (opcional, cerca de 100 MB).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

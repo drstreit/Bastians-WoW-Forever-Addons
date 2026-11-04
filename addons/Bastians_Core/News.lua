@@ -5,6 +5,54 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.4.0:1",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "The session plan (what fits into the next 30 to 180 minutes) moved from Route's Explore to Bastian's Gold and is off until you switch it on in Gold's settings.",
+  },
+  {
+    id = "1.4.0:2",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "Other addons can ask Bastian's for any thing's name and places, your notes near a spot and your gold income through Bastians.API.",
+  },
+  {
+    id = "1.4.0:3",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "When Bastian's Helpers restocks an item, it tells you if another vendor sells it cheaper and where.",
+  },
+  {
+    id = "1.4.0:4",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "What's new speaks your language: German, French, Spanish, Korean and Chinese.",
+  },
+  {
+    id = "1.4.0:5",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "Campfire can share your fire on a public channel and show everyone's fires (off by default, with a block list).",
+  },
+  {
+    id = "1.4.0:6",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "Bastian's Suite now speaks Russian and Brazilian Portuguese.",
+  },
+  {
+    id = "1.4.0:7",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "Other addons can now read and set Bastian's waypoint, read the account's gold and the suite's item sets through Bastians.API.",
+  },
+  {
+    id = "1.4.0:8",
+    date = "2026-11-04",
+    version = "1.4.0",
+    text = "Spoken 3.8.0, the launch client's copy, is now the version the suite was tested with; the hub no longer flags it as newer.",
+  },
+  {
     id = "1.3.0:1",
     date = "2026-11-02",
     version = "1.3.0",
@@ -32,19 +80,19 @@ ns.NEWS = {
     id = "1.3.0:5",
     date = "2026-11-02",
     version = "1.3.0",
-    text = "The colour picker opens in front of the settings, and no \"blocked\" message appears in combat.",
+    text = 'The colour picker opens in front of the settings, and no "blocked" message appears in combat.',
   },
   {
     id = "1.3.0:6",
     date = "2026-11-02",
     version = "1.3.0",
-    text = "Bastian's Helpers also writes its notices into a chat tab named \"Addons\" when you have one.",
+    text = 'Bastian\'s Helpers also writes its notices into a chat tab named "Addons" when you have one.',
   },
   {
     id = "1.3.0:7",
     date = "2026-11-02",
     version = "1.3.0",
-    text = "one search syntax in every box (words, \"phrases\", OR, -not, field:value, level>30), the text keys Ctrl+Backspace/Delete/Left/Right, a key that clears the screen for role play, a lock on every window, and the new look engine behind Modern and WoW.",
+    text = 'one search syntax in every box (words, "phrases", OR, -not, field:value, level>30), the text keys Ctrl+Backspace/Delete/Left/Right, a key that clears the screen for role play, a lock on every window, and the new look engine behind Modern and WoW.',
   },
   {
     id = "1.3.0:8",
@@ -135,53 +183,5 @@ ns.NEWS = {
     date = "2026-11-02",
     version = "1.3.0",
     text = "Emotes in Bastian's Chat now show in the colour scheme's own emote colour, for roleplay.",
-  },
-  {
-    id = "1.3.0:23",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "Bastian's Campfire: a card while a fire is near, a camp ring in Gestures, share the fire with your group and guild, and a planner of every camp feature.",
-  },
-  {
-    id = "1.3.0:24",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "A new welcome: choose the Wanderer or the Scholar with a picture of your own race, set up your pack, and try your first five minutes step by step.",
-  },
-  {
-    id = "1.3.0:25",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "With Total RP 3 or MyRolePlay, Chat, Gestures and the Orbiter show other players' roleplay names.",
-  },
-  {
-    id = "1.3.0:26",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "Korean and Chinese players read the quests' whole texts in their language, and Bastian's Chat speaks French, Spanish, Korean and Chinese.",
-  },
-  {
-    id = "1.3.0:27",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "The game's AddOn list shows the suite as one folding \"Bastian's Suite\" header with the data packs and map styles folded under their app, in Korean and Chinese too.",
-  },
-  {
-    id = "1.3.0:28",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "German, French and Spanish players read most quests' whole texts in their language, and the AddOn list speaks every language of the suite.",
-  },
-  {
-    id = "1.3.0:29",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "Forever's own dungeons (Dalaran, the Wetlands excavation, the Hall of Thanes, the Ruins of Lordaeron) now show Santiago Reyes' hand-drawn maps with the bosses marked - thank you, Santiago!",
-  },
-  {
-    id = "1.3.0:30",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "Minimap buttons close what they opened; Gestures' button opens its options; a switched-off app's button leads to its switch; a new button shows the welcome again.",
   },
 }

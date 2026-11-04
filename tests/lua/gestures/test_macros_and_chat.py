@@ -4,6 +4,7 @@ edit box, and a macro of the player's own runs from a secure button over its wed
 only, never in combat, dimmed when the macro is gone."""
 
 from harness import WowRuntime
+from test_editor_v2 import TARGET
 from test_gestures import MOD, E, R, boot, click_choice, cursor_on, errors
 
 MACRO_TIP = "Click the wedge (a macro runs only on a click)"
@@ -117,6 +118,52 @@ def test_a_macro_of_my_own_runs_from_a_secure_button_on_a_click(wow: WowRuntime)
     wow.execute("Mock.SetCombat(false)")
     assert shown(wow, o) and wow.eval(f"{R}.kit.items[8].disabled") is None
     wow.execute(f"{R}.Close()")
+    assert errors(wow) == []
+
+
+def test_a_command_with_a_protected_line_runs_as_a_macro_from_a_click(wow: WowRuntime):
+    """#24: a command slot with /cast, /use, /target ... gets the secure button too, its text
+    (placeholders filled when the ring opens) as the macro text; a click only, never in combat; a
+    line too long for the client keeps the old way (the protected line refused with a note)."""
+    boot(wow)
+    wow.execute(TARGET)
+    ring = f"{MOD}.db.global.rings[3]"
+    wow.execute(
+        f"{ring}.slots[6] = {{ kind = 'command', title = 'Home', "
+        "text = '/say Off home, %t!\\n/cast Hearthstone' }"
+    )
+    wow.execute(f"{R}.SetPage(3)")
+    wow.execute(f"{R}.Key('down')")
+    o = f"{R}.kit:Secure(6)"
+    assert wow.eval(f"{o} ~= nil") is True and shown(wow, o)
+    assert wow.eval(f"{o}:GetAttribute('type')") == "macro"
+    assert (
+        wow.eval(f"{o}:GetAttribute('macrotext')") == "/say Off home, Thalendra!\n/cast Hearthstone"
+    )
+    assert wow.eval(f"{o}:GetAttribute('macro')") is None
+    assert wow.eval(f"{R}.kit.items[6].tip") == MACRO_TIP
+    assert wow.eval(f"{R}.Fire(6)") is False  # the app never runs it itself
+    assert wow.eval("Mock.chatSent") is None or len(wow.eval("Mock.chatSent")) == 0
+    wow.execute(f"local b = {o}; b:GetScript('PostClick')(b, 'LeftButton')")
+    assert wow.eval(f"{R}.IsOpen()") is False and not shown(wow, o)
+    # in combat: dimmed, no button
+    wow.execute("Mock.SetCombat(true)")
+    wow.execute(f"{R}.Open()")
+    item = wow.eval(f"{R}.kit.items[6]")
+    assert item.disabled is True and item.tip == "Not in combat."
+    wow.execute(f"{R}.Close()")
+    wow.execute("Mock.SetCombat(false)")
+    # a command without a protected line stays the app's own (no button)
+    wow.execute(f"{ring}.slots[6].text = '/say Off home!'")
+    wow.execute(f"{R}.Open()")
+    assert wow.eval(f"{R}.kit.items[6].secure") is None
+    wow.execute(f"{R}.Close()")
+    # a line too long for the client: the old way, the protected line refused with a note
+    wow.execute(f"{ring}.slots[6].text = '/say ' .. string.rep('a', 260) .. '\\n/cast Hearthstone'")
+    wow.execute(f"{R}.Open()")
+    assert wow.eval(f"{R}.kit.items[6].secure") is None
+    assert wow.eval(f"{R}.Fire(6)") is True
+    assert any("/cast is a protected command" in line for line in wow.chat)
     assert errors(wow) == []
 
 

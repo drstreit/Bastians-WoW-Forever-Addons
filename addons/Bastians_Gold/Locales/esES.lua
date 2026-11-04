@@ -93,6 +93,8 @@ local strings = {
   ["Sales per day"] = "Ventas por día",
   ["30-day median"] = "Mediana de 30 días",
   ["30-day range"] = "Rango de 30 días",
+  ["Your scans, %d days"] = "Tus escaneos, %d días",
+  ["steady"] = "estable",
   ["no scan, no market data"] = "sin análisis, sin datos de mercado",
   ["AH price"] = "Precio en la CS",
   ["unknown"] = "desconocido",
@@ -208,6 +210,24 @@ local strings = {
   -- the bag addons' item sets and EllesmereUI's section (ADR 0043, 31.10.2026)
   ["Bastian's: sell on AH"] = "Bastian's: vender en subasta",
   ["Bastian's: vendor"] = "Bastian's: vendedor",
+  -- Plan.lua, the session plan (moved from Route 04.11.2026)
+  ["Timing the ways from here..."] = "Calculando los trayectos desde aquí...",
+  ["%d ways still being timed"] = "%d trayectos aún se están calculando",
+  ["XP per hour"] = "PX por hora",
+  ["Plan %d min"] = "Plan %d min",
+  ["arrive in %s, %s there, +%s"] = "llegada en %s, %s allí, +%s",
+  ["(way estimated)"] = "(trayecto estimado)",
+  ["Nothing fits into %d min from here."] = "Nada cabe en %d min desde aquí.",
+  ["Plan for %d min: %d stops, %s, %s"] = "Plan para %d min: %d paradas, %s, %s",
+  ["Route the plan"] = "Trazar la ruta del plan",
+  ["A route through the plan's stops, in order."] = "Una ruta por las paradas del plan, en orden.",
+  ["My plan"] = "Mi plan",
+  ["XP"] = "PX",
+  ["Session plan"] = "Plan de sesión",
+  ["what fits into the next 30 to 180 minutes"] = "lo que cabe en los próximos 30 a 180 minutos",
+  ["Show the session plan in the Browser"] = "Mostrar el plan de sesión en el Browser",
+  ["The session plan needs Bastian's Data."] = "El plan de sesión necesita Bastian's Data.",
+  ["Switch on the session plan in Gold's settings first."] = "Activa primero el plan de sesión en los ajustes de Gold.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

@@ -33,6 +33,7 @@ API.EVENTS = {
   "BASTIANS_CAMP_SHARED", -- uiMapID, x, y: a fire shared by the group or guild (Bastian's Campfire)
   "BASTIANS_CAMP_WARMED", -- host name or nil: the camp's buffs landed on the player
   "BASTIANS_CAMP_FADING", -- seconds left of the camp's buffs (ten minutes before they end)
+  "BASTIANS_WAYPOINT_CHANGED", -- uiMapID, x, y of the new waypoint, or nothing when cleared
 }
 
 -- The services (core-contracts §11, B.SERVICES) the API reads, and the ones it never will, with
@@ -46,12 +47,15 @@ API.READS = {
   knowledge = "Known",
   voice = "Speak",
   camps = "Camp",
+  notes = "NotesNear",
+  income = "Income",
+  waypoint = "Waypoint, SetWaypoint, ClearWaypoint",
+  account = "AccountGold",
 }
 API.INTERNAL = {
   data = "the packs' loader: the calls above answer from it",
   travel = "Route's own travel model; TravelTime is the public face",
   views = "the Browser's view registry: windows of the suite",
-  notes = "Bastian's Notes' records: a Notes call is a candidate (public-api.md)",
   facts = "the Library's facts injector: private until the Library ships",
   library = "the Library: private until it ships",
 }
@@ -287,6 +291,162 @@ API.Open = safe(function(name)
     return true
   end
   return nil
+end)
+
+-- Entity(ref) -> { ref, type, id, name, summary } or nil: any thing of the suite by its ref
+-- ("npc:299", "quest:7", "item:2589", "zone:1429"), the name in the client's language where the data
+-- has it; nil for a ref nothing knows (04.11.2026).
+API.Entity = safe(function(ref)
+  if type(ref) ~= "string" then
+    return nil
+  end
+  local typ, id = B.Entity.Parse(ref)
+  if not typ or id == nil then
+    return nil
+  end
+  local e = B:Entity(ref)
+  local name = scalar(e:Name())
+  if name == nil then
+    return nil
+  end
+  return { ref = ref, type = typ, id = scalar(id), name = name, summary = scalar(e:Summary()) }
+end)
+
+-- Where(ref, max) -> { { uiMapID, x, y } } (x, y in 0..1): the places of the thing that matter now
+-- (a quest's giver, an NPC's spawns, a node's spots), at most `max` (10 by default); nil without one.
+API.Where = safe(function(ref, max)
+  if type(ref) ~= "string" or not B.Entity.Parse(ref) then
+    return nil
+  end
+  local limit = type(max) == "number" and max >= 1 and math.floor(max) or 10
+  local out = {}
+  for _, p in ipairs(B:Entity(ref):Locations() or {}) do
+    if #out >= limit then
+      break
+    end
+    if type(p.map) == "number" and isFraction(p.x) and isFraction(p.y) then
+      out[#out + 1] = { uiMapID = p.map, x = p.x, y = p.y }
+    end
+  end
+  return #out > 0 and out or nil
+end)
+
+-- NotesNear(uiMapID, x, y, yards) -> { { title, text, yards } } nearest first: the player's notes on
+-- a spot within `yards` (40 by default, at most 500) of that point; nil without Bastian's Notes.
+API.NotesNear = safe(function(uiMapID, x, y, yards)
+  local notes = service("notes")
+  if not (notes and notes.Spots) or type(uiMapID) ~= "number" or not isFraction(x) or not isFraction(y) then
+    return nil
+  end
+  local continent, wx, wy = B.Coords.ToWorld(uiMapID, x, y)
+  if not continent then
+    return nil
+  end
+  local radius = type(yards) == "number" and yards > 0 and math.min(yards, 500) or 40
+  local out = {}
+  for _, n in ipairs(notes:Spots(continent) or {}) do
+    local d = math.sqrt((n.wx - wx) ^ 2 + (n.wy - wy) ^ 2)
+    if d <= radius then
+      out[#out + 1] = { title = scalar(n.title), text = scalar(n.text), yards = math.floor(d + 0.5) }
+    end
+  end
+  table.sort(out, function(a, b)
+    return a.yards < b.yards
+  end)
+  return out
+end)
+
+-- Income(days) -> { ah, loot, spent } in copper over the last `days` days, today included (1 by
+-- default, at most 30): gold from the auction house, from loot, and what was spent; nil without
+-- Bastian's Gold.
+API.Income = safe(function(days)
+  local income = service("income")
+  if not income then
+    return nil
+  end
+  local n = type(days) == "number" and math.max(1, math.min(30, math.floor(days))) or 1
+  local t = income:Total(n)
+  return type(t) == "table" and copy(t, { "ah", "loot", "spent" }) or nil
+end)
+
+-- Waypoint() -> { uiMapID, x, y, label } (x, y in 0..1) of the player's own waypoint on Bastian's
+-- Map, or nil when there is none (or without the Map).
+API.Waypoint = safe(function()
+  local w = service("waypoint")
+  local p = w and w:Get()
+  if type(p) ~= "table" or not (p.map and p.x and p.y) then
+    return nil
+  end
+  return { uiMapID = p.map, x = p.x, y = p.y, label = scalar(p.label) }
+end)
+
+-- SetWaypoint(uiMapID, x, y, label) -> true when Bastian's Map set the waypoint there; nil without
+-- the Map or for a point on no known map.
+API.SetWaypoint = safe(function(uiMapID, x, y, label)
+  local w = service("waypoint")
+  if not w or type(uiMapID) ~= "number" or not isFraction(x) or not isFraction(y) then
+    return nil
+  end
+  local continent, wx, wy = B.Coords.ToWorld(uiMapID, x, y)
+  if not continent then
+    return nil
+  end
+  return w:Set(continent, wx, wy, type(label) == "string" and label or nil, uiMapID, x, y) == true
+end)
+
+-- ClearWaypoint() -> true when the waypoint is gone; nil without the Map.
+API.ClearWaypoint = safe(function()
+  local w = service("waypoint")
+  return w and w:Clear() == true or nil
+end)
+
+-- AccountGold() -> { copper, characters }: the money of the account's characters as last seen by
+-- Bastian's Alts and how many it covers; nil without Alts or before any is known (unknown, not 0).
+API.AccountGold = safe(function()
+  local account = service("account")
+  if not account then
+    return nil
+  end
+  local copper, known = account:Money()
+  if type(copper) ~= "number" then
+    return nil
+  end
+  return { copper = copper, characters = scalar(known) }
+end)
+
+-- ItemSets() -> { { id, label, kind } }: the suite's item sets for bag addons ("category", "junk"
+-- or "mark"), by id; an empty table when no app registered one.
+API.ItemSets = safe(function()
+  local out = {}
+  for _, id in ipairs(B.Bags.order) do
+    local def = B.Bags.defs[id]
+    if def then
+      out[#out + 1] = { id = id, label = scalar(def.label), kind = scalar(def.kind) }
+    end
+  end
+  table.sort(out, function(a, b)
+    return a.id < b.id
+  end)
+  return out
+end)
+
+-- ItemSet(id) -> { itemID, ... } sorted: the items of that set now; nil for an unknown set.
+API.ItemSet = safe(function(id)
+  local def = type(id) == "string" and B.Bags.defs[id]
+  if not def then
+    return nil
+  end
+  local ok, set = ns.safecall(def.owner, def.items)
+  local out = {}
+  if ok and type(set) == "table" then
+    for itemID, on in pairs(set) do
+      if type(itemID) == "number" and on then
+        out[#out + 1] = itemID
+      end
+    end
+  end
+  table.sort(out)
+  return out
 end)
 
 -- RegisterCallback, UnregisterCallback, UnregisterAllCallbacks

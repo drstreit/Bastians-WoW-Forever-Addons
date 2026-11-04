@@ -811,6 +811,12 @@ local function register(self)
       return OWNED_ORDER[key] or 9
     end,
   })
+  -- the account service (#14): the gold of the account's characters as last seen
+  B:ProvideService(self, "account", {
+    Money = function()
+      return ns.Feed.Total()
+    end,
+  }, { priority = 100 })
   -- the knowledge service (core-contracts section 11): who knows a spell or recipe
   B:ProvideService(self, "knowledge", {
     Known = function(_, spellID)

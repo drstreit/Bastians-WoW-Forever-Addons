@@ -9,6 +9,8 @@
 ## Notes-frFR: Journal de quêtes, recommandations et suivi.
 ## Notes-esES: Registro de misiones, recomendaciones y seguimiento.
 ## Notes-esMX: Registro de misiones, recomendaciones y seguimiento.
+## Notes-ruRU: Журнал заданий, рекомендации и отслеживание.
+## Notes-ptBR: Registro de missões, recomendações e rastreador.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -17,8 +19,10 @@
 ## Category-frFR: Suite de Bastian
 ## Category-esES: Suite de Bastian
 ## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, QuestieDB
@@ -31,6 +35,8 @@ Locales\esES.lua
 Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
 News.lua
 Logic.lua
 State.lua

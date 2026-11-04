@@ -133,6 +133,16 @@ def test_a_missing_required_companion_and_another_api_version_alert(tmp_path: Pa
     assert report.alerts == ["Spoken is missing on forever"]
     assert "! Spoken (forever): missing: the folder is gone" in report.lines
     assert "  review addons/Bastians_Voice/Bridge.lua: Spoken's surface changed" in report.lines
+    # the next run says it once, not again every day (TomTom's page, 04.11.2026); the alert stays
+    report = cw.watch({"forever": addons, "retail": retail}, companions, today="2026-11-04", **kw)
+    assert report.alerts == ["Spoken is missing on forever"]
+    assert not any("folder is gone" in line for line in report.lines)
+    page = (tmp_path / "pages" / "Spoken.md").read_text(encoding="utf-8")
+    assert page.count("folder is gone") == 1
+    # back again: reported as new
+    addon(addons, "Spoken", "3.8.0", ["Play"])
+    report = cw.watch({"forever": addons, "retail": retail}, companions, today="2026-11-05", **kw)
+    assert "! Spoken (forever): new: 3.8.0" in report.lines
 
 
 def test_daily_lines_never_raise_and_read_the_install_config(tmp_path: Path):
@@ -167,3 +177,70 @@ def test_the_diff_of_two_snapshots_names_what_changed():
     ]
     assert cw.diff(None, None) == [] and cw.diff(old, None) == ["missing: the folder is gone"]
     assert cw.version_key("3.10.0") > cw.version_key("3.7.0")
+
+
+def lib(addons: Path, carrier: str, text: str, name: str = "LibDBIcon-1.0") -> None:
+    path = addons / carrier / "Libs" / name / f"{name}.lua"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def test_an_embedded_library_names_the_copy_that_loads_and_its_carriers(tmp_path: Path):
+    config, addons, kw = setup(tmp_path)
+    config.write_text(CONFIG + '\n[[library]]\nname = "LibDBIcon-1.0"\nabout = "The button."\n')
+    lib(
+        addons,
+        "Spoken",
+        'local D = "LibDBIcon-1.0"\nlocal D_MINOR = 52 -- bump\n'
+        "local lib = LibStub:NewLibrary(D, D_MINOR)\n",
+    )
+    lib(
+        addons,
+        "EverythingQuests",
+        'local MAJOR, MINOR = "LibDBIcon-1.0", 55\nlocal lib = LibStub:NewLibrary(MAJOR, MINOR)\n',
+    )
+    libraries = cw.load_libraries(config)
+    report = cw.watch(
+        {"forever": addons},
+        cw.load_companions(config),
+        today="2026-11-04",
+        libraries=libraries,
+        **kw,
+    )
+    assert "  LibDBIcon-1.0 (forever): new: minor 55 (2 copies)" in report.lines
+    snap = json.loads(
+        (tmp_path / "snap" / "forever" / "LibDBIcon-1.0" / "2026-11-04.json").read_text()
+    )
+    assert snap["copies"] == {"EverythingQuests": 55, "Spoken": 52} and snap["minor"] == 55
+    page = (tmp_path / "pages" / "LibDBIcon-1.0.md").read_text()
+    assert "| forever | 55 | EverythingQuests (55), Spoken (52) |" in page
+    # an update elsewhere: a dated change, the loaded minor moves
+    lib(addons, "Spoken", 'local lib = LibStub:NewLibrary("LibDBIcon-1.0", 56)\n')
+    report = cw.watch(
+        {"forever": addons},
+        cw.load_companions(config),
+        today="2026-11-05",
+        libraries=libraries,
+        **kw,
+    )
+    assert (
+        "  LibDBIcon-1.0 (forever): the loaded minor 55 -> 56; copies: Spoken 52 -> 56"
+        in report.lines
+    )
+    page = (tmp_path / "pages" / "LibDBIcon-1.0.md").read_text()
+    assert page.index("2026-11-05") < page.index("2026-11-04, forever")
+    # unchanged: nothing new
+    report = cw.watch(
+        {"forever": addons},
+        cw.load_companions(config),
+        today="2026-11-06",
+        libraries=libraries,
+        **kw,
+    )
+    assert not any("LibDBIcon" in line for line in report.lines)
+
+
+def test_a_computed_minor_is_unknown_not_zero():
+    text = 'local lib = LibStub:NewLibrary("X-1.0", tonumber(("$Rev: 30 $"):match("%d+")))\n'
+    assert cw.library_minor(text, "X-1.0") is None
+    assert cw.library_minor('LibStub:NewLibrary("Y-1.0", 3)', "X-1.0") is None

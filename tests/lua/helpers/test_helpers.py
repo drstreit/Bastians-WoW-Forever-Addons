@@ -368,3 +368,79 @@ def test_switched_off_the_helpers_do_nothing(wow: WowRuntime):
     wow.advance(0.5)
     assert wow.eval("Mock.bagSlots[0][1]") is None
     assert wow.errors == []
+
+
+def test_a_restock_says_where_the_item_is_cheaper(wow: WowRuntime):
+    """Issue #15: the packs' vendor lists (Data's npc.bySoldItem) name a vendor that sells the
+    restocked item for less; the same price or an unknown stack says nothing. Helpers never loads
+    the packs for it: here Quests does."""
+    boot(wow, CORE, DATA, "Bastians_Quests", HELPERS)
+    m = f"{H}.Model"
+    best = wow.eval(
+        f"""{m}.CheaperVendor(20, {{ {{ npc = 1, name = "B", price = 260, stack = 20 }},
+          {{ npc = 2, name = "A", price = 13, stack = 1 }}, {{ npc = 3, name = "C", price = 1 }},
+          {{ npc = 4, name = "D", price = 400, stack = 20 }} }})"""
+    )
+    assert (best.npc, best.name, best.unit) == (2, "A", 13)  # a tie goes by name; no stack, no unit
+    assert wow.eval(f"{m}.CheaperVendor(13, {{ {{ npc = 1, price = 260, stack = 20 }} }})") is None
+    assert wow.eval(f"{m}.CheaperVendor(nil, {{ {{ npc = 1, price = 1, stack = 1 }} }})") is None
+    # this merchant asks 20c a cloth; the fixture's vendor in Elwynn sells twenty for 260
+    wow.execute(f"{P}.sellJunk = false; Mock.bags[2589] = 0; Mock.merchant[1].price = 400")
+    wow.execute(f"{H}.SetRestock(2589, 20)")
+    wow.execute("Mock.OpenMerchant()")
+    text = notice(wow)
+    vendor = wow.eval("Bastians:Entity('npc:54'):Name()")
+    assert text == (
+        f"Restocked Linen Cloth x20 for 4s 00c. Linen Cloth is cheaper at {vendor} (Elwynn Forest): "
+        "13c each, here 20c."
+    )
+    # at the same price nothing more is said
+    wow.execute("Mock.CloseMerchant(); Mock.bags[2589] = 0; Mock.merchant[1].price = 260")
+    wow.execute("Mock.OpenMerchant()")
+    assert notice(wow) == "Restocked Linen Cloth x20 for 2s 60c"
+    assert wow.errors == []
+
+
+def test_mail_rules_put_the_kind_into_a_mail_the_player_sends(wow: WowRuntime):
+    """#18: "herbs go to my alchemist": a rule per kind (class and subclass), a button per rule
+    with stacks in the bags beside the send tab; it fills recipient, subject and attachments,
+    never a bound stack, never a mail to me; the player presses Send."""
+    wow.execute(
+        """Mock.items[2453] = { name = "Bruiseweed", quality = 1, level = 1, sell = 10, stack = 20,
+          icon = 1, classID = 7, subclassID = 9 }
+        Mock.items[765] = { name = "Silverleaf", quality = 1, level = 1, sell = 5, stack = 20,
+          icon = 1, classID = 7, subclassID = 9 }"""
+    )
+    boot(wow)
+    wow.execute(
+        """Mock.bagSlots[1] = { slots = 16, { itemID = 2453, count = 7 }, { itemID = 765, count = 3,
+          bound = true }, { itemID = 765, count = 12 } }
+        Mock.Fire('BAG_UPDATE_DELAYED')"""
+    )
+    edits = wow.eval(
+        "(function() local n = 0 for _, o in ipairs(Bastians:GetModule('Helpers').options) do "
+        "if o.type == 'edit' then n = n + 1 end end return n end)()"
+    )
+    assert edits == 8  # one row per kind
+    wow.execute(f"{H}.SetMailRule('herb', '  Alchemist ')")
+    assert wow.eval(f"{H}.MailRulesText()") == "Herbs go to Alchemist"
+    wow.execute("Mock.OpenMailbox()")
+    batches = wow.eval(f"{H}.Mail.Batches()")
+    assert len(batches) == 1 and batches[1].to == "Alchemist" and len(batches[1].slots) == 2
+    assert batches[1].count == 19  # the bound stack stays
+    button = "BastiansHelpersSendTo.rules[1]"
+    assert wow.eval(f"{button}:IsShown()") is True
+    wow.execute(f"{button}:Click()")
+    assert wow.eval("SendMailNameEditBox:GetText()") == "Alchemist"
+    assert wow.eval("SendMailSubjectEditBox:GetText()") == "Herbs"
+    sent = sorted(
+        wow.eval(f"GetSendMailItem({i})")[1] for i in (1, 2) if wow.eval(f"GetSendMailItem({i})")
+    )
+    assert sent == [765, 2453]
+    assert notice(wow) == "Herbs for Alchemist: 2 stacks in the mail, press Send."
+    # a rule naming me sends nothing; an empty name removes the rule
+    wow.execute(f"{H}.SetMailRule('herb', UnitName('player'))")
+    assert len(wow.eval(f"{H}.Mail.Batches()")) == 0
+    wow.execute(f"{H}.SetMailRule('herb', '')")
+    assert wow.eval(f"{H}.MailRulesText()") is None
+    assert wow.chat == [] and wow.errors == []

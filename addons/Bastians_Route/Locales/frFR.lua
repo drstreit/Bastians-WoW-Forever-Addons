@@ -39,17 +39,6 @@ ns.L:Register("frFR", {
   ["XP per hour"] = "XP par heure",
   ["Gold per hour"] = "Or par heure",
   ["Way"] = "Trajet",
-  -- the session plan (W10 step 3)
-  ["List"] = "Liste",
-  ["Plan %d min"] = "Plan %d min",
-  ["arrive in %s, %s there, +%s"] = "arrivée dans %s, %s sur place, +%s",
-  ["(way estimated)"] = "(trajet estimé)",
-  ["Nothing fits into %d min from here."] = "Rien ne tient en %d min depuis ici.",
-  ["Plan for %d min: %d stops, %s, %s"] = "Plan pour %d min : %d étapes, %s, %s",
-  ["Route the plan"] = "Tracer l'itinéraire du plan",
-  ["A route through the plan's stops, in order."] = "Un itinéraire passant par les étapes du plan, dans l'ordre.",
-  ["My plan"] = "Mon plan",
-  ["XP"] = "XP",
 
   -- departures (R26.6)
   ["Learned when %s leaves; shared with your group and guild."] = "Appris quand %s part ; partagé avec votre groupe et votre guilde.",

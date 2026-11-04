@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Monde
 ## Title-esES: Bastian's Data: Mundo
 ## Title-esMX: Bastian's Data: Mundo
+## Title-ruRU: Bastian's Data: Мир
+## Title-ptBR: Bastian's Data: Mundo
 ## IconTexture: Interface\AddOns\Bastians_Data_World\Icon
 ## Notes: Generated world data pack: NPCs, objects, zones (loads at startup).
 ## Notes-koKR: 생성된 월드 데이터 팩: NPC, 오브젝트, 지역 (접속 시 불러옴).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Paquet de données du monde généré : PNJ, objets, zones (chargé à la connexion).
 ## Notes-esES: Paquete de datos del mundo generado: PNJ, objetos, zonas (se carga al conectar).
 ## Notes-esMX: Paquete de datos del mundo generado: PNJ, objetos, zonas (se carga al conectar).
+## Notes-ruRU: Сгенерированный пакет данных о мире: NPC, объекты, зоны (загружается при входе).
+## Notes-ptBR: Pacote de dados do mundo gerado: PNJs, objetos, zonas (carrega ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

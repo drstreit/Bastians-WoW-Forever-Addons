@@ -39,17 +39,6 @@ ns.L:Register("zhCN", {
   ["XP per hour"] = "每小时经验",
   ["Gold per hour"] = "每小时金币",
   ["Way"] = "路线",
-  -- the session plan (W10 step 3)
-  ["List"] = "列表",
-  ["Plan %d min"] = "计划%d分钟",
-  ["arrive in %s, %s there, +%s"] = "%s后到达,在那里%s,+%s",
-  ["(way estimated)"] = "(路线为估算)",
-  ["Nothing fits into %d min from here."] = "从这里出发,%d分钟内没有合适的事。",
-  ["Plan for %d min: %d stops, %s, %s"] = "%d分钟计划: %d个站点,%s,%s",
-  ["Route the plan"] = "规划路线",
-  ["A route through the plan's stops, in order."] = "按顺序经过计划各站点的路线。",
-  ["My plan"] = "我的计划",
-  ["XP"] = "经验",
 
   -- departures (R26.6)
   ["Learned when %s leaves; shared with your group and guild."] = "%s出发时记录;与你的队伍和公会共享。",

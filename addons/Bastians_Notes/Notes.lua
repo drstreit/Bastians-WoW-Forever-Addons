@@ -1026,6 +1026,14 @@ mod = B:NewModule("Notes", {
     })
     -- the notes service (core-contracts §11): the map's bookmarks live in the lists (E, N2)
     B:ProvideService(self, "notes", {
+      -- the spot notes on a continent as plain copies { title, text, wx, wy } (Bastians.API.NotesNear)
+      Spots = function(_, continent)
+        local out = {}
+        for _, note in ipairs(Model.Spots(Notes.Global(), continent)) do
+          out[#out + 1] = { title = note.title, text = note.text, wx = note.on.wx, wy = note.on.wy }
+        end
+        return out
+      end,
       Bookmarks = function()
         return Model.Bookmarks(Notes.Global())
       end,

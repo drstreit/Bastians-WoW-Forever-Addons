@@ -185,6 +185,16 @@ local strings = {
   ["Tanning Rack"] = "Bastidor para pieles",
   ["Toxin Study"] = "Estudio sobre toxinas",
   ["Trapper's Workbench"] = "Banco de trabajo de trampero",
+  -- the public channel (#20, 04.11.2026)
+  ["You shared the fire, also on the public channel."] = "Has compartido el fuego, también en el canal público.",
+  ["A fire burns here (since %d min, shared by %s)"] = "Aquí arde un fuego (desde hace %d min, compartido por %s)",
+  ["Also on a public channel: share with everyone of the suite and see their fires"] = "También en un canal público: compartir con todos los de la suite y ver sus fuegos",
+  ["Off by default. Joins a hidden chat channel; fires from it come at most one per player in five minutes, twenty at once."] = "Desactivado por defecto. Se une a un canal de chat oculto; de él llega como mucho un fuego por jugador cada cinco minutos, veinte a la vez.",
+  ["Block a name on the public channel (Enter; the same name again unblocks it)"] = "Bloquear un nombre en el canal público (Intro; el mismo nombre otra vez lo desbloquea)",
+  ["%s is blocked on the public channel."] = "%s está bloqueado en el canal público.",
+  ["%s is no longer blocked."] = "%s ya no está bloqueado.",
+  ["Blocked: %s"] = "Bloqueados: %s",
+  ["Nobody is blocked."] = "No hay nadie bloqueado.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

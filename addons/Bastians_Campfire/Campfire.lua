@@ -28,6 +28,30 @@ local OPTIONS = {
   },
   {
     type = "toggle",
+    key = "public",
+    label = L["Also on a public channel: share with everyone of the suite and see their fires"],
+    desc = L["Off by default. Joins a hidden chat channel; fires from it come at most one per player in five minutes, twenty at once."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    type = "edit",
+    label = L["Block a name on the public channel (Enter; the same name again unblocks it)"],
+    set = function(name)
+      local blocked = ns.Public.Blocked(name)
+      local now = ns.Public.Block(name, not blocked)
+      if now ~= nil then
+        B:Say(now and L["%s is blocked on the public channel."] or L["%s is no longer blocked."], name)
+      end
+    end,
+  },
+  {
+    type = "note",
+    text = function()
+      local names = ns.Public.BlockedText()
+      return names and string.format(L["Blocked: %s"], names) or L["Nobody is blocked."]
+    end,
+  },
+  {
+    type = "toggle",
     key = "chatPickup",
     label = L["A camp posted in chat with a map pin becomes a faded pin"],
   },
@@ -78,6 +102,7 @@ local function camps()
 end
 
 local function apply()
+  ns.Public.Apply()
   ns.CampRing.Apply()
   ns.Card.Refresh()
 end
@@ -93,14 +118,23 @@ local mod = B:NewModule("Campfire", {
   apiVersion = 1,
   optional = { "Bastians_Data", "Bastians_Map", "Bastians_Voice", "Bastians_Gestures", "Bastians_Alts" },
   defaults = {
-    profile = { card = true, words = true, ring = true, beacon = true, chatPickup = true, planner = true },
+    profile = {
+      card = true,
+      words = true,
+      ring = true,
+      beacon = true,
+      public = false, -- the public channel (decision B: off by default)
+      chatPickup = true,
+      planner = true,
+    },
     char = { log = {} },
-    global = { fires = {} },
+    global = { fires = {} }, -- `blocked` is made by Public.Attach (a default table would never save)
   },
   options = OPTIONS,
   OnEnable = function(self)
     ns.Watch.Attach(self)
     ns.Beacon.Attach(self)
+    ns.Public.Attach(self)
     ns.Planner.Attach(self)
     ns.CampRing.Attach(self)
     ns.Card.Attach(self)
@@ -119,6 +153,7 @@ local mod = B:NewModule("Campfire", {
   OnDisable = function()
     ns.Watch.Detach()
     ns.Beacon.Detach()
+    ns.Public.Detach()
     ns.Card.Detach()
   end,
 })
@@ -129,6 +164,7 @@ mod.Model = ns.Model
 mod.Watch = ns.Watch
 mod.Card = ns.Card
 mod.Beacon = ns.Beacon
+mod.Public = ns.Public
 mod.CampRing = ns.CampRing
 mod.Planner = ns.Planner
 
@@ -164,10 +200,15 @@ function Campfire.Toggle()
   return Campfire.Open()
 end
 
--- `/bcamp` the planner; `/bcamp share` shares the fire; `/bcamp card` shows the card again.
+-- `/bcamp` the planner; `/bcamp share` shares the fire; `/bcamp card` shows the card again;
+-- `/bcamp block <name>` and `/bcamp unblock <name>` the public channel's block list.
 function Campfire.Slash(text)
-  local cmd = string.match(text or "", "^%s*(%S*)")
-  if cmd == "share" then
+  local cmd, rest = string.match(text or "", "^%s*(%S*)%s*(.-)%s*$")
+  if (cmd == "block" or cmd == "unblock") and rest ~= "" then
+    local now = ns.Public.Block(rest, cmd == "block")
+    B:Say(now and L["%s is blocked on the public channel."] or L["%s is no longer blocked."], rest)
+    return now
+  elseif cmd == "share" then
     return ns.Beacon.Share()
   elseif cmd == "card" then
     ns.Card.dismissed = nil

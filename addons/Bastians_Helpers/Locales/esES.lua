@@ -36,6 +36,7 @@ local strings = {
   ["Repaired for %s from the guild bank"] = "Reparado por %s con el banco de la hermandad",
   ["Repair costs %s, you have %s"] = "La reparación cuesta %s, tienes %s",
   ["Restocked %s for %s"] = "Repuesto %s por %s",
+  ["%s is cheaper at %s: %s each, here %s."] = "%s es más barato en %s: %s la unidad, aquí %s.",
   ["Never sell to a vendor"] = "No vender nunca a un mercader",
   ["Allow selling again"] = "Permitir vender de nuevo",
   ["Restock at vendors"] = "Reponer en los mercaderes",
@@ -75,6 +76,23 @@ local strings = {
   ["%d min ago"] = "hace %d min",
   ["Nothing done yet this session."] = "Aún no se ha hecho nada en esta sesión.",
   ["Click: the session panel. Right click: the Helpers settings."] = "Clic: el panel de sesión. Clic derecho: los ajustes de los ayudantes.",
+  -- the mail rules (#18, 04.11.2026)
+  ["Mail rules"] = "Reglas de correo",
+  ["No rules yet: name a character below, for example your alchemist for herbs."] = "Aún no hay reglas: nombra abajo a un personaje, por ejemplo tu alquimista para las hierbas.",
+  ["%s go to (a name, Enter; empty removes the rule)"] = "%s van a (un nombre, Intro; vacío quita la regla)",
+  ["%s go to %s"] = "%s van a %s",
+  ["%s: no mail rule"] = "%s: sin regla de correo",
+  ["By rule"] = "Por regla",
+  ["%s for %s: %d stacks in the mail, press Send."] = "%s para %s: %d montones en el correo, pulsa Enviar.",
+  ["Into a mail to %s: %s from your bags."] = "En un correo para %s: %s de tus bolsas.",
+  ["Herbs"] = "Hierbas",
+  ["Metal and stone"] = "Metal y piedra",
+  ["Leather"] = "Cuero",
+  ["Cloth"] = "Tela",
+  ["Meat and fish"] = "Carne y pescado",
+  ["Enchanting materials"] = "Materiales de encantamiento",
+  ["Elemental"] = "Elemental",
+  ["Recipes"] = "Recetas",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

@@ -1,7 +1,8 @@
 # The companion addons the suite reads or sits beside (tools/companion_watch.py, plan-second-wave.md
 # S4, 01.11.2026). `required`: the suite depends on it, a change heads the daily report and a
-# missing or too old copy writes .local/companions/ALERT.md. `min` mirrors B.TESTED_WITH in Core's
-# Settings.lua. `bridge`: our files that read the addon; a changed surface prints "review ...".
+# missing or too old copy writes .local/companions/ALERT.md. `min` mirrors the `min` of
+# Bastians.COMPANIONS in Core's Settings.lua (the oldest copy the bridge works with); B.TESTED_WITH
+# there is the newest copy the suite was tested with (3.8.0 since 04.11.2026). `bridge`: our files that read the addon; a changed surface prints "review ...".
 # The folders are read from the clients' Interface/AddOns ([companions] in .local/install.toml).
 
 [[companion]]
@@ -91,3 +92,22 @@ about = "Campfire Tooltips (GPLv3): the camp placements' data (S5's source, cred
 [[companion]]
 folder = "KerzoCampingSync"
 about = "Kerzo Camping Sync (All Rights Reserved): party buff sync (S5)."
+
+[[companion]]
+folder = "Questie"
+about = "Questie: the quest addon most players run beside ours; its QuestieDB is our second spawn source (companion of Quests)."
+
+[[companion]]
+folder = "Leatrix_Plus"
+about = "Leatrix Plus: many small helpers; watched for overlaps with Helpers (B7.9) and its slash commands."
+
+# Embedded libraries (04.11.2026, #22): every addon may carry a copy; LibStub loads the highest
+# minor. The suite's LDB feeds and the LibDBIcon button (ADR 0043) run on whichever copy loads.
+
+[[library]]
+name = "LibDataBroker-1.1"
+about = "The data feeds every app publishes (ADR 0043); Core carries a copy."
+
+[[library]]
+name = "LibDBIcon-1.0"
+about = "The minimap button; the suite uses it at runtime only (All Rights Reserved), never ships it (ADR 0043)."

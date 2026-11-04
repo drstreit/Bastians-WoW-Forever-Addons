@@ -9,6 +9,8 @@
 ## Notes-frFR: Vos notes sur les PNJ, quêtes, objets et lieux, dans des listes à partager.
 ## Notes-esES: Tus notas sobre PNJ, misiones, objetos y lugares, en listas que puedes compartir.
 ## Notes-esMX: Tus notas sobre PNJ, misiones, objetos y lugares, en listas que puedes compartir.
+## Notes-ruRU: Ваши заметки о NPC, заданиях, предметах и местах в списках, которыми можно делиться.
+## Notes-ptBR: Suas anotações sobre PNJs, missões, itens e lugares, em listas que você pode compartilhar.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -17,8 +19,10 @@
 ## Category-frFR: Suite de Bastian
 ## Category-esES: Suite de Bastian
 ## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Map
@@ -30,6 +34,8 @@ Locales\esES.lua
 Locales\koKR.lua
 Locales\zhCN.lua
 Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
 News.lua
 Notes.lua
 Feed.lua

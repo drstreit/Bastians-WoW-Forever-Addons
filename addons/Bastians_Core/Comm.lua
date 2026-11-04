@@ -14,7 +14,9 @@ Comm.CHUNK = 200 -- characters of payload per message (the game allows 255 with 
 Comm.RATE = 0.25 -- seconds between two messages of the send queue
 Comm.STALE = 60 -- seconds after which an incomplete message is dropped
 Comm.MAX_DEPTH, Comm.MAX_ITEMS = 8, 5000 -- what a received value may hold at most
-Comm.CHANNELS = { PARTY = true, RAID = true, GUILD = true, WHISPER = true }
+-- CHANNEL (04.11.2026, #20): a custom chat channel by its number; only a kind registered as
+-- `public` takes values from there (strangers reach it), every other kind drops them.
+Comm.CHANNELS = { PARTY = true, RAID = true, GUILD = true, WHISPER = true, CHANNEL = true }
 Comm.TEXT_TAG = "!BN1!" -- the start of the text form
 
 local handlers = {} -- kind -> { owner, fn }
@@ -243,13 +245,16 @@ function Comm.Parts(kind, value, id)
   return parts
 end
 
--- Sends a value of `kind` to PARTY, RAID, GUILD or WHISPER (target: the name); -> the number of
--- messages queued, or nil and why.
+-- Sends a value of `kind` to PARTY, RAID, GUILD, WHISPER (target: the name) or CHANNEL (target:
+-- the channel's number); -> the number of messages queued, or nil and why.
 function Comm.Send(kind, value, channel, target)
   if not Comm.CHANNELS[channel] then
     return nil, "channel"
   end
   if channel == "WHISPER" and (type(target) ~= "string" or target == "") then
+    return nil, "target"
+  end
+  if channel == "CHANNEL" and not (tonumber(target) and tonumber(target) > 0) then
     return nil, "target"
   end
   if not B.Compat.RegisterAddonPrefix(Comm.PREFIX) then
@@ -312,16 +317,17 @@ function Comm.Receive(prefix, text, channel, sender)
   partial[key] = nil
   local value = Comm.Deserialize(table.concat(p.parts, "", 1, p.n))
   local h = handlers[p.kind]
-  if value == nil or not h or not h.owner:IsEnabled() then
+  if value == nil or not h or not h.owner:IsEnabled() or (p.channel == "CHANNEL" and not h.public) then
     return nil
   end
   ns.safecall(h.owner, h.fn, value, sender, p.channel)
   return p.kind
 end
 
--- An app takes the values of a kind: fn(value, sender, channel). One handler per kind.
-function Comm.Register(owner, kind, fn)
-  handlers[kind] = { owner = owner, fn = fn }
+-- An app takes the values of a kind: fn(value, sender, channel). One handler per kind. `opts.public`
+-- also takes them from a custom channel (CHANNEL), where anyone may send.
+function Comm.Register(owner, kind, fn, opts)
+  handlers[kind] = { owner = owner, fn = fn, public = opts and opts.public == true or false }
   if not frame then
     frame = CreateFrame("Frame")
     frame:SetScript("OnEvent", function(_, _, ...)

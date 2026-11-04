@@ -185,4 +185,14 @@ ns.L:Register("koKR", {
   ["Tanning Rack"] = "무두질 선반",
   ["Toxin Study"] = "독소 연구대",
   ["Trapper's Workbench"] = "덫사냥꾼의 작업대",
+  -- the public channel (#20, 04.11.2026)
+  ["You shared the fire, also on the public channel."] = "공개 채널에도 모닥불을 공유했습니다.",
+  ["A fire burns here (since %d min, shared by %s)"] = "여기에 모닥불이 타고 있습니다 (%d분 전부터, %s 님이 공유)",
+  ["Also on a public channel: share with everyone of the suite and see their fires"] = "공개 채널에도: 모음의 모든 사용자와 공유하고 그들의 모닥불 보기",
+  ["Off by default. Joins a hidden chat channel; fires from it come at most one per player in five minutes, twenty at once."] = "기본값은 꺼짐. 숨겨진 대화 채널에 참여합니다. 그곳의 모닥불은 플레이어당 5분에 최대 하나, 한 번에 스무 개까지 받습니다.",
+  ["Block a name on the public channel (Enter; the same name again unblocks it)"] = "공개 채널에서 이름 차단 (Enter; 같은 이름을 다시 입력하면 해제)",
+  ["%s is blocked on the public channel."] = "%s 님은 공개 채널에서 차단되었습니다.",
+  ["%s is no longer blocked."] = "%s 님은 더 이상 차단되지 않습니다.",
+  ["Blocked: %s"] = "차단됨: %s",
+  ["Nobody is blocked."] = "차단된 사람이 없습니다.",
 })

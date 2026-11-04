@@ -8,7 +8,7 @@ addon = "Bastians_Data_World"
 file = "World.lua"
 # 12 MB since 20.10.2026 (was 10): Classic mob places, up to 12 per map, made the Forever pack 10.9 MB
 budget_kb = 12288
-indexes = ["npc.byZone", "object.byZone", "node.byZone", "entrance.byZone", "entrance.byInstance", "area.byZone", "area.toMap"]
+indexes = ["npc.byZone", "npc.bySoldItem", "object.byZone", "node.byZone", "entrance.byZone", "entrance.byInstance", "area.byZone", "area.toMap"]
 
 [packs.world.schema]
 # loot = { {itemID, chance percent}, ... } with lootSrc "classic" (CMaNGOS) or "tdb" (retail, ItemDB)

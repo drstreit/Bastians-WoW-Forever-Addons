@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Map: Crayon
 ## Title-esES: Bastian's Map: Lápiz
 ## Title-esMX: Bastian's Map: Lápiz
+## Title-ruRU: Bastian's Map: Карандаш
+## Title-ptBR: Bastian's Map: Lápis
 ## IconTexture: Interface\AddOns\Bastians_Map_Pencil\Icon
 ## Notes: Bastian's coloured pencil map style, drawn stroke by stroke (optional, about 100 MB).
 ## Notes-koKR: 한 획 한 획 그린 Bastian's 색연필 지도 스타일 (선택, 약 100 MB).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Le style de carte aux crayons de couleur de Bastian, dessiné trait par trait (facultatif, environ 100 Mo).
 ## Notes-esES: El estilo de mapa a lápices de colores de Bastian, dibujado trazo a trazo (opcional, unos 100 MB).
 ## Notes-esMX: El estilo de mapa a lápices de colores de Bastian, dibujado trazo a trazo (opcional, unos 100 MB).
+## Notes-ruRU: Стиль карты Bastian's цветными карандашами, нарисованный штрих за штрихом (необязательно, около 100 МБ).
+## Notes-ptBR: O estilo de mapa a lápis de cor do Bastian, desenhado traço a traço (opcional, cerca de 100 MB).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

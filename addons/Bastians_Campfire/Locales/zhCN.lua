@@ -185,4 +185,14 @@ ns.L:Register("zhCN", {
   ["Tanning Rack"] = "制革架",
   ["Toxin Study"] = "毒素研究",
   ["Trapper's Workbench"] = "捕兽者工作台",
+  -- the public channel (#20, 04.11.2026)
+  ["You shared the fire, also on the public channel."] = "你分享了营火，也发到了公共频道。",
+  ["A fire burns here (since %d min, shared by %s)"] = "这里有一堆营火（已燃烧 %d 分钟，由 %s 分享）",
+  ["Also on a public channel: share with everyone of the suite and see their fires"] = "也在公共频道：与所有使用本合集的人分享，并看到他们的营火",
+  ["Off by default. Joins a hidden chat channel; fires from it come at most one per player in five minutes, twenty at once."] = "默认关闭。加入一个隐藏的聊天频道；每名玩家五分钟内最多传来一堆营火，同时最多二十堆。",
+  ["Block a name on the public channel (Enter; the same name again unblocks it)"] = "在公共频道屏蔽一个名字（回车；再次输入同一名字即解除）",
+  ["%s is blocked on the public channel."] = "%s 已在公共频道被屏蔽。",
+  ["%s is no longer blocked."] = "%s 不再被屏蔽。",
+  ["Blocked: %s"] = "已屏蔽：%s",
+  ["Nobody is blocked."] = "没有屏蔽任何人。",
 })

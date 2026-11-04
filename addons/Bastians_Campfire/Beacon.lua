@@ -107,6 +107,10 @@ function Beacon.Share()
   if type(IsInGuild) == "function" and IsInGuild() and B.Comm.Send(Model.KIND, payload, "GUILD") then
     sent = sent + 1
   end
+  local public = ns.Public.Share(payload) -- the public channel, when switched on (#20)
+  if public then
+    sent = sent + 1
+  end
   local mine = Model.CleanCamp(payload, time())
   if mine then
     mine.mine = true
@@ -116,7 +120,10 @@ function Beacon.Share()
     B:Say(L["Nobody to share the fire with: you are in no group and no guild."])
     return nil, "nobody"
   end
-  B:Say(L["You shared the fire with your group and guild."])
+  B:Say(
+    public and L["You shared the fire, also on the public channel."]
+      or L["You shared the fire with your group and guild."]
+  )
   return sent
 end
 
@@ -150,8 +157,10 @@ local function query(view)
     end
     if w[1] and w[1] == view.continent then
       local minutes = math.max(0, math.floor((time() - (fire.at or 0)) / 60))
+      local from = fire.public and ns.Public.Sender(fire)
       local label = fire.chat and L["A camp posted in chat"]
         or (fire.mine and L["Your shared fire"])
+        or (from and string.format(L["A fire burns here (since %d min, shared by %s)"], minutes, from))
         or string.format(L["A fire burns here (since %d min)"], minutes)
       pins[#pins + 1] = {
         wx = w[2],
@@ -170,9 +179,14 @@ end
 function Beacon.Attach(m)
   mod = m
   world = setmetatable({}, { __mode = "k" })
-  B.Comm.Register(m, Model.KIND, function(value)
-    Beacon.Receive(value)
-  end)
+  -- public: the kind also takes fires from the custom channel (#20), which Public.lua checks
+  B.Comm.Register(m, Model.KIND, function(value, sender, channel)
+    if channel == "CHANNEL" then
+      ns.Public.Receive(value, sender)
+    else
+      Beacon.Receive(value)
+    end
+  end, { public = true })
   for _, event in ipairs(CHAT_EVENTS) do
     m:RegisterEvent(event, Beacon.OnChat)
   end

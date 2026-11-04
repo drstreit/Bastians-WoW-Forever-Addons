@@ -7,6 +7,8 @@
 ## Title-frFR: Bastian's Data: Marché
 ## Title-esES: Bastian's Data: Mercado
 ## Title-esMX: Bastian's Data: Mercado
+## Title-ruRU: Bastian's Data: Рынок
+## Title-ptBR: Bastian's Data: Mercado
 ## IconTexture: Interface\AddOns\Bastians_Data_Market\Icon
 ## Notes: Generated market price snapshot (loads when Gold is enabled).
 ## Notes-koKR: 생성된 시세 스냅샷 (Gold를 켜면 불러옴).
@@ -16,9 +18,11 @@
 ## Notes-frFR: Instantané des prix du marché généré (chargé si Gold est activé).
 ## Notes-esES: Instantánea de precios del mercado generada (se carga si Gold está activado).
 ## Notes-esMX: Instantánea de precios del mercado generada (se carga si Gold está activado).
+## Notes-ruRU: Сгенерированный снимок рыночных цен (загружается, когда включён Gold).
+## Notes-ptBR: Retrato dos preços de mercado gerado (carrega quando o Gold está ativado).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.3.0
+## Version: 1.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

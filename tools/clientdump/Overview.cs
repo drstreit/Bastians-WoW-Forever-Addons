@@ -111,7 +111,7 @@ static class Overview
 
     public static void Run(Client c, string defsDir, string map, string outDir,
         string? wdtFdidArg, string? listfile, int pixels, int span, string format, bool mips, string alpha = "dxt1",
-        string? seaArg = null, string? artPath = null)
+        string? seaArg = null, string? artPath = null, bool soften = false)
     {
         if (alpha is not ("dxt1" or "dxt5")) throw new ArgumentException("--alpha must be dxt1 or dxt5");
         var sea = ParseSea(seaArg);
@@ -145,6 +145,11 @@ static class Overview
             var rgba = new byte[pixels * pixels * 4];
             dark += Blit(rgba, pixels, 0, 0, pixels, bgra, w, h);
             tileRgba[(t.x, t.y)] = rgba;
+        }
+        if (soften)
+        {
+            var (pairs, before, after) = Soften(tileRgba, pixels);
+            Console.WriteLine($"soften: {tileRgba.Count} tiles, {pairs} edges, mean edge step {before:F2} -> {after:F2} per channel");
         }
         // the sea is the near-black water connected to the grid's edge or to a missing tile; enclosed
         // near-black water is a lake and keeps its colour (the continent art painted Redridge's lake
@@ -273,6 +278,107 @@ static class Overview
         if (format == "blp")
             Console.WriteLine($"self-check (DXT1 decode vs. canvas): mean error {errorSum / Math.Max(1, errorCount):F2} per channel, "
                 + $"{alphaBad} alpha mismatches");
+    }
+
+    const double SoftenPull = 0.05; // how strongly a tile's gain is pulled back to 1 (against the edges' weight 1)
+    const double SoftenMax = 0.223; // |ln gain| at most: a tile is never lightened or darkened beyond 25 %
+    const int SoftenRounds = 200;
+
+    /// <summary>Seam softening (#23, map.md "Imagery pipeline", 04.11.2026): Blizzard renders each ADT's
+    /// minimap tile under its zone's light, so zone borders show as steps in brightness and tint. Every
+    /// tile gets one gain per channel, solved in the log domain so that the mean colours of the land
+    /// pixels along each shared edge match (weighted by how many pixel pairs the edge has, pulled to 1 by
+    /// SoftenPull, clamped to SoftenMax), then applied to its land pixels. Water marked transparent stays
+    /// untouched. Deterministic: tiles in a fixed order, a fixed number of rounds.
+    /// Returns the edges compared and the mean step per channel before and after.</summary>
+    internal static (int pairs, double before, double after) Soften(Dictionary<(int x, int y), byte[]> tiles, int pixels)
+    {
+        var k = Math.Max(1, pixels / 32); // the strip of pixels either side of an edge
+        var keys = tiles.Keys.OrderBy(t => t.x).ThenBy(t => t.y).ToList();
+        var index = new Dictionary<(int x, int y), int>();
+        for (var i = 0; i < keys.Count; i++) index[keys[i]] = i;
+        // per edge: tile a, tile b, weight, and per channel ln(mean b / mean a) over the pixel pairs both land
+        var edges = new List<(int a, int b, double w, double[] d)>();
+        double StepOf(byte[] ra, byte[] rb, bool right, double[]? ga, double[]? gb, out double[] d, out int n)
+        {
+            var sa = new double[3]; var sb = new double[3]; n = 0;
+            for (var i = 0; i < pixels; i++)
+            for (var j = 0; j < k; j++)
+            {
+                // a's last k columns against b's first k (right), or a's last k rows against b's first k (below)
+                int pa = right ? (i * pixels + pixels - 1 - j) * 4 : ((pixels - 1 - j) * pixels + i) * 4;
+                int pb = right ? (i * pixels + j) * 4 : (j * pixels + i) * 4;
+                if (ra[pa + 3] != 255 || rb[pb + 3] != 255) continue;
+                for (var c = 0; c < 3; c++)
+                {
+                    sa[c] += ra[pa + c] * (ga is null ? 1 : Math.Exp(ga[c]));
+                    sb[c] += rb[pb + c] * (gb is null ? 1 : Math.Exp(gb[c]));
+                }
+                n++;
+            }
+            d = new double[3];
+            if (n == 0) return 0;
+            double step = 0;
+            for (var c = 0; c < 3; c++)
+            {
+                d[c] = Math.Log((sb[c] / n + 1) / (sa[c] / n + 1));
+                step += Math.Abs(sb[c] - sa[c]) / n;
+            }
+            return step / 3;
+        }
+        double beforeSum = 0; long beforeN = 0;
+        foreach (var t in keys)
+            foreach (var (dx, dy, right) in new[] { (1, 0, true), (0, 1, false) })
+            {
+                if (!tiles.TryGetValue((t.x + dx, t.y + dy), out var rb)) continue;
+                var step = StepOf(tiles[t], rb, right, null, null, out var d, out var n);
+                if (n < pixels / 4) continue; // a coast edge with a few land pixels says little
+                edges.Add((index[t], index[(t.x + dx, t.y + dy)], n / (double)(pixels * k), d));
+                beforeSum += step; beforeN++;
+            }
+        var gain = new double[keys.Count][];
+        for (var i = 0; i < gain.Length; i++) gain[i] = new double[3];
+        var around = new List<(int other, double w, double[] d, bool first)>[keys.Count];
+        for (var i = 0; i < around.Length; i++) around[i] = new();
+        foreach (var e in edges)
+        {
+            around[e.a].Add((e.b, e.w, e.d, true));
+            around[e.b].Add((e.a, e.w, e.d, false));
+        }
+        // Gauss-Seidel on: gain_a + ln(mean a) = gain_b + ln(mean b), i.e. gain_a - gain_b = d (a's side)
+        for (var round = 0; round < SoftenRounds; round++)
+            for (var i = 0; i < keys.Count; i++)
+            {
+                if (around[i].Count == 0) continue;
+                for (var c = 0; c < 3; c++)
+                {
+                    double num = 0, den = SoftenPull;
+                    foreach (var (other, w, d, first) in around[i])
+                    {
+                        num += w * (gain[other][c] + (first ? d[c] : -d[c]));
+                        den += w;
+                    }
+                    gain[i][c] = Math.Clamp(num / den, -SoftenMax, SoftenMax);
+                }
+            }
+        double afterSum = 0;
+        foreach (var e in edges)
+        {
+            var ka = keys[e.a]; var kb = keys[e.b];
+            afterSum += StepOf(tiles[ka], tiles[kb], kb.x != ka.x, gain[e.a], gain[e.b], out _, out _);
+        }
+        for (var i = 0; i < keys.Count; i++)
+        {
+            var rgba = tiles[keys[i]];
+            var g = new[] { Math.Exp(gain[i][0]), Math.Exp(gain[i][1]), Math.Exp(gain[i][2]) };
+            for (var p = 0; p < rgba.Length; p += 4)
+            {
+                if (rgba[p + 3] != 255) continue;
+                for (var c = 0; c < 3; c++)
+                    rgba[p + c] = (byte)Math.Clamp((int)Math.Round(rgba[p + c] * g[c]), 0, 255);
+            }
+        }
+        return (edges.Count, beforeSum / Math.Max(1, beforeN), afterSum / Math.Max(1, beforeN));
     }
 
     /// <summary>Which pixels of the whole 64 x 64 grid (at `pixels` per ADT) are sea: near-black water (alpha 0
