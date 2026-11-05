@@ -18,6 +18,7 @@ local COLOR_TOKEN = {
   green = "diffGreen",
   grey = "muted",
   white = "bright",
+  blue = "typeItem", -- the Forever-only tag (missing until launch night 05.11.2026: nil colour, Rows.lua:222)
 }
 R.COLOR = setmetatable({}, {
   __index = function(_, name)

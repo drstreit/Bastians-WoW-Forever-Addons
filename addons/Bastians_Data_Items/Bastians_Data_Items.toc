@@ -22,7 +22,7 @@
 ## Notes-ptBR: Pacote de dados de itens gerado (carrega ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.5.0
+## Version: 1.5.1
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

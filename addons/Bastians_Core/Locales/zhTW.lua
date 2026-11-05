@@ -552,6 +552,8 @@ ns.L:Register("zhTW", {
   ["Click: its page, to switch it on."] = "點擊：打開其頁面以開啟。",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Quests: the zone view no longer errors on quests that are new in Forever."] = "任務：區域檢視不再在 Forever 新增任務上出錯。",
+  ["Core: no catalogue warning when a voice line starts or a quest reward loads."] = "Core：語音開始播放或任務獎勵載入時不再出現目錄警告。",
   ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Bastian的小地圖在自己的樣式中也會顯示追蹤找到的草藥、礦石和生物，遊戲的追蹤按鈕回到了工具列。",
   ["The session plan (what fits into the next 30 to 180 minutes) moved from Route's Explore to Bastian's Gold and is off until you switch it on in Gold's settings."] = "工作階段計畫（接下來30到180分鐘能做的事）從Route的探索移到了Bastian's Gold，在Gold的設定中開啟前保持關閉。",
   ["Other addons can ask Bastian's for any thing's name and places, your notes near a spot and your gold income through Bastians.API."] = "其他插件可以透過Bastians.API向Bastian's詢問任何事物的名稱與地點、某處附近的筆記以及你的金幣收入。",

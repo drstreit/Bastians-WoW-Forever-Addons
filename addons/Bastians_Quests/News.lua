@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.5.1:1",
+    date = "2026-11-05",
+    version = "1.5.1",
+    text = "Quests: the zone view no longer errors on quests that are new in Forever.",
+  },
+  {
     id = "1.2.0:1",
     date = "2026-10-31",
     version = "1.2.0",

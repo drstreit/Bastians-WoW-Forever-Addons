@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "1.5.1:1",
+    date = "2026-11-05",
+    version = "1.5.1",
+    text = "Core: no catalogue warning when a voice line starts or a quest reward loads.",
+  },
+  {
     id = "1.4.0:1",
     date = "2026-11-04",
     version = "1.4.0",
@@ -177,11 +183,5 @@ ns.NEWS = {
     date = "2026-11-02",
     version = "1.3.0",
     text = "A Gestures wedge can run one of your own macros with a click, and runs the game's own commands such as /reload; Quests' item buttons work with \"cast on key down\".",
-  },
-  {
-    id = "1.3.0:22",
-    date = "2026-11-02",
-    version = "1.3.0",
-    text = "Emotes in Bastian's Chat now show in the colour scheme's own emote colour, for roleplay.",
   },
 }

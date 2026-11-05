@@ -216,6 +216,8 @@ for _, name in ipairs({
   "BASTIANS_TALE_SHOW",
   "BASTIANS_TALE_CHANGED",
   "BASTIANS_NOTICE",
+  "BASTIANS_ACTION_STATE", -- an action's active() may answer differently (Voice play/stop; §16)
+  "BASTIANS_REWARD_INFO_CHANGED", -- a reward item loaded or gear changed (Quests, S7; §16)
 }) do
   B:DeclareMessage(name)
 end

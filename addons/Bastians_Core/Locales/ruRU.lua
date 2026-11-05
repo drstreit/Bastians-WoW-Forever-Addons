@@ -551,6 +551,8 @@ ns.L:Register("ruRU", {
   ["%s is switched off. Its page has the switch to turn it on."] = "%s отключено. На его странице есть переключатель для включения.",
   ["Click: its page, to switch it on."] = "Щелчок: его страница, чтобы включить.",
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Quests: the zone view no longer errors on quests that are new in Forever."] = "Задания: вид зоны больше не выдаёт ошибку на заданиях, новых в Forever.",
+  ["Core: no catalogue warning when a voice line starts or a quest reward loads."] = "Core: больше нет предупреждения каталога при запуске озвучки или загрузке награды за задание.",
   ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Миникарта Bastian's показывает травы, руду и существ, найденных вашим поиском, и в собственных стилях, а кнопка поиска игры вернулась на панель инструментов.",
   ["The session plan (what fits into the next 30 to 180 minutes) moved from Route's Explore to Bastian's Gold and is off until you switch it on in Gold's settings."] = "План сессии (что успеть за ближайшие 30–180 минут) переехал из «Исследования» Route в Bastian's Gold и выключен, пока вы не включите его в настройках Gold.",
   ["Other addons can ask Bastian's for any thing's name and places, your notes near a spot and your gold income through Bastians.API."] = "Другие аддоны могут спросить у Bastian's через Bastians.API имя и места чего угодно, ваши заметки рядом с точкой и ваш доход золота.",
