@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("ptBR", {
+  -- Orbit.lua: a giver's tooltip details three quests (05.11.2026)
+  ["... and %d more"] = "... e mais %d",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark the place heard"] = "Marcar este local como ouvido",
   ["Spoken is not installed: no voice lines"] = "O Spoken não está instalado: sem falas de voz",

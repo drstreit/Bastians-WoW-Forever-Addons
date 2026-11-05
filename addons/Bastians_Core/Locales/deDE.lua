@@ -553,6 +553,9 @@ ns.L:Register("deDE", {
   ["Click: its page, to switch it on."] = "Klick: seine Seite, zum Einschalten.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Quests: right-click a quest in your log to abandon it; the game asks first."] = "Quests: Rechtsklick auf eine Quest in deinem Log, um sie abzubrechen; das Spiel fragt zuerst.",
+  ["Chat: the Up and Down keys recall your sent lines on Forever too (Alt+Up stays the game's)."] = "Chat: Die Tasten Pfeil hoch und runter rufen auch auf Forever deine gesendeten Zeilen zurück (Alt+Hoch bleibt dem Spiel).",
+  ["Orbiter: hovering a quest mark shows the quest's chain position and its rewards (money, reputation, items)."] = "Orbiter: Beim Zeigen auf eine Questmarke erscheinen die Position in der Questreihe und die Belohnungen (Geld, Ruf, Gegenstände).",
   ["Quests: the zone view no longer errors on quests that are new in Forever."] = "Quests: Die Zonenansicht meldet keinen Fehler mehr bei Quests, die neu in Forever sind.",
   ["Core: no catalogue warning when a voice line starts or a quest reward loads."] = "Core: Keine Katalogwarnung mehr, wenn eine Sprachzeile startet oder eine Questbelohnung geladen wird.",
   ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Bastians Minikarte zeigt die Kräuter, Erze und Kreaturen, die dein Aufspüren findet, nun auch in ihren eigenen Stilen, und der Aufspüren-Knopf des Spiels ist zurück in ihrer Werkzeugleiste.",

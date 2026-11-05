@@ -567,6 +567,23 @@ local function registerActions(mod)
       end
     end,
   })
+  -- Abandon a log quest (owner, Forever launch night 05.11.2026: the window had no way to cancel
+  -- one). The game's own confirmation asks; QUEST_REMOVED then refreshes the window.
+  B:RegisterAction(mod, {
+    id = "quests.abandon",
+    label = L["Abandon the quest (the game asks first)"],
+    short = L["Abandon"],
+    icon = B.UI.IconTexture("remove"),
+    types = { "quest" },
+    order = 80,
+    when = function(ref)
+      local id = questID(ref)
+      return id ~= nil and State.IsInLog(id)
+    end,
+    run = function(ref)
+      return B.Compat.AbandonQuest(questID(ref)) ~= false
+    end,
+  })
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -974,6 +991,29 @@ local function rewardRows(id)
   return rows
 end
 
+-- The rows under a quest's tooltip (owner, Forever launch night 05.11.2026: the Orbiter's quest
+-- marks showed no reward): the chain position, then the rewards (money, reputation, items, choices,
+-- a spell) without the experience row. Rendered by B.UI.TipRows wherever a host shows a quest.
+local function rewardTipRows(id)
+  local q = Logic.quest(id)
+  if not q then
+    return nil
+  end
+  local rows = {}
+  local ch = Logic.chain(id, State.ForLogic())
+  if ch and ch.pos[id] then
+    rows[1] = {
+      text = string.format(L["Quest chain '%s' %d/%d"], ch.name or "?", ch.pos[id], #ch.quests),
+    }
+  end
+  for _, row in ipairs(rewardRows(id) or {}) do
+    if row.valueKind ~= "number" then
+      rows[#rows + 1] = row
+    end
+  end
+  return rows
+end
+
 Reg.CARD_QUESTS = 3 -- quests a sign's card names; the rest as "... and n more"
 
 -- A quest's rewards as card lines: the money, the reputation, then every item (the choices
@@ -1364,10 +1404,16 @@ local function registerSections(mod)
     types = { "quest" },
     order = 8,
     block = { columns = 1, limit = 8, table = true }, -- a small table (ADR 0018 D)
-    invalidateOn = { "BASTIANS_PRICES_UPDATED" },
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_QUESTS_CHANGED" }, -- the chain position
     build = function(ref)
       return rewardRows(questID(ref))
     end,
+    tooltip = { -- the chain and the rewards under every host's quest tooltip (the Orbiter's marks)
+      max = 8,
+      build = function(ref)
+        return rewardTipRows(questID(ref))
+      end,
+    },
   })
   B:RegisterDetailSection(mod, {
     id = "quests.choice",

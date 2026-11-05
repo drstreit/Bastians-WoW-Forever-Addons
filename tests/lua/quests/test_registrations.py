@@ -461,3 +461,50 @@ def test_which_reward_compares_the_choices_against_the_gear_and_follows_loads(wo
     assert "quests.choice" not in sections(wow, "quest:76")
     assert "quests.choice" not in sections(wow, "quest:62")
     assert errors(wow) == []
+
+
+def test_abandon_action_asks_the_game_then_the_quest_leaves_the_log(wow: WowRuntime):
+    """Owner, Forever launch night 05.11.2026: the window had no way to cancel a quest. The action
+    opens the game's own confirmation; nothing happens until the player's Yes."""
+    boot(wow)
+    assert "quests.abandon" in actions(wow, "quest:176")
+    assert "quests.abandon" not in actions(wow, "quest:76")  # not in the log
+    wow.execute("Bastians:RunAction('quests.abandon', 'quest:176', { source = 'test' })")
+    popup = wow.g["Mock"].popup
+    assert popup.which == "ABANDON_QUEST" and popup[1] == "The Fargodeep Mine"
+    assert wow.eval("C_QuestLog.GetAbandonQuest()") == 176
+    assert wow.eval("Bastians:GetModule('Quests').State.IsInLog(176)") is True  # not before the Yes
+    wow.execute("Mock.AcceptPopup()")
+    wow.advance(0.2)
+    wow.run_frames(5)
+    assert wow.eval("Bastians:GetModule('Quests').State.IsInLog(176)") is False
+    assert "quests.abandon" not in actions(wow, "quest:176")
+    assert errors(wow) == []
+
+
+def test_quest_tooltip_rows_carry_the_chain_and_the_rewards_without_experience(wow: WowRuntime):
+    """Owner, Forever launch night 05.11.2026: the Orbiter's quest marks showed no reward; "gold,
+    items and renown, and the chain"."""
+    boot(wow)
+    wow.execute(
+        """
+        local Logic = Bastians:GetModule('Quests').Logic
+        Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 } }, items = { { 2589, 5 } } }
+        """
+    )
+    rows = [
+        (strip(r.text), r.value) for r in wow.eval("Bastians:GetTooltipRows('quest:62')").values()
+    ]
+    texts = [t for t, _ in rows]
+    assert any(t.startswith("Quest chain") for t in texts) == wow.eval(
+        "Bastians:GetModule('Quests').Logic.chain(62, Bastians:GetModule('Quests').State.ForLogic()) ~= nil"
+    )
+    assert ("Money", 125) in rows
+    assert ("Reputation: Faction 72", "+150") in rows
+    assert any("Linen Cloth" in t for t in texts)
+    assert not any(t.startswith("Experience") for t in texts)
+    # the game's tooltip host draws them the same way
+    wow.execute("GameTooltip:ClearLines() Bastians.UI.TipRows(GameTooltip, 'quest:62')")
+    lines = [strip(ln.left) for ln in wow.eval("GameTooltip.lines").values()]
+    assert "Money" in lines
+    assert errors(wow) == []

@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("koKR", {
+  -- Orbit.lua: a giver's tooltip details three quests (05.11.2026)
+  ["... and %d more"] = "... 외 %d개",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark the place heard"] = "이 장소를 들은 것으로 표시",
   ["Spoken is not installed: no voice lines"] = "Spoken이 설치되지 않음: 음성 대사 없음",

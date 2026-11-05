@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("zhTW", {
+  -- Orbit.lua: a giver's tooltip details three quests (05.11.2026)
+  ["... and %d more"] = "...還有 %d 個",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark the place heard"] = "將此地標記為已聽過",
   ["Spoken is not installed: no voice lines"] = "未安裝 Spoken：沒有語音台詞",

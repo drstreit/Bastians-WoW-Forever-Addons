@@ -552,6 +552,9 @@ local strings = {
   ["Click: its page, to switch it on."] = "Clic: su página, para activarlo.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Quests: right-click a quest in your log to abandon it; the game asks first."] = "Misiones: clic derecho en una misión de tu registro para abandonarla; el juego pregunta antes.",
+  ["Chat: the Up and Down keys recall your sent lines on Forever too (Alt+Up stays the game's)."] = "Chat: las flechas arriba y abajo recuperan tus líneas enviadas también en Forever (Alt+Arriba sigue siendo del juego).",
+  ["Orbiter: hovering a quest mark shows the quest's chain position and its rewards (money, reputation, items)."] = "Orbiter: al pasar el ratón por una marca de misión se muestran su posición en la cadena y sus recompensas (dinero, reputación, objetos).",
   ["Quests: the zone view no longer errors on quests that are new in Forever."] = "Misiones: la vista de zona ya no da error con las misiones nuevas en Forever.",
   ["Core: no catalogue warning when a voice line starts or a quest reward loads."] = "Core: sin aviso de catálogo cuando empieza una línea de voz o se carga una recompensa de misión.",
   ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "El minimapa de Bastian muestra también, en sus propios estilos, las hierbas, minerales y criaturas que encuentra tu rastreo, y el botón de rastreo del juego vuelve a su barra de herramientas.",

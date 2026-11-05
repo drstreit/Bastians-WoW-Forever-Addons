@@ -76,6 +76,36 @@ define("modern", "SetQuestWatched", function(questID, on)
   return false
 end)
 
+-- Abandon a log quest the way the default quest log does (retail QuestMapFrame, assumed for Forever
+-- 05.11.2026): select it, mark it, open Blizzard's own confirmation, whose Yes calls
+-- C_QuestLog.AbandonQuest. The popup with the items warning when the quest gave items.
+define("modern", "AbandonQuest", function(questID)
+  if
+    not questID
+    or not C_QuestLog.GetLogIndexForQuestID(questID)
+    or type(C_QuestLog.SetAbandonQuest) ~= "function"
+    or type(StaticPopup_Show) ~= "function"
+  then
+    return false
+  end
+  local last = C_QuestLog.GetSelectedQuest()
+  C_QuestLog.SetSelectedQuest(questID)
+  C_QuestLog.SetAbandonQuest()
+  local items = C_QuestLog.GetAbandonQuestItems and C_QuestLog.GetAbandonQuestItems() or nil
+  local title = C_QuestLog.GetTitleForQuestID(questID) or ""
+  if items and #items > 0 then
+    StaticPopup_Hide("ABANDON_QUEST")
+    StaticPopup_Show("ABANDON_QUEST_WITH_ITEMS", title, items)
+  else
+    StaticPopup_Hide("ABANDON_QUEST_WITH_ITEMS")
+    StaticPopup_Show("ABANDON_QUEST", title)
+  end
+  if last and last > 0 then
+    C_QuestLog.SetSelectedQuest(last)
+  end
+  return "asked"
+end)
+
 -- The quest's usable item (legacy global, used by Blizzard's own objective tracker on both clients).
 define("modern", "GetQuestItem", function(questLogIndex)
   if type(GetQuestLogSpecialItemInfo) ~= "function" or not questLogIndex then

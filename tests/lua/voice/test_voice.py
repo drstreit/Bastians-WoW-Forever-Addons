@@ -767,3 +767,48 @@ def test_round_6_the_tick_the_model_and_the_answers_as_symbols(wow: WowRuntime):
     )
     assert notnow.glyph.GetTexture(notnow.glyph) == never
     assert errors(wow) == []
+
+
+def test_the_quest_marks_tooltips_show_the_chain_and_the_rewards(wow: WowRuntime):
+    """Owner, Forever launch night 05.11.2026: "you cannot see the reward from a quest using the
+    orbiter ... gold, items and renown ... and also if part of a quest chain"."""
+    boot(wow)
+    wow.execute(
+        """
+        local Logic = Bastians:GetModule('Quests').Logic
+        Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 } }, items = { { 2589, 5 } } }
+        Logic.quest(76).rewards = { money = 40 }
+        Bastians:Fire("BASTIANS_QUESTS_CHANGED", {}, {})
+        """
+    )
+
+    def tip_lines(index: int) -> list[str]:
+        wow.execute(
+            f"GameTooltip:ClearLines() {ORBIT}.Visible()[{index}]:GetScript('OnEnter')({ORBIT}.Visible()[{index}])"
+        )
+        return [
+            str(ln.left or "") + (" | " + str(ln.right) if ln.right else "")
+            for ln in wow.eval("GameTooltip.lines").values()
+        ]
+
+    # compact: the giver's badge folds its quests; its tooltip names each with status and rewards
+    giver = next(i for i, b in enumerate(bubbles(wow)) if b.kind == "npc") + 1
+    lines = tip_lines(giver)
+    assert lines[0] == "Marshal Dughan"
+    joined = "\n".join(lines)
+    assert (
+        "The Fargodeep Mine, Ready to hand in" in joined
+    )  # the pack's name, as the orbit titles it
+    assert "Money | " in joined and "Reputation: Faction 72 | +150" in joined
+    assert "Linen Cloth" in joined
+    assert "Experience" not in joined
+    # wide: a quest moon carries its own rows
+    wow.execute(f"{ORBIT}.Hover(true)")
+    wow.run_frames(20)
+    moon = next(i for i, b in enumerate(bubbles(wow)) if b.kind == "quest" and b.questID == 62) + 1
+    lines = tip_lines(moon)
+    assert lines[0] == "The Fargodeep Mine"
+    assert any(ln.startswith("Money | ") for ln in lines)
+    assert any("Faction 72" in ln for ln in lines)
+    wow.execute(f"{ORBIT}.Hover(false)")
+    assert errors(wow) == []

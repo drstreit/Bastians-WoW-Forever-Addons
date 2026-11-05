@@ -29,15 +29,14 @@ local function refFor(info)
   return nil
 end
 
--- Adds the rows for the entity under the mouse; `tooltip.bastiansRef` marks a processed tooltip.
-local function render(tooltip, info)
-  local ref = refFor(info)
-  if not ref or tooltip.bastiansRef == ref then
-    return
-  end
-  tooltip.bastiansRef = ref
+-- The suite's tooltip rows of an entity (every detail section with a `tooltip` entry, §7) onto
+-- `tooltip`: the text left, the value right, `limit` rows at most (default: the Tooltips setting),
+-- then "more in the Browser (n)". The game's tooltips get them through the hooks below; a host with
+-- a tooltip of its own (the Orbiter's quest marks, 05.11.2026) calls it under its title lines.
+-- Returns the rows.
+function B.UI.TipRows(tooltip, ref, limit)
   local rows = B:GetTooltipRows(ref)
-  local limit = maxLines()
+  limit = limit or maxLines()
   for i = 1, math.min(#rows, limit) do
     local row = rows[i]
     local value = B.UI.FormatValue(row.value, row.valueKind)
@@ -68,6 +67,17 @@ local function render(tooltip, info)
       S.C.tipDim[3]
     )
   end
+  return rows
+end
+
+-- Adds the rows for the entity under the mouse; `tooltip.bastiansRef` marks a processed tooltip.
+local function render(tooltip, info)
+  local ref = refFor(info)
+  if not ref or tooltip.bastiansRef == ref then
+    return
+  end
+  tooltip.bastiansRef = ref
+  B.UI.TipRows(tooltip, ref)
 end
 
 local frame = CreateFrame("Frame")

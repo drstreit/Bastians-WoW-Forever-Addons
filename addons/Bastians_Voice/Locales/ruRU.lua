@@ -1,6 +1,8 @@
 -- Russian strings of Bastians_Voice (ruRU). Keys are the English texts (Locale.lua); loaded before the addon's other files.
 local _, ns = ...
 ns.L:Register("ruRU", {
+  -- Orbit.lua: a giver's tooltip details three quests (05.11.2026)
+  ["... and %d more"] = "... и еще %d",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark the place heard"] = "Отметить это место как прослушанное",
   ["Spoken is not installed: no voice lines"] = "Spoken не установлен: озвученных реплик нет",

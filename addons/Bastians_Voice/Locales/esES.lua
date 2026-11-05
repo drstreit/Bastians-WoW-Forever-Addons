@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 local strings = {
+  -- Orbit.lua: a giver's tooltip details three quests (05.11.2026)
+  ["... and %d more"] = "... y %d más",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark the place heard"] = "Marcar este lugar como escuchado",
   ["Spoken is not installed: no voice lines"] = "Spoken no está instalado: sin líneas de voz",

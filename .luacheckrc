@@ -94,6 +94,8 @@ local handwritten_globals = {
   "hooksecurefunc",
   "ItemRefTooltip",
   "StaticPopupDialogs",
+  "StaticPopup_Show", -- the Abandon Quest popups, called only from Compat/Modern.lua (05.11.2026)
+  "StaticPopup_Hide",
   "Minimap",
   "WorldMapFrame",
   "ToggleWorldMap",

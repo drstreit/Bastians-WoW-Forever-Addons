@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 local strings = {
+  -- the Abandon action (Forever launch night, 05.11.2026)
+  ["Abandon the quest (the game asks first)"] = "Abandonar la misión (el juego pregunta antes)",
+  ["Abandon"] = "Abandonar",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Toggle the tracker"] = "Mostrar u ocultar el rastreador",
   -- Views.lua, Quests.lua: the Library's leads in My quests

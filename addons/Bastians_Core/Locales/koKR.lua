@@ -552,6 +552,9 @@ ns.L:Register("koKR", {
   ["Click: its page, to switch it on."] = "클릭: 켜려면 해당 페이지로.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Quests: right-click a quest in your log to abandon it; the game asks first."] = "퀘스트: 퀘스트 로그의 퀘스트를 우클릭하여 포기할 수 있습니다. 게임이 먼저 확인합니다.",
+  ["Chat: the Up and Down keys recall your sent lines on Forever too (Alt+Up stays the game's)."] = "채팅: 위/아래 방향키로 Forever에서도 보낸 줄을 다시 불러옵니다 (Alt+위는 게임의 기능으로 남습니다).",
+  ["Orbiter: hovering a quest mark shows the quest's chain position and its rewards (money, reputation, items)."] = "Orbiter: 퀘스트 표시에 마우스를 올리면 연계 퀘스트 내 위치와 보상(골드, 평판, 아이템)이 표시됩니다.",
   ["Quests: the zone view no longer errors on quests that are new in Forever."] = "퀘스트: Forever에 새로 추가된 퀘스트에서 지역 보기가 더 이상 오류를 내지 않습니다.",
   ["Core: no catalogue warning when a voice line starts or a quest reward loads."] = "Core: 음성 대사가 시작되거나 퀘스트 보상이 로드될 때 카탈로그 경고가 더 이상 나오지 않습니다.",
   ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Bastian의 미니맵이 자체 스타일에서도 추적이 찾은 약초, 광석, 생물을 표시하며, 게임의 추적 버튼이 도구 줄에 돌아왔습니다.",

@@ -26,6 +26,36 @@ function Keys.Search(history, query, before)
   return nil
 end
 
+-- Up (dir -1) and Down (dir 1) over `history` (oldest first) as a shell walks it. `state` is the
+-- walk so far ({ index, draft, shown }) or nil before the first Up; `current` the bar's text now.
+-- Returns the text to show (nil: nothing to do) and the new state (nil once the walk is left on
+-- the draft). A text edited since the last step starts a new walk from the newest line, with the
+-- edited text as the draft that Down past the newest brings back.
+function Keys.Walk(history, state, dir, current)
+  if #history == 0 then
+    return nil, nil
+  end
+  current = current or ""
+  if state and state.shown ~= current then
+    state = nil
+  end
+  if not state then
+    if dir > 0 then
+      return nil, nil
+    end
+    state = { index = #history + 1, draft = current }
+  end
+  local i = state.index + dir
+  if i < 1 then
+    return nil, state -- the oldest line is shown already
+  end
+  if i > #history then
+    return state.draft, nil
+  end
+  state.index, state.shown = i, history[i]
+  return history[i], state
+end
+
 -- A sent line into the history: no empty line, no repeat of the newest, at most Keys.HISTORY.
 function Keys.Remember(history, line)
   if type(line) ~= "string" or not line:find("%S") or history[#history] == line then

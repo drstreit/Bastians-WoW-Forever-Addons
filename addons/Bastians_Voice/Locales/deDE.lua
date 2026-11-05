@@ -3,6 +3,8 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("deDE", {
+  -- Orbit.lua: a giver's tooltip details three quests (05.11.2026)
+  ["... and %d more"] = "... und %d weitere",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark the place heard"] = "Diesen Ort als gehört markieren",
   -- SpokenData.lua

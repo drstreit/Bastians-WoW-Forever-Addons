@@ -390,10 +390,30 @@ end
 -- What the game puts into the bar's history (every sent line and slash command) is kept too; the
 -- lines we hand the bar at the start are not counted again.
 local feeding = false
-local function onBoxHistory(_, text)
+local function onBoxHistory(box, text)
   if active and not feeding then
     Keys.Remember(mod.db.char.history, text)
+    if typed[box] then
+      typed[box].walk = nil -- sent: the next Up starts from the newest line
+    end
   end
+end
+
+-- Plain Up and Down over the kept history (chat.md "The input bar"), the bar's own walk with Alt
+-- left to the game. Returns "history" when a step was taken.
+function Chat.WalkHistory(box, dir)
+  local t = typed[box]
+  if not t then
+    return nil
+  end
+  local text, state = Keys.Walk(mod.db.char.history, t.walk, dir, box:GetText() or "")
+  t.walk = state
+  if text == nil then
+    return nil
+  end
+  box:SetText(text)
+  box:SetCursorPosition(#text)
+  return "history"
 end
 
 -- Ctrl+R: the newest older history line that holds the text typed before the first Ctrl+R.
@@ -456,6 +476,14 @@ function Chat.OnBoxKey(box, key)
   if not (active and boxes[box]) then
     return nil
   end
+  if key == "UP" or key == "DOWN" then
+    local modified = (IsControlKeyDown and IsControlKeyDown())
+      or (IsAltKeyDown and IsAltKeyDown())
+      or (IsShiftKeyDown and IsShiftKeyDown())
+    if not modified then
+      return Chat.WalkHistory(box, key == "UP" and -1 or 1)
+    end
+  end
   keyOpts.extra = mod.db.profile.bashKeys and Keys.EXTRA or nil
   return S.TextKey(box, key, keyOpts, killed)
 end
@@ -487,7 +515,9 @@ function Chat.AdoptBox(box)
     typed[box] = typed[box] or {}
     try(box, "SetMaxLetters", 0)
     try(box, "SetMaxBytes", 0)
-    try(box, "SetAltArrowKeyMode", false) -- Up and Down walk the history without Alt
+    -- the bar keeps the game's Alt mode: Alt+Up walks the bar's own history as the game does it,
+    -- plain Up and Down are ours (Chat.WalkHistory; Forever ignores SetAltArrowKeyMode(false),
+    -- measured by , build 70790: only Alt+Up walked, OnKeyDown saw UP)
     if not fed[box] then
       fed[box] = true
       feeding = true

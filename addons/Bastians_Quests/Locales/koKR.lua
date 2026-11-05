@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("koKR", {
+  -- the Abandon action (Forever launch night, 05.11.2026)
+  ["Abandon the quest (the game asks first)"] = "퀘스트 포기 (게임이 먼저 확인합니다)",
+  ["Abandon"] = "포기",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Toggle the tracker"] = "추적기 켜기/끄기",
   -- Views.lua, Quests.lua: the Library's leads in My quests

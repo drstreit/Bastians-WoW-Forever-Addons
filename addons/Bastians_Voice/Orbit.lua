@@ -390,6 +390,9 @@ local KIND_WORDS = {
   say = "Say",
 }
 
+local TIP_ROWS = 8 -- tooltip rows of a quest (the chain, money, reputation, items) at most
+local TIP_QUESTS = 3 -- quests a giver's tooltip details; the rest as "... and n more"
+
 local function tip(bubble)
   local item = bubble.item
   if not (item and GameTooltip) then
@@ -408,6 +411,11 @@ local function tip(bubble)
   if words then
     S.TipLine(GameTooltip, words, "tipGold")
   end
+  -- what the quest earns and where it sits in its chain (the marks
+  -- showed no reward): Quests' tooltip rows through Core, on a moon and under a giver's quests
+  if item.kind == "quest" and item.ref and B.UI.TipRows then
+    B.UI.TipRows(GameTooltip, item.ref, TIP_ROWS)
+  end
   if item.quests then
     local lines = 0
     for _, q in ipairs(item.quests) do
@@ -418,6 +426,22 @@ local function tip(bubble)
     S.TipLine(GameTooltip, string.format(L["%d quests, %d with a voice line"], #item.quests, lines), "tipDim")
     if lines > 0 then
       S.TipLine(GameTooltip, L["Click plays the first unheard line"], "tipDim")
+    end
+    local status = { available = L["To take"], log = L["In your log"], ready = L["Ready to hand in"] }
+    for i, q in ipairs(item.quests) do
+      if i > TIP_QUESTS then
+        S.TipLine(GameTooltip, string.format(L["... and %d more"], #item.quests - TIP_QUESTS), "tipDim")
+        break
+      end
+      GameTooltip:AddLine(" ")
+      S.TipLine(
+        GameTooltip,
+        (q.title or "?") .. (status[q.status] and (", " .. status[q.status]) or ""),
+        "tipText"
+      )
+      if q.ref and B.UI.TipRows then
+        B.UI.TipRows(GameTooltip, q.ref, TIP_ROWS)
+      end
     end
   end
   if item.distance then

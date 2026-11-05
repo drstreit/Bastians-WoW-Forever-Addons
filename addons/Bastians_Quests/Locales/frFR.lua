@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("frFR", {
+  -- the Abandon action (Forever launch night, 05.11.2026)
+  ["Abandon the quest (the game asks first)"] = "Abandonner la quête (le jeu demande confirmation)",
+  ["Abandon"] = "Abandonner",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Toggle the tracker"] = "Afficher ou masquer le suivi",
   -- Views.lua, Quests.lua: the Library's leads in My quests

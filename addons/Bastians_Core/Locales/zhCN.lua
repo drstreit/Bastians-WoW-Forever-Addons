@@ -552,6 +552,9 @@ ns.L:Register("zhCN", {
   ["Click: its page, to switch it on."] = "点击：打开其页面以开启。",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Quests: right-click a quest in your log to abandon it; the game asks first."] = "任务：右键点击任务日志中的任务即可放弃；游戏会先确认。",
+  ["Chat: the Up and Down keys recall your sent lines on Forever too (Alt+Up stays the game's)."] = "聊天：上下方向键在 Forever 上也能调出你发送过的内容（Alt+上仍为游戏自带）。",
+  ["Orbiter: hovering a quest mark shows the quest's chain position and its rewards (money, reputation, items)."] = "Orbiter：悬停任务标记时显示其在任务链中的位置与奖励（金钱、声望、物品）。",
   ["Quests: the zone view no longer errors on quests that are new in Forever."] = "任务：区域视图不再在 Forever 新增任务上报错。",
   ["Core: no catalogue warning when a voice line starts or a quest reward loads."] = "Core：语音开始播放或任务奖励加载时不再出现目录警告。",
   ["Bastian's minimap shows the herbs, ore and creatures your tracking finds on its own styles too, and the game's tracking button is back in its tools row."] = "Bastian的小地图在自己的样式中也会显示追踪找到的草药、矿石和生物，游戏的追踪按钮回到了工具栏。",

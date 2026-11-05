@@ -59,7 +59,8 @@ def test_npc_quest_item_and_zone_pages_show_a_card(wow: WowRuntime):
     c = card(wow)
     assert c["name"] == "The Fargodeep Mine" and c["badge"] == "quest"
     assert c["status"] == "In the log, complete  0 yd"  # the distance to the hand-in (C1)
-    assert c["buttons"] == ["Track", "Wowhead", "Bookmark"]  # chains are a section, not an action
+    # chains are a section, not an action; Abandon (05.11.2026) opens the game's own confirmation
+    assert c["buttons"] == ["Track", "Abandon", "Wowhead", "Bookmark"]
     assert "Chain" in page_rows(wow, DS)
     assert "Status" not in page_rows(wow, DS)  # the one status row moved onto the band
     assert c["height"] > 52
@@ -89,7 +90,7 @@ def test_the_card_actions_run_and_follow_the_state(wow: WowRuntime):
     wow.execute(f"{BR}.Open('quest:176')")
     wow.execute(SIZE)
     buttons = card(wow)["buttons"]
-    assert buttons == ["Track", "Wowhead", "Bookmark"]
+    assert buttons == ["Track", "Abandon", "Wowhead", "Bookmark"]
     # Track runs the registered action: the quest is watched, the button turns into Untrack
     wow.execute(f"{DS}.buttons[1]:Click()")
     wow.run_frames(5)

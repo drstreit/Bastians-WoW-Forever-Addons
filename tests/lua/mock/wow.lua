@@ -1408,6 +1408,15 @@ function StaticPopup_Show(which, ...)
   Mock.popup = { which = which, ... }
 end
 function StaticPopup_Hide() end
+-- The player's Yes on the popup shown last: the Abandon Quest popups run Blizzard's accept
+-- (C_QuestLog.AbandonQuest); other popups are only dismissed.
+function Mock.AcceptPopup()
+  local p = Mock.popup
+  Mock.popup = nil
+  if p and (p.which == "ABANDON_QUEST" or p.which == "ABANDON_QUEST_WITH_ITEMS") then
+    C_QuestLog.AbandonQuest()
+  end
+end
 -- a duel, a trade, a group invite declined (Gestures' courtesy, plan-second-wave S7)
 Mock.declined = {}
 function CancelDuel()
@@ -2541,7 +2550,13 @@ C_Item.GetItemInfoInstant = function(idOrLink)
   local id = tonumber(idOrLink) or tonumber(string.match(tostring(idOrLink), "item:(%d+)"))
   local it = id and Mock.items[id]
   if it then
-    return id, "Tradeskill", "Cloth", it.equipLoc or "INVTYPE_NON_EQUIP", it.icon, it.classID or 7, it.subclassID or 0
+    return id,
+      "Tradeskill",
+      "Cloth",
+      it.equipLoc or "INVTYPE_NON_EQUIP",
+      it.icon,
+      it.classID or 7,
+      it.subclassID or 0
   end
 end
 -- which items can be worn (the Browser's portrait tries them on): Mock.equippable[itemID] = true
@@ -3084,6 +3099,34 @@ C_QuestLog.RemoveQuestWatch = function(id)
   table.remove(Mock.watched, i)
   Mock.Fire("QUEST_WATCH_LIST_CHANGED", id, false)
   return true
+end
+-- The abandon flow of the default quest log: SetSelectedQuest, SetAbandonQuest, the popup, whose
+-- Yes calls AbandonQuest (Compat.AbandonQuest; Mock.AcceptPopup() stands in for the player).
+Mock.abandonQuest = nil
+C_QuestLog.SetAbandonQuest = function()
+  Mock.abandonQuest = Mock.selectedQuest
+end
+C_QuestLog.GetAbandonQuest = function()
+  return Mock.abandonQuest
+end
+C_QuestLog.GetAbandonQuestItems = function()
+  return {}
+end
+C_QuestLog.AbandonQuest = function()
+  local id = Mock.abandonQuest
+  Mock.abandonQuest = nil
+  for i, e in ipairs(Mock.questLog) do
+    if e.questID == id then
+      table.remove(Mock.questLog, i)
+      break
+    end
+  end
+  local w = watchIndex(id)
+  if w then
+    table.remove(Mock.watched, w)
+  end
+  Mock.Fire("QUEST_REMOVED", id)
+  Mock.Fire("QUEST_LOG_UPDATE")
 end
 C_QuestLog.GetLogIndexForQuestID = function(id)
   for i, e in ipairs(Mock.questLog) do

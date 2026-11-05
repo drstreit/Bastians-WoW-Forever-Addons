@@ -23,6 +23,8 @@ Compat.CONTRACT = {
   GetQuestText = "questID -> details, objectives (strings, client language) or nil",
   GetWatchedQuestIDs = "-> array of questIDs on the objective tracker, possibly empty",
   SetQuestWatched = "questID, on -> bool (changed)",
+  AbandonQuest = "questID -> 'asked' | false ; opens the game's own Abandon Quest confirmation for a log"
+    .. " quest (its Yes abandons); false when the quest is not in the log or the client lacks the flow",
   GetPlayerFacts = "-> { level, raceID, classID, faction ('Alliance' | 'Horde' | 'Neutral'), class (the"
     .. " file token, 'WARRIOR'), race (the file token, 'Human'), health (0..1 or nil) }",
   IsInGroup = "-> bool (party or raid)",

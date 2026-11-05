@@ -22,7 +22,7 @@
 ## Notes-ptBR: Retrato dos preços de mercado gerado (carrega quando o Gold está ativado).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 1.5.1
+## Version: 1.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 
