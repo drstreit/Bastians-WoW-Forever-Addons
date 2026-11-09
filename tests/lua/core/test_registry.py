@@ -207,7 +207,8 @@ def test_search_merges_ranks_and_reports_progress(app: WowRuntime):
     assert app.g.emptyDone == 0
 
 
-def test_a_new_search_cancels_the_previous_one(app: WowRuntime):
+def test_a_search_belongs_to_its_caller(app: WowRuntime):
+    """Another caller's search leaves it alone; its own handle cancels it (06.11.2026)."""
     app.execute(
         NEW_MODULE % "Srch"
         + """
@@ -215,14 +216,16 @@ def test_a_new_search_cancels_the_previous_one(app: WowRuntime):
           for i = 1, 5 do yield() end
           return { { ref = "npc:1", label = q, score = 1 } }
         end })
-        first, second = {}, {}
+        first, second, third = {}, {}, {}
         Bastians:Search("one", {}, function(results, done) first[#first + 1] = done end)
         Bastians:Search("two", {}, function(results, done) second[#second + 1] = done end)
+        Bastians:Search("three", {}, function(results, done) third[#third + 1] = done end):Cancel()
         """
     )
     app.run_frames(30)
-    assert len(app.g.first) == 0
+    assert list(app.g.first.values())[-1] is True
     assert list(app.g.second.values())[-1] is True
+    assert len(app.g.third) == 0
 
 
 def test_services_pick_the_highest_priority_provider(app: WowRuntime):
@@ -583,3 +586,85 @@ def test_a_taken_or_bad_namespace_is_refused(app: WowRuntime):
         "{ ns = 'thief', facets = { { facet = 'gatherplus.score', rule = function() end } } }))"
     )
     assert "neither ours nor under thief" in str(err)
+
+
+def test_the_tile_facet_is_assembled_from_every_rule(app: WowRuntime):
+    """ADR 0056: a tile's facts come from the app that knows each. Every rule of the type answers;
+    a field a higher rule set stays, also `false` (no badge at all); the other facets still take
+    the first answer."""
+    app.execute(
+        NEW_MODULE % "Records"
+        + """
+        Bastians:RegisterFacet(m, { facet = "tile", types = { "quest", "npc" }, priority = 100,
+          rule = function(ref)
+            if ref == "npc:1" then return { line = "Innkeeper, Goldshire", badge = { text = "30" } } end
+            return { line = "Elwynn Forest", badge = { text = "7", level = 7 } }
+          end })
+        local state = Bastians:NewModule("State", { addon = "Bastians_TestApp" })
+        Bastians:RegisterFacet(state, { facet = "tile", types = { "quest" }, priority = 150,
+          invalidateOn = { "TEST_QUESTS" },
+          rule = function(ref)
+            if ref == "quest:9" then return nil end
+            return { line = "Marshal Dughan", mark = { text = step or "1/3" } }
+          end })
+        Bastians:RegisterFacet(state, { facet = "tile", types = { "npc" }, priority = 150,
+          rule = function() return { badge = false } end })
+        """
+    )
+    tile = app.eval("Bastians:Entity('quest:62'):Facet('tile')")
+    assert (tile.line, tile.mark.text) == ("Marshal Dughan", "1/3")  # the higher rule's words
+    assert (tile.badge.text, tile.badge.level) == ("7", 7)  # what it left open, from below
+    assert app.eval("Bastians:Entity('quest:9'):Facet('tile').line") == "Elwynn Forest"
+    assert app.eval("Bastians:Entity('npc:1'):Facet('tile').badge") is False
+    assert app.eval("Bastians:Entity('item:1'):Facet('tile')") is None
+    app.execute("held = Bastians:Entity('quest:62'); step = '2/3'; Bastians:Fire('TEST_QUESTS')")
+    assert app.eval("held:Facet('tile').mark.text") == "2/3"  # one rule's message, the whole tile
+    assert app.errors == []
+
+
+def test_stats_register_by_rail_and_build_through_the_guard(app: WowRuntime):
+    """ADR 0058, PH4: stat tiles are a Core registry. A host asks a rail entry's stats and builds
+    each through its owner's error guard; a figure nobody knows is nil, a build that answers nil
+    is no tile, and an owner switched off takes its tiles with it."""
+    watch_registry(app)
+    app.execute(
+        NEW_MODULE % "StatApp"
+        + """
+        Bastians:RegisterStat(m, { id = "test.b", rail = "gold", title = "B", order = 20,
+          build = function() return { value = nil, note = "nothing known" } end })
+        Bastians:RegisterStat(m, { id = "test.a", rail = "gold", title = "A", order = 10,
+          build = function() return { value = 7, ref = "npc:240" } end })
+        Bastians:RegisterStat(m, { id = "test.h", rail = "here", title = "H",
+          build = function() return nil end })
+        Bastians:RegisterStat(m, { id = "test.boom", rail = "gold", title = "Boom", order = 30,
+          build = function() error("boom") end })
+        statApp = m
+        """
+    )
+    assert [x.id for x in app.eval("Bastians:GetStats('gold')").values()] == [
+        "test.a",
+        "test.b",
+        "test.boom",
+    ]
+    assert [x.id for x in app.eval("Bastians:GetStats()").values()] == [
+        "test.a",
+        "test.b",
+        "test.boom",
+        "test.h",
+    ]
+    assert "stat:test.a:true" in events(app)
+    got = app.eval("Bastians:BuildStat(Bastians:GetStats('gold')[1])")
+    assert got.value == 7 and got.ref == "npc:240"
+    got = app.eval("Bastians:BuildStat(Bastians:GetStats('gold')[2])")
+    assert got.value is None and got.note == "nothing known"
+    assert app.eval("Bastians:BuildStat(Bastians:GetStats('here')[1])") is None  # no tile
+    assert (
+        app.eval("Bastians:BuildStat(Bastians:GetStats('gold')[3])") is None
+    )  # the error is guarded
+    assert (
+        app.eval("Bastians:UnregisterStat('test.b')") is True
+        and app.eval("Bastians:UnregisterStat('test.b')") is False
+    )
+    app.execute("statApp:Disable()")
+    assert app.eval("#Bastians:GetStats('gold')") == 0
+    assert "stat:test.a:false" in events(app)

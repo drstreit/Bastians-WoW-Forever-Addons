@@ -410,6 +410,7 @@ function W.Open(key, which)
     db().view = which
   end
   if win:IsShown() then
+    win:Show() -- to the front
     W.Render()
   else
     win:Show()

@@ -6,7 +6,7 @@ registry's rules, and the kind words of Data."""
 import re
 
 from harness import WowRuntime
-from pages import chip, chips, clear, menu, pick, pills
+from pages import chip, chips, clear, menu, near_by_default, pick, pills, scope
 
 CORE, DATA, QUESTS, GOLD, BROWSER = (
     "Bastians_Core",
@@ -47,13 +47,14 @@ def open_list(wow: WowRuntime, typ: str) -> None:
 
 def test_choices_are_remembered_per_list_and_fall_back_when_empty(wow: WowRuntime):
     boot(wow)
+    near_by_default(wow)  # the narrowing itself is what this test is about
     open_list(wow, "npc")
     chip(wow, "Quest giver")  # the Service dimension is chips since ADR 0038
     pick(wow, TREE, "where", "Continent")
     open_list(wow, "item")
     assert pills(wow, TREE)[0] == "Class: All"  # another list keeps its own choices
     open_list(wow, "npc")  # a new history entry: the remembered choices
-    assert pills(wow, TREE)[0] == "Where: Continent"
+    assert scope(wow) == "in Eastern Kingdoms"
     assert [c for c in chips(wow) if c[2]] == [("Quest giver", 2, True)]
     assert flat(wow) == ["Gryan Stoutmantle  20", "Marshal Dughan  10"]
     saved = wow.eval(f"{MOD}.db.profile.listFilters.npc")
@@ -125,6 +126,7 @@ def test_quests_sort_by_xp_and_reputation(wow: WowRuntime):
 
 def test_an_app_facet_is_a_pill_and_a_row_may_count_for_two_keys(wow: WowRuntime):
     boot(wow)
+    near_by_default(wow)  # the narrowing itself is what this test is about
     wow.execute(
         """
         local mod = Bastians:NewModule("FacetApp", { addon = "Bastians_TestApp" })
@@ -190,10 +192,32 @@ def test_a_dimension_whose_rows_share_one_key_shows_no_pill(wow: WowRuntime):
     """Retail objects have no kinds and retail quests no levels (measured on the retail packs,
     23.10.2026: "Kind: All" offered only "Other"). The fixture's one object is a quest object."""
     boot(wow)
+    near_by_default(wow)  # the narrowing itself is what this test is about
     open_list(wow, "object")
-    assert pills(wow, TREE) == ["Where: Here", "Sort: Name"]
+    assert scope(wow) == "in Elwynn Forest" and pills(wow, TREE) == ["Sort: Name"]
     # a remembered choice keeps its pill, so it can be cleared
     wow.execute(f"{MOD}.db.profile.listFilters.object = {{ picks = {{ kind = 'Quest object' }} }}")
     open_list(wow, "object")
     assert "Kind: Quest object" in pills(wow, TREE)
+    assert wow.errors == []
+
+
+def test_a_list_opens_on_everything_with_at_most_seven_filters(wow: WowRuntime):
+    """ "when I click on Dungeons it jumps automatically to a zone ...
+    max 7 filters. For dungeons a zone dropdown would make sense"."""
+    boot(wow)
+    for key in ("npc", "mob", "quest", "chain", "item", "object", "dungeon", "recipe", "zone"):
+        wow.execute(f"{BR}.List('{key}')")
+        wow.run_frames(20)
+        assert wow.eval(f"{BR}.ListEntry().near") is None, key  # the player's zone is not set
+        assert len(pills(wow, TREE)) <= 7, key
+    # the zones are a dropdown of names, in their order, and narrow the list
+    wow.execute(f"{BR}.List('npc')")
+    wow.run_frames(20)
+    assert "Zone: All" in pills(wow, TREE)
+    zones = menu(wow, TREE, "zone")
+    assert [z.rsplit("  ", 1)[0] for z in zones[1:3]] == ["Elwynn Forest", "Westfall"]
+    pick(wow, TREE, "zone", "Westfall")
+    wow.run_frames(5)
+    assert "Zone: Westfall" in pills(wow, TREE)
     assert wow.errors == []

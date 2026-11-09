@@ -26,6 +26,19 @@ Helpers.Model = Model
 -- The stacks to sell: grey (quality 0), with a vendor price (not `noValue`), not on the
 -- never-sell list. `priceOf(itemID)` is the unit vendor price or nil (unknown, sold anyway).
 -- Rows { bag, slot, itemID, count, value } (value nil when the price is unknown).
+-- A rare creature: its record's flags (a word or a list) hold "rare" or "rareelite" (A3.3).
+function Model.IsRare(flags)
+  if type(flags) == "string" then
+    return flags == "rare" or flags == "rareelite"
+  end
+  for _, flag in ipairs(type(flags) == "table" and flags or {}) do
+    if flag == "rare" or flag == "rareelite" then
+      return true
+    end
+  end
+  return false
+end
+
 function Model.Junk(slots, neverSell, priceOf)
   local out = {}
   for _, s in ipairs(slots or {}) do
@@ -194,9 +207,45 @@ function Model.CodLeft(mails)
   return n
 end
 
+-- The surname in a record's whole name, nil when it has none (`full`: "Name Surname").
+function Model.Surname(record)
+  local full, name = record and record.full, record and record.name
+  if type(full) ~= "string" or type(name) ~= "string" or #full <= #name + 1 then
+    return nil
+  end
+  return string.sub(full, 1, #name) == name and string.sub(full, #name + 2) or nil
+end
+
+-- The surname all the account's known characters share, nil when none is known or they differ.
+function Model.SharedSurname(characters)
+  local shared
+  for _, c in pairs(characters or {}) do
+    local surname = Model.Surname(c)
+    if surname and shared and surname ~= shared then
+      return nil
+    end
+    shared = surname or shared
+  end
+  return shared
+end
+
+-- What a mail to the account's character `record` is addressed to, nil for anyone else. Its own whole
+-- name once it has logged in; before that `surname`, Model.SharedSurname's. A guess: every character
+-- may have a surname of its own, so it is made only while all the known ones agree,
+-- and the character's login replaces it. The name stands in the To line for the player to see.
+function Model.MailName(record, surname)
+  if not (record and record.name) then
+    return nil
+  elseif record.full and record.full ~= record.name then
+    return record.full
+  end
+  return surname and (record.name .. " " .. surname) or record.full
+end
+
 -- The names for the mail's Send to column: this account's other characters of the realm and
 -- faction of `me` (by name), then the recent recipients not among them; `max` names at most.
-function Model.Recipients(characters, meKey, recent, max)
+-- `surname`: the one Model.MailName adds, so that a recent recipient written so is no second button.
+function Model.Recipients(characters, meKey, recent, max, surname)
   local me = characters and characters[meKey]
   local alts, seen = {}, {}
   for key, c in pairs(characters or {}) do
@@ -205,9 +254,24 @@ function Model.Recipients(characters, meKey, recent, max)
     end
   end
   table.sort(alts)
+  local whole = {} -- a recent recipient written in full is the alt already listed
+  for _, c in pairs(characters or {}) do
+    if c.full and c.name then
+      whole[string.lower(c.full)] = true
+    end
+    if surname and c.name then
+      whole[string.lower(c.name .. " " .. surname)] = true
+    end
+  end
   local out = {}
-  local function add(name)
-    if name and name ~= "" and not seen[string.lower(name)] and #out < (max or 10) then
+  local function add(name, isRecent)
+    if
+      name
+      and name ~= ""
+      and not seen[string.lower(name)]
+      and #out < (max or 10)
+      and not (isRecent and whole[string.lower(name)])
+    then
       seen[string.lower(name)] = true
       out[#out + 1] = name
     end
@@ -219,9 +283,35 @@ function Model.Recipients(characters, meKey, recent, max)
     add(name)
   end
   for _, name in ipairs(recent or {}) do
-    add(name)
+    add(name, true)
   end
   return out
+end
+
+-- The record of the account's character called `name` on the realm and faction of `me`, or nil.
+function Model.RecipientRecord(characters, meKey, name)
+  local me = characters and characters[meKey]
+  for _, c in pairs(characters or {}) do
+    if me and c.name == name and c.realm == me.realm and c.faction == me.faction then
+      return c
+    end
+  end
+  return nil
+end
+
+-- "Level 4 Mage, Stormwind City": what is known of a character, nil when nothing is.
+function Model.Describe(c, classWord)
+  if not c then
+    return nil
+  end
+  local who = classWord
+  if c.level then
+    who = L["Level"] .. " " .. c.level .. (classWord and (" " .. classWord) or "")
+  end
+  if who and c.zone then
+    return who .. ", " .. c.zone
+  end
+  return who or c.zone
 end
 
 -- `recent` with `name` in front, once, `max` long.

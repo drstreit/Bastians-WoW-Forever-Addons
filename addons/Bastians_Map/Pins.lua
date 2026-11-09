@@ -53,6 +53,9 @@ end
 function Pins.SetLayerOn(id, on)
   db().layers[id] = on and true or false
   Pins.Requery()
+  for _, fn in ipairs(Map.onLayerChanged) do
+    fn() -- the minimap overlay: no bus message says that a layer was switched
+  end
 end
 
 -- Ask every enabled layer for the pins of the current view, then draw.
@@ -317,6 +320,10 @@ local function onPinClick(frame, button)
     -- 22.10.2026: the quest sign must give the quest, with its rewards, text, chain, Route and Play)
     local ref = pinSubject(pin)
     B:Focus(ref, ctx)
+    if B.Entity.Parse(ref) == "quest" and B:GetAction("quests.sheet") then
+      B:RunAction("quests.sheet", ref, ctx) -- a quest opens its sheet (ADR 0053)
+      return
+    end
     local action = B:GetPrimaryAction(pin.ref, ctx)
     if action and action.id ~= "map.show" then
       B:RunAction(action.id, pin.ref, ctx)
@@ -415,7 +422,18 @@ end
 
 -- The map's words are dark in every style (the light theme text was hard
 -- to read on the maps); a text pin's ink token takes its map twin.
-local MAP_INK = { text = "mapText", dim = "mapTextDim", bright = "mapText" }
+local MAP_INK = {
+  text = "mapText",
+  dim = "mapTextDim",
+  bright = "mapText",
+  -- a zone's level band (A3.4): the difficulty colour's dark twin on the light rim (owner,
+  -- Forever 07.11.2026: "the font is white with yellow outline and hard to read")
+  diffRed = "mapDiffRed",
+  diffOrange = "mapDiffOrange",
+  diffYellow = "mapDiffYellow",
+  diffGreen = "mapDiffGreen",
+  diffGrey = "mapDiffGrey",
+}
 
 -- A light rim around them (, the Burning Steppes: "can we add a white rim
 -- around it - then we have both contrast covered?"): the game's outline is black only, so the words
@@ -747,6 +765,7 @@ function Pins.Render(cam)
       S.ink(fs, S.C[MAP_INK[ink] or ink] or S.C.mapText)
       fs:SetText(t.pin.label)
       fs.sub:SetText(t.pin.sub or "")
+      S.ink(fs.sub, S.C[MAP_INK[t.pin.subInk] or t.pin.subInk] or S.C.mapTextDim)
       fs.pin, fs.hit.pin = t.pin, t.pin
       placeText(fs, t.sx, t.sy)
       fs:Show()

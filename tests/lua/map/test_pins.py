@@ -267,8 +267,9 @@ def test_focus_highlights_a_visible_entity_and_path_pins_draw_lines(wow: WowRunt
     assert wow.errors == []
 
 
-def test_a_pin_with_one_quest_behind_it_opens_that_quest_in_the_browser(wow: WowRuntime):
-    """the quest sign must give the quest, not only the NPC."""
+def test_a_pin_with_one_quest_behind_it_opens_that_quests_sheet(wow: WowRuntime):
+    """the quest sign must give the quest, not only the NPC; since ADR 0053
+    on the quest sheet."""
     boot(wow, CORE, DATA, QUESTS, "Bastians_Browser", MAP)
     wow.execute(f"{PINS}.SetLayerOn('quests.soon', true)")  # Marshal Dughan: 76 waits for 62
     wow.execute(f"{MAP_}.Fly(0, 0, 0, 6)")
@@ -279,9 +280,37 @@ def test_a_pin_with_one_quest_behind_it_opens_that_quest_in_the_browser(wow: Wow
     )
     assert list(marshal.pin.quests.values()) == [76] and "Jasperlode" in marshal.pin.lines[1]
     marshal.GetScript(marshal, "OnClick")(marshal, "LeftButton")
-    browser = "Bastians:GetModule('Browser').Browser"
-    assert wow.eval(f"{browser}.Current().ref") == "quest:76"
-    assert wow.eval("BastiansBrowserFrame:IsShown()") is True
+    assert wow.eval("Bastians:Focused()") == "quest:76"
+    assert wow.eval("BastiansQuestSheet:IsShown()") is True
+    assert wow.errors == []
+
+
+def test_places_further_apart_than_the_view_open_at_the_nearest_group(wow: WowRuntime):
+    """Riverpaw Gnoll Bounty has two camps; the map opened on Goldshire,
+    their middle, and showed neither."""
+    boot(wow)
+    wow.slash("/bmap")
+    wow.execute(f"{MAP_}.clip:SetSize(600, 400); {MAP_}.ViewChanged()")
+    far = "{ { wx = 1000, wy = 1000 }, { wx = 1010, wy = 1000 }, { wx = -1000, wy = -1000 } }"
+    near = wow.eval(f"{MAP_}.FitWorld(0, {far}, 5)")
+    c = wow.eval(f"{MAP_}.Camera()")
+    player = wow.eval(f"{MAP_}.PlayerWorld()")
+    assert (near.wx, near.wy) == (-1000, -1000) or (near.wx, near.wy) == (1000, 1000)
+    assert (round(c.wx), round(c.wy)) != (0, 0)  # never the middle between them
+    assert player is not None
+    group, first = wow.eval(
+        f"(function() return {{ {MAP_}.NearestGroup({far}, 900, 900) }} end)()"
+    ).values()
+    assert len(list(group.values())) == 2 and (first.wx, first.wy) == (1000, 1000)
+    group, first = wow.eval(f"(function() return {{ {MAP_}.NearestGroup({far}) }} end)()").values()
+    assert (first.wx, first.wy) == (1000, 1000)  # no player here: the first place
+    # places that fit stay centred between them
+    assert (
+        wow.eval(f"{MAP_}.FitWorld(0, {{ {{ wx = 0, wy = 0 }}, {{ wx = 100, wy = 0 }} }}, 5)")
+        is None
+    )
+    c = wow.eval(f"{MAP_}.Camera()")
+    assert (round(c.wx), round(c.wy)) == (50, 0)
     assert wow.errors == []
 
 

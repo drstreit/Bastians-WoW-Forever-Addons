@@ -64,6 +64,10 @@ ns.L:Register("koKR", {
   ["Route by default"] = "기본 경로 방식",
   ["Switch to this kind of route; it stays the default."] = "이 경로 방식으로 전환하며, 기본값으로 유지됩니다.",
   ["Careful: level %d creatures"] = "주의: 레벨 %d 몬스터",
+  -- the route's verdict (catalog review A4.3, 07.11.2026)
+  ["Safe trip"] = "안전한 여정",
+  ["Watch out"] = "주의",
+  ["Risky trip"] = "위험한 여정",
   ["elite"] = "정예",
 
   -- Death.lua (R26.8)
@@ -112,6 +116,10 @@ ns.L:Register("koKR", {
   ["All flight masters"] = "모든 비행 조련사",
   ["Open the step list when a route starts"] = "경로가 시작되면 단계 목록 열기",
   ["Show an arrow to the next step while a route is active"] = "경로가 활성화된 동안 다음 단계를 가리키는 화살표 표시",
+  -- Flight.lua: the flight bar (catalog review A4.1, 07.11.2026)
+  ["Show a flight bar with the time left while flying"] = "비행 중 남은 시간을 보여주는 비행 막대 표시",
+  ["%s to %s"] = "%s에서 %s",
+  ["%s left"] = "%s 남음",
   ["Route here"] = "여기로 경로 만들기",
   ["Route to"] = "경로 목적지:",
   ["Open Bastian's Route"] = "Bastian's Route 열기",
@@ -150,4 +158,13 @@ ns.L:Register("koKR", {
 
   -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
   ["Next: %s"] = "다음: %s",
+  -- the /way command (ADR 0062, 08.11.2026)
+  ["/way: %s"] = "/way: %s",
+  ["New route"] = "새 경로",
+  ["Add to route"] = "경로에 추가",
+  ["Waypoints"] = "경유지",
+  ["What /way does while a route runs: start a new route, or add the place to the route."] = "경로 진행 중 /way의 동작: 새 경로를 시작하거나 그 장소를 경로에 추가합니다.",
+  ["Which addon answers /way: Bastian's Route, or the one that had it first."] = "/way에 응답할 애드온: Bastian's Route 또는 먼저 사용하던 애드온.",
+  ["No zone called %s."] = "%s(이)라는 지역이 없습니다.",
+  ["Several zones match %s: %s"] = "%s에 해당하는 지역이 여러 개입니다: %s",
 })

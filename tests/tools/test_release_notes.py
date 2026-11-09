@@ -44,7 +44,7 @@ def test_the_tracks_cover_every_shipped_folder_once():
         if p.is_dir() and p.name not in DEV_ONLY and (p / f"{p.name}.toc").is_file()
     }
     folders = {p.split("/", 1)[1] for p in suite + data if p.startswith("addons/")}
-    assert folders >= shipped - {"Bastians_Data_Nav"}  # the Nav pack has no generator yet
+    assert folders >= shipped
     assert not {p for p in suite if p.startswith("addons/")} & set(data)
     for p in rn.SUITE_PIPELINE:
         assert p in suite and f":(exclude){p}" in data

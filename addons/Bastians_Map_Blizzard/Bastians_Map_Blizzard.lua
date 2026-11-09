@@ -1,4 +1,4 @@
--- Bastian's Map: Blizzard: the game's zone paintings as one seamless map (ADR 0036). The cells, their
+-- Bastian's Map: Painted: the game's zone paintings as one seamless map (ADR 0036). The cells, their
 -- table and Blizzard's names are Generated/ (tools/map_blizzard.py, tools/map_style.py --emit); this
 -- file only tells the Map that the style's addon is present, so its settings can say when the
 -- generated part is missing. Order-independent like Map Art's.

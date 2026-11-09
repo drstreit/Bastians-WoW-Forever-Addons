@@ -1,14 +1,16 @@
-"""The Rumour mill (strategies-design.md section 7): per chapter the strongest strategies no page of
-the book tells yet, one line each, rebuilt from every export.
+"""The Rumour mill (ADR 0057): per chapter what the road is saying that no page of the book tells
+yet, a plain list, one line each, rebuilt from every export.
 
-The candidate report scores the strategies; the mill takes, per chapter of the book, the best
-`MILL_CAP` that no page rests on, that are not marked "low value" and that at least
-`MIN_CHANNELS` channels tell, and for each the claim that carries it best (verified first, then
-the most sources, a concrete number, the reach) among those inside the level cap: no level above
-it, no profession skill above what the cap allows (`SKILL_AT_CAP`). The line is
-AHSync's own sentence (a claim, never a quote), its stamp from the export's status and the
-sources, so the mill needs no prose and changes with every scan: a rumour that gains travellers
-climbs, one that a page now tells leaves, a strong one is the next page's candidate.
+The candidate report scores the strategies; the mill takes, per chapter of the book, those no page
+rests on, that are not marked "low value" and that at least `MIN_CHANNELS` channels tell, the most
+repeated first and among those the newest, at most `MILL_CAP`, and for each the claim that carries
+it best (the most sources, a concrete number, the reach) among those inside the level cap: no level
+above it, no profession skill above what the cap allows (`SKILL_AT_CAP`). The line is AHSync's own
+sentence (a claim, never a quote) and its source, so the mill needs no prose and changes with every
+scan: a rumour that gains travellers climbs, one that a page now tells leaves, one that ages leaves.
+Nothing here is judged: a rumour never leaves as wrong. A rumour earns a page by popularity, several
+independent channels and a place in its chapter's top five of the candidate report, and the owner
+approves it.
 
 Only fresh rumours: a claim a video last
 told more than `MILL_DAYS` days before the export's newest claim is left out, so the mill follows
@@ -62,12 +64,10 @@ def last_told(claim: dict) -> float | None:
 
 def best_claim(s: Strategy, cap: int = DEFAULT_CAP, since: float | None = None) -> dict | None:
     """The claim that carries a strategy best among those inside the cap (and told since `since`):
-    verified, the most sources, a number, the reach; the lowest id where nothing decides
-    (deterministic)."""
+    the most sources, a number, the reach; the lowest id where nothing decides (deterministic)."""
 
     def key(c: dict) -> tuple:
         return (
-            c.get("status") == "verified",
             len(c.get("sources") or []),
             bool(DIGIT.search(c.get("claim") or "")),
             int(c.get("reach") or 0),
@@ -80,6 +80,11 @@ def best_claim(s: Strategy, cap: int = DEFAULT_CAP, since: float | None = None) 
 
     inside = [c for c in s.claims if within_cap(c, cap) and fresh(c)]
     return max(inside, key=key) if inside else None
+
+
+def newest(s: Strategy) -> float:
+    """When a video last told any claim of the strategy, 0 when none says."""
+    return max((last_told(c) or 0 for c in s.claims), default=0)
 
 
 def add_mill(
@@ -103,7 +108,7 @@ def add_mill(
         if chapter not in chapters:
             continue
         rank = 0
-        for s in found[chapter]:
+        for s in sorted(found[chapter], key=lambda s: (-len(s.channels), -newest(s), s.title)):
             if rank >= cap:
                 break
             if s.page or s.low_value or len(s.channels) < MIN_CHANNELS:

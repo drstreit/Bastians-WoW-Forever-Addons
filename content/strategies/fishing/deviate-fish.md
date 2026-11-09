@@ -10,12 +10,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 4055025310103
-stamp = "true"
 why = "Our data puts twelve School of Deviate Fish spawns at three waters of the central Barrens, and the school gives the fish on 85 casts out of 100."
 
 [[rumours]]
 claim = 7709818406629
-stamp = "true"
 why = "For this fish the school is the only source in our loot tables."
 
 [plate]

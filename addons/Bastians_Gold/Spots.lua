@@ -12,12 +12,6 @@ local L = ns.L
 local Spots = {}
 ns.Spots = Spots
 
-local STATUS_COLOR = {
-  verified = S.C.good,
-  unverified = S.C.neutral,
-  refuted = S.C.bad,
-}
-
 local function data()
   return B:GetService("data")
 end
@@ -48,8 +42,9 @@ function Spots.GoldPerHour(s)
   for _, it in ipairs(s.items or {}) do
     local p = service and service:Price(it[1]) or nil
     local price = p and p.median or nil
-    if price then
-      total = total + price * (it[2] or 0)
+    local rate = it[2] -- per hour; a spot may name an item and not how much of it falls
+    if price and rate and rate > 0 then
+      total = total + price * rate
       known = known + 1
     else
       unknown = unknown + 1
@@ -74,21 +69,20 @@ function Spots.GoldPerHourText(s)
   return text
 end
 
--- "verified (3 channels, reach 12,000)" from the strategy behind a spot.
+-- "3 channels, reach 12,000" from the strategy behind a spot; nil where nothing is known.
 local function evidence(s)
   local st = s.strategy and strategy(s.strategy) or nil
-  local status = L[s.status or "unverified"]
   if not st then
-    return status
+    return nil
   end
-  local parts = { status }
+  local parts = {}
   if st.weight then
     parts[#parts + 1] = string.format(st.weight == 1 and L["%d channel"] or L["%d channels"], st.weight)
   end
   if st.reach then
     parts[#parts + 1] = string.format(L["reach %d"], st.reach)
   end
-  return table.concat(parts, ", ")
+  return #parts > 0 and table.concat(parts, ", ") or nil
 end
 
 -- ", 12 min": the travel time to a spot (W8), or "" when unknown.
@@ -99,7 +93,8 @@ end
 
 -- The grey words of a spot's row: the evidence and the travel time there, when known.
 function Spots.Words(s)
-  return evidence(s) .. Spots.Away(s)
+  local words, away = evidence(s), Spots.Away(s)
+  return words and (words .. away) or (string.gsub(away, "^, ", ""))
 end
 
 local function allSpots()
@@ -140,7 +135,11 @@ local function registerEntities(mod)
       if s.levelMin and s.levelMax then
         parts[#parts + 1] = L["level"] .. " " .. s.levelMin .. "-" .. s.levelMax
       end
-      parts[#parts + 1] = Spots.GoldPerHourText(s)
+      -- the rate only where one is known: the worth column says "gold/h unknown" already
+      --
+      if Spots.GoldPerHour(s) then
+        parts[#parts + 1] = Spots.GoldPerHourText(s)
+      end
       parts[#parts + 1] = evidence(s)
       return table.concat(parts, ", ")
     end,
@@ -168,7 +167,7 @@ local function registerEntities(mod)
       if not st then
         return nil
       end
-      local parts = { L[st.kind or "claim"], L[st.status or "unverified"] }
+      local parts = { L[st.kind or "claim"] }
       if st.weight then
         parts[#parts + 1] = string.format(st.weight == 1 and L["%d channel"] or L["%d channels"], st.weight)
       end
@@ -207,12 +206,11 @@ local function spotPins(view)
           wx = wx,
           wy = wy,
           icon = B.UI.IconTexture("spot"),
-          color = STATUS_COLOR[s.status] or STATUS_COLOR.unverified,
+          color = S.C.neutral,
           label = s.name .. (gph and (" (" .. B.UI.MoneyShort(gph) .. "/h)") or ""),
           priority = 55,
           cluster = true,
           radius = s.radius,
-          status = s.status,
           goldPerHour = gph,
         }
       end
@@ -239,6 +237,24 @@ local function spotRows(ref)
     value = gph,
     valueKind = gph and "money" or nil,
   }
+  -- your own figures beside the claim's (A5.6): the rate from 20 kills on, else how far you are
+  local own = ns.Farming and ns.Farming.Record(s.id)
+  if own and (own.kills or 0) > 0 then
+    local rate, why = ns.Farming.Rate(own)
+    local words
+    if rate then
+      words = string.format(L["%s, %d kills"], B.UI.Duration(own.seconds), own.kills)
+    elseif why == "kills" then
+      words = string.format(L["after %d kills; %d so far"], ns.Farming.MIN_KILLS, own.kills)
+    else
+      words = L["too little time yet"]
+    end
+    rows[#rows + 1] = {
+      text = L["Your rate here"] .. " (" .. words .. ")",
+      value = rate,
+      valueKind = rate and "money" or nil,
+    }
+  end
   local service = prices()
   for _, it in ipairs(s.items or {}) do
     local p = service and service:Price(it[1]) or nil
@@ -252,7 +268,10 @@ local function spotRows(ref)
   if s.levelMin and s.levelMax then
     rows[#rows + 1] = { text = L["Level"] .. " " .. s.levelMin .. "-" .. s.levelMax }
   end
-  rows[#rows + 1] = { text = L["Evidence"] .. ": " .. evidence(s), color = STATUS_COLOR[s.status] }
+  local told = evidence(s)
+  if told then
+    rows[#rows + 1] = { text = L["Evidence"] .. ": " .. told }
+  end
   local st = s.strategy and strategy(s.strategy) or nil
   if st then
     local when = st.lastSeen and type(date) == "function" and date("!%Y-%m-%d", st.lastSeen) or nil
@@ -307,7 +326,6 @@ function Spots.Activity(ref)
     gives = gph and { { kind = "copper", amount = gph, per = "hour" } } or {},
     unpriced = unknown,
     needs = { level = s.levelMin },
-    status = s.status,
     src = s.src,
   }
 end
@@ -318,6 +336,25 @@ local function spotRefs()
     out[#out + 1] = "spot:" .. tostring(s.id)
   end
   return out
+end
+
+-- The farm spots on a map, the richest first: { { s, gph }, ... } (the Here section, the
+-- stat tile and Gold's Overview).
+function Spots.HereList(map)
+  local list = {}
+  for _, s in ipairs(allSpots()) do
+    if s.map == map then
+      local gph = Spots.GoldPerHour(s)
+      list[#list + 1] = { s = s, gph = gph }
+    end
+  end
+  table.sort(list, function(a, b)
+    if (a.gph or -1) ~= (b.gph or -1) then
+      return (a.gph or -1) > (b.gph or -1)
+    end
+    return a.s.name < b.s.name
+  end)
+  return list
 end
 
 function Spots.Register(mod)
@@ -342,12 +379,14 @@ function Spots.Register(mod)
     id = "gold.strategy",
     title = L["Strategy"],
     types = { "spot" },
+    -- your own figures move with your kills (A5.6), coalesced by Farming
     order = 15,
-    invalidateOn = { "BASTIANS_PRICES_UPDATED" },
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_GOLD_FARMING" },
     build = spotRows,
   })
   B:RegisterDetailSection(mod, {
     id = "gold.farm",
+    chapter = "worth", -- on the sheet (ADR 0054)
     title = L["Where to farm"],
     types = { "item" },
     order = 26,
@@ -359,30 +398,17 @@ function Spots.Register(mod)
   -- "Best spot here" (the Here column, C4): the farm spots on the player's zone, the richest first
   B:RegisterDetailSection(mod, {
     id = "gold.here.spot",
-    title = L["Best spot here"],
+    title = L["Farm spots here"], -- Bastian's Gold; ~~"Best spot here"~~ said neither (06.11.2026)
     types = { "zone" },
     order = 98,
     here = { order = 4, limit = 3, only = true },
     invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_GRAPH_TIMES" },
     build = function(ref)
       local _, map = B.Entity.Parse(ref)
-      map = tonumber(map)
-      local list = {}
-      for _, s in ipairs(allSpots()) do
-        if s.map == map then
-          local gph = Spots.GoldPerHour(s)
-          list[#list + 1] = { s = s, gph = gph }
-        end
-      end
+      local list = Spots.HereList(tonumber(map))
       if #list == 0 then
         return nil
       end
-      table.sort(list, function(a, b)
-        if (a.gph or -1) ~= (b.gph or -1) then
-          return (a.gph or -1) > (b.gph or -1)
-        end
-        return a.s.name < b.s.name
-      end)
       local rows = {}
       for _, it in ipairs(list) do
         rows[#rows + 1] = {
@@ -444,6 +470,7 @@ function Spots.Register(mod)
   })
   B:RegisterAction(mod, {
     id = "gold.farm",
+    main = true, -- a button of the sheet (ADR 0054)
     label = L["Where to farm"],
     icon = B.UI.IconTexture("spot"),
     types = { "item" },
@@ -461,6 +488,7 @@ function Spots.Register(mod)
   })
   B:RegisterAction(mod, {
     id = "gold.prices",
+    main = true, -- a button of the sheet (ADR 0054)
     label = L["Prices"],
     icon = B.UI.IconTexture("gold"),
     types = { "item" },

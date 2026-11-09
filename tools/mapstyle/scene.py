@@ -15,8 +15,15 @@ from pathlib import Path
 
 import numpy as np
 
+from .draw import grow, shrink
+
 TILE_YARDS = 1600.0 / 3
 ORIGIN = 32 * TILE_YARDS
+DOODAD = np.dtype(
+    [("fdid", "<u4")]
+    + [(f, "<f4") for f in ("wx", "wy", "wz", "scale", "heading", "radius", "height")]
+)
+WMO = np.dtype([("fdid", "<u4"), ("wx", "<f4"), ("wy", "<f4"), ("wz", "<f4")])
 
 
 @dataclass
@@ -72,16 +79,11 @@ def read_tile(path: Path) -> Tile:
         textures[fdid] = take("u1", count).reshape(n, n)
     (k,) = struct.unpack_from("<i", raw, pos)
     pos += 4
-    rec = np.dtype(
-        [("fdid", "<u4")]
-        + [(f, "<f4") for f in ("wx", "wy", "wz", "scale", "heading", "radius", "height")]
-    )
-    doodads = np.frombuffer(raw, dtype=rec, count=k, offset=pos)
+    doodads = np.frombuffer(raw, dtype=DOODAD, count=k, offset=pos)
     pos += doodads.nbytes
     (k,) = struct.unpack_from("<i", raw, pos)
     pos += 4
-    wrec = np.dtype([("fdid", "<u4"), ("wx", "<f4"), ("wy", "<f4"), ("wz", "<f4")])
-    wmos = np.frombuffer(raw, dtype=wrec, count=k, offset=pos)
+    wmos = np.frombuffer(raw, dtype=WMO, count=k, offset=pos)
     return Tile(
         x,
         y,
@@ -121,7 +123,8 @@ class Region:
     textures: dict[int, np.ndarray]
     doodads: np.ndarray
     wmos: np.ndarray
-    present: np.ndarray  # bool: the pixel lies in a tile the map has (the rest is open sea)
+    # bool: the pixel lies in a tile the map has and is no empty hole (the rest is open sea)
+    present: np.ndarray
     tiles: list[tuple[int, int]] = field(default_factory=list)
     top: int = 0  # pixel offsets of a cropped region inside its tiles
     left: int = 0
@@ -178,15 +181,31 @@ class Region:
         return row, col
 
 
-def read_region(folder: Path, x0: int, y0: int, x1: int, y1: int) -> Region:
+def empty_holes(
+    ground: np.ndarray, building: np.ndarray, obj: np.ndarray, liquid: np.ndarray, n: int
+) -> np.ndarray:
+    """The terrain holes with nothing in them (no WMO, no model, no liquid): open sea, not land.
+    Zephras Isle floats inside tiles that are holes all around it, which were drawn as blocks of
+    land (06.11.2026). A spot narrower than a chunk (n / 16 pixels) stays land and takes its
+    neighbours' height; an inlet of a wide hole up to a chunk deep stays sea."""
+    void = np.isnan(ground) & np.isnan(building) & np.isnan(obj) & (liquid == 0)
+    if not void.any():
+        return void
+    r = max(1, n // 32)
+    return void & grow(shrink(void, r), 2 * r)
+
+
+def read_region(folder: Path, x0: int, y0: int, x1: int, y1: int, n: int | None = None) -> Region:
+    """The tiles x0..x1, y0..y1 joined. `n` (a tile's pixels) allows a range without any tile: open
+    sea; without it such a range is an error."""
     tiles = {}
     for path in sorted(folder.glob("*.bmd.gz")):
         tx, ty = (int(v) for v in path.name.split(".")[0].split("_"))
         if x0 <= tx <= x1 and y0 <= ty <= y1:
             tiles[(tx, ty)] = read_tile(path)
-    if not tiles:
+    if not tiles and n is None:
         raise ValueError(f"{folder}: no tiles in {x0},{y0} to {x1},{y1}")
-    n = next(iter(tiles.values())).n
+    n = next(iter(tiles.values())).n if tiles else n
     cols, rows = x1 - x0 + 1, y1 - y0 + 1
     h, w = rows * n, cols * n
 
@@ -199,7 +218,7 @@ def read_region(folder: Path, x0: int, y0: int, x1: int, y1: int) -> Region:
     liquid, indoor = blank("u2", 0), blank("u1", 0)
     present = blank("bool", False)
     textures: dict[int, np.ndarray] = {}
-    doodads, wmos = [], []
+    doodads, wmos = [np.zeros(0, DOODAD)], [np.zeros(0, WMO)]
     for (tx, ty), t in sorted(tiles.items()):
         sl = (slice((ty - y0) * n, (ty - y0 + 1) * n), slice((tx - x0) * n, (tx - x0 + 1) * n))
         ground[sl], surface[sl], building[sl], obj[sl] = t.ground, t.surface, t.building, t.object
@@ -211,6 +230,7 @@ def read_region(folder: Path, x0: int, y0: int, x1: int, y1: int) -> Region:
             textures[fdid][sl] = wgt
         doodads.append(t.doodads)
         wmos.append(t.wmos)
+    present &= ~empty_holes(ground, building, obj, liquid, n)
     return Region(
         x0,
         y0,

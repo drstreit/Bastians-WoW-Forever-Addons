@@ -12,7 +12,6 @@ claim = 42874223405474
 
 [[rumours]]
 claim = 62193561901284
-stamp = "true"
 why = "The item data gives Strange Dust, Soul Dust and the magic and astral essences no vendor price at all."
 
 [[rumours]]
@@ -20,7 +19,6 @@ claim = 100473203036696
 
 [[rumours]]
 claim = 50080275532256
-stamp = "half"
 why = "The black market is in Powderfuse Port in the Riverglades, as the same video says a sentence later. The 24 hours we could not check."
 
 [plate]

@@ -68,8 +68,8 @@ def test_an_area_page_has_the_zones_blocks_for_what_stands_in_it(wow: WowRuntime
     monsters = texts(area["data.monsters"].rows.values())
     assert monsters == ["Goldtooth  8"]  # Hogger stands outside the lake
     assert "Hogger  11" in texts(zone["data.monsters"].rows.values())
-    places = texts(area["data.places"].rows.values())
-    assert any(t.startswith("Innkeeper Farley") for t in places)
+    people = texts(area["data.people"].rows.values())
+    assert any(t.startswith("Innkeeper Farley") for t in people)
     assert "data.areas" not in area  # an area lists no subzones of its own
     quests = [k for k in area if k.startswith("quests.zone.")]
     assert quests, list(area)  # the zone's quest blocks, narrowed
@@ -88,4 +88,60 @@ def test_the_area_shows_its_cut_of_the_zone(wow: WowRuntime):
     # the mock has map art for Elwynn only when its tiles are set; without art no plate
     has_art = wow.eval("Bastians.Coords.MapArt(1429) ~= nil")
     assert (width == 96) is has_art
+    assert wow.errors == []
+
+
+def test_a_zones_people_stand_by_what_they_do(wow: WowRuntime):
+    """ADR 0054, the sheet's People chapter: everyone in the zone who is not a monster, by what
+    they do; the inn as its own row, the groups folded with their count; no monster among them.
+    The gathering nodes are a block of the Places chapter (the fixture zone has none)."""
+    boot(wow)
+    zone = sections(wow, "zone:1429")
+    rows = list(zone["data.people"].rows.values())
+    heads = [strip(r.text) for r in rows]
+    assert heads == [
+        "Innkeeper Farley  Innkeeper",
+        "Quest givers  1",
+        "Vendors  1",
+        "Trainers  1",
+        "Auction house  1",
+    ]
+    givers = rows[1]
+    assert givers.collapsed is True
+    assert [(c.ref, strip(c.text)) for c in givers.children.values()] == [
+        ("npc:240", "Marshal Dughan  Marshal")
+    ]
+    everyone = [c.ref for r in rows for c in (r.children.values() if r.children else [r])]
+    assert "npc:448" not in everyone and "npc:295" in everyone  # Hogger is a monster
+    assert zone["data.people"]["def"].chapter == "people"
+    assert "data.places" not in zone and "data.gathering" not in zone
+    assert wow.errors == []
+
+
+def test_a_person_a_zone_and_a_dungeon_say_a_lead_sentence(wow: WowRuntime):
+    """ADR 0054: the sheet's lead from the record alone. A person says what they are, where they
+    stand and what they do; a zone its quest levels; a monster and a quest keep their summary."""
+    boot(wow)
+
+    def lead(ref: str):
+        return wow.eval(f"Bastians:Entity('{ref}'):Lead()")
+
+    assert lead("npc:240") == "Marshal in Elwynn Forest. Starts 2 quests."
+    assert lead("npc:295") == "Innkeeper in Elwynn Forest."
+    assert (
+        lead("zone:1429") == "Quests from level 7 to 11. Eastern Kingdoms. Fishing from skill 25."
+    )
+    assert lead("npc:448") is None and lead("quest:62") is None and lead("zone:1453") is None
+    assert wow.eval("Bastians:Entity('npc:448'):Summary()") == "Level 11, elite, Elwynn Forest"
+    # a vendor and a trainer count what they offer, one or many
+    wow.execute(
+        """
+        local d = Bastians:GetService('data')
+        KEEP = { d:Get('npc', 54), d:Get('npc', 198) }
+        KEEP[1].vendor, KEEP[2].trainer = { { 1 } }, { { 1 }, { 2 }, { 3 } }
+        Bastians:InvalidateEntities('npc')
+        """
+    )
+    assert lead("npc:54").endswith("Sells one item.")
+    assert lead("npc:198").endswith("Teaches 3 skills.")
     assert wow.errors == []

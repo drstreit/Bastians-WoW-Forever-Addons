@@ -37,7 +37,9 @@ def test_a_theme_switch_writes_into_the_same_tables_and_recolours(core: WowRunti
         """
     )
     teal_accent = rgb(core, "kept")
-    assert core.eval(f"{S}.H.muted") == "|cff858585"  # readable on the panel (H2)
+    assert (
+        core.eval(f"{S}.H.muted") == "|cff888888"
+    )  # readable on the panel and on a tile over it (H2, PA7)
     core.execute(f"{S}.ApplyTheme('parchment')")
     assert core.eval(f"{S}.ThemeId()") == "parchment"
     assert rgb(core, "kept") != teal_accent  # the kept reference follows the theme
@@ -46,7 +48,7 @@ def test_a_theme_switch_writes_into_the_same_tables_and_recolours(core: WowRunti
     assert [round(v, 3) for v in (r, g, b)] == rgb(core, f"{S}.C.panel")
     r, g, b, _ = core.eval("label:GetTextColor()")
     assert [round(v, 3) for v in (r, g, b)] == rgb(core, f"{S}.C.text")
-    assert core.eval(f"{S}.H.muted") != "|cff858585"  # the text codes follow too
+    assert core.eval(f"{S}.H.muted") != "|cff888888"  # the text codes follow too
     assert core.eval(f"{S}.SHAPE.radius") == 6
     core.execute(f"{S}.ApplyTheme('nonsense')")  # unknown: the first theme
     assert core.eval(f"{S}.ThemeId()") == "teal" and rgb(core, "kept") == teal_accent
@@ -123,3 +125,27 @@ def test_the_guard_sees_what_it_should():
     assert all(any(p.search(s) for p in RAW) for s in samples)
     clean = ["S.tint(t, S.C.grid)", "text = S.H.muted .. x", "local spots = { 1, 2 }"]
     assert not any(any(p.search(s) for p in RAW) for s in clean)
+
+
+def test_a_badge_reads_on_every_ground_in_every_theme(core: WowRuntime):
+    """ADR 0056, "readable by rule": the words on a badge are the dark or the light badge ink,
+    whichever stands out more, and reach 4.5 to 1 on every colour a badge is filled with, in
+    every theme and on the paper palette."""
+    grounds = ["diffRed", "diffOrange", "diffYellow", "diffGreen", "diffGrey", "rare", "svcQuest"]
+    grounds += ["accent", "good", "bad", "warn", "typeChain"]
+    assert round(core.eval(f"{S}.Contrast({{ 0, 0, 0 }}, {{ 1, 1, 1 }})"), 1) == 21.0
+    assert core.eval(f"{S}.Contrast({{ 1, 1, 1 }}, {{ 1, 1, 1 }})") == 1.0
+    themes = [t.id for t in core.eval(f"{S}.Themes()").values()]
+    for theme in themes:
+        core.execute(f"{S}.ApplyTheme('{theme}')")
+        for token in grounds:
+            ratio = core.eval(f"{S}.Contrast({S}.InkOn({S}.C.{token}), {S}.C.{token})")
+            assert ratio >= 4.5, (theme, token, ratio)
+    core.execute(f"{S}.ApplyTheme('teal')")
+    for token in grounds:
+        ratio = core.eval(
+            f"{S}.WithPalette({S}.Palette('parchment'), function() "
+            f"return {S}.Contrast({S}.InkOn({S}.C.{token}), {S}.C.{token}) end)"
+        )
+        assert ratio >= 4.5, ("paper", token, ratio)
+    assert core.errors == []

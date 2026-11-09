@@ -105,7 +105,8 @@ def place_labels(
     return kept
 
 
-CONTINENT_DIRS = {"Azeroth": 0, "Kalimdor": 1}  # mapdata's folders -> Map.db2 ids
+# mapdata's folders -> Map.db2 ids; Zephras Isle's Map.db2 directory is its id
+CONTINENT_DIRS = {"Azeroth": 0, "Kalimdor": 1, "2991": 2991}
 
 
 def _num(v: float) -> str:

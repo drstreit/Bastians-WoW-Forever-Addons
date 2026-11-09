@@ -38,7 +38,7 @@ def test_vendor_section_shows_unit_prices_and_stacks(wow: WowRuntime):
     assert strip(rows[0].text) == "Blood Saber (limited)" and rows[0].value == 1000
     assert strip(rows[1].text) == "Linen Cloth x20" and rows[1].ref == "item:2589"
     assert (rows[1].value, rows[1].valueKind, rows[1].note) == (13, "money", None)  # 260 / 20
-    assert wow.eval("Bastians:Entity('npc:54'):Summary()") == "Level 15, Elwynn Forest"
+    assert wow.eval("Bastians:Entity('npc:54'):Summary()") == "Level 15, Weaponsmith, Elwynn Forest"
 
 
 def test_trainer_section(wow: WowRuntime):
@@ -76,7 +76,7 @@ def test_loot_and_item_sources_point_at_each_other(wow: WowRuntime):
         and rows[-1].valueKind == "money"
     )
     tips = [strip(r.text) for r in wow.eval("Bastians:GetTooltipRows('item:2589')").values()]
-    assert tips == ["Hogger", "Goldtooth", "Right click: open in the Browser"]  # capped at 2 + hint
+    assert tips == ["Hogger", "Goldtooth"]  # capped at 2; the Browser's hint names a key, none set
     assert wow.eval("Bastians:Entity('item:2589'):Summary()") == "Item level 5"
 
 

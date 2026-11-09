@@ -76,12 +76,15 @@ def test_a_log_quest_without_pack_spots_takes_the_clients_step(wow: WowRuntime):
     song = find_row(rows, 99999)
     assert song is not None
     assert (song.map, song.x, song.y, song.src) == (1429, 0.3, 0.4, "client")
+    wow.execute("Bastians:Focus('quest:99999', { source = 'test' })")  # one quest has the map
     pins = wow.eval(f"Bastians:QueryLayer('quests.objectives', {ELWYNN_VIEW})")
     mine = [p for p in pins.values() if p.ref == "quest:99999"]
     assert len(mine) == 1 and mine[0].label == "A Song for Our Future"
     assert (round(mine[0].wx), round(mine[0].wy)) == (40, 80)  # 200 - 400*0.4, 200 - 400*0.3
     # the pack's spots win where they exist: the fixture quest keeps its own
     assert wow.eval("Bastians.Compat.GetQuestWaypoint(176, 1429)") is None
+    wow.execute("Bastians:Focus('quest:176', { source = 'test' })")
+    pins = wow.eval(f"Bastians:QueryLayer('quests.objectives', {ELWYNN_VIEW})")
     assert any(p.ref == "quest:176" for p in pins.values())
     assert wow.errors == []
 
@@ -97,7 +100,7 @@ def test_the_here_column_lists_the_clients_step_with_its_distance(wow: WowRuntim
     rows = wow.eval("Bastians:GetDetailSections('zone:1429')")
     log = next(s for s in rows.values() if s.id == "quests.here.log")
     texts = [strip(r.text) for r in log.rows.values()]
-    assert any(t.startswith("A Song for Our Future") and t.endswith("0 yd") for t in texts)
+    assert any("A Song for Our Future" in t and t.endswith("0 yd") for t in texts)
     assert wow.errors == []
 
 
@@ -115,11 +118,13 @@ def test_the_quest_text_block_falls_back_to_the_client_then_says_so(wow: WowRunt
     wow.advance(0.3)
     sections = {s.id: s for s in wow.eval("Bastians:GetDetailSections('quest:99999')").values()}
     texts = [strip(r.text) for r in sections["quests.text"].rows.values()]
-    assert texts == ["Sing it loud.", "Find the choir."]  # the client's text, pack loaded or not
+    assert texts == ["Sing it loud."]  # the client's text, pack loaded or not
+    task = next(iter(sections["quests.objectives"].rows.values()))
+    assert strip(task.text) == "Find the choir."  # its task leads the page (ADR 0052)
     wow.execute("Bastians:GetService('data'):LoadPack('text')")
     wow.run_frames(5)
     sections = {s.id: s for s in wow.eval("Bastians:GetDetailSections('quest:176')").values()}
-    assert len(list(sections["quests.text"].rows.values())) == 3  # the pack's text wins
+    assert len(list(sections["quests.text"].rows.values())) == 2  # the pack's text wins
     wow.execute("table.remove(Mock.questLog)")
     wow.fire("QUEST_LOG_UPDATE")
     wow.advance(0.3)

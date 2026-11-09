@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("zhTW", {
+  ["%s is forgotten. Logging in with that character records it again."] = "已忘記 %s。用該角色登入後會重新記錄。",
+  ["Forget %s? Use the action again within 5 seconds."] = "忘記 %s？請在 5 秒內再次執行。",
+  ["Forget this character"] = "忘記此角色",
   ["Alts"] = "分身",
   ["Characters"] = "角色",
   ["Your characters"] = "你的角色",
@@ -12,6 +15,32 @@ ns.L:Register("zhTW", {
   ["You have it"] = "你擁有",
   ["you"] = "你",
   ["Known by: %s"] = "已學會：%s",
+  -- Runs.lua, dungeon runs and lockouts (catalog review A2.5, 07.11.2026)
+  ["Your runs"] = "你的副本紀錄",
+  ["%s: one run"] = "%s：1次",
+  ["%s: %d runs"] = "%s：%d次",
+  ["last %s"] = "最近%s",
+  ["locked, resets in %s"] = "已鎖定，%s後重置",
+  ["No run recorded yet."] = "尚無副本紀錄。",
+  ["Dungeon runs"] = "副本次數",
+  -- Train.lua, the trainer view (catalog review A5.7, 07.11.2026)
+  ["Trainer"] = "訓練師",
+  ["what your class trainers teach you next"] = "你的職業訓練師接下來教你什麼",
+  ["Learn now"] = "現在可學",
+  ["Later"] = "以後",
+  ["at %s, %s"] = "在%s，%s",
+  ["at %s"] = "在%s",
+  ["You know every spell for your level."] = "你已掌握目前等級的所有法術。",
+  ["Nothing to learn now; %d at later levels"] = "現在沒有可學的；之後等級有%d個",
+  ["%d spells to learn now for %s; %d at later levels"] = "現在可學%d個法術，花費%s；之後等級有%d個",
+  ["; %d unknown whether known"] = "；%d個不知是否已學",
+  ["The trainer view needs Bastian's Data."] = "訓練師檢視需要 Bastian's Data。",
+  -- the gold goals (catalog review A5.5, 07.11.2026)
+  ["Next training"] = "下次訓練",
+  ["Training at level %d"] = "%d級訓練",
+  ["Riding at level %d"] = "%d級騎術",
+  ["A mount at level %d"] = "%d級坐騎",
+  ["Spell"] = "法術",
   ["Owned"] = "擁有",
   ["You"] = "你",
   ["Nobody"] = "無人",
@@ -77,4 +106,7 @@ ns.L:Register("zhTW", {
   ["Click a line: its page. Right click: its entity menu."] = "點擊一列：其頁面。右鍵點擊：其條目選單。",
   ["Click: your characters' window. Right click: its settings."] = "點擊：角色視窗。右鍵點擊：設定。",
   ["Item"] = "物品",
+  -- Alts.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Gold on all"] = "所有角色的金幣",
+  ["Highest level"] = "最高等級",
 })

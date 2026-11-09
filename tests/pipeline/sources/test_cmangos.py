@@ -73,6 +73,8 @@ def test_table_counts(tables):
         "item_template": 9,
         "spell_template": 28,
         "disenchant_loot_template": 4,  # lists 1 and 21 (31.10.2026)
+        "creature_spawn_entry": 0,  # the fixture has none: test_a_spawn_of_id_0_takes_its_entries
+        "gameobject_spawn_entry": 0,
     }
 
 
@@ -117,6 +119,32 @@ def test_creature_templates_and_escaped_apostrophe(tables):
     assert npcs[240]["Name"] == "Marshal Dughan" and npcs[240]["NpcFlags"] == 3
     assert npcs[268]["Name"] == "Sirra Von'Indi"
     assert npcs[54]["SubName"] == "Weaponsmith"
+
+
+def test_npc_flags_are_the_classic_bits_not_the_retail_family(tables):
+    """Stormwind's auctioneers showed as repairers and its stable masters as flight masters
+    (Forever, 05.11.2026): the dump's NpcFlags are the Classic 1.12 bits and were read with the
+    retail table. The values are the dump's own (ClassicDB z2815)."""
+    assert cmangos.npc_services(4096) == ["auctioneer"]  # Auctioneer Chilton, Fitch, Jaxon
+    assert cmangos.npc_services(8193) == ["stablemaster"]  # Sylista, Jenova Stoneshield
+    assert cmangos.npc_services(11) == ["questgiver", "flightmaster"]  # Dungar Longdrink
+    assert cmangos.npc_services(135) == ["questgiver", "vendor", "innkeeper"]  # Innkeeper Allison
+    assert cmangos.npc_services(257) == ["banker"]  # Olivia Burnside
+    assert cmangos.npc_services(2049) == ["battlemaster"]
+    assert cmangos.npc_services(19) == ["questgiver", "trainer"]
+    # every Classic service bit has one flag, and none of the retail family's high bits is read
+    assert cmangos.npc_services(0x7FFF) == list(cmangos.NPC_FLAGS.values())
+    assert sorted(cmangos.NPC_FLAGS) == [2, 4, 8, 16, 128, 256, 2048, 4096, 8192, 16384]
+    assert cmangos.npc_services(65536 | 131072 | 1048576 | 2097152 | 4194304) == []
+    # gossip, spirit healer and guide, petitioner, tabard designer: no service flag; unknown: none
+    assert cmangos.npc_services(1 | 32 | 64 | 512 | 1024) == []
+    assert cmangos.npc_services(None) == [] and cmangos.npc_services(0) == []
+    # the fixture's rows: Corina Steele sells and repairs (4 + 16384), the mage trainer trains
+    npcs = {r["Entry"]: r for r in tables["creature_template"]}
+    assert npcs[54]["NpcFlags"] == 16388
+    assert cmangos.npc_services(npcs[54]["NpcFlags"]) == ["vendor", "repair"]
+    assert cmangos.npc_services(npcs[198]["NpcFlags"]) == ["questgiver", "trainer"]
+    assert cmangos.npc_services(npcs[448]["NpcFlags"]) == []  # Hogger serves nobody
 
 
 def test_spawns(tables):
@@ -228,3 +256,19 @@ def test_quest_rewards_carry_reputation_spell_and_the_xp_of_the_max_level_money(
     assert c.reward_rep == () and c.reward_spell == 13563
     assert quest_xp(102) == 170 and quest_xp(525) == 875 and quest_xp(288) == 480
     assert quest_xp(0) is None and quest_xp(None) is None
+
+
+def test_a_spawn_of_id_0_takes_its_entries():
+    place = {"map": 0, "position_x": 1.0, "position_y": 2.0, "position_z": 3.0}
+    rows = cmangos.spawn_rows(
+        {
+            "creature": [{"guid": 7, "id": 0, **place}, {"guid": 8, "id": 46, **place}],
+            "creature_spawn_entry": [{"guid": 7, "entry": 97}, {"guid": 7, "entry": 98}],
+            "gameobject": [{"guid": 9, "id": 0, **place}],
+        }
+    )
+    assert [(r.kind, r.guid, r.entry) for r in rows] == [
+        ("creature", 7, 97),
+        ("creature", 7, 98),
+        ("creature", 8, 46),
+    ]  # the object has no entry row: it stays out, as an id of 0 did

@@ -81,3 +81,44 @@ def test_heavy_paths_stay_within_mock_budgets(wow: WowRuntime):
     stats = wow.eval("Bastians.Perf.modules")
     assert "Map" in stats and stats.Map.calls > 0  # the meter saw the work
     assert wow.errors == []
+
+
+def test_a_list_of_1500_tiles_scrolls_on_a_few_frames(wow: WowRuntime):
+    """ADR 0056, PA2: "1,500 rows scroll without a hitch". The list is virtual: a tile exists
+    only for the rows in view, a scroll step re-uses them, and the tiles' facts (the facet
+    `tile`) are asked for those rows alone. The times are generous mock limits."""
+    wow.start("Bastians_Core", "Bastians_Data", "Bastians_Quests", "Bastians_Browser")
+    wow.run_frames(10)
+    wow.advance(0.3)
+    tree = "Bastians:GetModule('Browser').tree"
+    wow.slash("/bb npcs")
+    wow.run_frames(10)
+    wow.execute(
+        f"""
+        local refs = {{ "npc:240", "quest:62", "item:2589", "zone:1429", "npc:448", "quest:76", "npc:295" }}
+        PERF_ROWS = {{}}
+        for i = 1, 1500 do
+          PERF_ROWS[i] = {{ id = "perf:" .. i, ref = refs[(i - 1) % #refs + 1], text = "Row " .. i }}
+        end
+        {tree}.scroll:SetSize(440, 700)
+        """
+    )
+    t0 = time.perf_counter()
+    wow.execute(f"{tree}:SetRows(PERF_ROWS)")
+    wow.run_frames(2)
+    assert time.perf_counter() - t0 < 0.5, "1,500 tiles took too long to set"
+    assert wow.eval(f"#{tree}.flat") == 1500
+    assert wow.eval(f"{tree}.pool[1].tile") is True  # they are tiles
+    frames = wow.eval("#Mock.frames")
+    worst = 0.0
+    for step in range(1, 120):  # top to bottom, a screen at a time
+        t0 = time.perf_counter()
+        wow.execute(f"{tree}:ScrollTo({step * 700})")
+        wow.run_frames(1)
+        worst = max(worst, time.perf_counter() - t0)
+    assert worst < 0.25, f"a scroll step of the tile list took {worst * 1000:.0f} ms on the mock"
+    # 700 units hold thirteen tiles of 56: the pool is the view, not the list
+    assert wow.eval(f"#{tree}.pool") <= 20
+    # scrolling made a handful of frames at most (a tile's badge, mark and edge on first use)
+    assert wow.eval("#Mock.frames") - frames < 60
+    assert wow.errors == []

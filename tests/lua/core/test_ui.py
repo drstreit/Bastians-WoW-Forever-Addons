@@ -162,6 +162,12 @@ def test_windows_dock_side_by_side_and_remember_it(core: WowRuntime):
     assert core.eval("({ follow.frame:GetPoint(1) })[3]") == "TOPLEFT"
     core.execute("follow.head:GetScript('OnDragStart')(follow.head)")
     assert core.eval("follow:IsDocked()") is False
+    # the move starts where the window is seen: one point on UIParent, no jump to an old place
+    #
+    point = core.eval("{ follow.frame:GetPoint(1) }")
+    assert (point[1], point[2].GetName(point[2]), point[3]) == ("TOPLEFT", "UIParent", "BOTTOMLEFT")
+    assert core.eval("follow.frame:GetNumPoints()") == 1
+    core.execute("follow.head:GetScript('OnDragStop')(follow.head)")
     core.execute("follow:DockWith(lead, 'right'); lead:ToggleFullScreen()")
     assert core.eval("follow:IsDocked()") is False and core.eval("lead:IsFullScreen()") is True
     core.execute("lead:ToggleFullScreen()")
@@ -583,6 +589,199 @@ def test_tree_two_line_rows_draw_the_meta_under_the_name(core: WowRuntime):
     assert core.errors == []
 
 
+def test_tree_two_line_rows_take_a_line_for_each_further_objective(core: WowRuntime):
+    """every objective of a quest on a line of its own; a row used
+    again for another quest leaves no old line behind."""
+    core.execute(TREE)
+    core.execute(
+        """
+        tree2 = Bastians.UI.Tree(host, { db = {}, twoLine = true })
+        tree2.scroll:SetSize(386, 200)
+        tree2:SetRows({
+          { id = "a", text = "Quest A", meta = "0/6 Trogg", metaMore = { "6/6 Burly", "Explore" } },
+          { id = "b", text = "Quest B", meta = "1/2 Wolf" },
+        })
+        """
+    )
+    assert list(core.eval("tree2.heights").values()) == [62, 34]
+    a = core.eval("tree2.pool[1]")
+    first, second = a.metaLines[1], a.metaLines[2]
+    assert (first.GetText(first), second.GetText(second)) == ("6/6 Burly", "Explore")
+    assert first.IsShown(first) is True and second.IsShown(second) is True
+    core.execute('tree2:SetRows({ { id = "a", text = "Quest A", meta = "0/6 Trogg" } })')
+    assert list(core.eval("tree2.heights").values()) == [34]
+    assert first.IsShown(first) is False and second.IsShown(second) is False
+    assert core.errors == []
+
+
+BLOCKS = """
+tree:SetRows({
+  { id = "s", text = "Section", kind = "section", children = {
+    { id = "q1", text = "Quest one", block = true, children = {
+      { id = "o1", text = "Objective" },
+      { id = "t1", text = "Text", children = { { id = "p1", text = "Paragraph" } } },
+      { id = "n1", text = "next in chain" },
+    } },
+    { id = "q2", text = "Quest two", block = true, children = { { id = "o2", text = "Objective" } } },
+    { id = "q3", text = "Quest alone", block = true },
+    { id = "plain", text = "No block", children = { { id = "pc", text = "Child" } } },
+  } },
+})
+function enter(i) tree.pool[i]:GetScript("OnEnter")(tree.pool[i]) end
+function leave(i) tree.pool[i]:GetScript("OnLeave")(tree.pool[i]) end
+"""
+
+
+def block_span(core: WowRuntime) -> tuple[float, float, float] | None:
+    """Left, top and bottom of the block fill on the tree's content; None while it is hidden."""
+    fill = core.eval("tree.blockFill")
+    if fill is None or not core.eval("tree.blockFill:IsShown()"):
+        return None
+    _, _, _, left, top = core.eval("{ tree.blockFill:GetPoint(1) }").values()
+    _, _, _, _, bottom = core.eval("{ tree.blockFill:GetPoint(2) }").values()
+    return left, top, bottom
+
+
+def test_block_of_finds_the_nearest_head_and_its_last_row(core: WowRuntime):
+    core.execute(TREE)
+    core.execute(BLOCKS)
+    of = "Bastians.UI.TreeUtil.blockOf"
+    # 1 section, 2 quest one, 3 objective, 4 text, 5 paragraph, 6 next, 7 quest two, 8 objective,
+    # 9 alone, 10 no block, 11 its child
+    for index in (2, 3, 4, 5, 6):
+        assert list(core.eval(f"{{ {of}(tree.flat, {index}) }}").values()) == [2, 6]
+    assert list(core.eval(f"{{ {of}(tree.flat, 8) }}").values()) == [7, 8]
+    assert list(core.eval(f"{{ {of}(tree.flat, 9) }}").values()) == [9, 9]
+    for index in (1, 10, 11):
+        assert core.eval(f"{of}(tree.flat, {index})") is None
+    assert core.errors == []
+
+
+def test_hover_lights_the_whole_block_and_the_row_in_two_colours(core: WowRuntime):
+    """ "one color for the whole quest block, and one color for the part of the
+    block where I am hovering", so a chain quest under a quest no longer reads as level one."""
+    core.execute(TREE)
+    core.execute(BLOCKS)
+    assert block_span(core) is None  # nothing before the mouse comes
+    core.execute("enter(6)")  # the "next in chain" row
+    # the block: from the head's indent, across the indents of its children, its five rows
+    assert block_span(core) == (14, -18, -(18 * 6))
+    assert core.eval("tree.pool[6].hl:IsShown()") is True
+    assert core.eval("tree.pool[2].hl:IsShown()") is False  # the head is block, not the hovered row
+    fill = list(core.eval("{ tree.blockFill:GetVertexColor() }").values())
+    token = list(core.eval("Bastians.UI.Style.C.hoverBlock").values())
+    hover = list(core.eval("Bastians.UI.Style.C.hover").values())
+    assert fill == token and token != hover  # two colours
+    assert core.eval("(tree.blockFill:GetDrawLayer())") == "BACKGROUND"  # under the row frames
+    # from row to row inside the block, then into the next block
+    core.execute("leave(6); enter(3)")
+    assert block_span(core) == (14, -18, -(18 * 6))
+    core.execute("leave(3); enter(8)")
+    assert block_span(core) == (14, -(18 * 6), -(18 * 8))
+    core.execute("leave(8)")
+    assert block_span(core) is None
+    assert core.errors == []
+
+
+def test_rows_outside_a_block_and_blocks_of_one_row_show_only_the_row(core: WowRuntime):
+    core.execute(TREE)
+    core.execute(BLOCKS)
+    for index in (1, 9, 10, 11):  # the section, the lone quest, a row without block, its child
+        core.execute(f"enter({index})")
+        assert block_span(core) is None
+        assert core.eval(f"tree.pool[{index}].hl:IsShown()") is True
+        core.execute(f"leave({index})")
+    # a folded quest is a block of one row too; open again, it is a block
+    core.execute("tree:ToggleFold(tree.flat[2]); enter(2)")
+    assert block_span(core) is None
+    core.execute("leave(2); tree:ToggleFold(tree.flat[2]); enter(2)")
+    assert block_span(core) == (14, -18, -(18 * 6))
+    assert core.errors == []
+
+
+def test_the_block_follows_folds_and_scrolling_under_a_resting_mouse(core: WowRuntime):
+    core.execute(TREE)
+    core.execute(BLOCKS)
+    core.execute("enter(3)")
+    core.execute("tree:ToggleFold(tree.flat[4])")  # the paragraph goes, the block with it
+    assert block_span(core) == (14, -18, -(18 * 5))
+    # new rows under the resting mouse: the frame shows no block any more
+    core.execute("tree:SetRows({ { id = 'x', text = 'Another' } })")
+    assert block_span(core) is None
+    assert core.errors == []
+
+
+def test_a_block_ends_with_the_mouse_on_a_widget_of_the_row_or_a_closed_window(core: WowRuntime):
+    """The row's OnLeave stays silent while the mouse is on its fold marker, button or icons, so
+    leaving through one of them must end the hover (the fold marker left the row lit before; the
+    icons left the host's preview waiting)."""
+    core.execute(TREE)
+    core.execute(BLOCKS)
+    core.execute(
+        """
+        hovers = {}
+        tree.opts.onHover = function(row, entering)
+          hovers[#hovers + 1] = (entering and "in " or "out ") .. row.id
+        end
+        """
+    )
+    # into the row, onto its fold marker, and out through the marker
+    core.execute("enter(2); Mock.mouseOverFrame = tree.pool[2]; leave(2)")
+    assert block_span(core) is not None  # still over the row
+    core.execute("local f = tree.pool[2].fold; f:GetScript('OnEnter')(f)")
+    core.execute(
+        "Mock.mouseOverFrame = nil; local f = tree.pool[2].fold; f:GetScript('OnLeave')(f)"
+    )
+    assert block_span(core) is None
+    assert core.eval("tree.pool[2].hl:IsShown()") is False
+    assert core.eval("tree.pool[2].bar:IsShown()") is False
+    assert list(core.g.hovers.values()) == ["in q1", "out q1"]
+    # straight onto the marker: the mouse never touched the row itself
+    core.execute("local f = tree.pool[7].fold; f:GetScript('OnEnter')(f)")
+    assert block_span(core) == (14, -(18 * 6), -(18 * 8))
+    assert core.eval("tree.pool[7].hl:IsShown()") is True
+    core.execute("local f = tree.pool[7].fold; f:GetScript('OnLeave')(f)")
+    assert block_span(core) is None
+    # the row button likewise
+    core.execute("local a = tree.pool[2].action; a:GetScript('OnEnter')(a)")
+    assert block_span(core) == (14, -18, -(18 * 6))
+    core.execute("local a = tree.pool[2].action; a:GetScript('OnLeave')(a)")
+    assert block_span(core) is None
+    # the window closes under the mouse: nothing lit when it opens again
+    core.execute("enter(2); tree.scroll:GetScript('OnHide')(tree.scroll); tree:Render()")
+    assert block_span(core) is None
+    assert core.errors == []
+
+
+def test_the_key_row_lights_its_block_and_the_mouse_goes_first(core: WowRuntime):
+    core.execute(TREE)
+    core.execute(BLOCKS)
+    core.execute("tree:SetKeyRow(tree.flat[8])")
+    assert block_span(core) == (14, -(18 * 6), -(18 * 8))
+    core.execute("enter(3)")
+    assert block_span(core) == (14, -18, -(18 * 6))
+    core.execute("leave(3)")
+    assert block_span(core) == (14, -(18 * 6), -(18 * 8))
+    core.execute("tree:SetKeyRow(nil)")
+    assert block_span(core) is None
+    assert core.errors == []
+
+
+def test_a_flat_tree_starts_the_block_at_its_own_indent(core: WowRuntime):
+    core.execute(TREE)
+    core.execute(
+        """
+        tree = Bastians.UI.Tree(host, { db = {}, flat = true })
+        tree.scroll:SetSize(386, 200)
+        tree:SetRows({ { id = "h", text = "Head" }, { id = "o", text = "Outer", children = {
+          { id = "q", text = "Quest", block = true, children = { { id = "c", text = "Child" } } } } } })
+        tree.pool[4]:GetScript("OnEnter")(tree.pool[4])
+        """
+    )
+    assert block_span(core) == (8, -(18 * 2), -(18 * 4))
+    assert core.errors == []
+
+
 def test_tree_with_icons_always_keeps_them_after_a_hover(core: WowRuntime):
     """the Chain rows lost their icons after one hover; a tree that
     shows icons always keeps them through OnEnter and OnLeave."""
@@ -630,7 +829,7 @@ def test_row_tags_mark_and_dim_rows(core: WowRuntime):
         and core.eval("Bastians:RowTag('npc:2')") is None
     )
     assert core.eval("Bastians:RowTag('item:1')") is None
-    assert core.eval("tree.pool[1].text:GetText()") == "One|cff858585  (odd)|r"
+    assert core.eval("tree.pool[1].text:GetText()") == "One|cff888888  (odd)|r"
     assert core.eval("tree.pool[2].text:GetText()") == "Two"
     assert core.errors == []
 
@@ -745,7 +944,7 @@ def test_every_toolbar_button_of_the_apps_has_a_tip(wow: WowRuntime):
           end
           local Br = Bastians:GetModule('Browser').Browser
           local tb = Br.toolbar
-          for _, k in ipairs({ 'back', 'forward', 'home', 'bookmarks', 'target', 'slim', 'dock' }) do
+          for _, k in ipairs({ 'back', 'forward', 'home', 'bookmarks', 'target', 'dock' }) do
             check('browser.' .. k, tb[k])
           end
           local mt = Bastians:GetModule('Map').Map.toolbar

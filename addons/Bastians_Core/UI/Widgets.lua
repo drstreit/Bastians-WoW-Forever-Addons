@@ -33,6 +33,15 @@ function W.Checkbox(parent, label, onChange)
   function b.GetChecked(self)
     return self.checked
   end
+  -- the box at the right of the label, as on a card of the settings hub (ADR 0058, PH7)
+  function b.SetControlRight(self)
+    self.box:ClearAllPoints()
+    self.box:SetPoint("RIGHT", 0, 0)
+    self.label:ClearAllPoints()
+    self.label:SetPoint("LEFT", 0, 0)
+    self.label:SetPoint("RIGHT", self.box, "LEFT", -6, 0)
+    self.controlRight = true
+  end
   b:SetScript("OnClick", function(self)
     self:SetChecked(not self.checked)
     if onChange then
@@ -444,7 +453,7 @@ end
 
 -- ---------------------------------------------------------------------------------------------
 -- The game's objective tracker (R6, 22.10.2026): one arbiter for every window that replaces it
--- (the Companion in slim mode, Quests' tracker frame). Bastians.UI.ClaimGameTracker(key, hide)
+-- (Quests' tracker frame; the Browser's slim mode until ADR 0056). Bastians.UI.ClaimGameTracker(key, hide)
 -- records a claim per key; the game's tracker is hidden while any claim stands and shown again
 -- when the last one goes. Out of combat the change applies at once (Compat.SetObjectiveTracker-
 -- Shown), in combat the wish waits for PLAYER_REGEN_ENABLED (golden rule 6).

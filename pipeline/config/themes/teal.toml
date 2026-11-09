@@ -11,6 +11,18 @@ panel = "#1a1816fa"     # buttons, fields, menus
 header = "#1f1d1b"      # title bars, the dossier's band
 line = "#ffffff1a"      # 1 px edges
 hover = "#ffffff29"     # a row under the mouse
+hoverBlock = "#0cd29d29" # the whole block of a row under the mouse
+# the quest sheet (ADR 0053): parchment in every theme, a page of its own
+sheetInk = "#2e2014"
+sheetDim = "#57442f"
+sheetTitle = "#802b18"
+sheetGood = "#1d5220"
+sheetLine = "#3b2a1747"
+sheetTile = "#241b10"
+sheetTileText = "#f3e6c8"
+badgeInk = "#050505"       # the words on a light badge (a tile's level, ADR 0056)
+badgeInkLight = "#ffffff"  # the words on a dark badge
+sheetXp = "#9a35c8"
 press = "#ffffff24"     # a pressed row
 faceHover = "#292624"   # a button's face under the mouse
 track = "#ffffff0a"     # scroll and slider tracks
@@ -19,11 +31,18 @@ divider = "#ffffff14"   # between two-line rows
 # text
 text = "#ebebeb"
 dim = "#999999"         # secondary words, hints
-muted = "#858585"       # grey words after a name
+muted = "#888888"       # grey words after a name
 bright = "#ffffff"      # the strongest text (objectives, zone names)
 mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
 mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
 mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
+# a zone's level band on the map (A3.4): the difficulty colours' dark twins, readable on
+# the light rim
+mapDiffRed = "#a01c1c"
+mapDiffOrange = "#9a4a0a"
+mapDiffYellow = "#6e5a00"
+mapDiffGreen = "#2a6a22"
+mapDiffGrey = "#5c5c5c"
 # accent and states
 accent = "#0cd29d"
 wayWanderer = "#e6a04a"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
@@ -31,10 +50,10 @@ wayScholar = "#5aa8e6"     # the welcome: the Scholar's picture frame (cool)
 gold = "#ffd100"        # worth, money, available quests
 on = "#59e659"          # an icon that is switched on
 good = "#4de666"        # verified, ahead
-bad = "#e64d4d"         # refuted, behind, a loss
+bad = "#e75656"         # refuted, behind, a loss
 warn = "#ff9933"
 neutral = "#b3b3b3"     # unverified
-rare = "#c241ff"        # rare creatures
+rare = "#c64cff"        # rare creatures
 water = "#6fb6ff"       # fish, flight
 # the six note colours of Bastian's Notes (notes.md, J)
 note1 = "#f2c94c"
@@ -50,11 +69,11 @@ tipText = "#ffffff"
 tipDim = "#cccccc"
 tipGold = "#ffd100"
 # quest difficulty (the game's own scale)
-diffRed = "#ff2020"
+diffRed = "#ff3838"
 diffOrange = "#ff8040"
 diffYellow = "#ffff00"
 diffGreen = "#40c040"
-diffGrey = "#858585"
+diffGrey = "#888888"
 # money letters
 coinGold = "#ffd700"
 coinSilver = "#c7c7cf"
@@ -105,7 +124,7 @@ svcInn = "#c58cff"
 svcFlight = "#4fd3e0"
 svcRepair = "#b8a48a"
 svcFriendly = "#4de666"
-svcHostile = "#e64d4d"
+svcHostile = "#e75656"
 typeNpc = "#4de666"
 typeItem = "#6fb6ff"
 typeQuest = "#ffd100"

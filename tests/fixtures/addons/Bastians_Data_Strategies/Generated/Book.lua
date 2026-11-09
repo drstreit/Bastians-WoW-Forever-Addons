@@ -44,14 +44,14 @@ B.deferred[#B.deferred + 1] = {
       [2] = [=[{ "2026-10-20", "The book opens." }]=],
     },
     page = {
-      ["hogger-camp"] = [=[{ "Hogger's Camp", "farming", 10, 9, 12, { 1429 }, { "Elwynn Forest", "level 9 to 12", "linen", "alone" }, { { "opening", "I'm standing at the gnoll camp. The gnolls carry {item:2589} and {npc:448} carries more." }, { "h", "Why it pays" }, { "p", "Linen sells for {price:2589} today, and a vendor pays {vendor:2589}." }, { "plate" }, { "h", "How" }, { "steps", { "Walk the loop.", "Kill {npc:448} when he is up. He is up often." } }, { "live" }, { "verdict", "Fine for a beginner." } }, { { 11, "true", nil }, { 12, "half", "Only the kobolds near the entrance." } }, { avoid = { { 0.92, 0.418 } }, farm = { { 0.08, 0.747 }, { 0.309, 0.253 } }, hull = { { 0.08, 0.747 }, { 0.309, 0.253 } }, kind = "spot", label = "the camp", labelAt = { 0.195, 0.747 }, landmark = { at = { 0.92, 0.418 }, glyph = "keep", label = "Goldtooth" }, loop = { { 0.112, 0.678 }, { 0.277, 0.322 } }, place = { 1429, 0.285, 0.83 }, start = { 0.112, 0.678 } }, { kind = "farm", npcs = { 448 }, top = 3 }, nil, { "item:2589", "npc:448" }, "active", nil, "2026-10-21", "2026-10-23" }]=],
+      ["hogger-camp"] = [=[{ "Hogger's Camp", "farming", 10, 9, 12, { 1429 }, { "Elwynn Forest", "level 9 to 12", "linen", "alone" }, { { "opening", "I'm standing at the gnoll camp. The gnolls carry {item:2589} and {npc:448} carries more." }, { "h", "Why it pays" }, { "p", "Linen sells for {price:2589} today, and a vendor pays {vendor:2589}." }, { "plate" }, { "h", "How" }, { "steps", { "Walk the loop.", "Kill {npc:448} when he is up. He is up often." } }, { "live" }, { "verdict", "Fine for a beginner." } }, { { 11, false, nil }, { 12, false, "Only the kobolds near the entrance." } }, { avoid = { { 0.92, 0.418 } }, box = { 0.26, 0.769, 0.39, 0.891 }, farm = { { 0.08, 0.747 }, { 0.309, 0.253 } }, hull = { { 0.08, 0.747 }, { 0.309, 0.253 } }, kind = "spot", label = "the camp", labelAt = { 0.195, 0.747 }, landmark = { at = { 0.92, 0.418 }, glyph = "keep", label = "Goldtooth" }, loop = { { 0.112, 0.678 }, { 0.277, 0.322 } }, place = { 1429, 0.285, 0.83 }, start = { 0.112, 0.678 } }, { kind = "farm", npcs = { 448 }, top = 3 }, nil, { "item:2589", "npc:448" }, "active", nil, "2026-10-21", "2026-10-23" }]=],
       ["leather-trick"] = [=[{ "The Leather Trick", "crafting", 5, 1, 60, nil, { "any level" }, { { "opening", "Nixie said it works." }, { "table" }, { "plate" }, { "live" } }, nil, { foot = { glyph = "never", text = "Only when the cloth is cheap.", tint = "bad" }, kind = "flow", nodes = { { glyph = "cloth", note = "buy cheap", title = "Linen Cloth" }, { glyph = "vendor", note = "pays 25c", title = "a vendor" } } }, { buy = 2589, kind = "flip", per = 1, sell = 2318 }, { kind = "vendorpairs", rows = { { 2589, 2318, 1 } } }, nil, "back", nil, "2026-10-22", "2026-10-22" }]=],
       ["old-gnolls"] = [=[{ "The Old Gnoll Camp", "farming", nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, "retired", nil, nil, nil, "2026-10-22", "The camp moved.", "hogger-camp" }]=],
     },
     rumour = {
-      [11] = [=[{ "Hogger's camp in Elwynn drops a lot of Linen Cloth.", "farm", "verified", "Hogger's camp linen farm", { { "Fixture Channel", "2026-10-13", "https://www.youtube.com/watch?v=fixture1&t=85s" } } }]=],
-      [12] = [=[{ "The Fargodeep Mine kobolds drop Linen Cloth too.", "farm", "unverified", "Fargodeep Mine kobolds", { { "Other Channel", "2026-10-14", "https://www.youtube.com/watch?v=fixture2&t=120s" } } }]=],
-      [13] = [=[{ "Hogger drops the Blood Saber about once in 30 kills.", "farm_spot", "unverified", "Hogger for the Blood Saber", { { "Fixture Channel", "2026-10-13", "https://www.youtube.com/watch?v=fixture3&t=40s" }, { "Other Channel", "2026-10-14", "https://www.youtube.com/watch?v=fixture4&t=200s" } } }]=],
+      [11] = [=[{ "Hogger's camp in Elwynn drops a lot of Linen Cloth.", "farm", "Hogger's camp linen farm", { { "Fixture Channel", "2026-10-13", "https://www.youtube.com/watch?v=fixture1&t=85s" } } }]=],
+      [12] = [=[{ "The Fargodeep Mine kobolds drop Linen Cloth too.", "farm", "Fargodeep Mine kobolds", { { "Other Channel", "2026-10-14", "https://www.youtube.com/watch?v=fixture2&t=120s" } } }]=],
+      [13] = [=[{ "Hogger drops the Blood Saber about once in 30 kills.", "farm_spot", "Hogger for the Blood Saber", { { "Fixture Channel", "2026-10-13", "https://www.youtube.com/watch?v=fixture3&t=40s" }, { "Other Channel", "2026-10-14", "https://www.youtube.com/watch?v=fixture4&t=200s" } } }]=],
     },
     schema = {
       chapter = { "name", "order", "opening", "active" },
@@ -62,7 +62,7 @@ B.deferred[#B.deferred + 1] = {
         "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor",
         "art",
       },
-      rumour = { "claim", "kind", "status", "subject", "sources" },
+      rumour = { "claim", "kind", "subject", "sources" },
     },
     sources = { "hand-written fixture world-mini" },
     version = "0.1.0",

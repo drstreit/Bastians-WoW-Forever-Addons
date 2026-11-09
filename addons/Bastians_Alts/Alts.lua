@@ -42,6 +42,8 @@ local ownerIndex -- Alts.Owned's index over every character's items, dropped by 
 
 -- a character's record or a request changed (core-contracts §16)
 B:DeclareMessage("BASTIANS_ALTS_CHANGED")
+-- a character of the account was forgotten (deleted in the game): its key "Name-Realm"
+B:DeclareMessage("BASTIANS_CHARACTER_FORGOTTEN")
 
 -- ---------------------------------------------------------------------------------------------
 -- The model: plain tables in and out (the saved `global` table is handed in), no WoW API
@@ -204,6 +206,12 @@ function Model.KeyOf(global, name, realm)
   if type(name) ~= "string" then
     return nil
   end
+  local whole = string.lower(name)
+  for key, c in pairs(global.characters) do
+    if c.full and string.lower(c.full) == whole and (realm == nil or c.realm == realm) then
+      return key
+    end
+  end
   local short, other = string.match(name, "^([^%-]+)%-(.+)$")
   name, realm = short or name, other or realm
   local want = string.lower(name)
@@ -213,6 +221,22 @@ function Model.KeyOf(global, name, realm)
     end
   end
   return nil
+end
+
+-- Forgets a character and every request it made or received. -> whether there was one.
+function Model.Forget(global, key)
+  if not global.characters[key] then
+    return false
+  end
+  global.characters[key] = nil
+  local keep = {}
+  for _, r in ipairs(global.requests) do
+    if r.holder ~= key and r.asker ~= key then
+      keep[#keep + 1] = r
+    end
+  end
+  global.requests = keep
+  return true
 end
 
 -- A mail went from `holder` to `recipient` (a name): the requests it answers go down by what it
@@ -280,7 +304,8 @@ end
 function Alts.RecordFacts()
   local c = Alts.Me()
   local facts = B.Compat.GetPlayerFacts()
-  c.name, c.realm = UnitName("player"), GetRealmName()
+  c.name, c.realm = (UnitName("player")), GetRealmName()
+  c.full = B.Compat.FullName("player") -- what a mail needs (Forever: with the surname)
   c.class, c.race, c.faction, c.level = facts.class, facts.race, facts.faction, facts.level
   c.money = B.Compat.GetMoney()
   c.zone = B.Coords.PlayerMap() or c.zone
@@ -468,6 +493,31 @@ local function className(c)
   return c.class and (type(classes) == "table" and classes[c.class] or L[c.class]) or nil
 end
 
+Alts.FORGET_SECONDS = 5 -- how long the second click may take
+local forgetting -- { key, at }: the character the first click named
+
+-- Forgets a character deleted in the game. The first click asks, a second
+-- one within FORGET_SECONDS does it. Logging in with it records it again. -> whether it is gone.
+function Alts.Forget(key)
+  local c = global().characters[key]
+  if not c or key == Alts.Key() then
+    return false
+  end
+  local clock = GetTime()
+  if not (forgetting and forgetting.key == key and clock - forgetting.at <= Alts.FORGET_SECONDS) then
+    forgetting = { key = key, at = clock }
+    B:Say(L["Forget %s? Use the action again within 5 seconds."], c.name or key)
+    return false
+  end
+  forgetting = nil
+  Model.Forget(global(), key)
+  B:Say(L["%s is forgotten. Logging in with that character records it again."], c.name or key)
+  B:InvalidateEntities("character")
+  B:Fire("BASTIANS_CHARACTER_FORGOTTEN", key)
+  B:Fire("BASTIANS_ALTS_CHANGED")
+  return true
+end
+
 function Alts.ClassIcon(c)
   if c and c.class then
     return "Interface\\Icons\\ClassIcon_" .. c.class
@@ -477,6 +527,28 @@ end
 
 local function zoneName(map)
   return map and B:Entity("zone:" .. map):Name() or nil
+end
+
+-- All we know of a character, for the Characters list's filter ("name,
+-- class, place, really all info we have ... also what they have in inventory"): asked only once a
+-- filter is typed.
+function Alts.FilterWords(record)
+  local c = record.c
+  local parts = {}
+  for _, word in ipairs({ className(c) or false, c.class or false, c.race or false, c.faction or false }) do
+    if word then
+      parts[#parts + 1] = word
+    end
+  end
+  parts[#parts + 1] = c.realm
+  parts[#parts + 1] = zoneName(c.zone)
+  if c.level then
+    parts[#parts + 1] = L["Level"] .. " " .. c.level
+  end
+  for id in pairs(Model.Places(c)) do
+    parts[#parts + 1] = B:Entity("item:" .. id):Name()
+  end
+  return table.concat(parts, " ")
 end
 
 local function itemText(id, link)
@@ -559,6 +631,16 @@ local function overviewRows(ref)
   local seen = Alts.Age(c.seen)
   if seen then
     rows[#rows + 1] = { text = L["Last seen"], value = seen }
+  end
+  local runs = ns.Runs and ns.Runs.OverviewRow(c) -- dungeon runs (A2.5)
+  if runs then
+    rows[#rows + 1] = runs
+  end
+  -- this character's gold goals (alts.md "Gold goals", A5.5): the next training, riding, a mount
+  if c == Alts.Me() and ns.Train then
+    for _, row in ipairs(ns.Train.GoalRows() or {}) do
+      rows[#rows + 1] = row
+    end
   end
   return rows
 end
@@ -723,6 +805,26 @@ end
 local function register(self)
   B:RegisterEntityType(self, {
     type = "character",
+    -- the sheet reads in tabs (ADR 0058, PH5): Overview (the facts as tiles, the goals), then
+    -- Equipment, Bags, Bank, Mail, Requests; a place not read yet says so
+    chapters = {
+      { id = "equipment", tab = true },
+      { id = "bags", tab = true, always = true, empty = L["The bags were not read yet."] },
+      {
+        id = "bank",
+        tab = true,
+        always = true,
+        empty = L["The bank was not read yet: open it once on this character."],
+      },
+      {
+        id = "mail",
+        tab = true,
+        always = true,
+        empty = L["The mailbox was not read yet: open one on this character."],
+      },
+      { id = "requests", tab = true },
+      { id = "notes", tail = true },
+    },
     name = function(key)
       local c = global().characters[tostring(key)]
       return c and c.name or nil
@@ -749,6 +851,76 @@ local function register(self)
     fields = function(key)
       local c = global().characters[tostring(key)]
       return c and { level = c.level, realm = c.realm, faction = c.faction } or nil
+    end,
+  })
+  -- the stat tiles of Characters (ADR 0058, PH4)
+  local function allChars()
+    local out = {}
+    for key, c in pairs(global().characters) do
+      out[#out + 1] = { key = key, c = c }
+    end
+    return out
+  end
+  local CHANGED = { "BASTIANS_ALTS_CHANGED" }
+  B:RegisterStat(self, {
+    id = "alts.stat.count",
+    rail = "characters",
+    order = 10,
+    title = L["Characters"],
+    invalidateOn = CHANGED,
+    build = function()
+      return { value = #allChars() }
+    end,
+  })
+  B:RegisterStat(self, {
+    id = "alts.stat.gold",
+    rail = "characters",
+    order = 20,
+    title = L["Gold on all"],
+    invalidateOn = CHANGED,
+    build = function()
+      local sum, known = 0, false
+      for _, it in ipairs(allChars()) do
+        if it.c.money then
+          sum, known = sum + it.c.money, true
+        end
+      end
+      return { value = known and B.UI.Money(sum) or nil }
+    end,
+  })
+  B:RegisterStat(self, {
+    id = "alts.stat.level",
+    rail = "characters",
+    order = 30,
+    title = L["Highest level"],
+    invalidateOn = CHANGED,
+    build = function()
+      local best
+      for _, it in ipairs(allChars()) do
+        if it.c.level and (not best or it.c.level > best.c.level) then
+          best = it
+        end
+      end
+      if not best then
+        return { value = nil }
+      end
+      return { value = best.c.level, note = best.c.name or best.key, ref = "character:" .. best.key }
+    end,
+  })
+  B:RegisterStat(self, {
+    id = "alts.stat.runs",
+    rail = "characters",
+    order = 40,
+    title = L["Dungeon runs"],
+    invalidateOn = CHANGED,
+    build = function()
+      local total = 0
+      for _, it in ipairs(allChars()) do
+        for _, r in pairs(type(it.c.runs) == "table" and it.c.runs or {}) do
+          total = total + (r.n or 0)
+        end
+      end
+      return { value = total }
     end,
   })
   B:RegisterList(self, {
@@ -783,6 +955,7 @@ local function register(self)
       end
       return #words > 0 and table.concat(words, ", ") or nil
     end,
+    words = Alts.FilterWords,
     ref = function(key)
       return "character:" .. key
     end,
@@ -823,15 +996,34 @@ local function register(self)
       return Alts.Known(spellID)
     end,
   }, { priority = 100 })
+  -- the requests service (core-contracts section 11, ADR 0058 PH6): what the other characters
+  -- asked this one for, by item: { { name, count }, ... } in the order asked
+  B:ProvideService(self, "requests", {
+    For = function(_, itemID)
+      local out = {}
+      for _, g in ipairs(Model.RequestsFor(global(), Alts.Key())) do
+        for _, it in ipairs(g.items) do
+          if it[1] == itemID then
+            local c = global().characters[g.asker]
+            out[#out + 1] = { name = c and c.name or g.asker, count = it[2] }
+          end
+        end
+      end
+      return out
+    end,
+  }, { priority = 100 })
   section({
     id = "alts.overview",
+    chapter = "facts", -- on the sheet (ADR 0054)
     title = L["Overview"],
     types = { "character" },
     order = 10,
+    block = { stats = true }, -- the facts as tiles (ADR 0058, PH5)
     build = overviewRows,
   })
   section({
     id = "alts.equipment",
+    chapter = "equipment",
     title = L["Equipment"],
     types = { "character" },
     order = 20,
@@ -840,6 +1032,7 @@ local function register(self)
   })
   section({
     id = "alts.bags",
+    chapter = "bags",
     title = placeTitle("Bags", "bagsAt"),
     types = { "character" },
     order = 30,
@@ -851,6 +1044,7 @@ local function register(self)
   })
   section({
     id = "alts.bank",
+    chapter = "bank",
     title = placeTitle("Bank", "bankAt"),
     types = { "character" },
     order = 31,
@@ -862,6 +1056,7 @@ local function register(self)
   })
   section({
     id = "alts.mail",
+    chapter = "mail",
     title = placeTitle("Mail", "mailAt"),
     types = { "character" },
     order = 32,
@@ -873,6 +1068,7 @@ local function register(self)
   })
   section({
     id = "alts.requests",
+    chapter = "requests",
     title = L["Requests"],
     types = { "character" },
     order = 15,
@@ -881,6 +1077,7 @@ local function register(self)
   })
   section({
     id = "alts.holders",
+    chapter = "yours", -- on the sheet (ADR 0054)
     title = L["Your characters have it"],
     types = { "item" },
     order = 18,
@@ -908,6 +1105,7 @@ local function register(self)
   })
   B:RegisterAction(self, {
     id = "alts.ask",
+    main = true, -- a button of the sheet (ADR 0054)
     label = L["Ask my characters for this"],
     types = { "item" },
     order = 45,
@@ -918,6 +1116,20 @@ local function register(self)
     run = function(ref)
       local _, id = B.Entity.Parse(ref)
       Alts.Ask(id)
+    end,
+  })
+  B:RegisterAction(self, {
+    id = "alts.forget",
+    label = L["Forget this character"],
+    types = { "character" },
+    order = 90,
+    when = function(ref)
+      local _, key = B.Entity.Parse(ref)
+      return key ~= Alts.Key() and global().characters[tostring(key)] ~= nil
+    end,
+    run = function(ref)
+      local _, key = B.Entity.Parse(ref)
+      Alts.Forget(tostring(key))
     end,
   })
   B:RegisterSearchProvider(self, {
@@ -957,6 +1169,7 @@ mod = B:NewModule("Alts", {
     ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function()
       Alts.RecordAll()
+      ns.Runs.OnEnteringWorld() -- a dungeon run, the raid info (A2.5)
     end)
     self:RegisterEvent("BAG_UPDATE_DELAYED", scheduleBags)
     -- the spell book and the open profession window (alts.md "Knowledge")
@@ -1003,6 +1216,8 @@ mod = B:NewModule("Alts", {
       ns.Mail.Attach(self)
     end
     ns.Window.Register(self)
+    ns.Train.Register(self) -- the trainer view (catalog review A5.7)
+    ns.Runs.Register(self) -- dungeon runs and lockouts (catalog review A2.5)
     -- one bus handler per message per module (Core replaces an earlier one): the mail strip and
     -- the window both follow a change
     self:On("BASTIANS_ALTS_CHANGED", function()
@@ -1019,16 +1234,30 @@ mod = B:NewModule("Alts", {
 Alts.mod = mod
 mod.Alts = Alts
 
--- `/balts`: the window on this character (Window.lua; before 02.11.2026 the Browser's page).
+-- `/balts`: this character in the Browser's Characters, the characters on the left and its page in
+-- tabs on the right (, R5: "this window does not make sense", the Browser
+-- has it); ~~the Alts window~~ only without the Browser, as every
+-- app works alone.
 function Alts.Open()
+  local ref = "character:" .. tostring(Alts.Key())
+  if B:RunAction("browser.open", ref, { source = "alts", withList = true }) ~= false then
+    return true
+  end
   return ns.Window.Open(Alts.Key())
 end
 
 function Alts.Toggle()
-  return ns.Window.Toggle()
+  if ns.Window.IsShown and ns.Window.IsShown() then
+    return ns.Window.Toggle()
+  end
+  return Alts.Open()
 end
 
 SLASH_BASTIANSALTS1 = "/balts"
-SlashCmdList.BASTIANSALTS = function()
+SlashCmdList.BASTIANSALTS = function(msg)
+  if string.match(msg or "", "^%s*train") then
+    ns.Train.Open() -- the trainer view (A5.7)
+    return
+  end
   Alts.Open()
 end

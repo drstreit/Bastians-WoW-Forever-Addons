@@ -12,10 +12,12 @@ from pages import (
     menu,
     nav_click,
     nav_lists,
+    near_by_default,
     page_refs,
     page_rows,
     pick,
     pills,
+    scope,
 )
 from pages import (
     chips as bar_chips,
@@ -87,7 +89,7 @@ def test_entity_page_has_header_actions_and_sections_in_order(wow: WowRuntime):
     # sections; no "Source" line
     assert texts[0] == "Overview"
     assert band(wow, DS)["name"] == "Marshal Dughan"
-    assert band(wow, DS)["summary"] == "Level 10, Elwynn Forest"
+    assert band(wow, DS)["summary"] == "Marshal in Elwynn Forest. Starts 2 quests."
     assert not any(t.startswith("Source:") for t in texts)
     assert [t for t in texts if t in ("Overview", "Locations", "Starts quests", "Ends quests")] == [
         "Overview",
@@ -116,7 +118,9 @@ def test_entity_page_has_header_actions_and_sections_in_order(wow: WowRuntime):
     wow.slash("/bb quest:176")
     assert "Track" in actions(wow)  # Quests' action, no change here
     assert "Status" not in page_rows(wow, DS)  # the one status row sits on the band (ADR 0013 B)
-    assert band(wow, DS)["status"] is not None
+    # a quest's page is the quest sheet (ADR 0056): it says the task, not a status word; the
+    # card's data still knows it
+    assert wow.eval(f"{DS}.data.card.status") is not None
     assert wow.errors == []
 
 
@@ -126,13 +130,14 @@ def test_refs_in_rows_lead_to_their_pages_with_history(wow: WowRuntime):
     wow.execute(SIZE)
     # the quest row under "Starts quests" is a link: a left click opens that page
     assert click_ref(wow, DS, "quest:62") is True
-    assert subject(wow) == "The Fargodeep Mine"
+    # the quest's page is the quest sheet (ADR 0056); a quest in the log reads as the log names it
+    assert subject(wow) == "The Fargodeep Mine II"
     history, cursor = wow.eval(f"{BR}.History()")
     assert [h.ref for h in history.values()] == ["npc:240", "quest:62"] and cursor == 2
     wow.execute(f"{BR}.Back()")
     assert subject(wow) == "Marshal Dughan"
     wow.execute(f"{BR}.Forward()")
-    assert subject(wow) == "The Fargodeep Mine"
+    assert subject(wow) == "The Fargodeep Mine II"
     wow.slash("/bb npc:448")  # a new page after going back truncates the forward branch
     wow.execute(f"{BR}.Back()")
     wow.execute(f"{BR}.Back()")
@@ -147,11 +152,12 @@ def test_refs_in_rows_lead_to_their_pages_with_history(wow: WowRuntime):
 
 def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     boot(wow)
+    near_by_default(wow)  # the narrowing itself is what this test is about
     wow.slash("/bb npcs")
     wow.execute(SIZE)
     assert flat(wow) == ["Building the list ..."]
     wow.run_frames(5)
-    assert title(wow) == "NPCs"
+    assert title(wow) == "People"
     # the list opens on the player's zone (C9): Westfall's Gryan is not here; Hogger and
     # Goldtooth are in the Mobs list since owner round 5 (31.10.2026)
     assert flat(wow) == [
@@ -164,25 +170,26 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
     # the list types are the navigation's Lists (ADR 0018; before, the type bar), the shown one
     # accented
     types = [
-        "Dungeons",  # data.md "Dungeons" (30.10.2026)
-        "Farm spots",
-        "Items",
-        "Mobs",  # owner round 5 (31.10.2026): the monsters apart from the NPCs
-        "NPCs",
-        "Nodes",
-        "Objects",
-        "Quest chains",
         "Quests",
-        "Recipes",
+        "Chains",
         "Zones",
-    ]  # by name; chains from Quests
+        "People",
+        "Monsters",
+        "Objects",
+        "Dungeons",
+        "Items",
+        "Recipes",
+        "Farm spots",
+    ]  # the rail's sections in order (ADR 0058); no Gathering: the fixture has no nodes
     assert nav_lists(wow) == types
-    assert wow.eval(f"{MOD}.navTree.selectedID") == "nav:list:npc"
+    assert wow.eval(f"{MOD}.tabs.active") == "nav:list:npc"
     # one filter bar (ADR 0016): a pill per dimension, the counts inside the dropdowns, given the
     # other filters (Here: Westfall's quest giver is not counted)
     # the Service dimension is chips with the counts on them since ADR 0038 (30.10.2026)
     # every NPC left is of normal rank: one key alone is no pill
-    assert chips(wow) == ["Where: Here", "Level: All", "Sort: Name"]
+    # where the list looks is the chip in the search box (ADR 0056), the rest the bar
+    assert scope(wow) == "in Elwynn Forest"
+    assert chips(wow) == ["Zone: All", "Level: All", "Sort: Name"]
     assert menu(wow, TREE, "where") == ["All  6", "Here  5", "Continent  6"]
     assert service_chips(wow) == [
         ("All", 5, True),
@@ -193,13 +200,13 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
         ("Vendor", 1, False),
     ]
     assert menu(wow, TREE, "level") == ["All  5", "1-10  2", "11-20  1", "21-30  2"]
-    assert strip(wow.eval(f"{MOD}.summary:GetText()")) == "5 of 5 shown"
+    assert strip(wow.eval(f"{MOD}.summary:GetText()")) == ""  # the count is the foot's (ADR 0058)
     chip(wow, "Quest giver")  # quest givers, within the zone
     assert flat(wow) == ["Marshal Dughan  10"]
     assert menu(wow, TREE, "where") == ["All  2", "Here  1", "Continent  2"]  # filters combine
     pick(wow, TREE, "where", "Continent")  # Continent: Westfall's giver too
     assert flat(wow) == ["Gryan Stoutmantle  20", "Marshal Dughan  10"]
-    assert chips(wow)[0] == "Where: Continent" and [c for c in service_chips(wow) if c[2]] == [
+    assert scope(wow) == "in Eastern Kingdoms" and [c for c in service_chips(wow) if c[2]] == [
         ("Quest giver", 2, True)
     ]
     nav_click(wow, "nav:list:zone")  # another list from the navigation
@@ -217,8 +224,8 @@ def test_lists_by_type_with_facets_are_built_as_jobs(wow: WowRuntime):
         "Search",  # "All" sorts first in the type menu since 21.10.2026: the search home
         "Farm spots",
         "Items",
-        "NPCs",
-        "Nodes",
+        "People",
+        "Gathering",
         "Objects",
         "Quests",
         "Recipes",
@@ -269,12 +276,19 @@ def test_bookmarks_toggle_persist_and_list(wow: WowRuntime):
 def test_tooltip_hint_line_only_with_the_browser(wow: WowRuntime):
     boot(wow, CORE, DATA, QUESTS)
     lines = [strip(line["left"]) for line in wow.tooltip("Unit", 240)]
-    assert "Right click: open in the Browser" not in lines
+    assert not any("open in the Browser" in line for line in lines)
     wow.load_addon(BROWSER)
     wow.run_frames(5)
     wow.execute("GameTooltip:Hide()")
     lines = [strip(line["left"]) for line in wow.tooltip("Unit", 240)]
-    assert lines[-1] == "Right click: open in the Browser"
+    assert not any("open in the Browser" in line for line in lines)  # no key set: no promise
+    wow.execute(
+        """GetBindingKey = function(a) return a == 'BASTIANS_BROWSER_HOVERED' and 'CTRL-B' or nil end
+        Mock.Fire('UPDATE_BINDINGS')
+        GameTooltip:Hide()"""
+    )
+    lines = [strip(line["left"]) for line in wow.tooltip("Unit", 240)]
+    assert lines[-1] == "CTRL-B: open in the Browser"
     assert "browser.hint" not in {
         s.id for s in wow.eval("Bastians:GetDetailSections('npc:240')").values()
     }  # a hint, not a page section
@@ -284,6 +298,7 @@ def test_gold_sections_and_actions_appear_on_the_right_pages(wow: WowRuntime):
     wow.needs(GOLD)  # no Gold on retail
     wow.execute('function GetRealmName() return "Classic Beta PvE" end')
     boot(wow, CORE, DATA, GOLD, BROWSER)
+    near_by_default(wow)  # the narrowing itself is what this test is about
     wow.slash("/bb item:2589")
     wow.execute(SIZE)
     assert "Price" in page_rows(wow, DS) and "Where to farm" in page_rows(wow, DS)
@@ -293,28 +308,114 @@ def test_gold_sections_and_actions_appear_on_the_right_pages(wow: WowRuntime):
     assert "Prices" in actions(wow) and "Where to farm" in actions(wow)
     wow.slash("/bb spots")
     wow.run_frames(5)
-    assert chips(wow)[:2] == ["Where: Here", "Status: All"] and "Hogger's camp" in flat(wow)
+    assert scope(wow) == "in Elwynn Forest"
+    assert chips(wow)[0] == "Zone: All" and "Hogger's camp" in flat(wow)
     assert wow.errors == []
 
 
 def test_quest_chains_are_a_list_of_their_own(wow: WowRuntime):
     """(N9): "an easier way to find quest chains, a list of its own".
     Quests registers the list through Core (RegisterList); one row per chain the character can
-    take, named after its first quest with the steps in grey; a row opens the first quest."""
+    take. Since ADR 0055 (PA5.2) a row is the chain itself: its tile says the steps and the zone,
+    the levels as the badge, how far the character is, the next step; a click opens the chain."""
     boot(wow)
     wow.slash("/bb chains")
     wow.run_frames(10)
-    assert title(wow) == "Quest chains"
-    rows = flat(wow)
-    assert rows and all("steps" in r for r in rows)
-    first = wow.eval(f"{MOD}.tree.flat[1]")
-    assert first.ref.startswith("quest:")
+    assert title(wow) == "Chains"
+    # it opens grouped by how far the character is (ADR 0055): quest 62 is in the log
+    assert flat(wow) == ["On your way  1", "The Fargodeep Mine  7"]
+    first = wow.eval(f"{MOD}.tree.flat[2]")
+    assert first.ref.startswith("chain:")
     wow.execute(SIZE)
-    wow.execute(f"{MOD}.tree.pool[1]:Click('LeftButton')")
+    tile = f"{MOD}.tree.pool[2]"
+    assert strip(wow.eval(f"{tile}.text:GetText()")) == "The Fargodeep Mine"
+    assert strip(wow.eval(f"{tile}.meta:GetText()")) == "3 steps, 2 zones"
+    assert wow.eval(f"{tile}.badge.label:GetText()") == "7-10"
+    assert wow.eval(f"{tile}.mark.label:GetText()") == "0/3"
+    wow.execute(f"{tile}:Click('LeftButton')")
     wow.run_frames(5)
     assert wow.eval(f"{BR}.Current().ref") == first.ref
+    # the chain's page: its way first, then where it goes
+    assert band(wow, DS)["name"] == "The Fargodeep Mine"
+    assert band(wow, DS)["summary"].startswith("3 steps, Level 7-10")
+    rows = page_rows(wow, DS)
+    assert rows[:4] == [
+        "The way",
+        "1. The Fargodeep Mine",
+        "2. The Jasperlode Mine",
+        "3. Riverpaw Gnoll Bounty",
+    ]
+    assert rows[rows.index("Where it goes") + 1 :][:2] == ["Elwynn Forest", "Westfall"]
     # without Quests there is no such list
     assert wow.eval("#Bastians:GetLists()") == 1
+    assert wow.errors == []
+
+
+def test_the_chain_list_is_grouped_by_progress_zone_or_level(wow: WowRuntime):
+    """quests.md "The list": groups by progress (the default), by zone, by level, or none; the
+    choice is remembered for the list. The dimensions: progress, kind, pairs."""
+    boot(wow)
+    wow.slash("/bb chains")
+    wow.run_frames(10)
+    assert menu(wow, TREE, "groups") == ["Progress", "Level", "Zone", "None"]
+    pick(wow, TREE, "groups", "Zone")
+    wow.run_frames(5)
+    assert flat(wow) == ["Elwynn Forest  1", "The Fargodeep Mine  7"]  # where its way starts
+    pick(wow, TREE, "groups", "Level")
+    wow.run_frames(5)
+    assert flat(wow) == ["1-10  1", "The Fargodeep Mine  7"]
+    pick(wow, TREE, "groups", "None")
+    wow.run_frames(5)
+    assert flat(wow) == ["The Fargodeep Mine  7"]
+    assert wow.eval(f"{MOD}.db.profile.listGroups.chain") is False
+    pick(wow, TREE, "groups", "Progress")  # the default again: nothing is kept
+    wow.run_frames(5)
+    assert flat(wow)[0] == "On your way  1"
+    assert wow.eval(f"{MOD}.db.profile.listGroups.chain") is None
+    # the values of the list's own dimensions for the fixture's chain
+    root = wow.eval("Bastians:GetModule('Quests').Logic.chainRoot(76)")
+    value = (
+        "(function() local f = Bastians:GetFilter('%s') local r = { state = 'on', steps = %d }"
+        f" return Bastians:FilterValue(f, 'chain:{root}', r) end)()"
+    )
+    assert wow.eval(value % ("quests.chain.progress", 3)) == "on"
+    assert wow.eval(value % ("quests.chain.length", 3)) == "longer"
+    assert wow.eval(value % ("quests.chain.length", 2)) == "pair"
+    assert len(wow.eval(value % ("quests.chain.kind", 3))) == 0  # an ordinary chain
+    labels = "Bastians:GetFilter('%s').labels('%s')"
+    assert wow.eval(labels % ("quests.chain.progress", "start")) == "Can start now"
+    assert wow.eval(labels % ("quests.chain.kind", "Other")) == "Ordinary"
+    assert wow.eval(labels % ("quests.chain.length", "pair")) == "Pairs"
+    assert wow.errors == []
+
+
+def test_rows_are_grouped_by_a_dimension_in_its_own_order(wow: WowRuntime):
+    """Browser.GroupRowsBy, pure: a heading per value with its words and count, in the
+    dimension's order, "Other" last; a row with several values under its first."""
+    boot(wow)
+    wow.execute(
+        f"""
+        local rows = {{ {{ text = "a" }}, {{ text = "b" }}, {{ text = "c" }}, {{ text = "d" }}, {{ text = "e" }} }}
+        local list = {{ values = {{ {{ "later", "on", {{ "on", "later" }}, "Other", "start" }} }} }}
+        local order = {{ on = 1, start = 2, later = 3 }}
+        local dim = {{
+          id = "progress",
+          labels = function(key) return string.upper(key) end,
+          sortKey = function(key) return order[key] or 9 end,
+        }}
+        GROUPS = {BR}.GroupRowsBy(rows, list, {{ 1, 2, 3, 4, 5 }}, 1, dim)
+        """
+    )
+    groups = [
+        (strip(g.text), g.group, [r.text for r in g.children.values()])
+        for g in wow.eval("GROUPS").values()
+    ]
+    assert groups == [
+        ("ON  2", True, ["b", "c"]),
+        ("START  1", True, ["e"]),
+        ("LATER  1", True, ["a"]),
+        ("OTHER  1", True, ["d"]),
+    ]
     assert wow.errors == []
 
 
@@ -345,4 +446,19 @@ def test_quests_without_a_title_in_the_pack_show_the_clients_title(wow: WowRunti
              unnamed = {{ true }}, levels = {{}}, suffixes = {{}} }}, 1)"""
     )
     assert text == wow.eval("Bastians:Entity('quest:62'):Name()") and not text.startswith("quest")
+    assert wow.errors == []
+
+
+def test_the_key_opens_the_page_of_what_is_under_the_mouse(wow: WowRuntime):
+    """ "right click not working ... maybe we can define a key"."""
+    boot(wow, CORE, DATA, QUESTS, BROWSER)
+    assert wow.eval(f"{BR}.OpenHovered()") is False  # nothing under the mouse
+    wow.tooltip("Unit", 240)
+    assert wow.eval("Bastians.UI.HoveredRef()") == "npc:240"
+    wow.execute(f"Opened = nil ; {BR}.Open = function(ref) Opened = ref end")
+    assert wow.eval(f"{BR}.OpenHovered()") is True
+    assert wow.eval("Opened") == "npc:240"
+    wow.execute("GameTooltip:Hide()")
+    assert wow.eval("Bastians.UI.HoveredRef()") is None
+    assert wow.eval(f"{BR}.OpenHovered()") is False  # the tooltip is gone
     assert wow.errors == []

@@ -55,6 +55,46 @@ function Graph.FormatSeconds(seconds)
   return string.format("%d:%02d", floor(seconds / 60), seconds % 60)
 end
 
+-- The route's verdict (route.md "The verdict", catalog review A4.3, 07.11.2026), pure: the worst
+-- walk step's creatures against the character's level, an elite counting 3 levels more. "risky"
+-- from RISKY_LEVELS above the character (the step's own "Careful" line), "careful" from
+-- CAREFUL_LEVELS (creatures that still attack), "safe" below; nil when no step knows a creature
+-- level or the character's level is unknown (unknown is not safe).
+Graph.RISKY_LEVELS = 3
+Graph.CAREFUL_LEVELS = -2
+Graph.VERDICT_WORDS = { safe = "Safe trip", careful = "Watch out", risky = "Risky trip" }
+Graph.VERDICT_TOKENS = { safe = "good", careful = "warn", risky = "bad" }
+
+function Graph.Verdict(route, playerLevel)
+  if not (route and route.steps and playerLevel) then
+    return nil
+  end
+  local worst
+  for _, step in ipairs(route.steps) do
+    if step.danger then
+      local d = step.danger - playerLevel + (step.elite and 3 or 0)
+      if not worst or d > worst then
+        worst = d
+      end
+    end
+  end
+  if worst == nil then
+    return nil
+  end
+  if worst >= Graph.RISKY_LEVELS then
+    return "risky"
+  elseif worst >= Graph.CAREFUL_LEVELS then
+    return "careful"
+  end
+  return "safe"
+end
+
+-- The verdict's words in the chat and the window; "" when there is none.
+function Graph.VerdictText(route, playerLevel, L)
+  local verdict = Graph.Verdict(route, playerLevel)
+  return verdict and L[Graph.VERDICT_WORDS[verdict]] or "", verdict
+end
+
 -- The flight key of two flight master ids, as the learned table stores it.
 function Graph.FlightKey(fromID, toID)
   return tostring(fromID) .. ">" .. tostring(toID)

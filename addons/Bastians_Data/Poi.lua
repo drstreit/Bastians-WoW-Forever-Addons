@@ -54,6 +54,21 @@ function Poi.TrainerWords(subname)
   return words
 end
 
+-- What a trainer or a vendor's card says it is: "Enchanter", "Alchemy Supplies" (owner, Forever
+-- 08.11.2026: "we do not say what kind of trainer or vendors these are, even when we have the
+-- info"); nil for anyone else, and for one without a subname.
+function Poi.ServiceWords(r)
+  if type(r) ~= "table" or type(r.subname) ~= "string" or r.subname == "" then
+    return nil
+  end
+  for _, role in ipairs(Poi.Roles("npc", r)) do
+    if role == "trainer" or role == "vendor" then
+      return r.subname
+    end
+  end
+  return nil
+end
+
 -- "Alchemy Trainer" -> "trainer.alchemy", "First Aid Trainer" -> "trainer.first-aid"; nil otherwise
 local function trainerKind(subname)
   local words = Poi.TrainerWords(subname)

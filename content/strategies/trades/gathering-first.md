@@ -15,7 +15,6 @@ claim = 104636073937211
 
 [[rumours]]
 claim = 123036700940545
-stamp = "half"
 why = "Our data knows no Frozen Lichen; the scarce herb is Frilled Lichen. The level limit we could not check."
 
 [[rumours]]
@@ -23,7 +22,6 @@ claim = 155130678879589
 
 [[rumours]]
 claim = 104967566783409
-stamp = "true"
 why = "The trainer data agrees: the first rank of Skinning costs 10 copper, and so do Herbalism and Mining."
 
 [plate]

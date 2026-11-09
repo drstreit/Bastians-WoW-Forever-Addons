@@ -10,22 +10,18 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 979795640808
-stamp = "half"
 why = "Level 27 to 28 and an egg in 72 % of kills hold. The old spawn list counts 37 Razormaws, not 28, and our data has no skinning loot."
 
 [[rumours]]
 claim = 243104376308241
-stamp = "true"
 why = "Silk Cloth in 24 % of Dragonmaw Raider kills, five times the rate of the gnolls nearby."
 
 [[rumours]]
 claim = 229840055201131
-stamp = "true"
 why = "Level 22 to 23 and Wool in a quarter of the kills. The old spawn list counts 43 of them."
 
 [[rumours]]
 claim = 243104376308243
-stamp = "lies"
 why = "At the video's own price of eight silver, five gold is 63 Silk. At one Silk in four kills that is some 250 Dragonmaw an hour."
 
 [plate]

@@ -123,4 +123,9 @@ ns.L:Register("koKR", {
   ["Read by the game's voice (no Spoken line)"] = "게임 음성이 읽음 (Spoken 대사 없음)",
   ["The game's voice that reads"] = "읽어 주는 게임 음성",
   ["A woman's voice (auto)"] = "여성 음성 (자동)",
+  ["Locked in place. The lock on the ring unlocks it."] = "위치가 잠겨 있습니다. 고리의 자물쇠로 풉니다.",
+  ["Locked in place"] = "위치 잠김",
+  ["Click to move the Orbiter freely."] = "클릭하면 오비터를 자유롭게 옮길 수 있습니다.",
+  ["Moves freely"] = "자유롭게 이동",
+  ["Drag the Orbiter where you want it. Click to lock it in place."] = "오비터를 원하는 곳으로 끌어 놓으세요. 클릭하면 위치를 잠급니다.",
 })

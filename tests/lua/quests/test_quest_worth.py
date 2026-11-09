@@ -51,7 +51,7 @@ def test_the_pure_worth_line(wow: WowRuntime):
     assert strip(vendor.text) == "reward 1s 20c (vendor)" and vendor.copper == 120  # 2 x 60
     assert strip(core.eval("unknown").text) == "reward price unknown"  # never 0
     assert core.eval("unknown.copper") is None
-    assert strip(core.eval("nothing").text) == "worth unknown"
+    assert core.eval("nothing") is None  # nothing known, no line (ADR 0052)
     # a reward the vendor pays nothing for is no "reward 0c (vendor)" (Forever 23.10.2026)
     core.execute(
         "zero = W.quest({ rewards = { xp = 100, items = { { 5555, 1 } } } }, "

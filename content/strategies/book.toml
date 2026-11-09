@@ -1,4 +1,4 @@
-# Bastian's Gold Rumours (strategies-design.md sections 6 and 7): the chapters, What's new and the
+# Bastian's Gold Adventures (strategies-design.md sections 6 and 7): the chapters, What's new and the
 # tombstones of retired pages. The pages are the .md files in the chapter folders; the build
 # (python -m bastians_build data ... --export) checks every id against the world and every claim
 # against the AHSync export. Text is ASCII: straight quotes, no dashes.
@@ -16,6 +16,7 @@ active = 3
 id = "farming"
 name = "Farming and easy kills"
 order = 1
+active = 6
 opening = "Places where creatures carry cloth, leather and coin, and how to work them. I spend most of my evenings in this chapter."
 
 [[chapter]]
@@ -89,5 +90,6 @@ text = "Trades: five pages on which professions to learn and what they pay up to
 page = "what-to-learn-first"
 
 [[news]]
-date = "2026-10-23"
-text = "The rumour mill: after each chapter, what the travellers say and I have not tried yet."
+date = "2026-11-06"
+text = "New page: Wolf Flanks in Duskwood."
+page = "duskwood-flanks"

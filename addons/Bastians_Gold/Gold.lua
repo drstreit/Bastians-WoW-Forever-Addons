@@ -22,6 +22,7 @@ local mod = B:NewModule("Gold", {
       capture = { scans = {}, merchants = {}, trainers = {}, sellPrices = {}, log = {} },
       income = {}, -- per day: ah, loot, spent, chars (Income.lua, R9)
     },
+    char = { farming = {} }, -- this character's own figures per farm spot (Farming.lua, A5.6)
   },
   options = {
     { type = "header", label = L["Today"] },
@@ -93,11 +94,15 @@ local mod = B:NewModule("Gold", {
     ns.Income.Register(self) -- gold per day, AH apart from loot (R9)
     ns.Advisor.Register(self) -- the bag advisor (S4)
     ns.History.Register(self) -- the own scans' medians per day (#19)
+    ns.Ledger.Register(self) -- what the invoices say was bought and sold
     ns.Prices.Register(self)
     ns.Sections.Register(self)
     ns.Spots.Register(self)
     ns.Signals.Register(self) -- the signals as things and activities (W10 step 2)
     ns.Plan.Register(self) -- the session plan, off by default (W10 step 3)
+    ns.Craft.Register(self) -- craft for gold (catalog review A5.1)
+    ns.Bargains.Register(self) -- the bargains
+    ns.Farming.Register(self) -- your own rate at a spot (catalog review A5.6)
     ns.Window.Register(self)
     ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
@@ -110,12 +115,17 @@ mod.Capture = ns.Capture
 mod.Prices = ns.Prices
 mod.Sections = ns.Sections
 mod.Today = ns.Today
+mod.Pricing = ns.Pricing
+mod.Ledger = ns.Ledger
+mod.Bridges = ns.Bridges
 mod.Spots = ns.Spots
 mod.History = ns.History -- the price history, the sparkline (History.lua, #19)
 mod.Income = ns.Income -- gold per day (Income.lua, R9)
 mod.Advisor = ns.Advisor -- the bag advisor (Advisor.lua, S4)
 mod.Window = ns.Window
 mod.Plan = ns.Plan -- the session plan (Plan.lua)
+mod.Craft = ns.Craft -- craft for gold (Craft.lua, A5.1)
+mod.Bargains = ns.Bargains -- the bargains (Bargains.lua, R6)
 
 SLASH_BASTIANSGOLD1 = "/bgold"
 SlashCmdList.BASTIANSGOLD = function(msg)
@@ -130,10 +140,16 @@ SlashCmdList.BASTIANSGOLD = function(msg)
     ns.Window.Open("spots", nil)
   elseif cmd == "bags" then
     ns.Window.Open("bags")
+  elseif cmd == "ledger" then
+    ns.Window.Open("ledger")
   elseif cmd == "plan" then
     if not ns.Plan.Open() then
       B:Say(L["Switch on the session plan in Gold's settings first."])
     end
+  elseif cmd == "craft" then
+    ns.Craft.Open()
+  elseif cmd == "bargains" then
+    ns.Bargains.Open()
   elseif cmd == "item" then
     ns.Window.Open("price", tonumber(string.match(msg, "%d+")))
   else

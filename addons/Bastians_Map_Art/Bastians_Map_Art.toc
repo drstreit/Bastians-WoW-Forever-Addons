@@ -13,7 +13,7 @@
 ## Notes-ptBR: Texturas do mapa geral para o Bastian's Map (carregam ao entrar no jogo).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 1.6.0
+## Version: 2.1.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

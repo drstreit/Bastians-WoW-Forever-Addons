@@ -144,7 +144,7 @@ end
 
 -- Runs fn with S.C and S.H pointing at the palette, and puts the theme back even on an error.
 function S.WithPalette(palette, fn, ...)
-  if not palette then
+  if not palette or S.C == palette.C then -- the theme, or inside this palette already
     return fn(...)
   end
   local oldC, oldH = S.C, S.H
@@ -177,6 +177,50 @@ end
 function S.Tok(frame, name)
   local p = S.PaletteOf(frame)
   return (p and p.C[name]) or themeC[name]
+end
+
+-- Whether a region (a frame, a texture, a text) stands under `frame`.
+local function under(region, frame)
+  local f = region
+  for _ = 1, 40 do
+    if not f then
+      return false
+    end
+    if f == frame then
+      return true
+    end
+    f = f.GetParent and f:GetParent() or nil
+  end
+  return false
+end
+
+-- A frame changes its palette (`from` and `to` are palettes, nil for the theme): what the kit
+-- drew under it with a token takes the same token of the new one, and its widgets draw again.
+-- The frame's own `palette` is set by the caller first. Walks everything the kit drew once, so
+-- it is for a changed option, never for a layout.
+function S.Repalette(frame, from, to)
+  local old, new = from and from.C or themeC, to and to.C or themeC
+  local names = {}
+  for name in pairs(themeC) do
+    names[old[name]] = name
+  end
+  for tex, paint in pairs(S.painted) do
+    local name = names[paint[1]]
+    if name and under(tex, frame) then
+      S.tint(tex, new[name], paint[2])
+    end
+  end
+  for fs, color in pairs(S.inked) do
+    local name = names[color]
+    if name and under(fs, frame) then
+      S.ink(fs, new[name])
+    end
+  end
+  for widget in pairs(S.widgets or {}) do
+    if under(widget, frame) then
+      S.Draw(widget)
+    end
+  end
 end
 
 local function eui()
@@ -335,6 +379,7 @@ S.SKIN_DEFAULTS = {
   pageSounds = true,
   gameButtons = false, -- the game's button textures on every kit button
   ornaments = false, -- the gold ornament under section titles
+  sheetParchment = true, -- a page reads on parchment (ADR 0054); off: the look's colours
   gameFrames = false, -- the game's own windows and insets
 }
 S.HEADING_FONT = "Fonts\\MORPHEUS.TTF"
@@ -739,6 +784,45 @@ function S.LevelToken(level, playerLevel)
     or (playerLevel <= 39 and math.floor(playerLevel / 10) + 5)
     or math.floor(playerLevel / 5) + 1
   return -diff <= green and "diffGreen" or "diffGrey"
+end
+
+-- The difficulty token of a level band (a zone's or a dungeon's) against the character's level:
+-- the character's own level while it lies inside the band (yellow), else the nearer end, so a band
+-- still ahead is orange or red and one left behind is green or grey. A band with one end takes
+-- that end; nil when neither end or the character's level is known.
+function S.BandToken(lo, hi, playerLevel)
+  local level = lo or hi
+  if not (level and playerLevel) then
+    return nil
+  end
+  if lo and hi and hi > lo then
+    level = math.max(lo, math.min(hi, playerLevel))
+  end
+  return S.LevelToken(level, playerLevel)
+end
+
+-- The relative luminance of a colour (WCAG 2), and the contrast of two colours (1 to 21).
+local function channel(v)
+  return v <= 0.03928 and v / 12.92 or ((v + 0.055) / 1.055) ^ 2.4
+end
+
+function S.Luminance(c)
+  return 0.2126 * channel(c[1]) + 0.7152 * channel(c[2]) + 0.0722 * channel(c[3])
+end
+
+function S.Contrast(a, b)
+  local la, lb = S.Luminance(a), S.Luminance(b)
+  if la < lb then
+    la, lb = lb, la
+  end
+  return (la + 0.05) / (lb + 0.05)
+end
+
+-- The ink for words on a filled ground (a tile's badge, ADR 0056: 4.5 to 1): the dark or the
+-- light badge ink of the colour set in force, whichever stands out more against `ground`.
+function S.InkOn(ground)
+  local dark, light = S.C.badgeInk, S.C.badgeInkLight
+  return S.Contrast(dark, ground) >= S.Contrast(light, ground) and dark or light
 end
 
 -- A line of the game's tooltip in the theme (the tooltip's white would vanish on parchment): green

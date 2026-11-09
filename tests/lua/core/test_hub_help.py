@@ -193,3 +193,51 @@ def test_the_help_page_and_the_usage_line(wow: WowRuntime):
     ):
         assert word in usage, word
     assert wow.errors == []
+
+
+def test_the_rail_rows_carry_the_sentence_and_the_options_are_cards(wow: WowRuntime):
+    """ADR 0058, PH7: the hub's menu is a rail of rows with the app's icon, its name and its one
+    sentence under it (a page of an app stays a plain row under it); every option of a page is a
+    card with its description under the widget and the control at the right."""
+    wow.start(CORE, DATA, QUESTS, MAP)
+    wow.run_frames(5)
+    wow.slash("/bastians")
+    buttons = nav(wow)
+    by_name = {strip(b.label.GetText(b.label)): b for b in buttons}
+    quests = by_name["Quests"]
+    assert quests.GetHeight(quests) == 40 and quests.sub.IsShown(quests.sub)
+    assert strip(quests.sub.GetText(quests.sub)).startswith("Every quest:")
+    minimap = by_name["Minimap"]
+    assert minimap.GetHeight(minimap) == 24 and not minimap.sub.IsShown(minimap.sub)
+    # the rows stack by their heights, none over another
+    tops = [
+        -wow.eval(f"select(5, {HUB}.navButtons[{i}]:GetPoint(1))")
+        for i in range(1, len(buttons) + 1)
+    ]
+    heights = [b.GetHeight(b) for b in buttons]
+    for i in range(1, len(tops)):
+        assert tops[i] == tops[i - 1] + heights[i - 1], i
+    # the Quests page: the options on cards, the toggles' boxes at the right, the description under
+    wow.execute(f"{HUB}.Open('Quests')")
+    assert wow.eval(f"{HUB}.canvas.cardCount") >= 3
+    widgets = list(wow.eval(f"{HUB}.canvas.widgets").values())
+    toggles = [w for w in widgets if w.box is not None and w.card is not None]
+    assert toggles and all(w.controlRight is True for w in toggles)
+    assert all(
+        wow.eval(f"(select(1, {HUB}.canvas.widgets[{i + 1}].box:GetPoint(1)))") == "RIGHT"
+        for i, w in enumerate(widgets)
+        if w.box is not None and w.card is not None
+    )
+    # General's options carry descriptions: the card shows the description under the widget
+    wow.execute(f"{HUB}.Open('Core')")
+    widgets = list(wow.eval(f"{HUB}.canvas.widgets").values())
+    described = [(i, w) for i, w in enumerate(widgets) if w.card not in (None, "")]
+    assert described
+    i, w = described[0]
+    n = sum(1 for x in widgets[: i + 1] if x.card is not None)  # the card's number among the cards
+    assert strip(wow.eval(f"{HUB}.canvas.cardPool[{n}].desc:GetText()")) == strip(str(w.card))
+    assert wow.eval(f"{HUB}.canvas.cardPool[{n}]:IsShown()") is True
+    # a header and a note are no cards
+    headers = [w for w in widgets if w.card is None]
+    assert headers
+    assert wow.errors == []

@@ -10,17 +10,14 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 279129607598808
-stamp = "half"
 why = "Our vendor data lists the pattern as limited stock at both leatherworking suppliers. How fast it comes back is not in the data."
 
 [[rumours]]
 claim = 200848432230967
-stamp = "true"
 why = "The pattern traded on all four beta markets for many times its vendor price of 20 silver."
 
 [[rumours]]
 claim = 217641367123977
-stamp = "half"
 why = "The bracers sold far above their parts at the 7-day medians, but the parts cost several times his figure, most of it for the pearls and fangs."
 
 [[rumours]]

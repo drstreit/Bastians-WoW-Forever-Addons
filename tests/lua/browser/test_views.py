@@ -5,7 +5,7 @@ and the Quests views open in it; without it, they open in Quests' own fallback w
 import re
 
 from harness import WowRuntime
-from pages import band, click_ref, page_rows
+from pages import band, click_ref, hosted_sheet, page_rows
 
 CORE, DATA, QUESTS, BROWSER = (
     "Bastians_Core",
@@ -48,16 +48,22 @@ def test_bq_opens_the_zone_page_in_the_browser(wow: WowRuntime):
     assert strip(wow.eval(f"{MOD}.win.title:GetText()")) == "Here: Elwynn Forest"
     assert wow.eval(f"{DS}:IsShown()") is True
     assert band(wow, DS)["name"] == "Elwynn Forest"
-    assert band(wow, DS)["summary"] == "Level 7-11, Eastern Kingdoms"
+    # the sheet's lead (ADR 0054): a zone says its quest levels and where it lies
+    assert (
+        band(wow, DS)["summary"]
+        == "Quests from level 7 to 11. Eastern Kingdoms. Fishing from skill 25."
+    )
     texts = page_rows(wow, DS)
-    assert texts[0] == "To do here  2" and "Hand in  1" in texts and "Places" in texts
+    assert texts[0] == "To do here  2" and "Hand in  1" in texts
+    assert any(t.startswith("Innkeeper Farley") for t in texts)  # the People chapter
     assert wow.eval("Bastians:GetModule('Quests').Window.IsShown()") is True
     assert wow.eval("Bastians:ShowPage('zone:1436')") is True
     assert wow.eval(f"{BR}.Current().ref") == "zone:1436"
     assert wow.eval("Bastians:ShowPage('nonsense')") is False
     # the views that remain are rows of the Browser's home; the old ones are gone
     views = [r.view for r in wow.eval(f"{BR}.IdleRows()[1].children").values()]  # no Here (C4)
-    assert views == ["quests.log", "quests.attune"]  # All quests: the Quests list covers it
+    # All quests: the Quests list covers it; Class quests joined on 07.11.2026 (A3.1)
+    assert views == ["quests.log", "quests.attune", "quests.class"]
     assert wow.errors == []
 
 
@@ -75,16 +81,17 @@ def test_pages_and_views_share_one_history(wow: WowRuntime):
     assert wow.eval(f"{BR}.Current().ref") == "quest:62"
     assert wow.eval(f"{DS}:IsShown()") is True
     assert wow.eval(f"{MOD}.controlBar:IsShown()") is False
-    assert "Chain" in page_rows(wow, DS)  # the chain lives on the quest page (ADR 0013 A)
+    # the chain is the strip of the quest's sheet (ADR 0055)
+    assert hosted_sheet(wow, DS)["links"][0] == "Step 1 of 3 - The Fargodeep Mine"
     # a view in the same history: Back from it returns to the page
     wow.slash("/bq log")
     assert wow.eval(f"{BR}.Current().kind") == "view"
     assert wow.eval(f"{BR}.Current().id") == "quests.log"
     assert wow.eval(f"{MOD}.win.title:GetText()") == "Quests: My quests"
     # the view fills the list pane; the quest's page stays in the detail pane (ADR 0018)
-    assert wow.eval(f"{DS}:IsShown()") is True and band(wow, DS)["name"] == "The Fargodeep Mine"
+    assert wow.eval(f"{DS}:IsShown()") is True and band(wow, DS)["name"] == "The Fargodeep Mine II"
     assert wow.eval(f"{MOD}.controlBar:IsShown()") is True
-    assert flat(wow)[0] == "HAND IN HERE  1"
+    assert flat(wow)[0] == "HAND IN, THIS ZONE  1"
     wow.execute(f"{BR}.Back()")
     assert wow.eval(f"{BR}.Current().ref") == "quest:62"
     # /bq <id> opens that quest's page
@@ -120,7 +127,7 @@ def test_a_quest_change_re_renders_the_view_in_the_browser(wow: WowRuntime):
     )
     wow.fire("QUEST_LOG_UPDATE")
     wow.advance(0.3)
-    assert any(t.endswith("The Fargodeep Mine  Group  1/1") for t in flat(wow))
+    assert any("The Fargodeep Mine  1/" in t for t in flat(wow))  # its finished objective shows
     # the zone page follows too: its sections are rebuilt on the quest change
     wow.slash("/bq here")
     assert any("1/1 objectives" in t for t in page_rows(wow, DS))

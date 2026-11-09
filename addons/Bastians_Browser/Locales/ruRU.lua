@@ -61,10 +61,6 @@ ns.L:Register("ruRU", {
   ["Your bookmarks and the pages you opened last."] = "Ваши закладки и последние открытые страницы.",
   ["The pages you kept with Bookmark on a page."] = "Страницы, сохраненные кнопкой закладки на странице.",
   ["Drag to widen the Here column"] = 'Перетащите, чтобы расширить столбец "Здесь"',
-  ["Slim"] = "Узкий",
-  ["Slim or wide"] = "Узкий или широкий",
-  ["Slim keeps only the Here column (your zone, your quests here) and hides the game's quest tracker; Wide shows the page beside it."] = 'Узкий режим оставляет только столбец "Здесь" (ваша зона, ваши задания здесь) и скрывает список заданий игры; широкий показывает страницу рядом.',
-  ["Wide"] = "Широкий",
   ["Dock"] = "Закрепить",
   ["Dock to the map"] = "Закрепить у карты",
   ["The window sits beside the map at its height and moves with it. Click again to undock."] = "Окно располагается рядом с картой на ее высоте и перемещается вместе с ней. Нажмите еще раз, чтобы открепить.",
@@ -72,19 +68,17 @@ ns.L:Register("ruRU", {
   -- settings, tooltip hint
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "Показывать в строках ценность заданий и предметов (награды, цены)",
   ["Follow the target: an NPC or object you target becomes the subject"] = "Следовать за целью: НИП или объект, который вы выбрали целью, становится темой",
-  ["Hide the game's objective tracker in slim mode"] = "Скрывать список целей игры в узком режиме",
   ["Preview a row in the page pane"] = "Предпросмотр строки на панели страницы",
   ["While Shift is held"] = "Пока удерживается Shift",
   ["On every hover"] = "При каждом наведении",
   ["Never"] = "Никогда",
   ["Open in Browser"] = "Открыть в обозревателе",
-  ["Right click: open in the Browser"] = "Правый клик: открыть в обозревателе",
+  ["%s: open in the Browser"] = "%s: открыть в обозревателе",
+  ["Open what is under the mouse in the Browser"] = "Открыть в обозревателе то, что под курсором",
 
   -- list types (Browser.LISTS and registered lists)
-  ["NPCs"] = "НИП",
   ["Items"] = "Предметы",
   ["Objects"] = "Объекты",
-  ["Nodes"] = "Ресурсы",
   ["Zones"] = "Зоны",
   ["Recipes"] = "Рецепты",
   ["Quests"] = "Задания",
@@ -92,7 +86,6 @@ ns.L:Register("ruRU", {
   ["Dungeon"] = "Подземелье",
   ["Raid"] = "Рейд",
   ["Farm spots"] = "Места фарма",
-  ["Quest chains"] = "Цепочки заданий",
 
   -- dimension titles and their values
   ["Service"] = "Услуга",
@@ -206,9 +199,6 @@ ns.L:Register("ruRU", {
   ["First Aid"] = "Первая помощь",
 
   -- spot statuses
-  ["Verified"] = "Проверено",
-  ["Unverified"] = "Не проверено",
-  ["Refuted"] = "Опровергнуто",
 
   -- sort labels registered by the apps (the Browser translates them once more)
   ["Loot per kill"] = "Добыча за убийство",
@@ -239,18 +229,62 @@ ns.L:Register("ruRU", {
   ["Here, your quests, the lists, bookmarks and recent pages."] = "Здесь, ваши задания, списки, закладки и недавние страницы.",
   ["Search: a name, or a type first (npc wel)"] = "Поиск: название или сначала тип (npc wel)",
   ["Drag to widen the list or the page"] = "Перетащите, чтобы расширить список или страницу",
-  ["Slim keeps only your quests (the tracker) in a narrow window and hides the game's quest tracker; Wide brings the lists and the page back."] = "Узкий режим оставляет только ваши задания (список) в узком окне и скрывает список заданий игры; широкий возвращает списки и страницу.",
   ["Copy Wowhead link"] = "Копировать ссылку Wowhead",
   ["Wowhead"] = "Wowhead",
   ["The link is in the chat input: copy it with Ctrl+C."] = "Ссылка находится в строке ввода чата: скопируйте ее с помощью Ctrl+C.",
   ["Slide the list in"] = "Свернуть список",
   ["Slide the list out"] = "Развернуть список",
   -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
-  ["Mobs"] = "Монстры",
   ["Filter"] = "Фильтр",
+  ["Filter this page"] = "Фильтр страницы",
   -- the search syntax (ADR 0045)
   ["type (npc, item, quest, zone, ...)"] = "тип (npc, item, quest, zone, ...)",
   -- the broker displays' feed (ADR 0043, 31.10.2026)
   ["Click: the Browser. Right click: the bookmarks."] = "Клик: обозреватель. Правый клик: закладки.",
   ["Everything the suite knows: quests, NPCs, items, places."] = "Все, что знает набор: задания, НИП, предметы, места.",
+  ["in %s"] = "Где: %s",
+  ["Everywhere"] = "Везде",
+  ["%d more elsewhere. Click to look everywhere."] = "Ещё %d в других местах. Щёлкните, чтобы искать везде.",
+  ["%d in the other lists. Click to look in all."] = "%d в других списках. Щёлкните, чтобы искать во всех.",
+  ["The search failed. See /bastians log."] = "Поиск не удался. См. /bastians log.",
+  ["Where the search looks: in your zone, on your continent, or everywhere."] = "Где ищет поиск: в вашей зоне, на вашем континенте или везде.",
+  ["Look everywhere"] = "Искать везде",
+  -- Browser.lua: a list grouped by one of its dimensions (PA5.4)
+  ["Zone"] = "Зона",
+  ["The rows under a heading: what they are grouped by."] = "Строки под заголовком: по чему они сгруппированы.",
+  -- Browser.lua: the lists by the model's words (ADR 0056, PA2.3)
+  ["People"] = "Жители",
+  ["Monsters"] = "Монстры",
+  ["Gathering"] = "Сбор",
+  ["Chains"] = "Цепочки",
+  -- Browser.lua:
+  ["All Notes"] = "Все заметки",
+  ["Gold Stories"] = "Золотые истории",
+  ["Chapter"] = "Глава",
+  ["Map style of the mini maps"] = "Стиль мини-карт",
+  ["As on the large map"] = "Как на большой карте",
+  ["The client's painting"] = "Рисунок игры",
+  -- Browser.lua: the rail, the tabs and More (ADR 0058, 07.11.2026)
+  ["%d-%d of %d"] = "%d-%d из %d",
+  ["Previous page"] = "Предыдущая страница",
+  ["Next page"] = "Следующая страница",
+  ["Opens the search box over the title; a second click brings the title back."] = "Открывает поле поиска поверх заголовка; второй щелчок возвращает заголовок.",
+  ["World"] = "Мир",
+  ["Characters"] = "Персонажи",
+  ["Gold"] = "Золото",
+  ["More"] = "Ещё",
+  ["%s needs %s"] = "%s требует %s",
+  ["Settings"] = "Настройки",
+  ["Help"] = "Справка",
+  ["What's new"] = "Что нового",
+  ["About"] = "О программе",
+  ["Every app, the looks, the keys."] = "Каждое приложение, оформление, клавиши.",
+  ["The story, the commands, the keys."] = "История, команды, клавиши.",
+  ["The last releases."] = "Последние выпуски.",
+  ["The sources and their licences."] = "Источники и их лицензии.",
+  ["Everything else: the other apps' views, your bookmarks, the settings."] = "Всё остальное: виды других приложений, ваши закладки, настройки.",
+  -- Browser.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Lands for you"] = "Земли для вас",
+  ["at your level"] = "вашего уровня",
+  ["unknown"] = "неизвестно",
 })

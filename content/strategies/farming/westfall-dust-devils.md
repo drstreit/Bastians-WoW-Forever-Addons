@@ -10,17 +10,14 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 19259994766981
-stamp = "true"
 why = "The loot tables give Magic Dust in one Dust Devil kill out of five. The three rares that carry it drop it less often, and no vendor sells it."
 
 [[rumours]]
 claim = 144830212600985
-stamp = "half"
 why = "Strange Dust is not in the Dust Devils' loot table. Magic Dust is, and twelve devils at one in five make about two a round."
 
 [[rumours]]
 claim = 218864395364307
-stamp = "open"
 why = "Our loot table, which comes from the Classic data, says one in five. Nobody has counted on Forever yet."
 
 [[rumours]]

@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("koKR", {
+  ["%s is forgotten. Logging in with that character records it again."] = "%s 캐릭터를 잊었습니다. 그 캐릭터로 접속하면 다시 기록됩니다.",
+  ["Forget %s? Use the action again within 5 seconds."] = "%s 캐릭터를 잊을까요? 5초 안에 다시 실행하세요.",
+  ["Forget this character"] = "이 캐릭터 잊기",
   ["Alts"] = "부캐릭터",
   ["Characters"] = "캐릭터",
   ["Your characters"] = "내 캐릭터",
@@ -12,6 +15,32 @@ ns.L:Register("koKR", {
   ["You have it"] = "내가 가짐",
   ["you"] = "나",
   ["Known by: %s"] = "습득: %s",
+  -- Runs.lua, dungeon runs and lockouts (catalog review A2.5, 07.11.2026)
+  ["Your runs"] = "내 공략 횟수",
+  ["%s: one run"] = "%s: 1회",
+  ["%s: %d runs"] = "%s: %d회",
+  ["last %s"] = "마지막 %s",
+  ["locked, resets in %s"] = "잠김, %s 후 초기화",
+  ["No run recorded yet."] = "아직 기록된 공략이 없습니다.",
+  ["Dungeon runs"] = "던전 공략 횟수",
+  -- Train.lua, the trainer view (catalog review A5.7, 07.11.2026)
+  ["Trainer"] = "훈련사",
+  ["what your class trainers teach you next"] = "직업 훈련사가 다음에 가르치는 것",
+  ["Learn now"] = "지금 배우기",
+  ["Later"] = "나중에",
+  ["at %s, %s"] = "%s에서, %s",
+  ["at %s"] = "%s에서",
+  ["You know every spell for your level."] = "현재 레벨의 모든 주문을 알고 있습니다.",
+  ["Nothing to learn now; %d at later levels"] = "지금 배울 것 없음; 이후 레벨에 %d개",
+  ["%d spells to learn now for %s; %d at later levels"] = "지금 배울 주문 %d개, 비용 %s; 이후 레벨에 %d개",
+  ["; %d unknown whether known"] = "; %d개는 아는지 알 수 없음",
+  ["The trainer view needs Bastian's Data."] = "훈련사 보기에는 Bastian's Data가 필요합니다.",
+  -- the gold goals (catalog review A5.5, 07.11.2026)
+  ["Next training"] = "다음 훈련",
+  ["Training at level %d"] = "%d 레벨 훈련",
+  ["Riding at level %d"] = "%d 레벨 탈것 타기",
+  ["A mount at level %d"] = "%d 레벨 탈것",
+  ["Spell"] = "주문",
   ["Owned"] = "소유",
   ["You"] = "나",
   ["Nobody"] = "아무도 없음",
@@ -77,4 +106,7 @@ ns.L:Register("koKR", {
   ["Click a line: its page. Right click: its entity menu."] = "줄 클릭: 해당 페이지. 오른쪽 클릭: 항목 메뉴.",
   ["Click: your characters' window. Right click: its settings."] = "클릭: 내 캐릭터 창. 오른쪽 클릭: 설정.",
   ["Item"] = "아이템",
+  -- Alts.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Gold on all"] = "전체 골드",
+  ["Highest level"] = "최고 레벨",
 })

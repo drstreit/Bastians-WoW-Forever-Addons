@@ -47,7 +47,7 @@ Welcome.WAYS = {
       { module = "Core", key = "wordsReminder", label = L["The suite's words"], values = "words" },
       { module = "Voice.Talk", key = "enabled", label = L["Conversations without windows"] },
       { module = "Map", key = "minimapPins", label = L["Pins on the minimap"] },
-      { module = "Gestures", key = "courtesy", label = L["Courtesy"], values = "courtesy" },
+      { module = "Courtesy", key = "courtesy", label = L["Courtesy"], values = "courtesy" },
     },
     steps = {
       { id = "hear", label = L["Hear this place"], tip = L["The Orbiter plays the zone's story."] },

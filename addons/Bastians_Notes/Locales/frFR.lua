@@ -91,4 +91,8 @@ ns.L:Register("frFR", {
   ["Near here:"] = "Près d'ici :",
   ["No notes near here."] = "Aucune note près d'ici.",
   ["and %d more"] = "et %d de plus",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "Sur",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "Pas encore de notes. Ajouter une note sur une page écrit la première.",
 })

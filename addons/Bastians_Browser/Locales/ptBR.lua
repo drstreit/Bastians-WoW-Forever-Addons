@@ -63,10 +63,6 @@ ns.L:Register("ptBR", {
   ["Your bookmarks and the pages you opened last."] = "Seus favoritos e as últimas páginas que você abriu.",
   ["The pages you kept with Bookmark on a page."] = "As páginas guardadas com Favoritar em uma página.",
   ["Drag to widen the Here column"] = "Arraste para alargar a coluna Aqui",
-  ["Slim"] = "Estreito",
-  ["Slim or wide"] = "Estreito ou largo",
-  ["Slim keeps only the Here column (your zone, your quests here) and hides the game's quest tracker; Wide shows the page beside it."] = "Estreito mantém apenas a coluna Aqui (sua zona, suas missões aqui) e oculta o rastreador de missões do jogo; Largo mostra a página ao lado.",
-  ["Wide"] = "Largo",
   ["Dock"] = "Acoplar",
   ["Dock to the map"] = "Acoplar ao mapa",
   ["The window sits beside the map at its height and moves with it. Click again to undock."] = "A janela fica ao lado do mapa, na mesma altura, e se move com ele. Clique de novo para desacoplar.",
@@ -74,19 +70,17 @@ ns.L:Register("ptBR", {
   -- settings, tooltip hint
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "Mostrar o valor das missões e dos itens (recompensas, preços) nas linhas",
   ["Follow the target: an NPC or object you target becomes the subject"] = "Seguir o alvo: um NPC ou objeto que você seleciona passa a ser o assunto",
-  ["Hide the game's objective tracker in slim mode"] = "Ocultar o rastreador de objetivos do jogo no modo estreito",
   ["Preview a row in the page pane"] = "Pré-visualizar uma linha no painel da página",
   ["While Shift is held"] = "Enquanto Shift estiver pressionado",
   ["On every hover"] = "A cada passagem do mouse",
   ["Never"] = "Nunca",
   ["Open in Browser"] = "Abrir no Navegador",
-  ["Right click: open in the Browser"] = "Clique direito: abrir no Navegador",
+  ["%s: open in the Browser"] = "%s: abrir no Navegador",
+  ["Open what is under the mouse in the Browser"] = "Abrir no Navegador o que está sob o mouse",
 
   -- list types (Browser.LISTS and registered lists)
-  ["NPCs"] = "NPCs",
   ["Items"] = "Itens",
   ["Objects"] = "Objetos",
-  ["Nodes"] = "Pontos de coleta",
   ["Zones"] = "Zonas",
   ["Recipes"] = "Receitas",
   ["Quests"] = "Missões",
@@ -94,7 +88,6 @@ ns.L:Register("ptBR", {
   ["Dungeon"] = "Masmorra",
   ["Raid"] = "Raide",
   ["Farm spots"] = "Locais de farm",
-  ["Quest chains"] = "Cadeias de missões",
 
   -- dimension titles and their values
   ["Service"] = "Serviço",
@@ -208,9 +201,6 @@ ns.L:Register("ptBR", {
   ["First Aid"] = "Primeiros Socorros",
 
   -- spot statuses
-  ["Verified"] = "Verificado",
-  ["Unverified"] = "Não verificado",
-  ["Refuted"] = "Refutado",
 
   -- sort labels registered by the apps (the Browser translates them once more)
   ["Loot per kill"] = "Saque por abate",
@@ -241,18 +231,62 @@ ns.L:Register("ptBR", {
   ["Here, your quests, the lists, bookmarks and recent pages."] = "Aqui, suas missões, as listas, os favoritos e as páginas recentes.",
   ["Search: a name, or a type first (npc wel)"] = "Busca: um nome, ou primeiro um tipo (npc wel)",
   ["Drag to widen the list or the page"] = "Arraste para alargar a lista ou a página",
-  ["Slim keeps only your quests (the tracker) in a narrow window and hides the game's quest tracker; Wide brings the lists and the page back."] = "Estreito mantém apenas suas missões (o rastreador) em uma janela estreita e oculta o rastreador de missões do jogo; Largo traz de volta as listas e a página.",
   ["Copy Wowhead link"] = "Copiar link do Wowhead",
   ["Wowhead"] = "Wowhead",
   ["The link is in the chat input: copy it with Ctrl+C."] = "O link está na entrada do chat: copie-o com Ctrl+C.",
   ["Slide the list in"] = "Recolher a lista",
   ["Slide the list out"] = "Expandir a lista",
   -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
-  ["Mobs"] = "Monstros",
   ["Filter"] = "Filtrar",
+  ["Filter this page"] = "Filtrar esta página",
   -- the search syntax (ADR 0045)
   ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
   -- the broker displays' feed (ADR 0043, 31.10.2026)
   ["Click: the Browser. Right click: the bookmarks."] = "Clique: o Navegador. Clique direito: os favoritos.",
   ["Everything the suite knows: quests, NPCs, items, places."] = "Tudo o que a suíte sabe: missões, NPCs, itens, locais.",
+  ["in %s"] = "em %s",
+  ["Everywhere"] = "Em todo lugar",
+  ["%d more elsewhere. Click to look everywhere."] = "Mais %d em outros lugares. Clique para procurar em todo lugar.",
+  ["%d in the other lists. Click to look in all."] = "%d nas outras listas. Clique para procurar em todas.",
+  ["The search failed. See /bastians log."] = "A busca falhou. Veja /bastians log.",
+  ["Where the search looks: in your zone, on your continent, or everywhere."] = "Onde a busca procura: na sua zona, no seu continente ou em todo lugar.",
+  ["Look everywhere"] = "Procurar em todo lugar",
+  -- Browser.lua: a list grouped by one of its dimensions (PA5.4)
+  ["Zone"] = "Zona",
+  ["The rows under a heading: what they are grouped by."] = "As linhas sob um título: pelo que são agrupadas.",
+  -- Browser.lua: the lists by the model's words (ADR 0056, PA2.3)
+  ["People"] = "Habitantes",
+  ["Monsters"] = "Monstros",
+  ["Gathering"] = "Coleta",
+  ["Chains"] = "Cadeias",
+  -- Browser.lua:
+  ["All Notes"] = "Todas as notas",
+  ["Gold Stories"] = "Histórias de ouro",
+  ["Chapter"] = "Capítulo",
+  ["Map style of the mini maps"] = "Estilo dos minimapas",
+  ["As on the large map"] = "Como no mapa grande",
+  ["The client's painting"] = "A pintura do jogo",
+  -- Browser.lua: the rail, the tabs and More (ADR 0058, 07.11.2026)
+  ["%d-%d of %d"] = "%d-%d de %d",
+  ["Previous page"] = "Página anterior",
+  ["Next page"] = "Próxima página",
+  ["Opens the search box over the title; a second click brings the title back."] = "Abre a caixa de busca sobre o título; um segundo clique traz o título de volta.",
+  ["World"] = "Mundo",
+  ["Characters"] = "Personagens",
+  ["Gold"] = "Ouro",
+  ["More"] = "Mais",
+  ["%s needs %s"] = "%s precisa de %s",
+  ["Settings"] = "Configurações",
+  ["Help"] = "Ajuda",
+  ["What's new"] = "Novidades",
+  ["About"] = "Sobre",
+  ["Every app, the looks, the keys."] = "Cada app, os visuais, as teclas.",
+  ["The story, the commands, the keys."] = "A história, os comandos, as teclas.",
+  ["The last releases."] = "Os últimos lançamentos.",
+  ["The sources and their licences."] = "As fontes e suas licenças.",
+  ["Everything else: the other apps' views, your bookmarks, the settings."] = "Todo o resto: as visões dos outros apps, seus favoritos, as configurações.",
+  -- Browser.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Lands for you"] = "Terras para você",
+  ["at your level"] = "do seu nível",
+  ["unknown"] = "desconhecido",
 })

@@ -228,7 +228,11 @@ function Arrow.Update()
   if not mod then
     return
   end
-  local t = db().arrow ~= false and mod:IsEnabled() and not byKey and Arrow.Target() or nil
+  local t = db().arrow ~= false
+    and mod:IsEnabled()
+    and not byKey
+    and not ns.Death.Silenced() -- never the way a death made wrong
+    and Arrow.Target()
   if not t then
     if frame then
       stopTicks()

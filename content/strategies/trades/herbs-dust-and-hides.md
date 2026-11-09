@@ -10,7 +10,6 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 262222496745632
-stamp = "true"
 why = "On the beta's auction houses the herbs of the 20s fetched more a piece than the ore and the leather of the same levels."
 
 [[rumours]]

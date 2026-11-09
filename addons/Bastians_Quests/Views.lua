@@ -227,7 +227,7 @@ local function placeEntry(row, e, q, map, px, py)
   if e.isComplete then
     turnIn()
   else
-    local spots = q and q.spots
+    local spots = q and q.spots and Logic.OpenSpots(e, q)
     local list = spots and spots[map]
     local cx, cy
     if not (list and #list > 0) then
@@ -264,90 +264,58 @@ local function placeEntry(row, e, q, map, px, py)
   row.d = (row.map == map) and dist2(px, py, row.x, row.y) or math.huge
 end
 
--- One quest of the log with objectives, the folded quest text and the quest item row below.
--- opts: { questText(qid) -> details, objectives ; questItem(entry) -> { itemID, icon, link } or nil }
--- The "next in chain" row of a quest: the following step of its chain, greyed while it cannot
--- be taken yet, in its own colours once it is available (the predecessor handed in). Nil when
--- the chain ends with the quest, the next step is done or in the log already.
-function V.nextInChain(qid, state, map)
-  local nextID = Logic.nextInChain(qid, state)
-  if not nextID or state.done(nextID) or state.inLog(nextID) then
-    return nil
+-- Where a log quest sends the player now: { map, x, y, target, d }, as on its row. A quest with no
+-- objective spot takes the client's quest POI on `map` (Forever's own quests, ADR 0053).
+function V.PlaceOf(e, q, map, px, py)
+  local place = {}
+  placeEntry(place, e, q, map, px, py)
+  if not e.isComplete and place.target ~= "objective" or place.map == nil then
+    for _, poi in ipairs(B.Compat.GetQuestsOnMap(map)) do
+      if poi.questID == e.questID then
+        place.map, place.x, place.y, place.target = map, poi.x, poi.y, "objective"
+        place.d = dist2(px, py, poi.x, poi.y)
+        break
+      end
+    end
   end
-  local st = Logic.status(nextID, state)
-  local row = R.quest(nextID, state, { status = st, zone = true, map = map, where = "next" .. qid })
-  row.id = "next:" .. qid
-  row.text = C.grey .. L["next in chain"] .. ":|r " .. row.text
-  if st ~= "available" then
-    row.color = S.C.muted -- greyed out until it can be taken
-  end
-  return row
+  return place
 end
 
+-- One quest of the log as two lines (ADR 0053): its name, then the one thing to know (R.nextStep).
+-- What else there is lives on the sheet. opts: { questItem(entry) -> { itemID, icon, link } or nil,
+-- onOpen(questID) (a left click) }.
 function V.activeRow(e, state, map, px, py, opts)
   opts = opts or {}
   local q = Logic.quest(e.questID)
-  local status = e.isComplete and "complete" or "log"
-  local progress = R.progressText(e)
-  local pdone, ptotal = R.progressOf(e)
-  local pcol = e.isComplete and R.COLOR.green or R.progressColor(pdone, ptotal > 0 and ptotal or nil)
   local row = R.quest(e.questID, state, {
-    status = status,
+    status = e.isComplete and "complete" or "log",
     title = e.title,
     map = map,
     where = e.isComplete and "turnin" or "start",
-    extra = progress ~= "" and ("  " .. pcol .. progress .. "|r") or nil,
   })
   row.id = "a:" .. e.questID
   row.entry = e
+  row.block = true -- the row lights as one under the mouse
   placeEntry(row, e, q, map, px, py)
-
-  local children = R.objectives(e)
-  local details, objText
-  if opts.questText then
-    details, objText = opts.questText(e.questID)
-  end
-  local first = R.firstSentence(details)
-  local more = {
-    id = "more:" .. e.questID,
-    text = C.grey .. (first or L["Quest text"]) .. "|r",
-    collapsed = true,
-    children = {},
-  }
-  for i, p in ipairs(R.paragraphs(details)) do
-    more.children[#more.children + 1] =
-      { id = "pa:" .. e.questID .. ":" .. i, kind = "para", text = C.grey .. p .. "|r" }
-  end
-  if objText and objText ~= "" then
-    more.children[#more.children + 1] =
-      { id = "pa:" .. e.questID .. ":o", kind = "para", text = C.white .. objText .. "|r" }
-  end
-  if #more.children == 0 then
-    more.children[1] =
-      { id = "pa:" .. e.questID .. ":0", kind = "para", text = C.grey .. L["(no quest text)"] .. "|r" }
-  end
-  -- the next quest of the chain under its predecessor ("next in chain
-  -- as a separate entry, greyed out as long as not active"); it turns active when this one is
-  -- handed in (V.active's "Next in chain" section takes it from there)
-  children[#children + 1] = more
-  local nextRow = V.nextInChain(e.questID, state, map)
-  if nextRow then
-    children[#children + 1] = nextRow
+  local level = (q and q.level) or e.level
+  local title = R.levelColor(level, state.level)
+    .. (level and ("[" .. level .. "] ") or "")
+    .. (e.title or R.questName(e.questID))
+    .. "|r"
+  local step, more = R.nextStep(e, q, map)
+  row.title, row.meta, row.metaMore = title, step, more
+  row.text = title .. "  " .. step .. (more and more[1] and ("  " .. table.concat(more, "  ")) or "")
+  row.icon = B.UI.IconTexture(e.isComplete and "done" or "questActive")
+  row.worth, row.value, row.valueKind = false, nil, nil -- the worth stands on the sheet
+  if opts.onOpen then
+    row.onClick = function()
+      opts.onOpen(e.questID)
+    end
   end
   local item = opts.questItem and opts.questItem(e)
   if item then
-    row.useItem, row.itemIcon, row.rightPad = item.itemID, item.icon, 24
-    children[#children + 1] = {
-      id = "use:" .. e.questID,
-      kind = "useitem",
-      useItem = item.itemID,
-      itemIcon = item.icon,
-      rightPad = 30,
-      height = 26,
-      text = "  " .. L["Use quest item"] .. ": " .. (item.link or ("item:" .. item.itemID)),
-    }
+    row.useItem, row.itemIcon = item.itemID, item.icon -- for the secure bar beside the frame
   end
-  row.children = children
   return row
 end
 
@@ -407,35 +375,10 @@ function V.active(map, px, py, opts)
   byDistance(goals)
   local roots = {}
   if #here > 0 then
-    roots[#roots + 1] = R.section("a_turnin", L["Hand in here"], #here, here)
-  end
-  -- the chains the character follows (opts.chainNext: next quest id -> the quest handed in): the
-  -- next step as an entry of its own, active now, with its own successor greyed under it; gone
-  -- once it is in the log or done
-  local following = {}
-  for nextID in pairs(opts.chainNext or {}) do
-    if not state.inLog(nextID) and not state.done(nextID) and Logic.quest(nextID) then
-      local st = Logic.status(nextID, state)
-      local row = R.quest(nextID, state, { status = st, zone = true, map = map, where = "follow" })
-      row.id = "follow:" .. nextID
-      if st ~= "available" then
-        row.color = S.C.muted
-      end
-      local after = V.nextInChain(nextID, state, map)
-      if after then
-        row.children = { after }
-      end
-      following[#following + 1] = row
-    end
-  end
-  table.sort(following, function(a, b)
-    return (a.text or "") < (b.text or "")
-  end)
-  if #following > 0 then
-    roots[#roots + 1] = R.section("a_next", L["Next in chain"], #following, following)
+    roots[#roots + 1] = R.section("a_turnin", L["Hand in, this zone"], #here, here)
   end
   if #goals > 0 then
-    roots[#roots + 1] = R.section("a_goals", L["Objectives here"], #goals, goals)
+    roots[#roots + 1] = R.section("a_goals", L["In progress"], #goals, goals)
   end
   if #zoneOrder > 0 then
     local n = 0
@@ -446,7 +389,7 @@ function V.active(map, px, py, opts)
     roots[#roots + 1] = R.section("a_elsewhere", L["Elsewhere"], n, zoneOrder)
   end
   if #doneElsewhere > 0 then
-    roots[#roots + 1] = R.section("a_done", L["Complete, hand in elsewhere"], #doneElsewhere, doneElsewhere)
+    roots[#roots + 1] = R.section("a_done", L["Hand in, elsewhere"], #doneElsewhere, doneElsewhere)
   end
   if #doneUnknown > 0 then
     roots[#roots + 1] = R.section("a_unknown", L["Complete, place unknown"], #doneUnknown, doneUnknown)
@@ -511,7 +454,7 @@ end
 -- All quests: every quest the data knows, by zone, with status, type and level filters
 -- ---------------------------------------------------------------------------------------------
 
-V.STATUS = { "available", "log", "done", "soon", "later", "blocked", "never" }
+V.STATUS = { "available", "log", "done", "soon", "later", "blocked", "inactive", "never" }
 V.STATUS_LABEL = {
   available = "Available",
   log = "In log",
@@ -519,6 +462,7 @@ V.STATUS_LABEL = {
   soon = "Soon",
   later = "Later",
   blocked = "Blocked",
+  inactive = "Not offered now",
   never = "Not for this character",
 }
 V.KINDS = {
@@ -538,7 +482,7 @@ V.BANDS = { "any", "1-10", "11-20", "21-30", "31-40", "41-50", "51-60" }
 
 -- Logic status -> chip key.
 function V.statusKey(st, q, state)
-  if st == "available" or st == "log" or st == "done" then
+  if st == "available" or st == "log" or st == "done" or st == "inactive" then
     return st
   elseif st == "level" then
     if (q.minLevel or 0) - state.level <= Logic.SOON then

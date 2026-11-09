@@ -395,10 +395,28 @@ local TIP_QUESTS = 3 -- quests a giver's tooltip details; the rest as "... and n
 
 local function tip(bubble)
   local item = bubble.item
+  -- a quest mark shows the quest sheet beside the ring (ADR 0053), the tooltip stays without it
+  local sheet = item and item.kind == "quest" and item.ref and B:GetService("questSheet")
+  if sheet then
+    state.sheetShown = sheet
+    -- on the side with room: the ring can stand anywhere
+    local side = state.center and state.center.x > UIParent:GetWidth() / 2 and "LEFT" or "RIGHT"
+    sheet:Preview(item.ref, { anchor = frame, side = side, title = item.title, detail = item.detail })
+    return
+  end
   if not (item and GameTooltip) then
     return
   end
   GameTooltip:SetOwner(bubble, "ANCHOR_RIGHT")
+  -- a reward says what it is: the game's whole item tooltip
+  if item.itemID and GameTooltip.SetItemByID then
+    GameTooltip:SetItemByID(item.itemID)
+    if item.hint then
+      S.TipLine(GameTooltip, item.hint, "tipDim")
+    end
+    GameTooltip:Show()
+    return
+  end
   S.TipLine(GameTooltip, item.title or "?", "tipText")
   local words = KIND_WORDS[item.kind] and L[KIND_WORDS[item.kind]] or nil
   if item.kind == "quest" then
@@ -477,9 +495,21 @@ local function tip(bubble)
 end
 
 local function hideTip()
+  if state.sheetShown then
+    state.sheetShown:EndPreview()
+    state.sheetShown = nil
+  end
   if GameTooltip then
     GameTooltip:Hide()
   end
+end
+
+-- The lock on the hub: whether the ring can be dragged. The same switch as "Lock the position"
+-- in the options.
+function Orbit.ToggleLock()
+  local p = profile()
+  p.lock = not p.lock
+  Orbit.Note(p.lock and L["Locked in place"] or L["Moves freely"])
 end
 
 -- A note under the hub for a few seconds (what a click did, why nothing plays).
@@ -828,6 +858,9 @@ local function build()
   end)
   frame:SetScript("OnDragStart", function(self)
     if profile().lock then
+      -- a locked ring says so ("I cannot move the orbiter anymore";
+      -- the profile held lock = true and nothing on the screen said it)
+      Orbit.Note(L["Locked in place. The lock on the ring unlocks it."])
       return
     end
     self:StartMoving()
@@ -929,6 +962,15 @@ local function build()
     end
   end, L["Open in Browser"])
   hub.open:SetPoint("CENTER", hub, "CENTER", d, -dy)
+  -- the lock ("a small lock symbol in Orbiter to toggle the ability to move it
+  -- freely around"): under the play button, lit while the ring is locked in place
+  hub.lock = iconButton("lock", 14, Orbit.ToggleLock, function()
+    if profile().lock then
+      return L["Locked in place"], L["Click to move the Orbiter freely."]
+    end
+    return L["Moves freely"], L["Drag the Orbiter where you want it. Click to lock it in place."]
+  end)
+  hub.lock:SetPoint("CENTER", hub, "CENTER", 0, -(Voice.RADII.hub - 7))
   hub.name = S.text(frame, 11, S.C.text)
   hub.name:SetPoint("TOP", hub, "BOTTOM", 0, -2)
   hub.name:SetJustifyH("CENTER")
@@ -1170,6 +1212,10 @@ function Orbit.RefreshHub()
     local enabled = on or (name == "open" and state.talk ~= nil)
     b:SetAlpha(enabled and 1 or 0.35)
   end
+  local locked = profile().lock == true
+  hub.lock:SetShown(state.wide)
+  S.tint(hub.lock.glyph, locked and S.C.accent or S.C.dim)
+  hub.lock.locked = locked
   if progress then
     if on and now.progress and now.clip.length then
       local len = now.clip.length

@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 ADDONS = ROOT / "addons"
 CODE_SUFFIXES = {".lua", ".xml"}
 GENERATED_DIR = "Generated"
+TEMPLATE_DIR = "Template"  # a template the player copies out (gestures.md "Your own lines")
 DIRECTIVE = re.compile(r"^##\s*([^:]+?)\s*:\s*(.*?)\s*$")
 
 
@@ -73,7 +74,7 @@ def check_addon(folder: Path) -> list[str]:
         if not path.is_file() or path.suffix.lower() not in CODE_SUFFIXES:
             continue
         rel = path.relative_to(folder)
-        if GENERATED_DIR in rel.parts:
+        if GENERATED_DIR in rel.parts or TEMPLATE_DIR in rel.parts:
             continue
         if rel.as_posix().lower() == "bindings.xml":
             continue  # the client loads Bindings.xml by name; it is never listed in the TOC

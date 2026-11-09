@@ -40,6 +40,7 @@ KINDS = {"road": "r", "ground": "g", "node": "n", "door": "d"}
 PROFILES = ("f", "n")  # fastest, noswim
 FACTS = ("len", "road", "swim", "up", "down", "indoor")
 LOCAL_VERSION = 1
+JOIN_CELLS = 32 * 32  # cells of a cluster in the join field, 33 yards each
 
 
 class NavnetError(ValueError):
@@ -135,6 +136,7 @@ class LocalLevel:
     ways: list[Way]
     anchors: list[Anchor]
     unanchored: list[dict] = field(default_factory=list)
+    join: list[int] = field(default_factory=list)  # flat col, row, waypoint id
 
 
 def _xyz(p, where: str) -> tuple[float, float, float]:
@@ -187,6 +189,7 @@ def read_local(path: Path) -> LocalLevel:
         ways,
         anchors,
         list(raw.get("unanchored") or []),
+        [int(v) for v in raw.get("join") or []],
     )
 
 
@@ -462,6 +465,34 @@ def read_taxi_rows(path: Path) -> list[TaxiRow]:
     return [TaxiRow(r["id"], r["from"], r["to"], r["continent"], r["length"]) for r in rows]
 
 
+def _join_text(net: Network) -> dict[int, str]:
+    """The join field per cluster (route.md "The join"): the 32 x 32 cells row by row, a cell's
+    value its waypoint's place in the cluster (1 = the first) or 0, runs as "value*count"."""
+    grids: dict[int, list[int]] = {}
+    field_ = net.level.join
+    for i in range(0, len(field_), 3):
+        col, row, wp = field_[i], field_[i + 1], field_[i + 2]
+        n = net.number.get(wp)
+        if n is None:
+            continue
+        key = (col // 32) * 32 + row // 32
+        first, last = net.clusters.get(key, (0, -1))
+        if not first <= n <= last:
+            continue  # a waypoint the cluster does not own: the runtime keeps the straight line
+        grids.setdefault(key, [0] * JOIN_CELLS)[(row % 32) * 32 + col % 32] = n - first + 1
+    out = {}
+    for key, grid in sorted(grids.items()):
+        runs, value, count = [], grid[0], 0
+        for v in [*grid, -1]:
+            if v == value:
+                count += 1
+                continue
+            runs.append(str(value) if count == 1 else f"{value}*{count}")
+            value, count = v, 1
+        out[key] = ",".join(runs)
+    return out
+
+
 def read_levels(folder: Path) -> dict[int, LocalLevel]:
     """`<continent>.json` local levels of `clientdump navnet` (tools/nav_build.py --navmesh)."""
     levels = {}
@@ -571,6 +602,7 @@ def graph_record(
     for an in sorted(level.anchors, key=lambda a: (a.ref, a.i)):
         typ, _, rid = an.ref.partition(":")
         anchors.setdefault(typ, []).append(f"{rid},{an.i},{net.number[an.wp]},{yd(an.len)}")
+    join = _join_text(net)
     times = taxi_times or {}
     taxi = [
         f"{p.from_node},{p.to_node},{yd(p.length)}"
@@ -594,4 +626,5 @@ def graph_record(
         "keys": dict(sorted(keys.items())),
         "anchors": {t: ";".join(v) for t, v in sorted(anchors.items())},
         "taxi": ";".join(taxi),
+        **({"join": join} if join else {}),
     }

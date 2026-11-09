@@ -7,7 +7,7 @@ combat only; `/bq` opens the window on Here; the home lost its Here section."""
 import re
 
 from harness import WowRuntime
-from pages import band, block_rows, block_title, block_titles, nav_active, nav_click
+from pages import band, block_rows, block_title, block_titles, nav_click
 
 CORE, DATA, QUESTS, GOLD, BROWSER = (
     "Bastians_Core",
@@ -56,15 +56,16 @@ def test_here_fills_the_list_pane_beside_the_page(wow: WowRuntime):
     boot(wow)
     wow.slash("/bb npc:240")
     wow.execute("Bastians:GetModule('Browser').Browser.SetListOpen(true)")  # out (R25.36)
-    # three panes (ADR 0018): the navigation, the list (Here before any list), the detail
-    assert wow.eval(f"{MOD}.nav:IsShown()") is True and wow.eval(f"{MOD}.nav:GetWidth()") == 180
-    assert nav_active(wow) == "nav:here"
+    # the category bar, then two tiles (ADR 0056): the list (Here before any list), the page
+    assert wow.eval(f"{MOD}.rail:IsShown()") is True and wow.eval(f"{MOD}.rail.count") == 7
+    assert wow.eval(f"{MOD}.rail.active") == "here"
     assert wow.eval(f"{MOD}.listPane:GetWidth()") == wow.eval(f"{BR}.ListWidth()")
     assert wow.eval(f"select(2, {MOD}.splitter:GetPoint(1)) == {MOD}.listPane") is True
-    # the page beside the list's tab, the tab beside the splitter
-    assert wow.eval(f"select(2, {MOD}.listTab:GetPoint(1)) == {MOD}.splitter") is True
-    assert wow.eval(f"select(2, {MOD}.detailPane:GetPoint(1)) == {MOD}.listTab") is True
-    assert wow.eval(f"{MOD}.search:GetParent() == {MOD}.toolbar") is True
+    # the page beside the divider
+    assert wow.eval(f"select(2, {MOD}.detailPane:GetPoint(1)) == {MOD}.splitter") is True
+    assert (
+        wow.eval(f"{MOD}.search:GetParent() == {MOD}.win.head") is True
+    )  # the title row (ADR 0058)
     assert band(wow, f"{MOD}.dossier")["name"] == "Marshal Dughan"
     assert wow.eval(f"{HD}:IsShown()") is True
     b = band(wow, HD)
@@ -74,7 +75,7 @@ def test_here_fills_the_list_pane_beside_the_page(wow: WowRuntime):
     assert titles[:2] == ["DO HERE  2", "MY QUESTS HERE  2"]
     # every Here block carries its count; Best spot is Gold's, none on retail
     gold = wow.made_for(GOLD)
-    assert titles[2:] == ["NEAR  4", *(["BEST SPOT HERE  2"] if gold else [])]
+    assert titles[2:] == ["NEAR  4", *(["FARM SPOTS HERE  2"] if gold else [])]
     # Do here: the ranking, best first, the worth in the value column instead of "/min"
     todo = block_rows(wow, HD, "Do here  2")
     assert todo[0].startswith("[7] The Fargodeep Mine II") and " xp, " in todo[0]
@@ -86,7 +87,7 @@ def test_here_fills_the_list_pane_beside_the_page(wow: WowRuntime):
     assert sorted(t[:4] for t in log) == ["[11]", "[7] "]  # the objective and the hand-in
     # Near: the places by distance, the kind and the distance after the name
     near = block_rows(wow, HD, "Near")
-    assert len(near) == 4 and (not gold or len(block_rows(wow, HD, "Best spot here")) == 2)
+    assert len(near) == 4 and (not gold or len(block_rows(wow, HD, "Farm spots here")) == 2)
     assert near[0].startswith("Marshal Dughan") or "yd" in near[0]
     assert all(", " in t and t.endswith("yd") for t in near)
     assert all(wow.eval(f"{HD}.blockPool[{i + 1}].block.wide") for i in range(len(titles)))
@@ -98,7 +99,9 @@ def test_here_fills_the_list_pane_beside_the_page(wow: WowRuntime):
     assert wow.eval(f"{MOD}.db.profile.listWidth") == 300
     wow.execute(f"{BR}.SetListWidth(2000)")
     width = wow.eval("BastiansBrowserFrame:GetWidth()")
-    assert wow.eval(f"{MOD}.listPane:GetWidth()") == width - 16 - 188 - 300
+    assert (
+        wow.eval(f"{MOD}.listPane:GetWidth()") == width - 16 - 300
+    )  # the page keeps its 300 (no navigation pane since ADR 0056)
     assert wow.errors == []
 
 
@@ -183,7 +186,7 @@ def test_the_home_lost_its_here_section(wow: WowRuntime):
     boot(wow)
     wow.execute(f"{BR}.Home()")
     kinds = [(r.kind, strip(r.text)) for r in wow.eval(f"{MOD}.tree.flat").values()]
-    assert kinds[0] == ("section", "Quests")  # the views first, no "Here" section
+    assert kinds[0][0] == "section"  # the views' groups first (Gold since A5.1), no "Here" section
     assert not any(t == "Here" for _, t in kinds)
     assert wow.errors == []
 

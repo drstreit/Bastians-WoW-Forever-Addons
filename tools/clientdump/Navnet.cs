@@ -49,7 +49,12 @@ static class Navnet
         public double CostShallow { get; set; } = 1.5;
         public double CostDeep { get; set; } = 3;           // nav.toml swim_factor
         public double CostIndoor { get; set; } = 1;
+        public List<HiddenGround> Hidden { get; set; } = [];
     }
+
+    /// <summary>A box of open ground the mesh can walk but nobody does: Forever's flat sheet of terrain 40 yards under
+    /// Stormwind's streets (pipeline/config/nav.toml [[hidden.forever]]; route.md "The join"). World yards.</summary>
+    sealed record HiddenGround(int Continent, double[] Wx, double[] Wy, double[] Z);
 
     sealed record NodeIn(string Id, int Continent, double Wx, double Wy, double? Wz = null);
     sealed record PlaceIn(string Ref, int I, double X, double Y, double? Z = null);
@@ -132,6 +137,27 @@ static class Navnet
                 polyArea[g] = PolyArea(t, p);
             }
         }
+        // before the regions: what is hidden joins nothing, and every query's filter leaves it out
+        var hiddenBoxes = cfg.Hidden.Where(h => h.Continent == file.MapId).ToList();
+        var hidden = 0;
+        if (hiddenBoxes.Count > 0)
+            for (var i = 0; i < mesh.GetMaxTiles(); i++)
+            {
+                var t = mesh.GetTile(i);
+                if (t?.data == null) continue;
+                for (var ip = 0; ip < t.data.header.polyCount; ip++)
+                {
+                    var g = tileBase[i] + ip;
+                    if (areaOf[g] is not (Navmesh.AreaGround or Navmesh.AreaRoad)) continue;
+                    var c = mesh.GetPolyCenter(refOf[g]);
+                    var (wx, wy, wz) = Frame.ToWorld(c.X, c.Y, c.Z);
+                    if (!hiddenBoxes.Any(h => wx >= h.Wx[0] && wx <= h.Wx[1] && wy >= h.Wy[0] && wy <= h.Wy[1] && wz >= h.Z[0] && wz <= h.Z[1])) continue;
+                    areaOf[g] = Navmesh.AreaBlocked;
+                    t.data.polys[ip].flags = Navmesh.FlagBlocked;
+                    hidden++;
+                }
+            }
+        if (hiddenBoxes.Count > 0) Console.WriteLine($"hidden ground: {hidden} polygons left out");
         for (var i = 0; i < mesh.GetMaxTiles(); i++)
         {
             var t = mesh.GetTile(i);
@@ -384,7 +410,8 @@ static class Navnet
         Console.WriteLine($"anchors: {anchors.Count(a => a.way != null)} of {places.Count} places in {sw.Elapsed.TotalSeconds:0.0} s; " +
             $"reverse check: {reverseFail} of {finalWays.Count / Math.Max(1, finalWays.Count / 500)} sampled ways fail backwards");
 
-        Write(outPath, client, file.Build, continent, wps, finalWays, places, anchors);
+        var join = JoinField(query, wps, n);
+        Write(outPath, client, file.Build, continent, wps, finalWays, places, anchors, join);
         Console.WriteLine($"-> {outPath} ({new FileInfo(outPath).Length / 1048576.0:0.0} MB), total {total.Elapsed.TotalSeconds:0} s");
         if (pngPath != null) Png(pngPath, pngTiles, wps, finalWays);
     }
@@ -918,7 +945,7 @@ static class Navnet
     }
 
     static void Write(string path, string client, string build, int continent, List<Wp> wps, List<Way> ways,
-        List<PlaceIn> places, (Way? way, int wp, string? why)[] anchors)
+        List<PlaceIn> places, (Way? way, int wp, string? why)[] anchors, List<int> join)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         var tmp = path + ".tmp";
@@ -980,6 +1007,9 @@ static class Navnet
                 w.WriteEndObject();
             }
             w.WriteEndArray();
+            w.WriteStartArray("join");
+            foreach (var v in join) w.WriteNumberValue(v);
+            w.WriteEndArray();
             w.WriteStartArray("unanchored");
             for (var i = 0; i < places.Count; i++)
             {
@@ -994,6 +1024,90 @@ static class Navnet
             w.WriteEndObject();
         }
         File.Move(tmp, path, true);
+    }
+
+    /// <summary>The join field (route.md "The join"): for each 33-yard cell of each cluster that has walkable
+    /// ground, the waypoint of that cluster nearest on foot, found by a search over the mesh's polygons from all
+    /// the cluster's waypoints at once. As flat triples col, row, waypoint id (cells of 1/16 ADT tile in the recast
+    /// frame). A place on the far side of a ridge is near in a straight line and far on foot; the runtime has no
+    /// mesh and joins the character by this.</summary>
+    static List<int> JoinField(ThreadLocal<DtNavMeshQuery> query, List<Wp> wps, int n)
+    {
+        const int cellsPerCluster = 32;
+        const double margin = 200, limit = 900;
+        var cell = Frame.Tile / 16;
+        var centers = new RcVec3f[n];
+        Parallel.For(0, n, g => centers[g] = mesh.GetPolyCenter(refOf[g]));
+        var groups = wps.Select((w, i) => (w, i))
+            .GroupBy(e => ((int)Math.Floor(e.w.P.X / Frame.Tile / 2), (int)Math.Floor(e.w.P.Z / Frame.Tile / 2)))
+            .OrderBy(g => g.Key).ToList();
+        var parts = new List<int>[groups.Count];
+        var cells = 0;
+        var differ = 0;
+        Parallel.For(0, groups.Count, gi =>
+        {
+            var q = query.Value!;
+            var (kx, kz) = groups[gi].Key;
+            double x0 = kx * 2 * Frame.Tile, z0 = kz * 2 * Frame.Tile, span = 2 * Frame.Tile;
+            var best = new Dictionary<int, (float d, int wp)>();
+            var open = new PriorityQueue<int, float>();
+            foreach (var (w, i) in groups[gi])
+            {
+                var g = Gid(w.Ref);
+                if (best.TryGetValue(g, out var b) && b.d == 0) continue;
+                best[g] = (0, i);
+                open.Enqueue(g, 0);
+            }
+            while (open.TryDequeue(out var g, out var d))
+            {
+                var at = best[g];
+                if (d > at.d || at.d > limit) continue;
+                var r = refOf[g];
+                var t = mesh.GetTile(DtDetour.DecodePolyIdTile(r));
+                for (var j = t.data.polys[DtDetour.DecodePolyIdPoly(r)].firstLink; j != DtDetour.DT_NULL_LINK; j = t.links[j].next)
+                {
+                    var o = Gid(t.links[j].refs);
+                    if (areaOf[o] == Navmesh.AreaBlocked) continue;
+                    var c = centers[o];
+                    if (c.X < x0 - margin || c.X > x0 + span + margin || c.Z < z0 - margin || c.Z > z0 + span + margin) continue;
+                    var nd = at.d + RcVec3f.Distance(centers[g], c) * Math.Max(0.1f, costs[areaOf[o]]);
+                    if (best.TryGetValue(o, out var old) && old.d <= nd) continue;
+                    best[o] = (nd, at.wp);
+                    open.Enqueue(o, nd);
+                }
+            }
+            var part = new List<int>();
+            var polys = new long[4096];
+            int found = 0, other = 0;
+            for (var cz = 0; cz < cellsPerCluster; cz++)
+            for (var cx = 0; cx < cellsPerCluster; cx++)
+            {
+                double px = x0 + (cx + 0.5) * cell, pz = z0 + (cz + 0.5) * cell;
+                q.QueryPolygons(new RcVec3f((float)px, 0, (float)pz), new RcVec3f((float)(cell / 2), 4000, (float)(cell / 2)), filter, polys, out var count, polys.Length);
+                (float d, int wp)? under = null, near = null;
+                for (var i = 0; i < count; i++)
+                {
+                    if (!best.TryGetValue(Gid(polys[i]), out var b)) continue;
+                    q.ClosestPointOnPoly(polys[i], new RcVec3f((float)px, centers[Gid(polys[i])].Y, (float)pz), out _, out var over);
+                    if (over && (under == null || b.d < under.Value.d)) under = b;
+                    if (near == null || b.d < near.Value.d) near = b;
+                }
+                var pick = under ?? near;
+                if (pick == null) continue;
+                part.Add((kx * 2 * 16) + cx);
+                part.Add((kz * 2 * 16) + cz);
+                part.Add(wps[pick.Value.wp].Id);
+                found++;
+                // what the straight line would have taken instead, for the report
+                var straight = groups[gi].OrderBy(e => (e.w.P.X - px) * (e.w.P.X - px) + (e.w.P.Z - pz) * (e.w.P.Z - pz)).First().i;
+                if (straight != pick.Value.wp) other++;
+            }
+            parts[gi] = part;
+            Interlocked.Add(ref cells, found);
+            Interlocked.Add(ref differ, other);
+        });
+        Console.WriteLine($"join field: {cells} cells, {differ} ({100.0 * differ / Math.Max(1, cells):0.0} %) join another waypoint than the straight line");
+        return parts.SelectMany(p => p).ToList();
     }
 
     /// <summary>The mesh image of an ADT tile range with the ways (white) and the waypoints (node red, door

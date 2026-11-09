@@ -47,10 +47,22 @@ function Rec.xp(questLevel, playerLevel)
   return Rec.baseXP(questLevel) * Rec.xpFactor(playerLevel, questLevel)
 end
 
+-- A quest's experience for a character: the reward the data or the client names (3,493 of 4,851
+-- Forever quests carry it, measured 05.11.2026), else the curve by the quest's level; both with
+-- the share for the level difference. The second value is true when the curve stood in.
+function Rec.questXP(qid, q, playerLevel)
+  local rw = Logic.rewards(qid) or (q and q.rewards)
+  local known = rw and tonumber(rw.xp)
+  if known and known > 0 then
+    return known * Rec.xpFactor(playerLevel, q and q.level), false
+  end
+  return Rec.xp(q and q.level, playerLevel), true
+end
+
 -- Reward money plus the best priced item (one choice is taken, other items are all given).
 -- price(itemID) -> copper or nil. Returns copper, unknown (true when an item had no price).
 function Rec.rewardValue(q, price)
-  local rw = q and q.rewards
+  local rw = q and ((q.id and Logic.rewards(q.id)) or q.rewards)
   if not rw then
     return 0, false
   end
@@ -89,9 +101,9 @@ function Rec.unlocks(qid, state)
         seen[f] = true
         local fq = Logic.quest(f)
         local st = fq and Logic.status(f, state)
-        if fq and st ~= "done" and st ~= "never" and st ~= "superseded" then
+        if fq and st ~= "done" and st ~= "never" and st ~= "superseded" and st ~= "inactive" then
           n = n + 1
-          value = value + Rec.xp(fq.level, state.level) * 0.5 ^ (depth - 1)
+          value = value + Rec.questXP(f, fq, state.level) * 0.5 ^ (depth - 1)
           walk(f, depth + 1)
         end
       end
@@ -114,8 +126,8 @@ local function place(list)
 end
 
 -- Nearest spot of the quest on `map` to a point (map fractions); nil without spots there.
-local function nearestSpot(q, map, x, y)
-  local list = q and q.spots and map and q.spots[map]
+local function nearestSpot(spots, map, x, y)
+  local list = spots and map and spots[map]
   if not list then
     return nil
   end
@@ -199,9 +211,10 @@ function Rec.minutes(q, entry, map, ctx, times, levelMod)
     leg(place(q and q.startPlaces))
   end
   if not complete then
-    local sm, sx, sy = nearestSpot(q, cm, cx, cy)
+    local spots = entry and Logic.OpenSpots(entry, q) or (q and q.spots)
+    local sm, sx, sy = nearestSpot(spots, cm, cx, cy)
     if not sm then
-      sm, sx, sy = nearestSpot(q, map, ctx.px, ctx.py)
+      sm, sx, sy = nearestSpot(spots, map, ctx.px, ctx.py)
     end
     if sm then
       leg(sm, sx, sy)
@@ -218,16 +231,17 @@ local function nextPlace(q, entry, map)
   if not entry then
     return place(q.startPlaces)
   end
-  if not entry.isComplete and q.spots then
-    local m = map and q.spots[map] and map or nil
+  local spots = not entry.isComplete and q.spots and Logic.OpenSpots(entry, q)
+  if spots then
+    local m = map and spots[map] and map or nil
     if not m then
-      for sm in pairs(q.spots) do
+      for sm in pairs(spots) do
         if not m or sm < m then
           m = sm
         end
       end
     end
-    local s = m and q.spots[m][1]
+    local s = m and spots[m][1]
     if s then
       return m, s[1], s[2]
     end
@@ -252,6 +266,14 @@ local function isHard(questLevel, playerLevel)
   return questLevel ~= nil and playerLevel ~= nil and questLevel - playerLevel >= 3
 end
 
+-- A quest the game draws red: so far above the character that its XP by the curve says nothing
+-- (level-60 festival quests stood on top of "To do here" for a low
+-- character). It stays in the list, after everything that is not.
+Rec.FAR_LEVELS = 5
+local function isFar(questLevel, playerLevel)
+  return questLevel ~= nil and playerLevel ~= nil and questLevel - playerLevel >= Rec.FAR_LEVELS
+end
+
 local function money(copper)
   return B.UI.MoneyShort and B.UI.MoneyShort(copper) or tostring(copper)
 end
@@ -265,7 +287,7 @@ function Rec.score(qid, entry, map, state, ctx)
   local weights = ctx.weights or Rec.DEFAULT_WEIGHTS
   local times = ctx.objectiveTime or Rec.DEFAULT_TIMES
   local parts, flags = {}, {}
-  local xp = Rec.xp(q.level, state.level)
+  local xp = Rec.questXP(qid, q, state.level)
   parts[#parts + 1] = string.format("%d %s", math.floor(xp + 0.5), L["xp"])
   local value = xp
   local reward, priceUnknown = Rec.rewardValue(q, ctx.price)
@@ -323,6 +345,7 @@ function Rec.score(qid, entry, map, state, ctx)
     confidence = confidence,
     unlocks = n,
     leadsNext = leadsNext,
+    far = isFar(q.level, state.level),
   }
 end
 
@@ -338,7 +361,8 @@ function Rec.candidates(map, state, ctx)
   for qid, entry in pairs(ctx.log or {}) do
     local q = Logic.quest(qid)
     if q then
-      local here = (q.spots and q.spots[map] ~= nil and not entry.isComplete) or Logic.turnInMap(q) == map
+      local here = (not entry.isComplete and q.spots and Logic.OpenSpots(entry, q)[map] ~= nil)
+        or Logic.turnInMap(q) == map
       if here then
         add(qid, entry)
       end
@@ -366,6 +390,9 @@ function Rec.rank(map, state, ctx)
     end
   end
   table.sort(out, function(a, b)
+    if a.far ~= b.far then
+      return b.far -- what is far above the character comes last, whatever its score
+    end
     if a.score ~= b.score then
       return a.score > b.score
     end
@@ -401,7 +428,7 @@ function Rec.nextAreas(map, state, faction)
   end
   for _, qid in ipairs(Logic.questsOfZone(map)) do
     local st = Logic.status(qid, state)
-    if st ~= "done" and st ~= "never" and st ~= "superseded" then
+    if st ~= "done" and st ~= "never" and st ~= "superseded" and st ~= "inactive" then
       for _, m in ipairs(Logic.leadsTo(qid, map)) do
         local z = byMap[m]
         if z then

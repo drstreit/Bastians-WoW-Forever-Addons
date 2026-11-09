@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("ptBR", {
+  -- /bgest try (gestures.md "The voice", 08.11.2026)
   -- the owner's follow-ups (retail 01.11.2026, late)
   ["(a macro)"] = "(uma macro)",
   ["A macro of the account"] = "Uma macro da conta",
@@ -52,29 +53,19 @@ ns.L:Register("ptBR", {
   ["Show or hide the cloak"] = "Mostrar ou ocultar a capa",
   ["A random favourite mount"] = "Uma montaria favorita aleatória",
   -- plan-second-wave.md S7 (01.11.2026)
-  ["%s challenges you to a duel"] = "%s desafia você para um duelo",
-  ["%s wants to trade"] = "%s quer negociar",
-  ["%s invites you to a group"] = "%s convida você para um grupo",
   ["Answer?"] = "Responder?",
   ["Bow"] = "Reverência",
   ["Wave"] = "Acenar",
-  ["Decline politely"] = "Recusar com educação",
-  ["Thank you, but not today, %t."] = "Obrigado, mas hoje não, %t.",
   ["The polite decline of a duel, a trade or an invite (press Enter; %t is who asked)"] = "A recusa educada de um duelo, uma negociação ou um convite (pressione Enter; %t é quem pediu)",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark heard"] = "Marcar como ouvido",
   ["Toggle the tracker"] = "Alternar o rastreador",
-  ["%s buffed you"] = "%s fortaleceu você",
-  ["%s cast %s on you"] = "%s lançou %s em você",
-  ["%s greets you"] = "%s cumprimenta você",
-  ["%s resurrected you"] = "%s ressuscitou você",
   ["(a ring)"] = "(um anel)",
   ["A line for slot %d"] = "Uma fala para o espaço %d",
   ["A ring of its own"] = "Um anel próprio",
   ["A short title for the wedge"] = "Um título curto para a fatia",
   ["Actions"] = "Ações",
   ["Add a thank-you line (press Enter; %t is who to thank)"] = "Adicionar uma fala de agradecimento (pressione Enter; %t é quem agradecer)",
-  ["Also in dungeons and battlegrounds"] = "Também em masmorras e campos de batalha",
   ["Ask"] = "Perguntar",
   ["Ask (a bubble)"] = "Perguntar (um balão)",
   ["Automatic"] = "Automático",
@@ -89,7 +80,6 @@ ns.L:Register("ptBR", {
   ["Clear the screen"] = "Limpar a tela",
   ["Click: set this slot"] = "Clique: definir este espaço",
   ["Click: the options. Right click: edit the rings."] = "Clique: as opções. Botão direito: editar os anéis.",
-  ["Courtesy"] = "Cortesia",
   ["Courtesy: %s"] = "Cortesia: %s",
   ["Default rings"] = "Anéis padrão",
   ["Edit the ring"] = "Editar o anel",
@@ -105,13 +95,9 @@ ns.L:Register("ptBR", {
   ["Long road"] = "Longa estrada",
   ["Looks around"] = "Olha ao redor",
   ["Lore here"] = "História daqui",
-  ["May the road be kind to you, %t."] = "Que a estrada seja gentil com você, %t.",
-  ["Much obliged, %t."] = "Muito grato, %t.",
   ["My thanks, friend."] = "Meus agradecimentos, amigo.",
   ["Needs Bastian's %s"] = "Requer Bastian's %s",
-  ["Not now"] = "Agora não",
   ["Note here"] = "Anotar aqui",
-  ["Off"] = "Desligado",
   ["Ring"] = "Anel",
   ["Ring %d: %s"] = "Anel %d: %s",
   ["Route home"] = "Rota para casa",
@@ -124,7 +110,6 @@ ns.L:Register("ptBR", {
   ["Spoken as"] = "Falado como",
   ["Thank"] = "Agradecer",
   ["Thank them?"] = "Agradecer?",
-  ["Thank you, %t!"] = "Obrigado, %t!",
   ["Thanks, friend"] = "Obrigado, amigo",
   ["The common tongue"] = "A língua comum",
   ["The key opens and closes the ring (else: hold it, release on a wedge)"] = "A tecla abre e fecha o anel (senão: segure e solte sobre uma fatia)",
@@ -143,5 +128,4 @@ ns.L:Register("ptBR", {
   ["say"] = "dizer",
   ["yell"] = "gritar",
   -- Bastian's Campfire (plan-second-wave.md S5, 02.11.2026)
-  ["%s's camp warmed you"] = "A fogueira de %s aqueceu você",
 })

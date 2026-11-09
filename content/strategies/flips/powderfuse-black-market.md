@@ -16,7 +16,6 @@ claim = 269116452692599
 
 [[rumours]]
 claim = 99095132606855
-stamp = "lies"
 why = "The repeatable Water Pouch Bounty in Gadgetzan that the plan relies on asks for level 40, above the cap of 30. With the talent's ten percent alone a crystal costs 45g, and a sale at 45g loses the cut."
 
 [[rumours]]

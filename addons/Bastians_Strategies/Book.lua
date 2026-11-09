@@ -4,9 +4,23 @@ local _, ns = ...
 local Book = {}
 ns.Book = Book
 
+-- The book's three font sizes ("too many different font sizes on the
+-- page - max 3 font sizes"): titles, text, the small words (meta, heads, sources, labels). Every
+-- size the book asks for falls into one of them; Core's text size (fontScale) scales all three.
+Book.TITLE, Book.TEXT, Book.META = 18, 13, 11
+
+function Book.Size(n)
+  n = tonumber(n) or Book.TEXT
+  if n >= 14 then
+    return Book.TITLE
+  elseif n >= 12 then
+    return Book.TEXT
+  end
+  return Book.META
+end
+
 local CUT = 0.95 -- the auction house keeps 5 % of a sale
 Book.CUT = CUT
-Book.UNSEAL_EARLY = 2 -- a page opens this many levels before its band starts (SB3)
 
 -- What one turns through, in reading order: each chapter's active pages (index book.toc), then
 -- the chapter's Rumour mill when hasMill(chapter) says it has one. -> { { kind, id } }, kind
@@ -24,21 +38,113 @@ function Book.Order(toc, hasMill)
   return out
 end
 
--- Sealed or open (SB3): open from the band's first level minus UNSEAL_EARLY, or once one of the
--- page's zones was entered (`entered[uiMapID] = true`). A page without a band is always open.
-function Book.IsOpen(page, level, entered)
-  if not (page and page.levelMin) then
-    return true
+-- ---------------------------------------------------------------------------------------------
+-- The story map (ADR 0057): pure, the window only draws what this answers
+-- ---------------------------------------------------------------------------------------------
+
+-- The world picture's layout, the numbers of tools/mapstyle/blizzard.py WORLD (a test holds the two
+-- together): the picture's size, its pixels per ADT tile, and per continent the first tile shown
+-- and where that tile starts on the picture.
+local TILE_YARDS = 1600 / 3
+local ORIGIN = 32 * TILE_YARDS
+Book.WORLD = {
+  width = 2048,
+  height = 1024,
+  ppt = 21,
+  [0] = { tx = 23, ty = 18, tx2 = 49, ty2 = 62, ox = 1162, oy = 50 },
+  [1] = { tx = 12, ty = 8, tx2 = 50, ty2 = 56, ox = 340, oy = 8 },
+}
+
+-- Which ocean board a story without a place stands on, by its chapter: the market left, what you
+-- make and gather right.
+Book.BOARD = { auction = "market", flips = "market" }
+
+-- World yards -> fractions of the picture, nil outside the continent's tiles or on another map.
+function Book.WorldSpot(continent, wx, wy)
+  local w = Book.WORLD[continent]
+  if not (w and wx and wy) then
+    return nil
   end
-  if level and level >= page.levelMin - Book.UNSEAL_EARLY then
-    return true
+  local col, row = (ORIGIN - wy) / TILE_YARDS, (ORIGIN - wx) / TILE_YARDS
+  if col < w.tx or col > w.tx2 or row < w.ty or row > w.ty2 then
+    return nil
   end
-  for _, zone in ipairs(page.zones or {}) do
-    if entered and entered[zone] then
-      return true
+  return (w.ox + (col - w.tx) * Book.WORLD.ppt) / Book.WORLD.width,
+    (w.oy + (row - w.ty) * Book.WORLD.ppt) / Book.WORLD.height
+end
+
+-- The stories for the map: `pages` by id, `toWorld(map, x, y)` -> continent, wx, wy. -> `spots`, the
+-- stories with a place ({ id, page, fx, fy, exact }: exact where the page names its spot, else the
+-- middle of its first zone) and `boards` = { market = { ... }, trades = { ... } } of the rest. The
+-- front matter (the preface) and what left the shelf are not stories of the map. Sorted by id.
+function Book.Atlas(pages, toWorld, front)
+  local ids = {}
+  for id, p in pairs(pages or {}) do
+    if p.shelf == "active" and p.chapter ~= front then
+      ids[#ids + 1] = id
     end
   end
-  return false
+  table.sort(ids)
+  local spots, boards = {}, { market = {}, trades = {} }
+  for _, id in ipairs(ids) do
+    local p = pages[id]
+    local place = p.plate and p.plate.place
+    local map, x, y, exact
+    if place then
+      map, x, y, exact = place[1], place[2], place[3], true
+    elseif p.zones and p.zones[1] then
+      map, x, y, exact = tonumber(p.zones[1]), 0.5, 0.5, false
+    end
+    local fx, fy
+    if map then
+      local continent, wx, wy = toWorld(map, x, y)
+      if continent then
+        fx, fy = Book.WorldSpot(continent, wx, wy)
+      end
+    end
+    if fx then
+      spots[#spots + 1] = { id = id, page = p, fx = fx, fy = fy, exact = exact }
+    else
+      local board = boards[Book.BOARD[p.chapter] or "trades"]
+      board[#board + 1] = { id = id, page = p }
+    end
+  end
+  return spots, boards
+end
+
+-- Pushes points { x, y } apart until no two stand closer than `gap`, inside the box x1, y1, x2, y2:
+-- each overlapping pair moves apart along the line between them, so a point stays as near its true
+-- place as its neighbours allow. Points on one spot part by their order. In place; deterministic.
+Book.SPREAD_ROUNDS = 200
+function Book.Spread(points, gap, x1, y1, x2, y2)
+  local n = #points
+  for _ = 1, Book.SPREAD_ROUNDS do
+    local moved = false
+    for i = 1, n do
+      for j = i + 1, n do
+        local a, b = points[i], points[j]
+        local dx, dy = b.x - a.x, b.y - a.y
+        local d = math.sqrt(dx * dx + dy * dy)
+        if d < gap then
+          moved = true
+          if d < 0.001 then
+            local angle = (i * 7 + j * 3) * 0.7
+            dx, dy, d = math.cos(angle), math.sin(angle), 1
+          end
+          local push = (gap - math.sqrt((b.x - a.x) ^ 2 + (b.y - a.y) ^ 2)) / 2 + 0.25
+          a.x, a.y = a.x - dx / d * push, a.y - dy / d * push
+          b.x, b.y = b.x + dx / d * push, b.y + dy / d * push
+        end
+      end
+    end
+    for _, p in ipairs(points) do
+      p.x, p.y = math.max(x1, math.min(x2, p.x)), math.max(y1, math.min(y2, p.y))
+    end
+    if not moved then
+      break
+    end
+  end
+  return points
 end
 
 -- The text with its tokens drawn: {item:ID}, {npc:ID}, {object:ID}, {zone:ID} through
@@ -239,6 +345,40 @@ function Book.Search(pages, query, textOf)
     return string.lower(a.name) < string.lower(b.name)
   end)
   return out
+end
+
+-- A page's lead: its opening (else its first paragraph) as plain words, cut at about `width`
+-- characters at a whole word, with "..." where it was cut; nil for a page without one.
+function Book.Lead(p, width)
+  width = width or 70
+  local text
+  for _, b in ipairs(p and p.blocks or {}) do
+    if (b[1] == "opening" or b[1] == "p") and type(b[2]) == "string" then
+      text = b[2]
+      break
+    end
+  end
+  if not text then
+    return nil
+  end
+  text = Book.Expand(text, {
+    name = function(kind, id)
+      local e = Bastians:Entity(kind .. ":" .. tostring(id))
+      return e:Name() or ""
+    end,
+    price = function()
+      return ""
+    end,
+    vendor = function()
+      return ""
+    end,
+  })
+  text = string.gsub(text, "%s+", " ")
+  if #text <= width then
+    return text
+  end
+  local piece = string.sub(text, 1, width)
+  return (string.match(piece, "^(.*%S) ") or piece) .. "..."
 end
 
 -- A piece of `text` about `width` characters long around the first place of `query`'s first

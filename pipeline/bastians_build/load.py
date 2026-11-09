@@ -13,7 +13,9 @@ from bastians_build.sources import (
     cmangos,
     foreverdb,
     probe,
+    questie,
     questiedb,
+    questiedb_store,
     tdb,
 )
 from bastians_build.sources.allthethings import read_allthethings
@@ -184,6 +186,14 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.fdb_quests = foreverdb.read_quests(fdb / "QuestForever.lua")
             s.fdb_items = foreverdb.read_items(fdb / "Items.lua")
             s.fdb_names = foreverdb.read_search_names(fdb / "SearchNames.lua")
+            s.fdb_seen = foreverdb.read_quest_seen(fdb / "QuestForever.lua")
+            s.fdb_npc_names = foreverdb.read_npc_names(fdb / "QuestForever.lua")
+            s.fdb_sold = foreverdb.read_sold(fdb / "NPCs.lua")
+            s.fdb_trainers = foreverdb.read_trainers(fdb / "NPCs.lua")
+            if (fdb / "QuestXP.lua").is_file():
+                s.fdb_xp = foreverdb.read_quest_xp(fdb / "QuestXP.lua")
+            if (fdb / "QuestGuide.lua").is_file():
+                s.fdb_guide = foreverdb.read_quest_guide(fdb / "QuestGuide.lua")
             if (fdb / "Dungeons.lua").is_file():  # since ForeverDB 0.44 (data.md "Dungeons")
                 s.fdb_dungeons = foreverdb.read_dungeons(fdb / "Dungeons.lua")
             if (fdb / "DungeonMaps.lua").is_file():  # the floors (DG2)
@@ -193,11 +203,19 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.source_names.append(f"ForeverDB {meta.addon if meta and meta.addon else '?'}")
             if s.build == "unknown" and meta and meta.build:
                 s.build = str(meta.build)  # the client build ForeverDB read its data from
+        toc = paths.addons / "QuestieDB" / "QuestieDB_Forever.toc"
+        if client == "forever" and toc.is_file():
+            s.questie = questiedb_store.read_store(toc)
+            s.source_names.append(f"QuestieDB store ({len(s.questie.npcs)} NPCs)")
         zones = paths.addons / "QuestieDB" / "support" / "Forever" / "Zones" / "areaIdToUiMapId.lua"
         if zones.is_file():
             table = questiedb.read_area_to_ui_map_file(zones)
             s.area_to_map = {a: m for a, m in table.mapping.items() if m}
             s.source_names.append(f"QuestieDB zones {table.source_build or '?'}")
+        questie_dir = paths.addons / "Questie"
+        if client == "forever" and (questie_dir / questie.BLACKLIST).is_file():
+            s.questie_gates = questie.read_quest_gates(questie_dir)
+            s.source_names.append(f"Questie {s.questie_gates.version or '?'}")
         att_dir = paths.addons / "AllTheThings"
         if client in ATT_FLAVOR and (att_dir / "db" / ATT_FLAVOR[client]).is_dir():
             s.att = read_allthethings(att_dir, ATT_FLAVOR[client])

@@ -16,6 +16,8 @@ State.facts = { level = nil, raceID = nil, classID = nil, faction = nil }
 State.flightPaths = {} -- [nodeID or name] = { name, map, x, y }, persisted per character (db.char)
 State.tracked = {} -- [questID] = true for quests on the objective tracker
 State.hidden = {} -- [questID] = true for quests the player hid from Do here (R3, per character)
+State.missed = {} -- [questID] = level at which its giver did not offer it (Offers.lua, per character)
+State.offered = {} -- [questID] = time() the game offered it against the data (Offers.lua, per character)
 
 function State.IsHidden(questID)
   return State.hidden[questID] == true
@@ -27,6 +29,10 @@ end
 
 local DONE_RETRIES = 3 -- how often an empty completed list is asked again (retail answers it late)
 local doneAttempts = 0
+local OFFER_SECONDS = 14 * 24 * 3600 -- how long an offer outside the known dates beats a world event's
+local HOLIDAY_SECONDS = 60 -- how long the answers about the world events are kept
+local holidayAt
+local holidayOn = {}
 
 -- ---------------------------------------------------------------------------------------------
 -- Character facts and the completed set
@@ -36,11 +42,44 @@ function State.ReadFacts()
   local f = B.Compat.GetPlayerFacts()
   local facts = State.facts
   facts.level, facts.raceID, facts.classID, facts.faction = f.level, f.raceID, f.classID, f.faction
+  facts.trivialRange = B.Compat.QuestTrivialRange()
   return facts
 end
 
 function State.SetLevel(level)
   State.facts.level = level
+  State.facts.trivialRange = B.Compat.QuestTrivialRange()
+end
+
+-- Whether a world event runs now; the clock is read once a minute at most, not per quest.
+function State.HolidayOn(name)
+  local now = GetTime()
+  if not holidayAt or now - holidayAt > HOLIDAY_SECONDS then
+    holidayAt, holidayOn = now, {}
+  end
+  local on = holidayOn[name]
+  if on == nil then
+    on = ns.Holidays.Running(name, B.Compat.CalendarNow())
+    holidayOn[name] = on
+  end
+  return on
+end
+
+-- Whether the game offered the quest against the data: for good against Questie's lists, for
+-- OFFER_SECONDS against a world event's dates (the event ends).
+function State.WasOffered(questID)
+  local at = State.offered[questID]
+  if not at then
+    return false
+  end
+  local q = ns.Logic.quest(questID)
+  return not (q and q.holiday) or time() - at <= OFFER_SECONDS
+end
+
+-- Whether the giver left the quest out at the character's level (a level up asks again).
+function State.NotOffered(questID)
+  local level = State.missed[questID]
+  return level ~= nil and level == State.facts.level
 end
 
 -- Reads the completed list; returns how many quests it holds. An empty answer is retried on later
@@ -218,11 +257,15 @@ function State.ForLogic()
       rep = function()
         return nil
       end,
+      holidayOn = State.HolidayOn,
+      offered = State.WasOffered,
+      notOffered = State.NotOffered,
     }
   end
   local f = State.facts
   logicState.level, logicState.raceID, logicState.classID, logicState.faction =
     f.level, f.raceID, f.classID, f.faction
+  logicState.trivialRange = f.trivialRange
   return logicState
 end
 
@@ -260,7 +303,20 @@ function State.Attach(mod)
     char.hidden = {}
   end
   State.hidden = char.hidden
+  if type(char.missed) ~= "table" then
+    char.missed = {}
+  end
+  State.missed = char.missed
+  if type(char.offered) ~= "table" then
+    char.offered = {}
+  end
+  State.offered = char.offered
   State.ReadFacts()
+  for id, level in pairs(State.missed) do
+    if level ~= State.facts.level then
+      State.missed[id] = nil -- the character gained a level: the givers are asked again
+    end
+  end
   doneAttempts = 0
   State.LoadDone()
   State.Refresh()

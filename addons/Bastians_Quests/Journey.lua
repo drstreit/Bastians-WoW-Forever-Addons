@@ -388,6 +388,7 @@ function Journey.Register(self)
   B:DeclareMessage("BASTIANS_JOURNEY_CHANGED")
   B:RegisterDetailSection(self, {
     id = "quests.journey",
+    chapter = "roads", -- on the sheet (ADR 0054)
     title = L["Journey"],
     types = { "zone" },
     order = 98,

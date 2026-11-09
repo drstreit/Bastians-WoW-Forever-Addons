@@ -1,5 +1,5 @@
 """The owner's retail round of 22.10.2026 (roadmap "Owner feedback"): the type bar on every entry
-(no Home click for the categories), slim mode as the tracker (the log view alone), a map button
+(no Home click for the categories), ~~slim mode as the tracker~~ (gone with ADR 0056), a map button
 on every quest and NPC row, "Show on map" fitting a quest's giver and targets or an NPC's spawn
 areas."""
 
@@ -33,69 +33,65 @@ def strip(text: str | None) -> str:
     return text.replace("|r", "")
 
 
+def test_a_list_known_to_be_empty_has_no_button(wow: WowRuntime):
+    """ADR 0054, B14 (kept by ADR 0056): a list with no rows stays hidden. Known means the pack
+    is loaded and holds no record of the type; a pack not loaded yet is unknown, and its list
+    shows. The list in the list tile keeps its button, and rows bring a button back."""
+    boot(wow)
+    wow.execute(f"{BR}.Open()")
+    data = "Bastians:GetService('data')"
+    # the fixture world has no gathering nodes; the farm spots' pack is not loaded: unknown
+    assert wow.eval(f"{data}:Any('node')") is False and wow.eval(f"{data}:Any('npc')") is True
+    assert wow.eval(f"{data}:Any('spot')") is None
+    assert "Gathering" not in nav_lists(wow) and "Farm spots" in nav_lists(wow)
+    assert wow.eval(f"{data}:Any('no such type')") is None  # unknown is not "none"
+    empty = f"{BR}.ListIsEmpty"
+    assert wow.eval(f"{empty}({{ type = 'node' }})") is True
+    assert wow.eval(f"{empty}({{ type = 'mob', entity = 'npc' }})") is False
+    assert wow.eval(f"{empty}({{ type = 'no such type' }})") is False
+    # a registered list says it itself, or is shown
+    assert wow.eval(f"{empty}({{ type = 'x', ids = function() return {{}} end }})") is False
+    assert wow.eval(f"{empty}({{ type = 'x', empty = function() return true end }})") is True
+    # the list that is shown keeps its button
+    wow.execute(f"{BR}.List('node')")
+    wow.run_frames(5)
+    assert "Gathering" in nav_lists(wow) and nav_active(wow) == "nav:list:node"
+    assert wow.errors == []
+
+
 def test_the_navigation_is_there_on_every_entry(wow: WowRuntime):
     """The type bar of 22.10.2026 became the navigation's Lists (ADR 0018): there on a page, a
     list and a view, the shown list accented."""
     boot(wow)
     wow.execute(f"{BR}.Open('npc:240')")  # a page: the navigation is there, Here accented
-    assert nav_lists(wow) == [  # by name
-        "Dungeons",
-        "Farm spots",
-        "Items",
-        "Mobs",
-        "NPCs",
-        "Nodes",
-        "Objects",
-        "Quest chains",
+    assert nav_lists(wow) == [
         "Quests",
-        "Recipes",
+        "Chains",
         "Zones",
+        "People",
+        "Monsters",
+        "Objects",
+        "Dungeons",
+        "Items",
+        "Recipes",
+        "Farm spots",  # its pack is not loaded here: unknown, so shown
     ]
-    assert wow.eval(f"{MOD}.nav:IsShown()") is True and nav_active(wow) == "nav:here"
+    assert wow.eval(f"{MOD}.rail:IsShown()") is True and wow.eval(f"{MOD}.rail.active") == "here"
     nav_click(wow, "nav:list:npc")  # NPCs, from the page, without Home
     wow.run_frames(5)
     assert wow.eval(f"{BR}.Current().kind") == "list" and wow.eval(f"{BR}.Current().type") == "npc"
     assert nav_active(wow) == "nav:list:npc"
     assert band(wow, f"{MOD}.dossier")["name"] == "Marshal Dughan"  # the page stays beside it
     wow.slash("/bq log")
-    assert wow.eval(f"{MOD}.nav:IsShown()") is True  # a view too
+    assert wow.eval(f"{MOD}.rail:IsShown()") is True  # a view too
     assert nav_active(wow) == "nav:view:quests.log"
     assert wow.errors == []
 
 
-def test_slim_is_the_tracker(wow: WowRuntime):
-    boot(wow)
-    wow.execute(f"{BR}.Open('npc:240')")
-    wow.execute(f"{BR}.SetSlim(true)")
-    assert (
-        wow.eval(f"{BR}.Current().kind") == "view"
-        and wow.eval(f"{BR}.Current().id") == "quests.log"
-    )
-    assert (
-        wow.eval(f"{MOD}.nav:IsShown()") is False and wow.eval(f"{MOD}.listPane:IsShown()") is True
-    )
-    assert (
-        wow.eval(f"{MOD}.toolbar:IsShown()") is False
-        and wow.eval(f"{MOD}.search:IsVisible()") is False
-    )
-    assert wow.eval(f"{MOD}.detailPane:IsShown()") is False
-    assert wow.eval(f"{MOD}.win.frame:GetWidth()") == 260
-    texts = [strip(r.text) for r in wow.eval(f"{MOD}.tree.flat").values()]
-    assert texts[0] == "HAND IN HERE  1"  # the log view with its objectives
-    # the target does not take the tracker over
-    wow.execute('Mock.guids = { target = "Creature-0-4469-0-12-54-0000ABCDEF" }')
-    wow.fire("PLAYER_TARGET_CHANGED")
-    assert wow.eval(f"{BR}.Current().id") == "quests.log"
-    # Wide brings the page back; a row click in the tracker widens and opens the page
-    wow.execute(f"{BR}.SetSlim(false)")
-    assert wow.eval(f"{BR}.Current().ref") == "npc:240" and wow.eval(f"{MOD}.nav:IsShown()") is True
-    wow.execute(f"{BR}.SetSlim(true)")
-    wow.execute(f"{BR}.Open('quest:62')")
-    assert wow.eval(f"{BR}.IsSlim()") is False and wow.eval(f"{BR}.Current().ref") == "quest:62"
-    assert wow.errors == []
-
-
-def test_rows_show_their_map_button_without_a_hover(wow: WowRuntime):
+def test_a_sheets_rows_are_quiet_until_the_mouse_is_on_them(wow: WowRuntime):
+    """ADR 0054: no icons on a row at rest, where the round of
+    22.10.2026 showed the map button on every row. They show under the mouse and on the focused
+    row; every action stays in the entity menu."""
     boot(wow, CORE, DATA, QUESTS, MAP, BROWSER)
     wow.execute(f"{BR}.Open('npc:240')")
     wow.execute("Bastians:GetModule('Browser').Browser.SetListOpen(true)")  # out (R25.36)
@@ -116,7 +112,7 @@ def test_rows_show_their_map_button_without_a_hover(wow: WowRuntime):
           return table.concat(out, ";")
         end)()"""
     )
-    assert "quest:62=map.show" in icons  # the quest row's map button, shown without a hover
+    assert "quest:62=" in icons and "map.show" not in icons  # the rows are there, quiet
     assert band(wow, f"{MOD}.hereDossier")["name"] == "Elwynn Forest"
     assert wow.errors == []
 

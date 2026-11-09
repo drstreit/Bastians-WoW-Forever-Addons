@@ -65,6 +65,10 @@ ns.L:Register("ptBR", {
   ["Route by default"] = "Rota padrão",
   ["Switch to this kind of route; it stays the default."] = "Mudar para este tipo de rota; ele continua sendo o padrão.",
   ["Careful: level %d creatures"] = "Cuidado: criaturas de nível %d",
+  -- the route's verdict (catalog review A4.3, 07.11.2026)
+  ["Safe trip"] = "Viagem segura",
+  ["Watch out"] = "Cuidado",
+  ["Risky trip"] = "Viagem arriscada",
   ["elite"] = "elite",
 
   -- Death.lua (R26.8)
@@ -113,6 +117,10 @@ ns.L:Register("ptBR", {
   ["All flight masters"] = "Todos os mestres de voo",
   ["Open the step list when a route starts"] = "Abrir a lista de passos quando uma rota começar",
   ["Show an arrow to the next step while a route is active"] = "Mostrar uma seta para o próximo passo enquanto houver uma rota ativa",
+  -- Flight.lua: the flight bar (catalog review A4.1, 07.11.2026)
+  ["Show a flight bar with the time left while flying"] = "Mostrar uma barra de voo com o tempo restante enquanto voa",
+  ["%s to %s"] = "%s para %s",
+  ["%s left"] = "%s restante",
   ["Route here"] = "Rota até aqui",
   ["Route to"] = "Rota para",
   ["Open Bastian's Route"] = "Abrir Bastian's Route",
@@ -151,4 +159,13 @@ ns.L:Register("ptBR", {
 
   -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
   ["Next: %s"] = "Próximo: %s",
+  -- the /way command (ADR 0062, 08.11.2026)
+  ["/way: %s"] = "/way: %s",
+  ["New route"] = "Nova rota",
+  ["Add to route"] = "Adicionar à rota",
+  ["Waypoints"] = "Pontos de rota",
+  ["What /way does while a route runs: start a new route, or add the place to the route."] = "O que /way faz enquanto há uma rota: começar uma rota nova ou adicionar o local à rota.",
+  ["Which addon answers /way: Bastian's Route, or the one that had it first."] = "Qual addon responde a /way: Bastian's Route ou o que o tinha primeiro.",
+  ["No zone called %s."] = "Nenhuma zona chamada %s.",
+  ["Several zones match %s: %s"] = "Várias zonas correspondem a %s: %s",
 })

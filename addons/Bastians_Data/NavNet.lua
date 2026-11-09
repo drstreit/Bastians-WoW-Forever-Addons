@@ -248,15 +248,52 @@ function Net.Point(net, n)
   return nil
 end
 
--- The nearest waypoint to (x, y) in its cluster by straight line: n, yards; nil when the cluster
--- has none within JOIN_YARDS. With a height z the choice weighs height over ground
+-- The waypoint of the cluster nearest on foot to (x, y), from the build's join field (the mesh
+-- never ships, route.md "The join"): the cell's run in row-by-row "value*count" text; nil
+-- without a field or on a cell that has none.
+local function joinByWalking(net, c, x, y)
+  local text = net.rec.join and net.rec.join[c.key]
+  if not text then
+    return nil
+  end
+  local col = floor((32 - y / Net.TILE) * 16) % 32
+  local row = floor((32 - x / Net.TILE) * 16) % 32
+  local cell, at = row * 32 + col, 0
+  for value, count in text:gmatch("(%d+)%*?(%d*),?") do
+    at = at + (tonumber(count) or 1)
+    if cell < at then
+      local v = tonumber(value)
+      return v > 0 and c.first + v - 1 or nil
+    end
+  end
+  return nil
+end
+
+-- The waypoint a place joins the network at: n, yards; nil when its cluster has none within
+-- JOIN_YARDS. A place without a height (the character) takes the waypoint nearest on foot
+-- (a route began over a ridge, the nearest waypoint in a straight
+-- line lay behind it); without a field for its cell, the nearest in a straight line.
+-- With a height z the choice weighs height over ground
 -- (JOIN_Z_WEIGHT), so a place under another floor (Undercity under the ruins) joins its own
 -- floor, not the one above (R25.42); the yards are then the straight line in three dimensions.
 -- Without z (the character: UnitPosition's height is always 0, measured 22./23.10.2026) the plane.
-function Net.Join(net, x, y, z)
+-- noField: a place without a height that is not the character (a goal, a stop, a landing). The field
+-- holds one waypoint per cell, which in a stacked place can lie on another floor (owner, Forever
+-- 08.11.2026: Gakin joined the hidden ground under Stormwind's streets); such a place keeps the plane.
+function Net.Join(net, x, y, z, noField)
   local c = Net.Cluster(net, Net.ClusterKey(x, y))
   if not c then
     return nil
+  end
+  if not z and not noField then
+    local n = joinByWalking(net, c, x, y)
+    if n and c.x[n] then
+      local dx, dy = c.x[n] - x, c.y[n] - y
+      local yards = sqrt(dx * dx + dy * dy)
+      if yards <= Net.JOIN_YARDS then
+        return n, yards
+      end
+    end
   end
   local wz = Net.JOIN_Z_WEIGHT
   local best, bestScore, bestFlat, bestDz
@@ -574,7 +611,7 @@ Net.LegsTo = legsTo -- the legs back from `to` to `from` (nil: to the search's s
 function Net.Route(net, from, to, opts)
   opts = opts or {}
   local a, da = Net.Join(net, from.x, from.y, from.z)
-  local b, db = Net.Join(net, to.x, to.y, to.z)
+  local b, db = Net.Join(net, to.x, to.y, to.z, true)
   if not a then
     return nil, "start off the network"
   end

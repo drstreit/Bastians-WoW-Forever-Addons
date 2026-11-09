@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("koKR", {
+  -- /bgest try (gestures.md "The voice", 08.11.2026)
   -- the owner's follow-ups (retail 01.11.2026, late)
   ["(a macro)"] = "(매크로)",
   ["A macro of the account"] = "공통 매크로",
@@ -52,29 +53,19 @@ ns.L:Register("koKR", {
   ["Show or hide the cloak"] = "망토 보이기/숨기기",
   ["A random favourite mount"] = "즐겨찾는 탈것 무작위 소환",
   -- plan-second-wave.md S7 (01.11.2026)
-  ["%s challenges you to a duel"] = "%s 님이 결투를 신청했습니다",
-  ["%s wants to trade"] = "%s 님이 거래를 원합니다",
-  ["%s invites you to a group"] = "%s 님이 파티에 초대했습니다",
   ["Answer?"] = "답할까요?",
   ["Bow"] = "절하기",
   ["Wave"] = "손 흔들기",
-  ["Decline politely"] = "정중히 거절",
-  ["Thank you, but not today, %t."] = "고맙지만 오늘은 사양할게요, %t.",
   ["The polite decline of a duel, a trade or an invite (press Enter; %t is who asked)"] = "결투, 거래, 초대를 정중히 거절하는 문구 (Enter를 누르세요. %t는 요청한 사람)", -- luacheck: ignore 631
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark heard"] = "들은 것으로 표시",
   ["Toggle the tracker"] = "추적기 켜기/끄기",
-  ["%s buffed you"] = "%s 님이 나에게 버프를 걸어 주었습니다",
-  ["%s cast %s on you"] = "%s 님이 나에게 %s 주문을 시전했습니다",
-  ["%s greets you"] = "%s 님이 나에게 인사합니다",
-  ["%s resurrected you"] = "%s 님이 나를 부활시켰습니다",
   ["(a ring)"] = "(링)",
   ["A line for slot %d"] = "%d번 칸의 문구",
   ["A ring of its own"] = "별도의 링",
   ["A short title for the wedge"] = "조각의 짧은 제목",
   ["Actions"] = "동작",
   ["Add a thank-you line (press Enter; %t is who to thank)"] = "감사 문구 추가 (Enter를 누르세요. %t는 감사할 사람)",
-  ["Also in dungeons and battlegrounds"] = "던전과 전장에서도",
   ["Ask"] = "묻기",
   ["Ask (a bubble)"] = "묻기 (말풍선)",
   ["Automatic"] = "자동",
@@ -89,7 +80,6 @@ ns.L:Register("koKR", {
   ["Clear the screen"] = "화면 비우기",
   ["Click: set this slot"] = "클릭: 이 칸 지정",
   ["Click: the options. Right click: edit the rings."] = "클릭: 옵션. 오른쪽 클릭: 링 편집.",
-  ["Courtesy"] = "예의",
   ["Courtesy: %s"] = "예의: %s",
   ["Default rings"] = "기본 링",
   ["Edit the ring"] = "링 편집",
@@ -105,13 +95,9 @@ ns.L:Register("koKR", {
   ["Long road"] = "먼 길",
   ["Looks around"] = "둘러보기",
   ["Lore here"] = "이곳의 이야기",
-  ["May the road be kind to you, %t."] = "가는 길이 평탄하기를, %t.",
-  ["Much obliged, %t."] = "정말 고맙습니다, %t.",
   ["My thanks, friend."] = "고맙소, 친구.",
   ["Needs Bastian's %s"] = "Bastian's %s 필요",
-  ["Not now"] = "지금은 안 함",
   ["Note here"] = "여기에 메모",
-  ["Off"] = "끔",
   ["Ring"] = "링",
   ["Ring %d: %s"] = "링 %d: %s",
   ["Route home"] = "집으로 가는 길",
@@ -124,7 +110,6 @@ ns.L:Register("koKR", {
   ["Spoken as"] = "말하는 방식",
   ["Thank"] = "감사",
   ["Thank them?"] = "감사 인사를 할까요?",
-  ["Thank you, %t!"] = "고마워요, %t!",
   ["Thanks, friend"] = "고맙소, 친구",
   ["The common tongue"] = "공용어",
   ["The key opens and closes the ring (else: hold it, release on a wedge)"] = "키로 링을 열고 닫습니다 (끄면: 누르고 있다가 조각 위에서 놓기)",
@@ -143,5 +128,4 @@ ns.L:Register("koKR", {
   ["say"] = "일반 대화",
   ["yell"] = "외침",
   -- Bastian's Campfire (plan-second-wave.md S5, 02.11.2026)
-  ["%s's camp warmed you"] = "%s의 캠프가 몸을 녹여 주었습니다",
 })

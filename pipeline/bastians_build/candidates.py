@@ -10,7 +10,6 @@ of parts the report prints, so the owner sees why a strategy ranks where it does
 | channels | 10 per independent channel, at most 30 |
 | reach | up to 20, by the logarithm of the summed views (100,000 views: all 20) |
 | freshness | 15 when last seen within 14 days, falling to 0 at 60 days before the export |
-| verification | +15 for verified claims, -15 for refuted ones, by their share |
 | level cap | 20 when the zone's lowest level is within the cap, 10 for no zone, else 0 |
 | breadth | 2 per claim, at most 10 |
 
@@ -55,7 +54,7 @@ CHAPTER_OF = {
     "vendor_flip": "flips",
     "ah_rule": "auction",
     "profession_choice": "trades",
-}  # price_level claims are facts for stamps and the Rumour mill, not strategies of their own
+}  # price_level claims are facts for the Rumour mill, not strategies of their own
 CHAPTERS = ("farming", "fishing", "crafting", "flips", "auction", "trades")
 STOP = frozenset(
     [
@@ -185,7 +184,7 @@ def group(export: Export, world: World) -> list[Strategy]:
     by_key: dict[tuple, Strategy] = {}
     for claim in export.tables.get("claims", []):
         chapter = CHAPTER_OF.get(claim.get("kind") or "")
-        if not chapter or claim.get("status") == "outdated":
+        if not chapter:
             continue
         zone = claim.get("ui_map_id") or place_map(claim.get("where"), zones)
         key = (chapter, zone, _video(claim))
@@ -371,15 +370,12 @@ def score(s: Strategy, world: World, now: float, cap: int = DEFAULT_CAP) -> None
     reach = sum(int(c.get("reach") or 0) for c in s.claims)
     last = max((_ts(c.get("last_seen")) or 0 for c in s.claims), default=0)
     days = (now - last) / 86400 if last else 999
-    verified = sum(1 for c in s.claims if c.get("status") == "verified")
-    refuted = sum(1 for c in s.claims if c.get("status") == "refuted")
     zone = world.get("zone", s.zone) if s.zone else None
     low = zone.get("levelLo") if zone else None
     parts = {
         "channels": float(min(30, 10 * channels)),
         "reach": round(min(20.0, 20 * math.log10(1 + reach) / 5), 1),
         "freshness": round(15.0 if days <= 14 else max(0.0, 15 * (60 - days) / 46), 1),
-        "verification": round(15 * (verified - refuted) / len(s.claims), 1),
         "level cap": 10.0 if low is None else (20.0 if low <= cap else 0.0),
         "breadth": float(min(10, 2 * len(s.claims))),
     }
@@ -454,7 +450,7 @@ def report(found: dict[str, list[Strategy]], top: int = 8) -> str:
 
 def as_json(found: dict[str, list[Strategy]], top: int = 15) -> dict:
     """The report for tools and writers: per chapter the best `top` with every claim."""
-    keys = ("claim_id", "kind", "subject", "where", "claim", "status")
+    keys = ("claim_id", "kind", "subject", "where", "claim")
     out: dict = {}
     for chapter, items in found.items():
         out[chapter] = [

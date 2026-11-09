@@ -34,7 +34,45 @@ function Plate.New(parent)
   end)
   route:Hide()
   self.route = route
+  -- Show on map: the place on the world map, through Map's action (
+  -- "all maps need to be able to open in world map - it's hard to see what region we mean")
+  local show = S.action(frame, { icon = "zone", label = L["Show on map"], row = true, boxed = true })
+  show:SetPoint("RIGHT", route, "LEFT", -4, 0)
+  show:SetScript("OnClick", function()
+    Plate.ShowOnMap(self.place, self.name)
+  end)
+  show:Hide()
+  self.show = show
   return self
+end
+
+-- The context of Map's "map.show" for a place ({ map, x, y } in map fractions): the zone and the
+-- point. -> ref, ctx, or nil where the place has no world position.
+function Plate.MapContext(place, name)
+  if not place then
+    return nil
+  end
+  local continent, wx, wy = B.Coords.ToWorld(place[1], place[2], place[3])
+  if not continent then
+    return nil
+  end
+  return "zone:" .. tostring(place[1]), { source = "strategies", point = { continent, wx, wy, name } }
+end
+
+-- Whether a place can be shown: Map's action is there and takes it.
+function Plate.CanShow(place, name)
+  local ref, ctx = Plate.MapContext(place, name)
+  local def = ref and B:GetAction("map.show")
+  return def ~= nil and B:ActionEnabled(def, ref, ctx) == true
+end
+
+-- Opens the world map on a plate's place. -> true when Map took it.
+function Plate.ShowOnMap(place, name)
+  local ref, ctx = Plate.MapContext(place, name)
+  if not ref then
+    return false
+  end
+  return B:RunAction("map.show", ref, ctx) ~= false
 end
 
 -- Asks Route for the way to a plate's place ({ map, x, y } in map fractions). -> true when asked.
@@ -71,6 +109,7 @@ local function texture(self, path, size, color, alpha)
 end
 
 local function text(self, value, size, color)
+  size = ns.Book.Size(size)
   self.nf = self.nf + 1
   local fs = self.fs[self.nf]
   if not fs then
@@ -181,6 +220,14 @@ function Obj:DrawSpot(spec, w, h, ctx)
   end
   self.place, self.name = place, spec.label or (ctx and ctx.title)
   self.route:SetShown(place ~= nil and B:GetService("route") ~= nil)
+  self.show:SetShown(Plate.CanShow(place, self.name))
+  if not self.route:IsShown() then
+    self.show:ClearAllPoints()
+    self.show:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", -6, 1)
+  else
+    self.show:ClearAllPoints()
+    self.show:SetPoint("RIGHT", self.route, "LEFT", -4, 0)
+  end
   for _, p in ipairs(spec.avoid or {}) do
     dot(self, p[1], p[2], w, h, S.C.bad, 0.75)
   end
@@ -258,6 +305,7 @@ function Obj:DrawFlow(spec, w, h)
   local frame = self.frame
   B.UI.Scenery.DrawBox(frame, self.art, nil) -- a trade's steps: no map
   self.route:Hide()
+  self.show:Hide()
   local nodes = spec.nodes or {}
   local n = #nodes
   if n == 0 then

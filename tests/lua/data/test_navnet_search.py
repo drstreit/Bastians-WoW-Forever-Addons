@@ -174,6 +174,41 @@ def test_taxi_edges_between_known_nodes(wow: WowRuntime):
     assert abs(r.seconds - 20) < 1e-6
 
 
+def test_a_goal_does_not_join_by_the_field(net):
+    """Trade District to Gakin looped out by the harbour. A goal has no
+    height either, and the field's one waypoint per cell can lie on another floor: Gakin's lay on
+    the hidden ground 40 yards under Stormwind's streets. The field is for the character."""
+    net.execute(
+        "Bastians.Data.packs.nav.graph[0].join = { [495] = '0*827,2,0*196' };"
+        "N = Net.New(Bastians.Data.packs.nav.graph[0])"
+    )
+    assert net.eval("Net.Join(N, 205, 150, nil, true)") == (4, 95)
+    r = net.eval("Net.Route(N, { x = 100, y = 50 }, { x = 205, y = 150 }, {})")
+    assert r.to == 4
+
+
+def test_the_character_joins_the_waypoint_nearest_on_foot(net):
+    """a route began across a mountain. At (205, 150) the hill (4) is
+    nearest in a straight line; the join field says the road (2) is nearest on foot. The cell is
+    row 25, column 27 of the cluster; a place with a height keeps its own rule."""
+    assert net.eval("Net.Join(N, 205, 150)") == (4, 95)  # no field yet: the straight line
+    elsewhere = net.eval("Net.Join(N, 205, 200)")
+    net.execute(
+        "Bastians.Data.packs.nav.graph[0].join = { [495] = '0*827,2,0*196' };"
+        "N = Net.New(Bastians.Data.packs.nav.graph[0])"
+    )
+    assert net.eval("Net.Join(N, 205, 150)") == (2, 105)
+    # a cell the field does not cover: the straight line again
+    assert net.eval("Net.Join(N, 205, 200)") == elsewhere
+    # a height is not the character: its own floor as before
+    n, _ = net.eval("Net.Join(N, 205, 150, 30)")
+    assert n == 4
+    # the route starts where the field says
+    r = net.eval("Net.Route(N, { x = 205, y = 150 }, { x = 100, y = 50 }, {})")
+    assert [(leg["from"], leg.to) for leg in r.legs.values()] == [(2, 3)]
+    assert net.errors == []
+
+
 def test_a_place_with_a_height_joins_its_own_floor(net):
     """R25.42: a goal under another floor (Undercity under the ruins) joined the floor above, by the
     plane alone. At (205, 150) the hill's top (4, height 30) is 95 yards away, the road below

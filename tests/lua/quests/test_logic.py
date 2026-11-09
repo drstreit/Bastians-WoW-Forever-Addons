@@ -177,7 +177,8 @@ def test_zone_list_by_faction(wow: WowRuntime):
     elwynn = logic(wow, "zoneInfo(1429)")
     assert (elwynn.lo, elwynn.hi, elwynn.med, elwynn.a, elwynn.h) == (7, 11, 9, 3, 3)
     westfall = logic(wow, "zoneInfo(1436)")
-    assert (westfall.a, westfall.h) == (1, 2)  # the Horde-only errand counts for Horde only
+    # the Horde-only errand counts for Horde only; the mage's errand (A3.1) for both
+    assert (westfall.a, westfall.h) == (2, 3)
     assert logic(wow, "neighbor(1429, 'Alliance', 1)") == 1436
     assert logic(wow, "neighbor(1436, 'Alliance', 1)") is None
     assert logic(wow, "knows(1429)") is True and logic(wow, "knows(99)") is False
@@ -239,4 +240,161 @@ def test_quest_graph_comes_from_the_pack_and_falls_back_to_decoding(wow: WowRunt
         "onward": [z.map for z in logic(wow, "onward(1429, state)").values()],
     }
     assert decoded == shipped
+    assert wow.errors == []
+
+
+def test_the_chain_as_a_subject_on_the_fixture(wow: WowRuntime):
+    """ADR 0055, quests.md "Chains, first class" (PA5.1): a chain for a character is one main
+    line with where the character is on it, the zones it reaches, its levels and what is ahead."""
+    boot(wow)
+    state(wow, level=10)
+    assert logic(wow, "chainRoot(76)") == logic(wow, "chainRoot(11)") == logic(wow, "chainRoot(62)")
+    assert logic(wow, "chainRoot(176)") is None  # a quest alone
+    root = logic(wow, "chainRoot(76)")
+    chain = logic(wow, f"chainSheet({root}, state)")
+    assert list(chain.main.values()) == [62, 76, 11]  # the numbered steps
+    assert (chain.index[62], chain.index[76], chain.index[11]) == (1, 2, 3)
+    assert len(chain.side) == 0 and chain.id == root
+    assert (
+        chain.name == "The Fargodeep Mine" and logic(wow, f"chainName({root}, state)") == chain.name
+    )
+    # nothing done, the first step can be taken: it can start, and that step is where to go
+    assert (chain.done, chain.now, chain.state) == (0, 1, "start")
+    assert list(chain.zones.values()) == [1429, 1436]  # Elwynn Forest, then Westfall
+    assert (chain.lo, chain.hi) == (7, 10)
+    # a step done, the next in the log: on the way; what is ahead no longer counts the done step
+    before = chain.ahead.xp
+    state(wow, level=10, done=(62,), log=(76,))
+    chain = logic(wow, f"chainSheet({root}, state)")
+    assert (chain.done, chain.now, chain.state) == (1, 2, "on")
+    assert chain.ahead.xp <= before
+    state(wow, level=10, done=(62, 76, 11))
+    chain = logic(wow, f"chainSheet({root}, state)")
+    assert (chain.done, chain.now, chain.state) == (3, None, "finished")
+    assert chain.ahead.xp == 0 and chain.ahead.money == 0
+    # too low for the first step by more than a few levels: later; within reach: it can start
+    state(wow, level=1)
+    assert logic(wow, f"chainSheet({root}, state)").state == "start"  # minLevel 4: three away
+    wow.execute("Bastians:GetModule('Quests').Logic.SOON = 1")
+    assert logic(wow, f"chainSheet({root}, state)").state == "later"
+    assert logic(wow, "chainSheet(424242, state)") is None
+    assert wow.errors == []
+
+
+def test_a_branched_chain_has_one_main_line_and_the_rest_hangs(wow: WowRuntime):
+    """The longest line through what the character can take is the main line (ties to the smaller
+    id); a side quest hangs under the deepest main step before it, another way in under 0; what
+    the character's race or class cannot take is listed with the reason (ADR 0055, C3 and C8)."""
+    boot(wow)
+    state(wow, level=30, race=1)
+    wow.execute(
+        """
+        local quests = {
+          [1] = { name = "The Brotherhood", zone = 10, level = 10 },
+          [2] = { name = "The Brotherhood", zone = 10, level = 12, pre = { 1 } },
+          [3] = { name = "The Brotherhood", zone = 20, level = 14, pre = { 2 } },
+          [4] = { name = "The Brotherhood", zone = 20, level = 18, pre = { 3 } },
+          [5] = { name = "A Letter", zone = 10, level = 12, pre = { 2 } },        -- hangs under step 2
+          [6] = { name = "The Reply", zone = 10, level = 13, pre = { 5 } },       -- through 5: step 2
+          [7] = { name = "A Rumour", zone = 30, level = 9 },                      -- another way in
+          [8] = { name = "For the Horde", zone = 20, level = 14, pre = { 3 }, races = 2 }, -- orcs
+          [9] = { name = "Warrior's Trial", zone = 20, level = 20, pre = { 4 }, classes = 1 },
+          [50] = { name = "Alone", zone = 10, level = 5 },
+        }
+        quests[2].preAny = { 7 }
+        local ids = {}
+        for id in pairs(quests) do ids[#ids + 1] = id end
+        table.sort(ids)
+        BST_FAKE = {
+          Get = function(_, typ, id) return typ == "quest" and quests[id] or nil end,
+          Index = function(_, name, key)
+            if name == "quest.byZone" then
+              if key == nil then return { [1] = ids } end
+              return key == 1 and ids or nil
+            end
+            return nil
+          end,
+        }
+        Bastians:GetModule('Quests').Logic.SetData(BST_FAKE)
+        """
+    )
+    root = logic(wow, "chainRoot(4)")
+    assert root == 1 and logic(wow, "chainRoot(50)") is None
+    chain = logic(wow, "chainSheet(1, state)")
+    assert list(chain.main.values()) == [1, 2, 3, 4]
+    assert [(s.id, s.after) for s in chain.side.values()] == [(7, 0), (5, 2), (6, 2)]
+    assert [(o.id, o.after, o.why) for o in chain.others.values()] == [
+        (8, 3, "race"),
+        (9, 4, "class"),
+    ]
+    assert chain.name == "The Brotherhood"  # the name most steps share
+    assert list(chain.zones.values()) == [10, 20] and (chain.lo, chain.hi) == (10, 18)
+    assert (chain.done, chain.now, chain.state) == (0, 1, "start")
+    assert (
+        logic(wow, "whyNot(quest(8), state)") == "race"
+        and logic(wow, "whyNot(quest(1), state)") is None
+    )
+    # every quest's place: its step on the main line, or the step it hangs under
+    place = [logic(wow, f"chainPlace({q}, state)") for q in (3, 6, 7, 8)]
+    assert (place[0].root, place[0].step, place[0].steps) == (1, 3, 4)
+    assert (place[1].step, place[1].after, place[1].why) == (None, 2, None)
+    assert (place[2].step, place[2].after) == (None, 0)
+    assert (place[3].after, place[3].why) == (3, "race")
+    assert logic(wow, "chainPlace(50, state)") is None and logic(wow, "chainFor(50, state)") is None
+    assert logic(wow, "chainFor(6, state)") == 1
+    # the chains among a zone's quests: the main steps there, the side quests counted, what
+    # the character cannot take left out; a quest alone gives no chain
+    among = logic(wow, "chainsAmong({ 3, 4, 5, 8, 50 }, state)")
+    assert len(among) == 1
+    assert (among[1].chain.id, list(among[1].steps.values()), among[1].side) == (1, [3, 4], 1)
+    assert len(logic(wow, "chainsAmong({ 8, 9, 50 }, state)")) == 0
+    assert len(logic(wow, "chainsAmong({}, state)")) == 0
+    # what kind of chain: from its main steps
+    assert len(logic(wow, "chainKinds(1, state)")) == 0
+    wow.execute(
+        "BST_FAKE.Get(nil, 'quest', 3).qtype = 81; BST_FAKE.Get(nil, 'quest', 4).holiday = 'Brewfest'"
+    )
+    wow.execute("BST_FAKE.Get(nil, 'quest', 5).classes = 1")  # a side quest does not count
+    wow.execute("Bastians:GetModule('Quests').Logic.SetData(BST_FAKE)")
+    assert list(logic(wow, "chainKinds(1, state)").values()) == ["Dungeon", "Festival"]
+    wow.execute(
+        "BST_FAKE.Get(nil, 'quest', 3).qtype = nil; BST_FAKE.Get(nil, 'quest', 4).holiday = nil"
+    )
+    wow.execute("BST_FAKE.Get(nil, 'quest', 5).classes = nil")
+    wow.execute("Bastians:GetModule('Quests').Logic.SetData(BST_FAKE)")
+    # an orc takes the Horde step: it is a side quest then, no longer one of the others
+    state(wow, level=30, race=2)
+    orc = logic(wow, "chainSheet(1, state)")
+    assert (8, 3) in [(s.id, s.after) for s in orc.side.values()]
+    assert [o.id for o in orc.others.values()] == [9]
+    # the step in the log is where the player is, also with an earlier step still to take
+    state(wow, level=30, race=1, done=(1,), log=(3,))
+    assert logic(wow, "chainSheet(1, state)").now == 3
+    # a chain of which the character can take one quest is no chain for them
+    wow.execute("BST_FAKE.Get(nil, 'quest', 2).races = 2; BST_FAKE.Get(nil, 'quest', 3).races = 2")
+    wow.execute(
+        "for _, id in ipairs({ 4, 5, 6, 7 }) do BST_FAKE.Get(nil, 'quest', id).races = 2 end"
+    )
+    wow.execute("Bastians:GetModule('Quests').Logic.SetData(BST_FAKE)")
+    state(wow, level=30, race=1)
+    assert logic(wow, "chainSheet(1, state)") is None
+    wow.execute("Bastians:GetModule('Quests').Logic.SetData(Bastians:GetService('data'))")
+    assert wow.errors == []
+
+
+def test_a_book_in_the_bags_is_no_longer_offered_where_it_lay(wow: WowRuntime):
+    """ "I see the quest for a book to collect - but I have that book already"."""
+    wow.start(CORE, DATA, QUESTS)
+    taken = "Bastians:GetModule('Quests').Logic.AlreadyTaken"
+    book = (
+        "{ starts = { 'npc:211033', 'object:386759' }, objectives = { { 'loot', 'item:203755' } } }"
+    )
+    held = "function(id) return id == 203755 and 1 or 0 end"
+    none = "function() return 0 end"
+    assert wow.eval(f"{taken}({book}, 'object:386759', {held})") is True
+    assert wow.eval(f"{taken}({book}, 'object:386759', {none})") is False
+    assert wow.eval(f"{taken}({book}, 'npc:211033', {held})") is False  # the librarian's pin stays
+    only = "{ starts = { 'object:1' }, objectives = { { 'loot', 'item:203755' } } }"
+    assert wow.eval(f"{taken}({only}, 'object:1', {held})") is False  # nowhere else to get it
+    assert wow.eval(f"{taken}(nil, 'object:1', {held})") is False
     assert wow.errors == []

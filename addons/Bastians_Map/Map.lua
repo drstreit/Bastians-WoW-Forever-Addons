@@ -38,6 +38,9 @@ local mod, win, clip, footer, toolbar
 local cameras = {} -- continent -> Camera
 local camera -- the current one
 local dragging -- { x, y } last cursor position while the mouse button is down
+local DRAG_SLOP = 4 -- pixels a centred map ignores: a click's wobble is not looking around
+local looking = false -- the player looks elsewhere: Centred rests until the map closes
+local centredLook -- the Centred button's colour (below)
 local settleSince -- when the pending layer query was first asked for (SETTLE_MAX)
 local settleTimer
 Map.onView = {} -- fn(camera) after every view change
@@ -154,9 +157,7 @@ end
 
 -- Switch to a continent (keeps that continent's camera).
 function Map.SetContinent(continent)
-  if Map.KeepCentred() then
-    Map.SetKeepCentred(false) -- the player looks at another continent: the map lets go
-  end
+  Map.LookAround() -- the player looks at another continent
   camera = cameraFor(continent)
   if toolbar and toolbar.continent then
     toolbar.continent:SetValue(continent)
@@ -165,11 +166,11 @@ function Map.SetContinent(continent)
 end
 
 -- Centre the camera on a world point, optionally at a level, switching continents when needed.
--- Flying elsewhere lets go of Keep centred, as dragging does (another
+-- Flying elsewhere rests Keep centred, as dragging does (another
 -- continent snapped back to the player's at once); `follow` is the player's own position.
 local function fly(continent, wx, wy, level, follow)
-  if not follow and Map.KeepCentred() then
-    Map.SetKeepCentred(false)
+  if not follow then
+    Map.LookAround()
   end
   if not win then
     Map.Open()
@@ -199,6 +200,30 @@ end
 -- 22.10.2026: three wolf spawns fitted at a far zoom became one icon; the player's zoom stays,
 -- zoomed in to the zone level at least). With `fit`, the level drops until the box fits: for a
 -- whole zone, where seeing all of it is the point.
+-- The group of `points` around the one nearest to the player (world yards; the first point without
+-- a player on this continent): that point, and every point within Map.GROUP_YARDS of it.
+Map.GROUP_YARDS = 250
+function Map.NearestGroup(points, px, py)
+  local first = points[1]
+  if px and py then
+    local best
+    for _, p in ipairs(points) do
+      local d = (p.wx - px) ^ 2 + (p.wy - py) ^ 2
+      if not best or d < best then
+        first, best = p, d
+      end
+    end
+  end
+  local group = {}
+  for _, p in ipairs(points) do
+    if (p.wx - first.wx) ^ 2 + (p.wy - first.wy) ^ 2 <= Map.GROUP_YARDS ^ 2 then
+      group[#group + 1] = p
+    end
+  end
+  return group, first
+end
+
+-- Returns the point the view went to when the places lay too far apart for it, else nil.
 function Map.FitWorld(continent, points, level, fit)
   if not points or #points == 0 then
     return
@@ -211,6 +236,21 @@ function Map.FitWorld(continent, points, level, fit)
   local cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
   local extent = math.max(x2 - x1, y2 - y1)
   if not fit or #points == 1 or extent < 50 then
+    -- places further apart than the view (a quest's two camps): their middle shows neither
+    --;
+    -- the group nearest to the player, there
+    local yards = math.min(clip:GetWidth() or 600, clip:GetHeight() or 400) * 32 / 2 ^ level
+    if #points > 1 and extent > yards * 0.8 then
+      local p = Map.PlayerWorld()
+      local here = p and p[1] == continent
+      local group, nearest = Map.NearestGroup(points, here and p[2] or nil, here and p[3] or nil)
+      local gx, gy = 0, 0
+      for _, g in ipairs(group) do
+        gx, gy = gx + g.wx, gy + g.wy
+      end
+      Map.Fly(continent, gx / #group, gy / #group, level)
+      return nearest
+    end
     Map.Fly(continent, cx, cy, level)
     return
   end
@@ -228,21 +268,34 @@ function Map.CenterOnPlayer()
   if not p then
     return false
   end
+  looking = false -- the Player button: back to the player, and following again
+  centredLook()
   fly(p[1], p[2], p[3], nil, true)
   return true
 end
 
 -- ---------------------------------------------------------------------------------------------
 -- Keep centred: the player stays in the middle of the map while
--- moving; the zoom stays the player's. Dragging the map switches it off, as Google Maps does. Not
--- the old Follow, which flew to the Browser's pages (removed in round 2).
+-- moving; the zoom stays the player's. Not the old Follow, which flew to the Browser's pages
+-- (removed in round 2). On by default, and only the button switches it off (owner, Forever
+-- 08.11.2026: "only if the player disables it it stays that way, currently it switches off all
+-- the time"): looking around (a drag, another continent, a place flown to) rests it until the
+-- map closes or the Player button is pressed; the next open follows again.
 -- ---------------------------------------------------------------------------------------------
 
 function Map.KeepCentred()
-  return mod ~= nil and db().keepCentred == true
+  return mod ~= nil and db().centred ~= false and not looking
 end
 
-local function centredLook()
+-- The player looks elsewhere: the map stops following until it closes. No change to the choice.
+function Map.LookAround()
+  if not looking then
+    looking = true
+    centredLook()
+  end
+end
+
+function centredLook()
   local b = toolbar and toolbar.centred
   if not b then
     return
@@ -258,7 +311,8 @@ function Map.SetKeepCentred(on)
   if not mod then
     return
   end
-  db().keepCentred = on and true or false
+  db().centred = on and true or false
+  looking = false
   centredLook()
   if on then
     Map.CenterOnPlayer()
@@ -368,11 +422,10 @@ local function onUpdate(_, elapsed)
       scale = 1
     end
     local dx, dy = (x - dragging.x) / scale, (dragging.y - y) / scale
-    if dx ~= 0 or dy ~= 0 then
+    local far = dragging.moved or not Map.KeepCentred() or dx * dx + dy * dy >= DRAG_SLOP * DRAG_SLOP
+    if far and (dx ~= 0 or dy ~= 0) then
       dragging.x, dragging.y, dragging.moved = x, y, true
-      if Map.KeepCentred() then
-        Map.SetKeepCentred(false) -- the player looks around: the map lets go (R27.9)
-      end
+      Map.LookAround() -- the player looks around: the map rests until it closes (R27.9)
       Map.Pan(dx, dy)
     end
   else
@@ -447,19 +500,45 @@ function Map.Describe(continent, wx, wy)
   return L[continentName(continent) or ("continent " .. tostring(continent))], nil
 end
 
+-- The travel time from the character to a world point, as words ("12 min"; "~12 min" when the
+-- last stretch is a straight line), from the graph's time cache (catalog review A4.2, 07.11.2026).
+-- One memo lookup: nil until a job has filled the cell (the footer asks again ten times a second),
+-- on another continent than the character's, or where the graph has no network. Unknown says nothing.
+function Map.TimeTo(continent, wx, wy)
+  local g = B:GetService("graph")
+  if not g then
+    return nil
+  end
+  local seconds, approx = g:Time({ map = continent, wx = wx, wy = wy })
+  local words = B.UI.Duration(seconds)
+  if words and approx then
+    return "~" .. words
+  end
+  return words
+end
+
 function Map.UpdateFooter()
   if not (footer and camera) then
     return
   end
   local sx, sy = Map.CursorPos()
-  local text
+  local text, away
   if sx >= 0 and sy >= 0 and sx <= camera.width and sy <= camera.height then
     local wx, wy = camera:ToWorld(sx, sy)
     text = Map.Describe(camera.continent, wx, wy)
+    away = Map.TimeTo(camera.continent, wx, wy)
   else
     text = L[continentName(camera.continent) or "?"]
   end
-  footer:SetText(string.format("%s   " .. S.H.muted .. "%s %.1f|r", text, L["zoom"], camera.level))
+  footer:SetText(
+    string.format(
+      "%s   %s" .. S.H.muted .. "%s %.1f|r",
+      text,
+      away and (away .. "   ") or "",
+      L["zoom"],
+      camera.level
+    )
+  )
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -479,11 +558,14 @@ local function build()
     db = db().window,
     onShow = function()
       clip:SetScript("OnUpdate", onUpdate)
+      Map.FollowPlayer() -- opens on the player, not a frame later
       Map.ViewChanged()
     end,
     onHide = function()
       clip:SetScript("OnUpdate", nil) -- no work while hidden (CLAUDE.md golden rule 7)
       dragging = nil
+      looking = false -- the next open follows the player again
+      centredLook()
       if settleTimer then
         settleTimer:Cancel()
         settleTimer = nil
@@ -516,8 +598,9 @@ local function build()
   toolbar.player:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   toolbar.centred = S.tileButton(toolbar, L["Centred"], "arrow", "dim")
   toolbar.centred.tip = function()
-    return L["Keep me centred"],
-      L["The map follows you while you move. Dragging the map lets go; click again to follow."]
+    local text = "The map follows you and centres on you whenever it opens. Looking around lets go "
+      .. "until you close it; click to switch this off for good."
+    return L["Keep me centred"], L[text]
   end
   toolbar.centred:SetPoint("LEFT", toolbar.player, "RIGHT", 6, 0)
   toolbar.centred:SetScript("OnClick", function()
@@ -714,6 +797,7 @@ function Map.Open()
     toolbar.continent:SetValue(camera.continent)
   end
   if win:IsShown() then
+    win:Show() -- to the front
     Map.ViewChanged()
   else
     win:Show()
@@ -782,6 +866,11 @@ end
 function Map.Style()
   local style = mod and db().mapStyle
   return style and known(style) and style or "physical"
+end
+
+-- The style a continent is drawn in: the chosen one, or the physical map where it has no cells.
+function Map.StyleOn(continent)
+  return ns.Styles.On(Map.Style(), continent)
 end
 
 -- The style's name for the bar and the settings.
@@ -857,7 +946,7 @@ mod = B:NewModule("Map", {
       layers = {},
       continent = 0,
       mapStyle = "physical",
-      keepCentred = false, -- the player in the middle while moving (R27.9)
+      centred = true, -- the player in the middle while moving, the button's word (R27.9)
       nativeTiles = true,
       overviewArt = true,
       minimapPins = true, -- the layers on the game's minimap (S5)
@@ -992,7 +1081,7 @@ mod = B:NewModule("Map", {
         {
           type = "toggle",
           key = "miniTracked",
-          label = L["On Bastian's styles, show what the game's tracking finds (herbs, ore, creatures)"],
+          label = L["On Bastian's styles, show the herbs, ore and creatures the game's tracking finds"],
           default = true,
         },
         {
@@ -1005,6 +1094,7 @@ mod = B:NewModule("Map", {
     },
   },
   OnEnable = function(self)
+    self.db.profile.keepCentred = nil -- before 08.11.2026: every drag saved it off
     runAll(Map.onEnable, self)
     self:On("BASTIANS_SETTING_CHANGED", function(_, _, name, key, value)
       if name == self.name then

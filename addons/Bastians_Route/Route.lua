@@ -32,6 +32,12 @@ Route.LANDING_MOVED = 200 -- yards the character must have moved for that landin
 Route.KINDS = { "fastest", "safe", "nocost" }
 Route.CAREFUL_LEVELS = 3 -- a walk through creatures this many levels above the character says so
 
+-- ", Risky trip" for the chat's route line (A4.3); "" without a verdict.
+function Route.VerdictSuffix(route)
+  local words, verdict = Graph.VerdictText(route, (B.Compat.GetPlayerFacts() or {}).level, L)
+  return verdict and (", " .. words) or ""
+end
+
 local FACTION_LETTER = { Alliance = "A", Horde = "H" }
 
 local mod
@@ -41,6 +47,7 @@ local lastReplan = -math.huge
 local offTicks = 0 -- checks in a row off the way
 local taxiShown, taxiCurrent, taxiFlight -- the open taxi map, its current node, the flight in progress
 local hearthingAt
+local addCount = 0 -- the ids of the stops added to a route
 local teleporting -- { id, at, from } while a teleport of the table was just cast (R26.7)
 local nameToID -- flight master name -> data id (built on demand)
 local nets = {} -- continent -> decoded walk network, or false (route.md "Walk network")
@@ -508,12 +515,13 @@ function Route.PlanAsync(start, goal, callback, kind)
     callback(Route.Plan(start, goal))
     return
   end
-  kind = kind or Route.Kind()
+  -- on foot (a ghost, Death.lua): no flight master, hearthstone or teleport serves it
+  kind = goal.onFoot and "nocost" or kind or Route.Kind()
   local facts = B.Compat.GetPlayerFacts() or {}
   local notes = {}
-  local hearth = Route.Hearth(notes)
+  local hearth = not goal.onFoot and Route.Hearth(notes) or nil
   local known = {}
-  for _, f in ipairs(Route.Flights()) do
+  for _, f in ipairs(goal.onFoot and {} or Route.Flights()) do
     known[f.id] = true
   end
   g:Route({ map = start.continent, wx = start.wx, wy = start.wy }, {
@@ -524,7 +532,7 @@ function Route.PlanAsync(start, goal, callback, kind)
     known = known,
     faction = FACTION_NAME[playerFaction() or ""],
     hearth = hearth and { map = hearth.continent, wx = hearth.wx, wy = hearth.wy } or nil,
-    teleports = Route.Teleports(),
+    teleports = not goal.onFoot and Route.Teleports() or nil,
     speeds = { ground = db().char.maxSpeed or Graph.WALK_SPEED },
     profile = kind ~= "fastest" and kind or nil,
     level = facts.level,
@@ -635,7 +643,12 @@ function Route.To(ref)
     best.ref = ref
     Route.Set(best)
     Route.Alternatives(best, start)
-    B:Say(L["Route to %s: %s, %d steps"], name, Graph.FormatSeconds(best.seconds), #best.steps)
+    B:Say(
+      L["Route to %s: %s, %d steps"] .. Route.VerdictSuffix(best),
+      name,
+      Graph.FormatSeconds(best.seconds),
+      #best.steps
+    )
     if db().profile.openWindow ~= false then
       W.Open()
     end
@@ -664,24 +677,35 @@ function Route.To(ref)
   return true
 end
 
--- Route to a world point (the map's right click, "Route here"): plans from the player, sets the route.
-function Route.ToPoint(continent, wx, wy, name)
+-- Route to a world point (the map's right click, "Route here"): plans from the player, sets the
+-- route. `opts.onFoot`: walking only (a ghost), one kind of route, kept by a re-route.
+function Route.ToPoint(continent, wx, wy, name, opts)
   local start = playerPos()
   if not start then
     B:Say(L["No map position here (instance?)"])
     return false
   end
   name = name or L["the marked spot"]
+  local onFoot = opts and opts.onFoot or nil
   local result
-  Route.PlanAsync(start, { continent = continent, wx = wx, wy = wy, name = name }, function(route)
+  local goal = { continent = continent, wx = wx, wy = wy, name = name, onFoot = onFoot }
+  Route.PlanAsync(start, goal, function(route)
     if not route then
       B:Say(L["No route to %s"], name)
       result = false
       return
     end
+    route.onFoot = onFoot
     Route.Set(route)
-    Route.Alternatives(route, start)
-    B:Say(L["Route to %s: %s, %d steps"], name, Graph.FormatSeconds(route.seconds), #route.steps)
+    if not onFoot then
+      Route.Alternatives(route, start)
+    end
+    B:Say(
+      L["Route to %s: %s, %d steps"] .. Route.VerdictSuffix(route),
+      name,
+      Graph.FormatSeconds(route.seconds),
+      #route.steps
+    )
     if db().profile.openWindow ~= false then
       W.Open()
     end
@@ -806,6 +830,75 @@ function Route.TourAhead()
   return ahead
 end
 
+-- Whether places can be added to the route that runs: not to a ghost's way back (ADR 0062).
+function Route.CanAdd()
+  return active ~= nil and not active.onFoot
+end
+
+-- The stops a new one comes behind: a tour's still ahead, or the goal of a plain route.
+function Route.StopsAhead()
+  if not active then
+    return {}
+  end
+  if active.tour then
+    return Route.TourAhead()
+  end
+  local g = active.goal
+  return {
+    {
+      id = "goal",
+      name = g.name,
+      ref = g.ref or active.ref,
+      place = { map = g.continent, wx = g.wx, wy = g.wy },
+    },
+  }
+end
+
+-- One route through `new`, in that order; `keep`: behind the stops still ahead (ADR 0062).
+function Route.AddStops(new, keep)
+  local all = keep and Route.StopsAhead() or {}
+  local last = all[#all]
+  for _, st in ipairs(new) do
+    st.after = last and { last.id } or nil
+    all[#all + 1] = st
+    last = st
+  end
+  return Route.Tour(all, keep and active and active.tour and active.tour.name or L["Waypoints"])
+end
+
+-- An entity behind the stops ahead: its place nearest the route's goal.
+function Route.AddRef(ref)
+  local e, g, best, bestYards = B:Entity(ref), active and active.goal, nil, math.huge
+  for _, loc in ipairs(e:Locations()) do
+    local c, wx, wy = B.Coords.ToWorld(loc.map, loc.x, loc.y)
+    if c then
+      local yards = g and c == g.continent and Graph.Distance(g.wx, g.wy, wx, wy) or math.huge
+      if not best or yards < bestYards then
+        best, bestYards = { map = c, wx = wx, wy = wy }, yards
+      end
+    end
+  end
+  if not best then
+    B:Say(L["No route to %s"], e:Name() or ref)
+    return false
+  end
+  addCount = addCount + 1
+  return Route.AddStops(
+    { { id = "add:" .. addCount, name = e:Name() or ref, ref = ref, place = best } },
+    true
+  )
+end
+
+-- A point of the map behind the stops ahead.
+function Route.AddPoint(continent, wx, wy, name)
+  addCount = addCount + 1
+  local place = { map = continent, wx = wx, wy = wy }
+  return Route.AddStops(
+    { { id = "add:" .. addCount, name = name or L["the marked spot"], place = place } },
+    true
+  )
+end
+
 -- The other kinds of the route just set, planned in the background (R26.5): route.alternatives =
 -- { [kind] = route } shared by all of them; the step list shows them as they come. Only over the
 -- graph (Route's own planner knows no kinds).
@@ -875,7 +968,11 @@ function Route.Replan(reason)
   if active.tour then -- the stops still ahead, ordered again from here (R26.4)
     return Route.Tour(Route.TourAhead(), active.tour.name)
   end
-  local goal, was = active.goal, active
+  local was = active
+  local goal = was.goal
+  if was.onFoot then
+    goal = { continent = goal.continent, wx = goal.wx, wy = goal.wy, name = goal.name, onFoot = true }
+  end
   local result
   Route.PlanAsync(start, goal, function(route)
     if active ~= was then
@@ -891,6 +988,7 @@ function Route.Replan(reason)
     end
     route.ref = was.ref
     route.reason = reason
+    route.onFoot = was.onFoot
     Route.Set(route)
     result = true
   end, was.kind)
@@ -918,6 +1016,10 @@ tick = function()
     return
   end
   learnSpeed()
+  ns.Death.Sync() -- the case of the stale arrow: a route runs, and the character may have died
+  if not active or ns.Death.Silenced() then
+    return -- life cleared the way back, or a route the death made wrong: no step, no re-route
+  end
   local pos = playerPos()
   if not pos then
     return
@@ -1197,6 +1299,7 @@ local function onLanded()
     taxiFlight = flight -- a stop on a multi-hop flight; wait for the real landing
     return
   end
+  ns.Flight.End()
   local seconds = GetTime() - flight.startedAt
   local to = flight.to or nearestFlight(playerPos())
   local g = graph()
@@ -1224,6 +1327,7 @@ local function hookTaxi()
       to = flightIDFor(target),
       startedAt = GetTime(),
     }
+    ns.Flight.Begin(taxiFlight) -- the flight bar (A4.1)
   end)
 end
 
@@ -1293,6 +1397,8 @@ mod = B:NewModule("Route", {
       openWindow = true,
       corpseRoute = true,
       routeKind = "fastest",
+      wayAdd = false, -- /way while a route runs: false a new route, true behind its stops (ADR 0062)
+      wayOverOwner = false, -- another addon has /way: true hands it to Route
       window = {},
       tree = {},
     },
@@ -1334,6 +1440,12 @@ mod = B:NewModule("Route", {
       default = true,
     },
     {
+      type = "toggle",
+      key = "flightBar",
+      label = L["Show a flight bar with the time left while flying"],
+      default = true,
+    },
+    {
       type = "note",
       text = function()
         return Route.Note()
@@ -1356,6 +1468,7 @@ mod = B:NewModule("Route", {
     -- the map's right click on empty ground opens the zone's menu with the point in the context
     B:RegisterAction(self, {
       id = "route.here",
+      main = true, -- a button of the sheet (ADR 0054)
       label = L["Route here"],
       icon = B.UI.IconTexture("route"),
       types = { "zone" },
@@ -1370,6 +1483,19 @@ mod = B:NewModule("Route", {
     })
     B:RegisterAction(self, {
       id = "route.to",
+      main = {
+        "npc",
+        "object",
+        "node",
+        "quest",
+        "chain", -- to the step the player is on
+        "dungeon",
+        "spot",
+        "area",
+        "entrance",
+        "flightpath",
+        "transport",
+      }, -- a button of the sheet (ADR 0054)
       label = L["Route to"],
       icon = B.UI.IconTexture("route"),
       types = "*",
@@ -1384,6 +1510,42 @@ mod = B:NewModule("Route", {
       end,
       run = function(ref)
         Route.To(ref)
+      end,
+    })
+    -- add to the running route instead of a new one
+    B:RegisterAction(self, {
+      id = "route.add",
+      label = L["Add to route"],
+      icon = B.UI.IconTexture("route"),
+      types = "*",
+      order = 16,
+      when = function(ref, ctx)
+        if not Route.CanAdd() or (ctx and ctx.point) then
+          return false
+        end
+        for _, loc in ipairs(B:Entity(ref):Locations()) do
+          if B.Coords.ToWorld(loc.map, loc.x, loc.y) then
+            return true
+          end
+        end
+        return false
+      end,
+      run = function(ref)
+        Route.AddRef(ref)
+      end,
+    })
+    B:RegisterAction(self, {
+      id = "route.addhere",
+      label = L["Add to route"],
+      icon = B.UI.IconTexture("route"),
+      types = { "zone" },
+      order = 15,
+      when = function(_, ctx)
+        return Route.CanAdd() and ctx ~= nil and type(ctx.point) == "table"
+      end,
+      run = function(_, ctx)
+        local pt = ctx.point
+        Route.AddPoint(pt[1], pt[2], pt[3], pt[4])
       end,
     })
     -- Gestures' "Route home" (plan-second-wave.md S6): offered to the ring only (ctx.source)
@@ -1456,11 +1618,14 @@ mod = B:NewModule("Route", {
         return
       end
       ns.Arrow.HideByKey(hidden == true)
+      ns.Flight.HideByKey(hidden == true)
     end)
     hookTaxi()
     W.Register(self)
     ns.Arrow.Register(self) -- the arrow to the next step (S6)
+    ns.Flight.Register(self) -- the flight bar (A4.1)
     ns.Death.Register(self) -- the place of death and the way back (R26.8)
+    ns.Way.Register(self) -- the /way command (ADR 0062)
     ns.Ferries.Register(self) -- the departures of boats and zeppelins (R26.6)
     ns.Explore.Register(self) -- what is worth doing nearby (R26.11)
     ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
@@ -1498,11 +1663,15 @@ mod = B:NewModule("Route", {
   OnDisable = function()
     Route.Clear()
     W.Hide()
+    ns.Death.Unregister()
+    ns.Way.Unregister()
     ns.Arrow.Unregister()
+    ns.Flight.Unregister()
   end,
 })
 ns.mod = mod
 mod.Arrow = ns.Arrow -- the arrow to the next step (Arrow.lua, S6)
+mod.Flight = ns.Flight -- the flight bar (Flight.lua, A4.1)
 mod.Route, mod.Graph, mod.Window = Route, Graph, W
 
 BINDING_HEADER_BASTIANS_ROUTE = "Bastian's Route" -- one header per addon (plan-launch-review I4)
@@ -1523,6 +1692,8 @@ SlashCmdList.BASTIANSROUTE = function(msg)
     Route.Replan("command")
   elseif cmd == "corpse" then
     ns.Death.RouteBack()
+  elseif cmd == "death" then
+    ns.Death.Report()
   elseif cmd == "home" then
     Route.Home()
   elseif cmd == "member" then
@@ -1537,8 +1708,8 @@ SlashCmdList.BASTIANSROUTE = function(msg)
     Route.To(arg)
   else
     B:Say(
-      "/broute [clear | corpse | explore | ferries | hearth | home | member <name> | replan | teleports | "
-        .. "to <type:id>]"
+      "/broute [clear | corpse | death | explore | ferries | hearth | home | member <name> | replan | "
+        .. "teleports | to <type:id>]"
     )
   end
 end

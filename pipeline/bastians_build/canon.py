@@ -18,6 +18,7 @@ from typing import Any
 
 from bastians_build.areas import AreaBlock, add_areas
 from bastians_build.coords import (
+    CAPITALS,
     CMANGOS_CONTINENT,
     Spawn,
     best_map,
@@ -26,6 +27,7 @@ from bastians_build.coords import (
     place_world_point,
     world_to_map,
 )
+from bastians_build.internal import drop_internal
 from bastians_build.model import World
 from bastians_build.sources import cmangos, foreverdb
 from bastians_build.sources.allthethings import AllTheThings
@@ -41,9 +43,16 @@ from bastians_build.sources.clientdump import (
 from bastians_build.sources.everything_quests import EverythingQuests
 from bastians_build.sources.itemdb import ItemDB
 from bastians_build.sources.probe import Transform
+from bastians_build.sources.questie import QuestGates
+from bastians_build.sources.questiedb_store import Store, StoreQuest
 from bastians_build.sources.tdb import Tdb
 
-GRAPH_CONTINENTS = (0, 1)  # Map ids of Eastern Kingdoms and Kalimdor, the world graph's (ADR 0026)
+# Map ids of the world graph's continents: Eastern Kingdoms, Kalimdor (ADR 0026), Zephras Isle
+GRAPH_CONTINENTS = (0, 1, 2991)
+# The zones Forever added: their rectangles overlap old zones, and no Classic point lies in them
+# (06.11.2026: 234 NPC and 98 object points of Winterspring, Mulgore and the Badlands landed on
+# Mount Hyjal, Shen'dralas and the Riverglades)
+FOREVER_NEW_MAPS = frozenset({2482, 2548, 2652})
 MAX_SPOTS_PER_MAP = 8  # objective spots kept per quest and map (EQ orders densest first)
 MAX_DROPS_PER_ITEM = 20
 MAX_LOOT_PER_NPC = 30
@@ -53,19 +62,10 @@ MAX_LOOT_PER_NPC = 30
 # 20-25").
 WORLD_DROP_MIN_DROPPERS = 25
 
-# CMaNGOS NpcFlags bits -> service flags (data.md npc record)
-NPC_FLAGS = {
-    2: "questgiver",
-    16: "trainer",
-    128: "vendor",
-    4096: "repair",
-    8192: "flightmaster",
-    65536: "innkeeper",
-    131072: "banker",
-    1048576: "battlemaster",
-    2097152: "auctioneer",
-    4194304: "stablemaster",
-}
+# The NpcFlags tables live with their sources, one per flag family: ``cmangos.NPC_FLAGS`` (Classic
+# 1.12 bits) and ``tdb.NPC_FLAGS`` (retail family). Never decode one source with the other's.
+# titles of quests the game never finished, as QuestieDB keeps them
+NOT_A_QUEST = re.compile(r"NYI|DEPRECATED|UNUSED|\[PH\]|<TXT>|^zz", re.IGNORECASE)
 RANKS = {1: "elite", 2: "rareelite", 3: "boss", 4: "rare"}
 # CMaNGOS gameobject_template.type -> the object kind (data.md object record, ADR 0016): the
 # Browser shows the kinds a player looks for and folds the technical ones into "Other". A type
@@ -132,6 +132,13 @@ class Sources:
     fdb_recipes: list[foreverdb.RecipeRow] = field(default_factory=list)
     fdb_gather: tuple[list, list, list] | None = None
     fdb_quests: list[foreverdb.QuestRow] = field(default_factory=list)
+    # what players saw in Forever (06.11.2026): places, XP, rewards, stock, trainers
+    fdb_seen: dict[int, foreverdb.QuestSeen] = field(default_factory=dict)
+    fdb_npc_names: dict[int, str] = field(default_factory=dict)
+    fdb_xp: dict[int, int] = field(default_factory=dict)
+    fdb_guide: dict[int, foreverdb.GuideRewards] = field(default_factory=dict)
+    fdb_sold: dict[int, list[foreverdb.SoldRow]] = field(default_factory=dict)
+    fdb_trainers: frozenset[int] = frozenset()
     fdb_items: list[foreverdb.ItemFacts] = field(default_factory=list)
     fdb_names: dict[int, str] = field(default_factory=dict)
     fdb_dungeons: list[foreverdb.DungeonRow] = field(default_factory=list)
@@ -153,6 +160,7 @@ class Sources:
     # the side and hostility of CMaNGOS' creatures (guards and the danger, R26.5)
     cm_factions: dict[int, tuple[str | None, bool]] = field(default_factory=dict)
     area_to_map: dict[int, int] = field(default_factory=dict)
+    questie: Store | None = None  # QuestieDB's baked store (Forever, 06.11.2026)
     att: AllTheThings | None = None  # retail: AllTheThings db/Standard (quests, places)
     idb: ItemDB | None = None  # retail: ItemDB names, item facts, places
     tdb: Tdb | None = None  # retail: TrinityCore's world database (services, levels, places)
@@ -176,6 +184,7 @@ class Sources:
     fallback_map_names: dict[int, str] = field(default_factory=dict)
     fallback_map_types: dict[int, int] = field(default_factory=dict)
     source_names: list[str] = field(default_factory=list)
+    questie_gates: QuestGates | None = None  # the quests Questie hides on Forever (ADR 0051)
     # the subzones (data.md "Areas"): the navmesh files' area blocks, the client's AreaTable and
     # its UiMapAssignment's area -> uiMapIDs; `areas_note` says why a build has none
     area_blocks: list[AreaBlock] = field(default_factory=list)
@@ -317,8 +326,7 @@ def merge_creatures(world: World, s: Sources) -> None:
         if lo is not None:
             rec["level"] = int(lo)
             rec["levelMax"] = int(hi) if hi is not None and hi != lo else None
-        flags = int(row.get("NpcFlags") or 0)
-        services = [name for bit, name in NPC_FLAGS.items() if flags & bit]
+        services = cmangos.npc_services(row.get("NpcFlags"))
         rank = RANKS.get(int(row.get("Rank") or 0))
         if rank:
             services.append(rank)
@@ -343,6 +351,8 @@ def merge_creatures(world: World, s: Sources) -> None:
             rec = _rec(world, "object", obj_id)
             rec["name"] = clean_name(name) or rec.get("name")
             rec["src"] = "forever"
+    for npc_id, name in s.fdb_npc_names.items():  # who players met on Forever's quests
+        _set_if_missing(_rec(world, "npc", npc_id), "name", clean_name(name))
     # ForeverDB vendors and trainers: Forever coordinates (converted Classic places unless seen)
     for npc in s.fdb_npcs:
         rec = _rec(world, "npc", npc.id)
@@ -365,6 +375,9 @@ def merge_creatures(world: World, s: Sources) -> None:
         if npc.seen_in_forever:
             rec["src"] = "forever"
     # Classic spawns through the transform table
+    frame = s.transforms
+    if s.client == "forever" and frame:
+        frame = {k: v for k, v in frame.items() if k not in FOREVER_NEW_MAPS}
     for spawn in s.cm_spawns:
         record_type = "npc" if spawn.kind == "creature" else "object"
         if spawn.map_id not in CMANGOS_CONTINENT:
@@ -373,13 +386,14 @@ def merge_creatures(world: World, s: Sources) -> None:
             )
             continue
         placed = place_world_point(
-            s.transforms,
+            frame,
             spawn.map_id,
             spawn.position_x,
             spawn.position_y,
             "classic",
             spawn.position_z,
             spawn.spawndist if (spawn.spawndist or 0) >= 1 else None,
+            CAPITALS.get(s.client, ()),  # the city rule (data.md): Stormwind's bankers
         )
         if placed is None:
             world.drop(
@@ -401,6 +415,86 @@ def merge_creatures(world: World, s: Sources) -> None:
                         rec, Spawn(place.ui_map_id, round(place.x, 4), round(place.y, 4), "eq")
                     )
                     _set_if_missing(rec, "src", "forever")
+
+
+def _questie_rows(places: dict, s: Sources) -> list[list]:
+    """A QuestieDB row's places as spawn rows: its zones are AreaTable ids, its points map percent,
+    a common mob's hundreds thinned as Classic ones are."""
+    rows: list[list] = []
+    for zone in sorted(places):
+        ui_map = s.area_to_map.get(zone)
+        if ui_map is None or not s.transforms or ui_map not in s.transforms:
+            continue
+        points = [
+            [ui_map, round(x / 100, 4), round(y / 100, 4), "questie"] for x, y in places[zone]
+        ]
+        rows.extend(farthest_points(points, MAX_CLASSIC_SPAWNS_PER_MAP))
+    return rows
+
+
+def _add_rows(rec: dict, rows: list[list]) -> None:
+    """Adds the places a record lacks: a point within a hundredth of the map of one it has is that
+    one (Everything Quests names the same givers)."""
+    spawns = rec.setdefault("spawns", [])
+    for row in rows:
+        near = any(
+            s[0] == row[0] and abs(s[1] - row[1]) < 0.01 and abs(s[2] - row[2]) < 0.01
+            for s in spawns
+        )
+        if not near:
+            spawns.append(row)
+
+
+def merge_questie_world(world: World, s: Sources) -> None:
+    """The NPCs and objects CMaNGOS does not have, or has no place for (sources.md): QuestieDB's
+    Forever build is the one source of the creatures of the zones Forever added. A Classic creature
+    with a place is left alone: QuestieDB's row for it is the same CMaNGOS point."""
+    store = s.questie
+    if store is None:
+        return
+    classic = {int(row["Entry"]) for row in s.cm_creatures}
+    for npc_id, npc in sorted(store.npcs.items()):
+        rec = world.get("npc", npc_id)
+        new = npc_id not in classic
+        if not new and (rec is None or rec.get("spawns")):
+            continue
+        rows = _questie_rows(npc.places, s)
+        if rec is None and not rows:
+            continue
+        rec = _rec(world, "npc", npc_id)
+        _set_if_missing(rec, "name", clean_name(npc.name))
+        _set_if_missing(rec, "subname", clean_name(npc.subname))
+        if new:
+            _set_if_missing(rec, "level", npc.level)
+            if npc.level_max != npc.level:
+                _set_if_missing(rec, "levelMax", npc.level_max)
+            services = cmangos.npc_services(npc.npc_flags)
+            rank = RANKS.get(npc.rank)
+            if rank:
+                services.append(rank)
+            if services:  # over ForeverDB's guess from the title
+                rec["flags"] = services
+            side, hostile = s.cm_factions.get(int(npc.faction_template or 0), (None, None))
+            friendly = npc.friendly if npc.friendly in ("A", "H") else side
+            _set_if_missing(rec, "faction", friendly)
+            if hostile is not None:
+                rec["hostile"] = hostile
+        _add_rows(rec, rows)
+        _set_if_missing(rec, "src", "forever")
+    classic = {int(row["entry"]) for row in s.cm_objects}
+    for object_id, obj in sorted(store.objects.items()):
+        rec = world.get("object", object_id)
+        if object_id in classic and (rec is None or rec.get("spawns")):
+            continue
+        rows = _questie_rows(obj.places, s)
+        if rec is None and not rows:
+            continue
+        rec = _rec(world, "object", object_id)
+        _set_if_missing(rec, "name", clean_name(obj.name))
+        if "mailbox" in (rec.get("name") or "").lower():
+            _set_if_missing(rec, "kind", "mailbox")
+        _add_rows(rec, rows)
+        _set_if_missing(rec, "src", "forever")
 
 
 def assign_zones(world: World) -> None:
@@ -439,6 +533,25 @@ def merge_vendors_and_trainers(world: World, s: Sources) -> None:
                 "classic",
             ]
         )
+    # Forever's own stock where CMaNGOS has no list: new NPCs, and Classic ones it does not sell
+    for npc_id, offers in s.fdb_sold.items():
+        rec = world.get("npc", npc_id)
+        if rec is None:
+            world.drop("npc", npc_id, "ForeverDB stock for an unknown npc")
+        elif not rec.get("vendor"):
+            rec["vendor"] = [[o.item, o.price, o.stack, o.limited, "fdb"] for o in offers]
+    # ForeverDB's trainers name what a title alone guessed as a vendor
+    classic = {int(row["Entry"]) for row in s.cm_creatures}
+    for npc_id in sorted(s.fdb_trainers):
+        rec = world.get("npc", npc_id)
+        if rec is None:
+            continue
+        flags = list(rec.get("flags") or [])
+        if npc_id not in classic and "vendor" in flags and not rec.get("vendor"):
+            flags.remove("vendor")
+        if "trainer" not in flags:
+            flags.append("trainer")
+        rec["flags"] = flags
 
 
 # ---------------------------------------------------------------------------------------------
@@ -553,6 +666,156 @@ def merge_quests(world: World, s: Sources) -> None:
                 },
             )
         _set_if_missing(rec, "src", "classic")
+
+
+def _seen_rows(points) -> list[list]:
+    return [[p.ui_map_id, round(p.x_pct / 100, 4), round(p.y_pct / 100, 4), "fdb"] for p in points]
+
+
+def merge_fdb_quest_facts(world: World, s: Sources) -> None:
+    """What players measured in Forever (ForeverDB): a quest's XP over the value derived from
+    Classic money, its rewards where the guide marks them as seen in Forever, and where it was
+    offered, handed in and advanced where no source named a place."""
+    for quest_id, xp in s.fdb_xp.items():
+        rec = world.get("quest", quest_id)
+        if rec is not None:
+            rec.setdefault("rewards", {"src": "forever"})
+            if rec["rewards"] is None:
+                rec["rewards"] = {"src": "forever"}
+            rec["rewards"]["xp"] = xp
+    for quest_id, g in s.fdb_guide.items():
+        rec = world.get("quest", quest_id)
+        if rec is None:
+            continue
+        rewards = rec.get("rewards") or {"src": "forever"}
+        if g.money:
+            rewards["money"] = g.money
+        if g.items:
+            rewards["items"] = [list(x) for x in g.items]
+        if g.choices:
+            rewards["choices"] = [list(x) for x in g.choices]
+        rec["rewards"] = rewards
+    for quest_id, seen in s.fdb_seen.items():
+        rec = world.get("quest", quest_id)
+        if rec is None:
+            continue
+        if not rec.get("startPlaces"):
+            rec["startPlaces"] = _seen_rows(seen.starts) or None
+        if not rec.get("endPlaces"):
+            rec["endPlaces"] = _seen_rows(seen.ends) or None
+        if not rec.get("spots"):
+            by_map: dict[int, list] = {}
+            for number, points in seen.objectives.items():
+                for p in points:
+                    rows = by_map.setdefault(p.ui_map_id, [])
+                    if len(rows) < MAX_SPOTS_PER_MAP:
+                        mask = 1 << (number - 1)
+                        rows.append(
+                            [round(p.x_pct / 100, 4), round(p.y_pct / 100, 4), "area", mask]
+                        )
+            rec["spots"] = dict(sorted(by_map.items())) or None
+
+
+def _places_of(world: World, refs: list[str], limit: int) -> list[list]:
+    """Up to `limit` places of the things named, as a quest's place rows."""
+    out: list[list] = []
+    for ref in refs:
+        kind, _, entity = ref.partition(":")
+        rec = world.get(kind, int(entity))
+        for row in (rec or {}).get("spawns") or ():
+            if len(out) < limit:
+                out.append(list(row[:4]))
+    return out
+
+
+def _questie_refs(npcs: tuple[int, ...], objects: tuple[int, ...]) -> list[str]:
+    return [f"npc:{i}" for i in npcs] + [f"object:{i}" for i in objects]
+
+
+def _questie_spots(world: World, q: StoreQuest) -> dict[int, list]:
+    """Where a quest's creatures and objects stand, a spread of them per map, by objective bit."""
+    rows: dict[int, list] = {}
+    for kind, record_type, ids in (("slay", "npc", q.creatures), ("object", "object", q.objects)):
+        # the bit counts within the kind, as Everything Quests' do: the addon reads both alike
+        for bit, entity in enumerate(ids):
+            rec = world.get(record_type, entity)
+            for row in (rec or {}).get("spawns") or ():
+                rows.setdefault(row[0], []).append([row[0], row[1], row[2], kind, 1 << bit])
+    return {
+        ui_map: [r[1:] for r in farthest_points(rows[ui_map], MAX_SPOTS_PER_MAP)]
+        for ui_map in sorted(rows)
+    }
+
+
+def _new_questie_quest(world: World, s: Sources, q: StoreQuest, classic: set[int]) -> dict | None:
+    """A quest no other source has, when a player can be sent to it: a real title and a starter
+    with a place. QuestieDB also keeps quests the game never finished."""
+    title = clean_name(q.name)
+    refs = _questie_refs(q.starts_npc, q.starts_object)
+    places = _places_of(world, refs, 3)
+    if not title or NOT_A_QUEST.search(title) or not places:
+        return None
+    rec = _rec(world, "quest", q.id)
+    rec["name"] = title
+    rec["level"] = q.level
+    rec["minLevel"] = q.min_level
+    rec["races"] = q.races
+    rec["classes"] = q.classes
+    rec["starts"] = refs
+    rec["startPlaces"] = places
+    rec["pre"] = list(q.pre_all) or None
+    rec["preAny"] = list(q.pre_any) or None
+    rec["excl"] = list(q.exclusive) or None
+    rec["zone"] = places[0][0]
+    if q.id not in classic:
+        rec["foreverOnly"] = True
+    rec["src"] = "forever"
+    return rec
+
+
+def merge_questie_quests(world: World, s: Sources) -> None:
+    """What Everything Quests, ForeverDB and CMaNGOS leave open, from QuestieDB (sources.md): who
+    takes a quest in, what it asks for and where, its objective line and its reputation. Runs after
+    them: it fills gaps and replaces nothing."""
+    store = s.questie
+    if store is None:
+        return
+    classic = {q.id for q in s.cm_quests}
+    for quest_id, q in sorted(store.quests.items()):
+        rec = world.get("quest", quest_id) or _new_questie_quest(world, s, q, classic)
+        if rec is None:
+            world.drop("quest", quest_id, "QuestieDB only, no title or no placed starter")
+            continue
+        ends = _questie_refs(q.ends_npc, q.ends_object)
+        _set_if_missing(rec, "ends", ends or None)
+        if not rec.get("endPlaces"):
+            rec["endPlaces"] = _places_of(world, rec.get("ends") or [], 3) or None
+        if not rec.get("objectives"):
+            rows = [["slay", f"npc:{i}"] for i in q.creatures]
+            rows += [["object", f"object:{i}"] for i in q.objects]
+            rows += [["loot", f"item:{i}"] for i in q.items]
+            rec["objectives"] = rows or None
+        if not rec.get("spots"):
+            rec["spots"] = _questie_spots(world, q) or None
+        if q.rep:
+            rewards = rec.get("rewards") or {"src": "forever"}
+            _set_if_missing(rewards, "rep", [list(r) for r in q.rep])
+            rec["rewards"] = rewards
+        _set_if_missing(rec, "objectiveText", clean_name(q.objective_text))
+
+
+def merge_objective_texts(world: World) -> None:
+    """A quest's objective line into the text pack where CMaNGOS has no text for it: Forever's own
+    quests have no text at all otherwise (06.11.2026: 0 of the 371 in the pack)."""
+    for quest_id, rec in world.records.get("quest", {}).items():
+        line = rec.get("objectiveText")
+        if not line:
+            continue
+        text = world.get("questText", quest_id)
+        if text is None:
+            world.add("questText", quest_id, {"objectives": line, "src": "forever"})
+        elif not text.get("objectives"):
+            text["objectives"] = line
 
 
 # ---------------------------------------------------------------------------------------------
@@ -974,6 +1237,79 @@ def merge_att_places(world: World, s: Sources) -> None:
             rec["name"] = clean_name(name)
 
 
+def merge_questie_gates(world: World, s: Sources) -> None:
+    """Questie's hidden quests as flags (ADR 0051): `absent`, not in the game, and `dormant`, a
+    one-time world event. A quest ForeverDB saw players take keeps no flag: seen beats listed.
+    Questie's event quests are hidden until their event runs: they get the event as `holiday`
+    where no source named it, and never `absent`, or they would stay away during the event too."""
+    gates = s.questie_gates
+    if gates is None:
+        return
+    for quest_id, event in sorted(gates.events.items()):
+        rec = world.get("quest", quest_id)
+        if rec is not None:
+            _set_if_missing(rec, "holiday", event)
+    for flag, ids in (("absent", gates.absent), ("dormant", gates.dormant)):
+        for quest_id in sorted(ids):
+            rec = world.get("quest", quest_id)
+            if rec is None or rec.get("seenBy") or (flag == "absent" and rec.get("holiday")):
+                continue
+            rec["flags"] = sorted({*(rec.get("flags") or []), flag})
+
+
+def _needs(world: World, quest_id: int, target: int) -> bool:
+    """Whether `quest_id` already waits for `target`, through any length of `pre` and `preAny`."""
+    seen: set[int] = set()
+    stack = [quest_id]
+    while stack:
+        current = stack.pop()
+        if current == target:
+            return True
+        if current in seen:
+            continue
+        seen.add(current)
+        rec = world.get("quest", current)
+        if rec is not None:
+            stack += [*(rec.get("pre") or []), *(rec.get("preAny") or [])]
+    return False
+
+
+def _masks_meet(a: int | None, b: int | None) -> bool:
+    """Two race or class masks can hold the same character; an unknown mask says nothing."""
+    return not a or not b or bool(a & b)
+
+
+def merge_fdb_previous_quests(world: World, s: Sources) -> None:
+    """The quest players were seen to need first (ForeverDB's column since 0.57.14) joins `pre`, as
+    in ForeverDB's own addon. Never where it could lock the quest for good: one already named by
+    the sources, or excluding it, one no character of this quest can take, or a cycle."""
+    added = refused = 0
+    for fq in s.fdb_quests:
+        previous = fq.confirmed_previous
+        rec = world.get("quest", fq.id)
+        other = world.get("quest", previous) if previous else None
+        if rec is None or other is None:
+            continue
+        if previous in (rec.get("pre") or []) or previous in (rec.get("preAny") or []):
+            continue
+        if (
+            previous == fq.id
+            or previous in (rec.get("excl") or [])
+            or not _masks_meet(rec.get("races"), other.get("races"))
+            or not _masks_meet(rec.get("classes"), other.get("classes"))
+            or _needs(world, previous, fq.id)
+        ):
+            refused += 1
+            continue
+        rec["pre"] = [*(rec.get("pre") or []), previous]
+        added += 1
+    if added or refused:
+        world.notes.append(
+            f"ForeverDB previous quests: {added} joined `pre`, {refused} left out "
+            "(would lock the quest)"
+        )
+
+
 def merge_client_quest_titles(world: World, s: Sources) -> None:
     """The client's quest-task titles (clientdump QuestV2CliTask, D1) name the quests that have no
     name yet; the report counts how many quests stay without one (the client supplies those at
@@ -1102,6 +1438,89 @@ def merge_att_flightpaths(world: World, s: Sources) -> None:
             _add_spawn(rec, Spawn(pt.ui_map_id, pt.x, pt.y, "att"))
 
 
+def derive_dungeon_quests(world: World, s: Sources) -> int:
+    """Dungeon quests by where their targets live (data.md "Dungeons", catalog review A2.1,
+    07.11.2026): a quest ForeverDB did not confirm gets `dungeon` = the one instance that holds
+    every spawn of a kill or object objective's target, or every known dropper (CMaNGOS creature
+    and object loot, shared lists expanded) of a loot objective's or required item; targets outside
+    any instance are allowed beside it, targets in two instances make no answer. Labelled
+    `dungeonSrc` "classic" (ForeverDB's rows carry "forever"). Returns how many were derived."""
+    instances = set(world.records.get("dungeon", {}))
+    if not instances or not s.cm_spawns:
+        return 0
+    maps_of: dict[tuple[str, int], set[int]] = {}
+    for sp in s.cm_spawns:
+        kind = "npc" if sp.kind == "creature" else "object"
+        maps_of.setdefault((kind, sp.entry), set()).add(sp.map_id)
+
+    def only_inside(kind: str, entry: int) -> int | None:
+        maps = maps_of.get((kind, entry))
+        if not maps or not maps <= instances or len(maps) != 1:
+            return None
+        return next(iter(maps))
+
+    droppers: dict[int, set[tuple[str, int]]] = {}
+    shared = reference_items(s.cm_loot)
+    for row in s.cm_loot:
+        if row.kind == "reference":
+            continue
+        kind = "npc" if row.kind == "creature" else "object"
+        items = [x[0] for x in shared.get(row.reference_id, [])] if row.reference_id else []
+        if row.item_id is not None:
+            items.append(row.item_id)
+        for item in items:
+            droppers.setdefault(item, set()).add((kind, row.entry))
+
+    def item_dungeon(item: int) -> int | None:
+        where = set()
+        for kind, entry in droppers.get(item, ()):
+            inside = only_inside(kind, entry)
+            if inside is None:
+                return None  # a dropper outside, or in several instances: no dungeon item
+            where.add(inside)
+        return next(iter(where)) if len(where) == 1 else None
+
+    derived = ambiguous = 0
+    for rec in world.records.get("quest", {}).values():
+        if rec.get("dungeon") is not None:
+            continue
+        candidates: set[int] = set()
+        for o in rec.get("objectives") or []:
+            if not (isinstance(o, list) and len(o) > 1):
+                continue
+            kind, ref = o[0], str(o[1])
+            typ, _, sid = ref.partition(":")
+            if not sid.isdigit():
+                continue
+            if kind == "loot":
+                # a loot objective names the item, and its droppers as further loot rows: only the
+                # item decides (a world drop with one dungeon dropper is no dungeon quest)
+                inside = item_dungeon(int(sid)) if typ == "item" else None
+            elif typ in ("npc", "object"):
+                inside = only_inside(typ, int(sid))
+            else:
+                inside = None
+            if inside is not None:
+                candidates.add(inside)
+        for row in rec.get("requiredItems") or []:
+            item = row[0] if isinstance(row, list) else row
+            if isinstance(item, int):
+                inside = item_dungeon(item)
+                if inside is not None:
+                    candidates.add(inside)
+        if len(candidates) == 1:
+            rec["dungeon"], rec["dungeonSrc"] = next(iter(candidates)), "classic"
+            derived += 1
+        elif candidates:
+            ambiguous += 1
+    if derived or ambiguous:
+        world.notes.append(
+            f"{derived} dungeon quests derived from where their targets spawn (classic); "
+            f"{ambiguous} quests touch two instances and got none"
+        )
+    return derived
+
+
 # ---------------------------------------------------------------------------------------------
 # Gather nodes
 # ---------------------------------------------------------------------------------------------
@@ -1110,7 +1529,13 @@ def merge_att_flightpaths(world: World, s: Sources) -> None:
 def merge_nodes(world: World, s: Sources) -> None:
     if not s.fdb_gather:
         return
-    kinds, points, _zones = s.fdb_gather
+    kinds, points, zones = s.fdb_gather
+    # the Classic fishing skill a zone asks for (ForeverDB's `fish`), on zones the world knows;
+    # catalog review A3.6, 07.11.2026
+    for z in zones:
+        rec = world.get("zone", z.ui_map_id)
+        if rec is not None and z.fishing_skill is not None and z.fishing_skill > 0:
+            rec["fishing"] = z.fishing_skill
     for k in kinds:
         rec = _rec(world, "node", k.id)
         rec["name"] = clean_name(k.name)
@@ -1120,6 +1545,8 @@ def merge_nodes(world: World, s: Sources) -> None:
         rec["item"] = k.item_id
         rec["icon"] = k.icon_file_id
         rec["src"] = "forever"
+        if k.profession in ("herb", "mine"):
+            world.gather_objects.update(dict.fromkeys(k.object_ids, k.profession))
     for p in points:
         rec = world.get("node", p.kind_id)
         if rec is None:
@@ -1213,6 +1640,9 @@ def merge_flightpaths(world: World, s: Sources) -> None:
     zone) when that map contains the point, else the containing rectangle (coordinates.md)."""
     by_name = by_rect = 0
     for node in s.taxi:
+        if node.name.lower().startswith("zz"):  # Blizzard's mark for a retired row
+            world.drop("flightpath", node.id, "retired in the client")
+            continue
         rec = _rec(world, "flightpath", node.id)
         rec["name"] = node.name
         rec["faction"] = node.faction
@@ -1463,7 +1893,7 @@ def merge_client_quest_lines(world: World, s: Sources) -> None:
 def merge_client_quest_areas(world: World, s: Sources) -> None:
     """QuestPOIBlob and QuestPOIPoint: the areas the quest log draws, one spot per objective area
     (the centre of its corners, as a map fraction), kind `area`, for quests without spots; on the
-    world graph's continents only (Eastern Kingdoms, Kalimdor: ADR 0026), as the other places."""
+    world graph's continents only (GRAPH_CONTINENTS), as the other places."""
     t = s.client_tables
     if t is None or not s.transforms:
         return
@@ -1546,6 +1976,7 @@ def merge_dungeons(world: World, s: Sources) -> None:
             quest = world.get("quest", quest_id)
             if quest is not None:
                 quest["dungeon"] = d.id
+                quest["dungeonSrc"] = "forever"
     # the floors: the
     # client's own dungeon maps from retail's UiMap tables (`floor_art`; the Forever client has
     # the same art under its file names), the boss spots and the door placed on them through the
@@ -1703,28 +2134,37 @@ def build_world(s: Sources) -> World:
     merge_zones(world, s)
     merge_areas(world, s)
     merge_creatures(world, s)
+    merge_questie_world(world, s)
     merge_att_places(world, s)
     merge_itemdb_places(world, s)
     merge_tdb(world, s)
     merge_vendors_and_trainers(world, s)
     merge_quests(world, s)
+    merge_fdb_quest_facts(world, s)
     merge_att_quests(world, s)
     merge_att_recipes(world, s)
+    merge_fdb_previous_quests(world, s)
+    merge_questie_gates(world, s)
     merge_client_quest_titles(world, s)
     merge_items(world, s)
     merge_itemdb_items(world, s)
     merge_client_recipes(world, s)
     merge_client_items(world, s)
     merge_client_quest_lines(world, s)
+    merge_questie_quests(world, s)
+    merge_objective_texts(world)
     merge_client_quest_areas(world, s)
     merge_tdb_loot(world, s)
     merge_dungeons(world, s)
+    derive_dungeon_quests(world, s)
     merge_nodes(world, s)
     merge_flightpaths(world, s)
     merge_att_flightpaths(world, s)
     prune_classic_spawns(world)
     assign_zones(world)
     fix_loot_objectives(world)
+    # the internal records leave before the statistics count them (data.md "Internal records")
+    drop_internal(world, {row["Entry"]: row.get("UnitFlags") for row in s.cm_creatures})
     zone_statistics(world)
     name_unnamed_zones(world, s)
     for rows in world.records.values():

@@ -577,8 +577,9 @@ function Chat.ReleaseBoxes()
 end
 
 -- The game showed, focused or activated a bar: into our window it goes (any callback argument
--- that is an edit box counts; the registry passes its owner first).
-local function onBoxShown(...)
+-- that is an edit box counts; the registry passes its owner first). `activated`: the player asked
+-- for the bar; a bar that merely appears (adopted on a /reload) never takes the keyboard.
+local function onBoxShown(activated, ...)
   if not active then
     return
   end
@@ -596,12 +597,14 @@ local function onBoxShown(...)
         -- the window was hidden (the clear-screen key): the box lost the focus the game gave it
         -- a moment ago; back on the next frame ("I have to press
         -- enter the second time")
-        C_Timer.After(0, function()
-          local hasFocus = v.HasFocus and v:HasFocus()
-          if active and v:IsShown() and not hasFocus then
-            v:SetFocus()
-          end
-        end)
+        if activated then
+          C_Timer.After(0, function()
+            local hasFocus = v.HasFocus and v:HasFocus()
+            if active and v:IsShown() and not hasFocus then
+              v:SetFocus()
+            end
+          end)
+        end
         return
       end
     end
@@ -757,12 +760,15 @@ local function setupHooks()
   -- the EventRegistry callbacks; the old global where a client still calls it)
   for _, name in ipairs({ "ChatEdit_ActivateChat", "ChatFrameUtil.ActivateChat" }) do
     Compat.HookGlobal(name, function(box)
-      guard("activate", onBoxShown, box)
+      guard("activate", onBoxShown, true, box)
     end)
   end
-  for _, event in ipairs({ "ChatFrame.OnEditBoxShow", "ChatFrame.OnEditBoxFocusGained" }) do
+  for event, activated in pairs({
+    ["ChatFrame.OnEditBoxShow"] = false,
+    ["ChatFrame.OnEditBoxFocusGained"] = true,
+  }) do
     Compat.OnRegistryEvent(event, function(...)
-      guard("activate", onBoxShown, ...)
+      guard("activate", onBoxShown, activated, ...)
     end, Chat)
   end
   -- a whisper window the game opens later is hidden and captured too

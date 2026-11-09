@@ -235,6 +235,15 @@ local function probeP2()
         entry.readyForTurnIn = try(C_QuestLog.ReadyForTurnIn, qid)
         entry.tagInfo = try(C_QuestLog.GetQuestTagInfo, qid)
         entry.isElite = try(C_QuestLog.IsEliteQuest, qid)
+        -- what the client says a quest pays, by id and with the quest selected (ADR 0053)
+        entry.rewardByID = { money = try(GetQuestLogRewardMoney, qid), xp = try(GetQuestLogRewardXP, qid) }
+        try(C_QuestLog.SetSelectedQuest, qid)
+        entry.rewardSelected = {
+          money = try(GetQuestLogRewardMoney, qid),
+          xp = try(GetQuestLogRewardXP, qid),
+          items = try(GetNumQuestLogRewards, qid),
+          choices = try(GetNumQuestLogChoices, qid, true),
+        }
       end
       out.modern[#out.modern + 1] = entry
     end
@@ -264,6 +273,9 @@ local function probeP2()
     out.completedLegacy = legacyDone
   end
   out.questTimers = try(C_QuestLog and C_QuestLog.GetQuestTimers)
+  out.questBlobFrame = try(CreateFrame, "QuestPOIFrame") -- may an addon draw the game's zone?
+  out.questTrivialRange = try(rawget(_G, "UnitQuestTrivialLevelRange"), "player")
+  out.calendarTime = try(C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime)
   db.results.P2 = out
   say("P2 done: %d modern entries, %d legacy entries", #out.modern, #out.legacy)
 end
@@ -933,13 +945,72 @@ local function runAll()
   end)
 end
 
+-- /bprobe books: the Library books of Forever (ADR 0058, PH8; catalog review A3.2). Which API
+-- tells that a book was read? The probe lists every global that names a library, a book or a
+-- readable, then listens: every book opened (ITEM_TEXT_BEGIN/READY) is recorded with its title,
+-- its length and the object under the mouse, and every event whose name holds BOOK, LIBRARY or
+-- READABLE. /reload saves; the dump goes to data/probe and forever-api.md.
+local booksListening = false
+local function probeBooks()
+  db.results = db.results or {}
+  local out = db.results.books or { at = now(), globals = {}, opened = {}, events = {} }
+  db.results.books = out
+  out.at = now()
+  out.globals = {}
+  for name, value in pairs(_G) do
+    if type(name) == "string" and (name:find("Librar") or name:find("Book") or name:find("Readable")) then
+      out.globals[#out.globals + 1] = name .. ":" .. type(value)
+    end
+  end
+  table.sort(out.globals)
+  say("books: %d globals name a library, a book or a readable (saved on /reload)", #out.globals)
+  if booksListening then
+    say("books: listening already; open a book in the Stormwind library, then /reload")
+    return
+  end
+  booksListening = true
+  local f = CreateFrame("Frame")
+  f:RegisterEvent("ITEM_TEXT_BEGIN")
+  f:RegisterEvent("ITEM_TEXT_READY")
+  f:RegisterEvent("ITEM_TEXT_CLOSED")
+  pcall(f.RegisterAllEvents, f)
+  f:SetScript("OnEvent", function(_, event, ...)
+    if event == "ITEM_TEXT_BEGIN" or event == "ITEM_TEXT_READY" then
+      local okItem, title = pcall(ItemTextGetItem)
+      local okText, text = pcall(ItemTextGetText)
+      local okGuid, guid = pcall(UnitGUID, "mouseover")
+      out.opened[#out.opened + 1] = {
+        at = now(),
+        event = event,
+        title = okItem and title or nil,
+        length = okText and type(text) == "string" and #text or nil,
+        mouseover = okGuid and guid or nil,
+        target = select(2, pcall(UnitGUID, "target")),
+      }
+      say("books: %s '%s' (%s chars)", event, tostring(title), tostring(okText and text and #text or "?"))
+    elseif
+      type(event) == "string" and (event:find("BOOK") or event:find("LIBRAR") or event:find("READABLE"))
+    then
+      local args = {}
+      for i = 1, select("#", ...) do
+        args[i] = tostring((select(i, ...)))
+      end
+      out.events[#out.events + 1] = { at = now(), event = event, args = args }
+      say("books: event %s", event)
+    end
+  end)
+  say("books: listening. Open a book in the Stormwind library, read it to the end, then /reload")
+end
+
 local HELP = {
   "/bprobe all  - P1, P2, P3, P5, P6, P10 (automatic probes)",
+  "/bprobe books - the Library books: the globals that name them, every book opened, their events (A3.2)",
   "/bprobe p1 | p2 | p3 | p5 [fileID or path] | p6 | p10  - one probe",
   "/bprobe p4 <label>  - record a landmark at your position (and your target: NPC, object, node)",
   "/bprobe alpha  - the Map_Art overview cells over red (transparency test)",
   "/bprobe mask [fdid name] - a native coast tile with its Map_Art sea mask over red",
   "/bprobe maskvariants - which of four test mask files the client loads",
+  "/bprobe minimaps [uiMapID] [style] - a zone drawn small from a map style's cells (PA6)",
   "P7, trainer and merchant record by themselves: open a flight map, take a flight,"
     .. " open a trainer or a vendor",
   "/bprobe buttons [n] - n fake minimap buttons (default 50) for the button box; 0 removes them",
@@ -990,6 +1061,345 @@ local function makeFakeButtons(n)
   say("%d fake minimap buttons; hover the box's opener on Bastian's minimap", n)
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- /bprobe minimaps [uiMapID] [style]: a zone drawn small from a map style's cells (ADR 0056, PA6:
+-- "the mini map is the button, in the chosen map style"; unproven: the styles' tiles drawn small,
+-- cost and sharpness). The zone (default: where the player stands) at three sizes, each from
+-- the style's far cells (8 x 8 ADT tiles in 512 px) and near cells (4 x 4 tiles in 1024 px),
+-- with the client's default filter and with TRILINEAR; beside them the client's own painting of
+-- the zone; under them 24 zones at once from the far cells. A cell is cut to the zone by its
+-- texture coordinates, so nothing is clipped by a frame. Recorded: the textures per picture, the
+-- cells the client did not load, the time to build, and the frames before and after.
+-- ---------------------------------------------------------------------------------------------
+
+local MINI_ZONES = { -- Eastern Kingdoms, then Kalimdor: the uiMapIDs of the old world's zones
+  1429,
+  1436,
+  1433,
+  1431,
+  1426,
+  1432,
+  1437,
+  1424,
+  1417,
+  1425,
+  1422,
+  1423,
+  1420,
+  1421,
+  1416,
+  1418,
+  1427,
+  1428,
+  1430,
+  1434,
+  1435,
+  1419,
+  1411,
+  1412,
+  1413,
+  1438,
+  1439,
+  1440,
+  1441,
+  1442,
+  1443,
+  1444,
+  1445,
+  1446,
+  1447,
+  1448,
+  1449,
+  1450,
+  1451,
+  1452,
+}
+-- rows of sizes; the window fits a 1080p screen (1365 by 768 units)
+local MINI_ROWS = { { { 250, 167, "large" } }, { { 140, 93, "medium" }, { 56, 37, "tile" } } }
+local MINI_STRESS = 24
+local MINI_SAMPLE = 2 -- seconds of frames before and after
+
+local mini
+
+local function miniWindow()
+  if not mini then
+    mini = CreateFrame("Frame", "BastiansProbeMinimaps", UIParent)
+    mini:SetSize(1340, 670)
+    mini:SetPoint("CENTER")
+    mini:SetFrameStrata("DIALOG")
+    mini:SetMovable(true)
+    mini:EnableMouse(true)
+    mini:RegisterForDrag("LeftButton")
+    mini:SetScript("OnDragStart", mini.StartMoving)
+    mini:SetScript("OnDragStop", mini.StopMovingOrSizing)
+    local bg = mini:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0.05, 0.05, 0.08, 0.96)
+    mini.title = mini:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    mini.title:SetPoint("TOPLEFT", 10, -8)
+    mini.textures, mini.labels = {}, {}
+  end
+  mini.usedTextures, mini.usedLabels = 0, 0
+  for _, t in ipairs(mini.textures) do
+    t:Hide()
+  end
+  for _, l in ipairs(mini.labels) do
+    l:Hide()
+  end
+  mini:SetScript("OnUpdate", nil)
+  mini:Show()
+  return mini
+end
+
+local function miniTexture(win)
+  win.usedTextures = win.usedTextures + 1
+  local t = win.textures[win.usedTextures]
+  if not t then
+    t = win:CreateTexture(nil, "ARTWORK")
+    win.textures[win.usedTextures] = t
+  end
+  t:SetTexCoord(0, 1, 0, 1)
+  return t
+end
+
+local function miniLabel(win, left, top, width, text)
+  win.usedLabels = win.usedLabels + 1
+  local l = win.labels[win.usedLabels]
+  if not l then
+    l = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    l:SetJustifyH("LEFT")
+    win.labels[win.usedLabels] = l
+  end
+  l:ClearAllPoints()
+  l:SetPoint("TOPLEFT", win, "TOPLEFT", left, -top)
+  l:SetWidth(width)
+  l:SetText(text)
+  l:Show()
+end
+
+-- The zone's rectangle in world yards: north and south edge (wx), west and east edge (wy; west
+-- is the larger one), and its continent. nil when the client does not place the map.
+local function miniZoneRect(mapID)
+  local coords = Bastians and Bastians.Coords
+  if not (coords and coords.ToWorld) then
+    return nil
+  end
+  local ok1, c1, n, w = pcall(coords.ToWorld, mapID, 0, 0)
+  local ok2, c2, sEdge, e = pcall(coords.ToWorld, mapID, 1, 1)
+  if not (ok1 and ok2 and c1 and c1 == c2 and n and w and sEdge and e and n > sEdge and w > e) then
+    return nil
+  end
+  return { continent = c1, north = n, south = sEdge, west = w, east = e }
+end
+
+-- Draws the zone from the cells of `part` into the rectangle (left, top, w, h) of the window.
+-- Returns the textures used, how many of them the client did not load, and the first error of
+-- SetTexture with a filter (nil when the client took it).
+local function miniDraw(win, styles, part, zone, left, top, w, h, filter)
+  local cells = styles.Visible(part, zone.continent, zone.south, zone.east, zone.north, zone.west, 0)
+  local used, missing, filterError = 0, 0, nil
+  local high, wide = zone.north - zone.south, zone.west - zone.east
+  for _, c in ipairs(cells) do
+    local x1, x2 = math.max(c.x1, zone.south), math.min(c.x2, zone.north) -- north-south, in wx
+    local y1, y2 = math.max(c.y1, zone.east), math.min(c.y2, zone.west) -- east-west, in wy
+    if x2 > x1 and y2 > y1 then
+      local t = miniTexture(win)
+      local ok, err
+      if filter then
+        ok, err = pcall(t.SetTexture, t, c.path, nil, nil, filter)
+        if not ok then
+          filterError = filterError or tostring(err)
+          pcall(t.SetTexture, t, c.path)
+        end
+      else
+        pcall(t.SetTexture, t, c.path)
+      end
+      -- a cell's picture has north up and west left
+      local cw, ch = c.y2 - c.y1, c.x2 - c.x1
+      t:SetTexCoord((c.y2 - y2) / cw, (c.y2 - y1) / cw, (c.x2 - x2) / ch, (c.x2 - x1) / ch)
+      local sx1, sx2 = (zone.west - y2) / wide * w, (zone.west - y1) / wide * w
+      local sy1, sy2 = (zone.north - x2) / high * h, (zone.north - x1) / high * h
+      t:ClearAllPoints()
+      t:SetPoint("TOPLEFT", win, "TOPLEFT", left + sx1, -(top + sy1))
+      t:SetSize(sx2 - sx1, sy2 - sy1)
+      t:Show()
+      used = used + 1
+      local okGet, got = pcall(t.GetTexture, t)
+      if not (okGet and got) then
+        missing = missing + 1 -- SetTexture is true for a file the client does not have
+      end
+    end
+  end
+  return used, missing, filterError
+end
+
+-- The client's own painting of the zone (the art layer's 256 px tiles), for the eye.
+local function miniPainting(win, mapID, left, top, w, h)
+  local okLayers, layers = pcall(C_Map.GetMapArtLayers, mapID)
+  local okTex, files = pcall(C_Map.GetMapArtLayerTextures, mapID, 1)
+  local layer = okLayers and type(layers) == "table" and layers[1] or nil
+  if not (layer and okTex and type(files) == "table" and #files > 0) then
+    return 0
+  end
+  local lw, lh = layer.layerWidth or 1002, layer.layerHeight or 668
+  local tw, th = layer.tileWidth or 256, layer.tileHeight or 256
+  local cols = math.ceil(lw / tw)
+  for i, file in ipairs(files) do
+    local col, row = (i - 1) % cols, math.floor((i - 1) / cols)
+    local px, py = math.min(tw, lw - col * tw), math.min(th, lh - row * th)
+    if px > 0 and py > 0 then
+      local t = miniTexture(win)
+      pcall(t.SetTexture, t, file)
+      t:SetTexCoord(0, px / tw, 0, py / th)
+      t:ClearAllPoints()
+      t:SetPoint("TOPLEFT", win, "TOPLEFT", left + col * tw / lw * w, -(top + row * th / lh * h))
+      t:SetSize(px / lw * w, py / lh * h)
+      t:Show()
+    end
+  end
+  return #files
+end
+
+-- Frames for `seconds`: { frames, avgMs, worstMs }, handed to onDone.
+local function miniSample(win, seconds, onDone)
+  local frames, total, worst = 0, 0, 0
+  win:SetScript("OnUpdate", function(self, elapsed)
+    frames = frames + 1
+    total = total + elapsed
+    worst = math.max(worst, elapsed)
+    if total >= seconds then
+      self:SetScript("OnUpdate", nil)
+      onDone({
+        frames = frames,
+        avgMs = math.floor(total / frames * 100000 + 0.5) / 100,
+        worstMs = math.floor(worst * 100000 + 0.5) / 100,
+      })
+    end
+  end)
+end
+
+local function probeMinimaps(arg)
+  local mapMod = Bastians and Bastians.GetModule and Bastians:GetModule("Map")
+  local styles = mapMod and mapMod.Styles
+  if not (styles and styles.Get and styles.Visible and styles.List) then
+    say("minimaps: Bastian's Map is not loaded, or it has no map styles")
+    return
+  end
+  local wantMap, wantStyle = string.match(arg or "", "^(%d*)%s*(%S*)$")
+  local okMap, here = pcall(C_Map.GetBestMapForUnit, "player")
+  local mapID = tonumber(wantMap) or (okMap and here) or nil
+  local zone = mapID and miniZoneRect(mapID)
+  if not zone then
+    say("minimaps: map %s has no place in the world; give a zone's uiMapID (Elwynn: 1429)", tostring(mapID))
+    return
+  end
+  local key = wantStyle ~= "" and wantStyle or (mapMod.Map and mapMod.Map.Style and mapMod.Map.Style())
+  local style = key and styles.Get(key)
+  if not style then
+    style = styles.List()[1] -- the physical map is chosen: the first style there is
+  end
+  if not (style and style.far) then
+    say("minimaps: no map style of Bastian's is installed (Modern, Pencil, Parchment, Blizzard)")
+    return
+  end
+  local out = {
+    at = now(),
+    map = mapID,
+    style = style.key,
+    zoneYards = { math.floor(zone.west - zone.east), math.floor(zone.north - zone.south) },
+    variants = {},
+  }
+  local okScale, scale = pcall(UIParent.GetEffectiveScale, UIParent)
+  local okScreen, sw, sh = pcall(GetPhysicalScreenSize)
+  out.uiScale = okScale and scale or nil
+  out.screen = okScreen and { sw, sh } or nil
+  local win = miniWindow()
+  win.title:SetText("Mini maps: map " .. mapID .. " in the style '" .. style.key .. "'   (/bprobe hide)")
+  win:Hide() -- the frames before are measured without it
+  local sampler = CreateFrame("Frame")
+  miniSample(sampler, MINI_SAMPLE, function(before)
+    out.before = before
+    win:Show()
+    local started = debugprofilestop()
+    local parts = {
+      { "far", style.far, nil },
+      { "far trilinear", style.far, "TRILINEAR" },
+      { "near", style.near, nil },
+      { "near trilinear", style.near, "TRILINEAR" },
+    }
+    local top = 30
+    for _, row in ipairs(MINI_ROWS) do
+      local left, tallest = 10, 0
+      for _, size in ipairs(row) do
+        local w, h = size[1], size[2]
+        tallest = math.max(tallest, h)
+        for _, part in ipairs(parts) do
+          if part[2] then
+            local t0 = debugprofilestop()
+            local used, missing, filterError = miniDraw(win, styles, part[2], zone, left, top, w, h, part[3])
+            out.variants[#out.variants + 1] = {
+              name = part[1] .. ", " .. size[3],
+              width = w,
+              textures = used,
+              missing = missing,
+              ms = debugprofilestop() - t0,
+              filterError = filterError,
+            }
+            miniLabel(win, left, top + h + 2, math.max(w, 110), part[1] .. "  " .. used .. " tex")
+            left = left + math.max(w, 110) + 12
+          end
+        end
+        if size[3] == "large" then
+          out.painting = miniPainting(win, mapID, left, top, w, h)
+          miniLabel(win, left, top + h + 2, w, "the client's painting  " .. out.painting .. " tex")
+        end
+      end
+      top = top + tallest + 26
+    end
+    -- many at once: the zones of this continent from the far cells, as a list of tiles would
+    local t0 = debugprofilestop()
+    local shown, textures, missingAll = 0, 0, 0
+    local w, h, perRow = 120, 80, 10
+    for _, id in ipairs(MINI_ZONES) do
+      local z = shown < MINI_STRESS and miniZoneRect(id)
+      if z and z.continent == zone.continent then
+        local left = 10 + (shown % perRow) * (w + 12)
+        local rowTop = top + math.floor(shown / perRow) * (h + 20)
+        local used, missing = miniDraw(win, styles, style.far, z, left, rowTop, w, h, nil)
+        miniLabel(win, left, rowTop + h + 2, w, id .. "  " .. used .. " tex")
+        shown, textures, missingAll = shown + 1, textures + used, missingAll + missing
+      end
+    end
+    out.many = { zones = shown, textures = textures, missing = missingAll, ms = debugprofilestop() - t0 }
+    out.buildMs = debugprofilestop() - started
+    out.texturesShown = win.usedTextures
+    miniSample(win, MINI_SAMPLE, function(after)
+      out.after = after
+      db.results.minimaps = out -- the last run
+      db.results.minimapRuns = db.results.minimapRuns or {} -- and every run: styles, zones, screens
+      table.insert(db.results.minimapRuns, out)
+      say(
+        "minimaps: map %d, style %s, %d textures in %.1f ms; %d zones at once: %d textures, %d not loaded",
+        mapID,
+        style.key,
+        out.texturesShown,
+        out.buildMs,
+        shown,
+        textures,
+        missingAll
+      )
+      say(
+        "minimaps: frames before %.2f ms (worst %.2f), with the window %.2f ms (worst %.2f)",
+        before.avgMs,
+        before.worstMs,
+        after.avgMs,
+        after.worstMs
+      )
+      say("minimaps: take a screenshot now, then /reload so the numbers are saved")
+    end)
+  end)
+end
+
 local function command(msg)
   local cmd, arg = string.match(msg or "", "^%s*(%S*)%s*(.-)%s*$")
   cmd = string.lower(cmd or "")
@@ -1004,6 +1414,9 @@ local function command(msg)
   elseif cmd == "hide" then
     if display then
       display:Hide()
+    end
+    if mini then
+      mini:Hide()
     end
     return
   elseif cmd == "reset" then
@@ -1037,6 +1450,10 @@ local function command(msg)
       probeMask(arg)
     end,
     maskvariants = probeMaskVariants,
+    minimaps = function()
+      probeMinimaps(arg)
+    end,
+    books = probeBooks,
   }
   local fn = probes[cmd]
   if not fn then

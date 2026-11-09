@@ -123,4 +123,9 @@ ns.L:Register("frFR", {
   ["Read by the game's voice (no Spoken line)"] = "Lu par la voix du jeu (pas de réplique Spoken)",
   ["The game's voice that reads"] = "La voix du jeu qui lit",
   ["A woman's voice (auto)"] = "Une voix de femme (auto)",
+  ["Locked in place. The lock on the ring unlocks it."] = "Position verrouillée. Le cadenas sur l'anneau la déverrouille.",
+  ["Locked in place"] = "Position verrouillée",
+  ["Click to move the Orbiter freely."] = "Cliquez pour déplacer librement l'Orbiter.",
+  ["Moves freely"] = "Déplacement libre",
+  ["Drag the Orbiter where you want it. Click to lock it in place."] = "Faites glisser l'Orbiter où vous le voulez. Cliquez pour verrouiller sa position.",
 })

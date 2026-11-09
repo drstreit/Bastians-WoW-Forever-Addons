@@ -147,6 +147,18 @@ def test_unlocks_next_area_bonus_and_hard_quests(wow: WowRuntime):
     full = wow.eval(f"{REC}.score(176, nil, 1429, {state(wow)}, ctx)")
     assert full.score > 0 and full.minutes > 0
     assert recs[176][1] * 2 == round(full.value / full.minutes, 1) or recs[176][1] > 0
+    # a quest the game draws red (five levels above the character) comes last, whatever the curve
+    # gives it.
+    # The fixture has none that far above and open: Hogger gets the better score by a weight, and
+    # the limit comes down to his three levels
+    wow.execute("ctx.weights = { gold = 5000, unlock = 0.5, next = 300 }")
+    assert [r[0] for r in rank(wow)] == [176, 76]
+    assert full.far is False and wow.eval(f"{REC}.FAR_LEVELS") == 5
+    wow.execute(f"{REC}.FAR_LEVELS = 3")
+    ranked = rank(wow)
+    assert [r[0] for r in ranked] == [76, 176] and ranked[1][1] > ranked[0][1]
+    assert wow.eval(f"{REC}.score(176, nil, 1429, {state(wow)}, ctx)").far is True
+    assert wow.eval(f"{REC}.score(76, nil, 1429, {state(wow)}, ctx)").far is False
 
 
 def test_next_areas_and_what_leads_there(wow: WowRuntime):
@@ -189,3 +201,27 @@ def test_the_ranking_is_the_zone_page_s_first_section(wow: WowRuntime):
     assert not [
         line.text for line in wow.eval("Bastians:GetLog()").values() if line.level == "error"
     ]
+
+
+def test_a_quest_counts_the_xp_the_data_names(wow: WowRuntime):
+    """05.11.2026: the data names a quest's XP for most quests; the ranking uses it with the
+    share for the level difference, and the curve by the quest's level only where it is unknown."""
+    boot(wow)
+    wow.execute("Mock.completedQuests = { 783, 7, 18, 62 }; Mock.questLog[2] = nil; Mock.level = 8")
+    wow.execute(f"{MOD}.State.Attach({MOD})")
+    ctx(wow, log="{}", grouped="true")
+    curve = wow.eval(f"{REC}.questXP(76, {MOD}.Logic.quest(76), 8)")
+    assert list(curve) == [wow.eval(f"{REC}.xp(9, 8)"), True]  # unknown: the curve stands in
+    # the record names 1000 XP (held in a global: Data keeps decoded records weakly)
+    wow.execute(
+        f"KEEP = {MOD}.Logic.quest(76); KEEP.rewards = KEEP.rewards or {{}}; KEEP.rewards.xp = 1000"
+    )
+    assert list(wow.eval(f"{REC}.questXP(76, KEEP, 8)")) == [1000, False]
+    assert list(wow.eval(f"{REC}.questXP(76, KEEP, 16)")) == [
+        600,
+        False,
+    ]  # seven levels below: 60 %
+    assert list(wow.eval(f"{REC}.questXP(76, KEEP, 30)")) == [100, False]  # a tenth from ten below
+    recs = {r[0]: r for r in rank(wow)}
+    assert recs[76][2].startswith("1000 xp")
+    assert wow.errors == []

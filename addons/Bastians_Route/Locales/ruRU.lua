@@ -65,6 +65,10 @@ ns.L:Register("ruRU", {
   ["Route by default"] = "Маршрут по умолчанию",
   ["Switch to this kind of route; it stays the default."] = "Переключиться на этот вид маршрута; он останется по умолчанию.",
   ["Careful: level %d creatures"] = "Осторожно: существа уровня %d",
+  -- the route's verdict (catalog review A4.3, 07.11.2026)
+  ["Safe trip"] = "Безопасный путь",
+  ["Watch out"] = "Осторожно",
+  ["Risky trip"] = "Рискованный путь",
   ["elite"] = "элита",
 
   -- Death.lua (R26.8)
@@ -113,6 +117,10 @@ ns.L:Register("ruRU", {
   ["All flight masters"] = "Все распорядители полетов",
   ["Open the step list when a route starts"] = "Открывать список шагов при начале маршрута",
   ["Show an arrow to the next step while a route is active"] = "Показывать стрелку к следующему шагу, пока маршрут активен",
+  -- Flight.lua: the flight bar (catalog review A4.1, 07.11.2026)
+  ["Show a flight bar with the time left while flying"] = "Показывать полосу полёта с оставшимся временем во время полёта",
+  ["%s to %s"] = "%s в %s",
+  ["%s left"] = "осталось %s",
   ["Route here"] = "Маршрут сюда",
   ["Route to"] = "Маршрут к",
   ["Open Bastian's Route"] = "Открыть Bastian's Route",
@@ -151,4 +159,13 @@ ns.L:Register("ruRU", {
 
   -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
   ["Next: %s"] = "Далее: %s",
+  -- the /way command (ADR 0062, 08.11.2026)
+  ["/way: %s"] = "/way: %s",
+  ["New route"] = "Новый маршрут",
+  ["Add to route"] = "Добавить в маршрут",
+  ["Waypoints"] = "Точки маршрута",
+  ["What /way does while a route runs: start a new route, or add the place to the route."] = "Что делает /way при активном маршруте: начинает новый маршрут или добавляет место в текущий.",
+  ["Which addon answers /way: Bastian's Route, or the one that had it first."] = "Какой аддон отвечает на /way: Bastian's Route или тот, что занял команду первым.",
+  ["No zone called %s."] = "Нет зоны с названием %s.",
+  ["Several zones match %s: %s"] = "Нескольким зонам соответствует %s: %s",
 })

@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.6.0
+## Version: 2.1.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data
@@ -39,13 +39,19 @@ Locales\ruRU.lua
 Locales\ptBR.lua
 News.lua
 Capture.lua
+Pricing.lua
+Bridges.lua
 Prices.lua
 History.lua
+Ledger.lua
 Sections.lua
 Today.lua
 Spots.lua
 Signals.lua
 Plan.lua
+Craft.lua
+Bargains.lua
+Farming.lua
 Worth.lua
 Income.lua
 Advisor.lua

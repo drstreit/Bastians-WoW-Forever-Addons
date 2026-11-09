@@ -240,6 +240,8 @@ class QuestRow:
     ends: tuple[str, ...]
     seen_by_players: int | None
     new_in_forever: bool
+    confirmed_previous: int | None = None  # the quest players were seen to need first; 0 is none
+    lowest_level_seen: int | None = None  # the lowest level seen completing it; 0 is unknown
 
 
 _REF_KINDS = {"n": "npc", "o": "object"}
@@ -263,17 +265,38 @@ def _opt_int(s: str) -> int | None:
     return int(s) if s.strip() else None
 
 
+_QUEST_HEADER = re.compile(r'^--\s*\[quest\]\s*=\s*"([^"]*)"', re.MULTILINE)
+# the layouts the file has had: 8 columns, and since ForeverDB 0.57.14 (measured 08.11.2026, build
+# 1.60.1.70862) two more at the end: confirmed previous quest, lowest player level seen completing
+# it (read since 09.11.2026, ForeverDB 0.57.15).
+_QUEST_COLUMNS = (8, 10)
+
+
+def _quest_columns(text: str) -> int:
+    """The file's own header names its columns; a row's field count cannot, a "|" may be in the
+    free text. A file without the header is the 8-column layout."""
+    header = _QUEST_HEADER.search(text)
+    columns = header.group(1).count("|") + 1 if header else 8
+    if columns not in _QUEST_COLUMNS:
+        raise ValueError(f"QuestForever.lua has {columns} columns, the reader knows 8 and 10")
+    return columns
+
+
 def parse_quests(text: str) -> list[QuestRow]:
-    """``ns.qfQuests = {[quest] = "title|level|min level|objective|starts|ends|seen|new"}``."""
+    """``ns.qfQuests = {[quest] = "title|level|min level|objective|starts|ends|seen|new"}``, since
+    ForeverDB 0.57.14 with two more columns at the end."""
+    columns = _quest_columns(text)
+    after_objective = columns - 4
     out = []
     for qid, s in sorted_items(run_text(text, "QuestForever.lua").qfQuests):
         parts = s.split("|")
-        if len(parts) < 8:
-            raise ValueError(f"quest {qid}: expected 8 fields, got {len(parts)}")
-        # a stray "|" can only be in the free text: keep the first three and last four positions
+        if len(parts) < columns:
+            raise ValueError(f"quest {qid}: expected {columns} fields, got {len(parts)}")
+        # a stray "|" can only be in the free text: keep the first three and the last positions
         title, level, min_level = parts[0], parts[1], parts[2]
-        objective = "|".join(parts[3:-4])
-        starts, ends, seen, new = parts[-4:]
+        objective = "|".join(parts[3:-after_objective])
+        starts, ends, seen, new = parts[-after_objective:][:4]
+        previous, lowest = parts[-2:] if columns == 10 else ("", "")
         out.append(
             QuestRow(
                 id=qid,
@@ -285,6 +308,8 @@ def parse_quests(text: str) -> list[QuestRow]:
                 ends=parse_entity_refs(ends),
                 seen_by_players=_opt_int(seen),
                 new_in_forever=new.strip() == "1",
+                confirmed_previous=_opt_int(previous) or None,
+                lowest_level_seen=_opt_int(lowest) or None,
             )
         )
     return out
@@ -661,3 +686,154 @@ def read_items(path: Path) -> list[ItemFacts]:
 
 def read_search_names(path: Path) -> dict[int, str]:
     return parse_search_names(_read(path))
+
+
+# ---------------------------------------------------------------- What players saw (06.11.2026)
+
+
+def _items(table: Any) -> list[tuple[Any, Any]]:
+    """A table the file may not have yet (older ForeverDB, the fixture): absent is empty."""
+    return [] if table is None else list(sorted_items(table))
+
+
+class SeenPoint(NamedTuple):
+    ui_map_id: int
+    x_pct: float
+    y_pct: float
+
+
+@dataclass(frozen=True)
+class QuestSeen:
+    """`qfSeen`: where players' Companion addons saw a quest offered, handed in and advanced."""
+
+    id: int
+    starts: tuple[SeenPoint, ...]
+    ends: tuple[SeenPoint, ...]
+    objectives: dict[int, tuple[SeenPoint, ...]]  # objective number (1-based) -> places
+
+
+def parse_points(text: str | None) -> tuple[SeenPoint, ...]:
+    """Space-separated base-36 numbers, each map * 1,000,000 + x * 10 * 1,000 + y * 10."""
+    out = []
+    for word in (text or "").split():
+        value = int(word, 36)
+        out.append(
+            SeenPoint(value // 1_000_000, (value % 1_000_000) // 1000 / 10, (value % 1000) / 10)
+        )
+    return tuple(out)
+
+
+def parse_quest_seen(text: str) -> dict[int, QuestSeen]:
+    out = {}
+    for quest, rec in _items(run_text(text, "QuestForever.lua").qfSeen):
+        row = to_python(rec)
+        spots = row.get("o") or {}
+        if isinstance(spots, list):  # keys 1..n come back as a list
+            spots = {i + 1: v for i, v in enumerate(spots)}
+        out[quest] = QuestSeen(
+            quest,
+            parse_points(row.get("s")),
+            parse_points(row.get("e")),
+            {int(n): parse_points(v) for n, v in sorted(spots.items())},
+        )
+    return out
+
+
+def read_quest_seen(path: Path) -> dict[int, QuestSeen]:
+    return parse_quest_seen(path.read_text(encoding="utf-8"))
+
+
+def parse_npc_names(text: str) -> dict[int, str]:
+    """`qfNpcNames`: the creatures of Forever's quests by the name players saw."""
+    return dict(_items(run_text(text, "QuestForever.lua").qfNpcNames))
+
+
+def read_npc_names(path: Path) -> dict[int, str]:
+    return parse_npc_names(path.read_text(encoding="utf-8"))
+
+
+def parse_quest_xp(text: str) -> dict[int, int]:
+    """`qxp.q`: a quest's full XP as players measured it in Forever."""
+    return {int(k): int(v) for k, v in sorted_items(run_text(text, "QuestXP.lua").qxp.q)}
+
+
+def read_quest_xp(path: Path) -> dict[int, int]:
+    return parse_quest_xp(path.read_text(encoding="utf-8"))
+
+
+@dataclass(frozen=True)
+class GuideRewards:
+    """What `qgQuests` says a quest pays, only what it marks as seen in Forever (source "f")."""
+
+    id: int
+    money: int | None
+    items: tuple[tuple[int, int], ...]
+    choices: tuple[tuple[int, int], ...]
+
+
+def _reward_items(text: str) -> tuple[tuple[int, int], ...]:
+    out = []
+    for word in text.split():
+        item, _, count = word.partition(":")
+        out.append((int(item), int(count or 1)))
+    return tuple(out)
+
+
+def parse_quest_guide(text: str) -> dict[int, GuideRewards]:
+    """`qgQuests[quest]` = "zone|text|objectives|their sources|money|its source|xp:level|items|
+    choices|their source|reputation|..."; a source of "c" is Classic, which CMaNGOS gives too."""
+    out = {}
+    for quest, row in sorted_items(run_text(text, "QuestGuide.lua").qgQuests):
+        parts = row.split("|")
+        if len(parts) < 10:
+            continue
+        money = _opt_int(parts[4]) if parts[5] == "f" else None
+        forever_items = parts[9] == "f"
+        items = _reward_items(parts[7]) if forever_items else ()
+        choices = _reward_items(parts[8]) if forever_items else ()
+        if (money and money > 0) or items or choices:
+            out[quest] = GuideRewards(quest, money if money and money > 0 else None, items, choices)
+    return out
+
+
+def read_quest_guide(path: Path) -> dict[int, GuideRewards]:
+    return parse_quest_guide(path.read_text(encoding="utf-8"))
+
+
+class SoldRow(NamedTuple):
+    item: int
+    price: int | None  # copper for the vendor stack; 0 in the file is unknown
+    stack: int | None
+    limited: bool
+
+
+def parse_sold(text: str) -> dict[int, list[SoldRow]]:
+    """`sold[item]` = {npc, price, stack, limited, npc, ...}, turned round to npc -> offers. The
+    file keeps fewer vendors for an item many sell (`soldCount`), so a list can be short."""
+    out: dict[int, list[SoldRow]] = {}
+    for item, rec in _items(run_text(text, "NPCs.lua").sold):
+        row = to_python(rec)
+        for i in range(0, len(row) - 3, 4):
+            npc, price, stack, limited = row[i : i + 4]
+            out.setdefault(int(npc), []).append(
+                SoldRow(int(item), int(price) or None, int(stack) or None, bool(limited))
+            )
+    return dict(sorted(out.items()))
+
+
+def read_sold(path: Path) -> dict[int, list[SoldRow]]:
+    return parse_sold(path.read_text(encoding="utf-8"))
+
+
+def parse_trainers(text: str) -> frozenset[int]:
+    """Every NPC of `classTrainers` and `profTrainers`."""
+    ns = run_text(text, "NPCs.lua")
+    ids: set[int] = set()
+    for table in (ns.classTrainers, ns.profTrainers):
+        for _, npcs in _items(table):
+            ids.update(int(n) for n in to_python(npcs))
+    return frozenset(ids)
+
+
+def read_trainers(path: Path) -> frozenset[int]:
+    return parse_trainers(path.read_text(encoding="utf-8"))

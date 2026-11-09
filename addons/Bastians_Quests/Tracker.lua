@@ -141,6 +141,9 @@ local function build()
     ctx = { source = "tracker" },
     twoLine = true, -- the owner's two-line quest rows (R2)
     iconsAlways = true,
+    rowActions = { "voice.play", "quests.chain" }, -- on the row; the rest on the sheet (ADR 0053)
+    hoverActions = { "map.show", "route.to" },
+    iconSize = 16,
     onClick = function(row, button)
       if row.onClick and button ~= "RightButton" then
         row.onClick(row, button)

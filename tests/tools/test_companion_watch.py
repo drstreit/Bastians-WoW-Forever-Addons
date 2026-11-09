@@ -160,6 +160,14 @@ def test_daily_lines_never_raise_and_read_the_install_config(tmp_path: Path):
     assert lines == ["companions ! Spoken (forever): new: 3.7.0"]
     assert (tmp_path / "docs" / "reference" / "companions" / "Spoken.md").is_file()
     assert (tmp_path / ".local" / "companions" / "forever" / "Spoken" / "2026-11-01.json").is_file()
+    # the notebook's pages land outside the checkout (ops.toml companion_pages)
+    addon(tmp_path / "forever" / "Interface" / "AddOns", "Spoken", "3.8.0", ["Play"])
+    cw.daily_lines(tmp_path, "2026-11-02", pages=tmp_path / "out-of-repo")
+    page = (tmp_path / "out-of-repo" / "Spoken.md").read_text(encoding="utf-8")
+    assert "3.8.0" in page
+    assert "3.8.0" not in (tmp_path / "docs" / "reference" / "companions" / "Spoken.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_the_diff_of_two_snapshots_names_what_changed():

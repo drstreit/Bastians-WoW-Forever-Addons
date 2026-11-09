@@ -40,6 +40,10 @@ Camp.SKILLS = {
   [393] = "Skinning",
 }
 
+-- The Pouch of Violet Dust, a toy of the Launch Celebration: thrown on a fire it turns the flames violet
+-- (item, spell and aura in the client's tables of 07.11.2026; what it does from the survey, assumed).
+Camp.VIOLET = { toy = 289439, spell = 1328348, aura = 1328375 }
+
 -- The benefits: the aura the player gets, what it gives, the class buff it does not stack with
 -- (the client's spell name, translated in the locales), the value per level as literal brackets
 -- { up to level, value } (the first bracket whose level is >= the player's applies).

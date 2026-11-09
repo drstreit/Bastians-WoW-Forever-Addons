@@ -100,7 +100,8 @@ def test_gather():
     skin = {k.id: k for k in kinds}[45]
     assert (skin.profession, skin.npc_ids, skin.level_range) == ("skin", (2956,), (6, 7))
     assert skin.item_id is None and skin.object_ids == ()
-    assert zones == [fdb.GatherZone(1411, 25), fdb.GatherZone(1412, 25)]
+    # Elwynn's row joined the fixture for the zone's fishing skill (catalog review A3.6)
+    assert zones == [fdb.GatherZone(1411, 25), fdb.GatherZone(1412, 25), fdb.GatherZone(1429, 25)]
     briar = [p for p in points if p.kind_id == 6 and p.ui_map_id == 1411]
     assert len(briar) == 7  # "c" has 28 characters
     assert briar[0] == fdb.GatherPoint(6, 1411, 0.7, 35.4, "classic", 2.3)
@@ -151,6 +152,45 @@ def test_quest_text_with_pipe_stays_in_objective():
     assert rows[0].starts == ("npc:5",)
     assert rows[0].ends == ("npc:6",)
     assert rows[0].seen_by_players == 2 and rows[0].new_in_forever is True
+
+
+TEN_COLUMNS = (
+    '-- [quest] = "title|level|min level|objective text|starts|ends|players who saw it'
+    '|1 = new in Forever|confirmed previous quest|lowest player level seen completing it"\n'
+)
+
+
+def quests_file(header: str, *rows: str) -> str:
+    body = ",".join(f'[{i}]="{row}"' for i, row in enumerate(rows, 1))
+    return f"local _, ns = ...\n{header}ns.qfQuests = {{{body}}}"
+
+
+def test_quests_in_the_ten_column_layout_of_foreverdb_0_57_14():
+    rows = fdb.parse_quests(
+        quests_file(TEN_COLUMNS, "T|3|1|do a|n5|o6|7|1|18|5", "U|2|0|||n12696|1|0|0|26")
+    )
+    assert rows[0] == fdb.QuestRow(1, "T", 3, 1, "do a", ("npc:5",), ("object:6",), 7, True, 18, 5)
+    assert rows[1].starts == () and rows[1].ends == ("npc:12696",)
+    assert rows[1].objective_text is None
+    assert rows[1].seen_by_players == 1 and rows[1].new_in_forever is False
+    assert rows[1].confirmed_previous is None and rows[1].lowest_level_seen == 26  # 0 is none
+
+
+def test_quest_text_with_pipe_stays_in_objective_in_the_ten_column_layout():
+    rows = fdb.parse_quests(quests_file(TEN_COLUMNS, "T|3|1|do a|b|n5|n6|2|1|0|7"))
+    assert rows[0].objective_text == "do a|b"
+    assert rows[0].starts == ("npc:5",) and rows[0].ends == ("npc:6",)
+
+
+def test_quest_rejects_a_short_record_in_the_ten_column_layout():
+    with pytest.raises(ValueError, match="expected 10 fields, got 8"):
+        fdb.parse_quests(quests_file(TEN_COLUMNS, "T|3|1|do a|n5|n6|2|1"))
+
+
+def test_quest_layout_the_reader_does_not_know_is_named():
+    header = '-- [quest] = "title|level|min level|objective text|starts|ends|seen|new|a|b|c"\n'
+    with pytest.raises(ValueError, match="11 columns"):
+        fdb.parse_quests(quests_file(header, "T|3|1|do a|n5|n6|2|1|0|7|9"))
 
 
 def test_items():
@@ -251,3 +291,55 @@ def test_dungeon_maps():
     ony = rows[249]
     assert [len(f.tiles) for f in ony.floors] == [0, 1]  # the first floor: no readable file
     assert ony.door is None and ony.why.startswith("The client's file")
+
+
+def test_the_tables_of_what_players_saw():
+    text = """
+    local _, ns = ...
+    ns.qfSeen = { [92461] = { s = "15p6t2r", e = "15p6t2r", o = { [1] = "15p7d5s 15p7g83" } } }
+    ns.qfNpcNames = { [251361] = "Name" }
+    """
+    seen = fdb.parse_quest_seen(text)[92461]
+    assert seen.starts == seen.ends
+    assert seen.starts[0].ui_map_id == 2521
+    assert 0 <= seen.starts[0].x_pct <= 100 and 0 <= seen.starts[0].y_pct <= 100
+    assert len(seen.objectives[1]) == 2
+    assert fdb.parse_npc_names(text) == {251361: "Name"}
+
+
+def test_stock_turns_round_to_the_seller_and_zero_is_unknown():
+    text = """
+    local _, ns = ...
+    ns.sold = { [2488] = { 54, 536, 1, 0, 66, 0, 5, 1 } }
+    ns.classTrainers = { WARRIOR = { 4087 } }
+    ns.profTrainers = { Alchemy = { 2837, 257019 } }
+    """
+    sold = fdb.parse_sold(text)
+    assert sold[54] == [fdb.SoldRow(2488, 536, 1, False)]
+    assert sold[66] == [fdb.SoldRow(2488, None, 5, True)]
+    assert fdb.parse_trainers(text) == {4087, 2837, 257019}
+
+
+def test_the_guide_takes_only_what_it_marks_as_forever():
+    text = """
+    local _, ns = ...
+    ns.qgQuests = {
+      [1] = "3|4|5|ff|15|f|80:2|7:2|8 9|f||",
+      [2] = "3|4|5|cc|15|c|80:2|7|8|c||",
+      [3] = "3|4|5|ff|-5|f|80:2|||f||",
+    }
+    """
+    guide = fdb.parse_quest_guide(text)
+    assert guide == {1: fdb.GuideRewards(1, 15, ((7, 2),), ((8, 1), (9, 1)))}
+
+
+def test_measured_quest_xp():
+    text = "local _, ns = ...\nns.qxp = { q = { [2] = 2450, [6] = 340 } }\n"
+    assert fdb.parse_quest_xp(text) == {2: 2450, 6: 340}
+
+
+def test_an_older_file_without_the_tables_reads_as_empty():
+    text = "local _, ns = ...\n"
+    assert fdb.parse_quest_seen(text) == {}
+    assert fdb.parse_sold(text) == {}
+    assert fdb.parse_trainers(text) == frozenset()

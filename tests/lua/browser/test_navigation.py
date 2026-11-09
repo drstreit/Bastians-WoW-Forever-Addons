@@ -39,7 +39,7 @@ def flat(wow: WowRuntime) -> list[str]:
 def test_the_search_is_global_and_the_type_chips_filter_it(wow: WowRuntime):
     """(N12): typing on a page mixed the page's own rows into the
     search ("Mangy" on the Elwynn page), and on a page the type chips did nothing. Now typing
-    anywhere searches the world (on a list with the list's type as the filter); the chips filter
+    anywhere searches the world (since 07.11.2026 on a list too, every list); the chips filter
     the search on every entry, with an empty box they open their list (All: the home); Back
     returns to where the search started."""
     boot(wow)
@@ -69,7 +69,7 @@ def test_the_search_is_global_and_the_type_chips_filter_it(wow: WowRuntime):
     wow.run_frames(10)
     assert wow.eval(f"{BR}.Current().kind") == "home" and wow.eval(f"{BR}.HomeType()") == "item"
     assert wow.eval(f"{MOD}.search:GetText()") == "fargo"
-    assert wow.eval(f"{MOD}.navTree.selectedID") == "nav:list:item"
+    assert wow.eval(f"{MOD}.tabs.active") == "nav:list:item"
     nav_click(wow, "nav:list:item")
     wow.run_frames(10)
     assert wow.eval(f"{BR}.HomeType()") is None
@@ -81,10 +81,11 @@ def test_the_search_is_global_and_the_type_chips_filter_it(wow: WowRuntime):
     nav_click(wow, "nav:list:item")
     wow.run_frames(10)
     assert wow.eval(f"{BR}.Current().kind") == "list" and wow.eval(f"{BR}.Current().type") == "item"
-    # typing on a list searches the world for that type
+    # typing on a list searches every list ("Search field is always
+    # global"); the list's own filter narrows the list
     wow.execute(f"{MOD}.search:SetText('linen')")
     wow.run_frames(10)
-    assert wow.eval(f"{BR}.Current().kind") == "home" and wow.eval(f"{BR}.HomeType()") == "item"
+    assert wow.eval(f"{BR}.Current().kind") == "home" and wow.eval(f"{BR}.HomeType()") is None
     assert any(r.startswith("Linen Cloth") for r in flat(wow))
     wow.execute(f"{BR}.Open('npc:240')")
     wow.execute(f"{BR}.Home()")
@@ -126,7 +127,7 @@ def test_open_in_browser_from_a_view_row_opens_the_page(wow: WowRuntime):
         if i.IsShown(i)
     ]
     assert "Open in Browser" in labels
-    # inside the Browser the item is greyed: the row click opens the page;
+    # inside the Browser the item is greyed, the sheet offers the page;
     # a click on the greyed item leaves the menu open and changes nothing
     greyed = [
         i.action.id
@@ -145,8 +146,11 @@ def test_open_in_browser_from_a_view_row_opens_the_page(wow: WowRuntime):
         f"for _, r in ipairs({MOD}.tree.flat) do "
         f"if r.ref == 'quest:62' then {MOD}.tree.opts.onClick(r, 'LeftButton') break end end"
     )
-    assert wow.eval(f"{BR}.Current().kind") == "page"
-    assert wow.eval(f"{BR}.Current().ref") == "quest:62"
+    # a quest of My quests opens its sheet (ADR 0053), the view stays behind it
+    assert wow.eval("BastiansQuestSheet:IsShown()") is True
+    assert wow.eval(f"{BR}.Current().kind") == "view"
+    wow.execute("BastiansQuestSheet:Hide()")
+    wow.execute(f"{BR}.Open('quest:62')")
     # the action stays listed everywhere; from the map it is greyed only on the page already shown
     enabled = lambda ref, source: wow.eval(  # noqa: E731
         f"Bastians:ActionEnabled('browser.open', '{ref}', {{ source = '{source}' }})"
@@ -161,15 +165,23 @@ def test_open_in_browser_from_a_view_row_opens_the_page(wow: WowRuntime):
 
 
 def test_my_quests_is_one_click_in_the_navigation(wow: WowRuntime):
-    """The log view is pinned (RegisterView `pinned`): the navigation's second row, after Here
-    (ADR 0018; before, a toolbar button after Home)."""
+    """The log view is pinned (RegisterView `pinned`): the Quests section's second tab, right
+    after its list (ADR 0058; before, the bar's second button after Here)."""
     boot(wow)
     wow.execute(f"{BR}.Open()")
     rows = nav_rows(wow)
-    assert rows[0][0] == "nav:here" and rows[1] == (
+    assert rows[0][0] == "nav:here"
+    assert rows[rows.index(("nav:list:quest", "Quests")) + 1] == (
         "nav:view:quests.log",
-        "My quests  2 in the log",
+        "My quests",
     )
+    nav_click(wow, "nav:list:quest")
+    wow.run_frames(5)
+    # how many are in the log is the tab's tip
+    assert list(wow.eval(f"{{ {MOD}.tabs.buttons[2].tip() }}").values()) == [
+        "My quests",
+        "2 in the log",
+    ]
     assert ("nav:view:quests.attune", "Attunements") in rows  # the other views under their group
     # All quests is the Quests list with its Status and Type filters
     assert not any(r[0] == "nav:view:quests.all" for r in rows)
@@ -182,5 +194,5 @@ def test_my_quests_is_one_click_in_the_navigation(wow: WowRuntime):
     assert not any(rid.startswith("nav:view:") for rid, _ in nav_rows(wow))
     wow.execute("Bastians:GetModule('Quests'):Enable()")
     wow.advance(0.2)
-    assert nav_rows(wow)[1][0] == "nav:view:quests.log"
+    assert ("nav:view:quests.log", "My quests") in nav_rows(wow)
     assert wow.errors == []

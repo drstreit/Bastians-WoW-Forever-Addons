@@ -92,4 +92,8 @@ ns.L:Register("deDE", {
   ["Near here:"] = "In der Nähe:",
   ["No notes near here."] = "Keine Notizen in der Nähe.",
   ["and %d more"] = "und %d weitere",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "Auf",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "Noch keine Notizen. Notiz hinzufügen auf einer Seite schreibt die erste.",
 })

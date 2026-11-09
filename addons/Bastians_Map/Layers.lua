@@ -141,6 +141,7 @@ local function zonePins(view)
   end
   local d = data()
   local pins = {}
+  local _, _, playerLevel = B.Compat.GetPlayerXP()
   for _, r in ipairs(Layers.ZoneRects(view.continent)) do
     if overlaps(r, view) then
       local z = d:Get("zone", r.ui)
@@ -155,6 +156,9 @@ local function zonePins(view)
           wy = wy,
           label = z.name,
           sub = band,
+          -- the band in the game's difficulty colour against the character's level (catalog
+          -- review A3.4, 07.11.2026); the dim map text where a level is unknown
+          subInk = band and S.BandToken(z.levelLo, z.levelHi, playerLevel) or nil,
           priority = 40,
           info = function()
             return Layers.ZoneInfo(ui)
@@ -229,6 +233,16 @@ local function together(places)
   return x2 - x1 <= Layers.WALKER_YARDS and y2 - y1 <= Layers.WALKER_YARDS
 end
 
+-- A layer that stays off the minimap overlay.
+local function bigMapOnly(query)
+  return function(view)
+    if view.minimap then
+      return {}
+    end
+    return query(view)
+  end
+end
+
 -- A layer's query over the zones in view: matching entities inside the view.
 Layers.AREA_MIN_YARDS = 15 -- a creature roaming at least this far gets a soft area (W5)
 
@@ -271,13 +285,12 @@ local function poiQuery(types, prefixes, fallbackIcon, priority)
         paths[#paths + 1] = { kind = "path", points = points, color = S.C.dim, width = 1, style = "dashed" }
       end
       local name = B:Entity(ref):Name()
-      if role and string.sub(role, 1, 7) == "trainer" then
-        -- what the trainer trains, from its subname ("Alchemy Trainer";
-        -- "I see the trainer names - but not what they train")
+      if role and (string.sub(role, 1, 7) == "trainer" or string.sub(role, 1, 6) == "vendor") then
+        -- what they train or sell, from the subname ("Alchemy Trainer": Alchemy; "Enchanter" and
+        -- "Alchemy Supplies" as they are; Forever 08.11.2026)
         local rec = d:Get("npc", id)
-        local words = type(rec) == "table"
-          and type(rec.subname) == "string"
-          and rec.subname:match("^(.-)%s+[Tt]rainer$")
+        local subname = type(rec) == "table" and type(rec.subname) == "string" and rec.subname or nil
+        local words = subname and (subname:match("^(.-)%s+[Tt]rainer$") or subname)
         if words and words ~= "" and name then
           name = name .. " (" .. words .. ")"
         end
@@ -548,7 +561,9 @@ Layers.DEFS = {
     label = "Resource nodes",
     on = false,
     min = 2,
-    query = poiQuery({ "node", "object" }, { "gather" }, "herb", 35),
+    -- every spawn is for the big map: the minimap shows what the game's tracking really finds
+    --
+    query = bigMapOnly(poiQuery({ "node", "object" }, { "gather" }, "herb", 35)),
   },
   {
     id = "map.monsters",

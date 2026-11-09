@@ -128,6 +128,10 @@ def test_a_route_comes_in_three_kinds_and_the_player_picks_one(wow: WowRuntime):
     assert buttons.fastest.label.GetText(buttons.fastest.label).startswith("Fastest ")
     rows = [r.text for r in wow.eval(f"{w}.tree.rows").values() if r.text]
     assert any("Careful: level 20 creatures" in t for t in rows)
+    # the verdict (A4.3): the fastest route passes the level 20, a level 12 reads "Risky trip"
+    g = "Bastians:GetModule('Route').Graph"
+    assert wow.eval(f"{g}.Verdict({R}.Active(), 12)") == "risky"
+    assert "Risky trip" in wow.eval(f"{w}.summary:GetText()")
     # a click on Safest: that route, and the kind stays the default for the next route
     wow.execute(f"local b = {w}.kindButtons.safe; b:GetScript('OnClick')(b)")
     assert wow.eval(f"{R}.Active().kind") == "safe"
@@ -183,3 +187,21 @@ def test_a_tour_is_one_route_through_numbered_stops(wow: WowRuntime):
     assert [s.name for s in again.tour.stops.values()][-1] == "Marshal"
     assert len(again.tour.stops) == 2
     assert wow.errors == []
+
+
+def test_the_verdict_is_pure_and_unknown_is_not_safe(core: WowRuntime):
+    core.start("Bastians_Core", "Bastians_Route")
+    g = "Bastians:GetModule('Route').Graph"
+    route = (
+        "{ steps = { { mode = 'walk', danger = 15 }, { mode = 'fly' }, "
+        "{ mode = 'walk', danger = 9 } } }"
+    )
+    assert core.eval(f"{g}.Verdict({route}, 12)") == "risky"  # 15 is 3 above
+    assert core.eval(f"{g}.Verdict({route}, 14)") == "careful"  # 15 is 1 above
+    assert core.eval(f"{g}.Verdict({route}, 18)") == "safe"  # every creature 3 or more below
+    elite = "{ steps = { { mode = 'walk', danger = 12, elite = true } } }"
+    assert core.eval(f"{g}.Verdict({elite}, 12)") == "risky"  # an elite counts 3 more
+    assert core.eval(f"{g}.Verdict({{ steps = {{ {{ mode = 'fly' }} }} }}, 12)") is None
+    assert core.eval(f"{g}.Verdict({route}, nil)") is None
+    assert core.eval(f"{g}.Verdict(nil, 12)") is None
+    assert core.errors == []

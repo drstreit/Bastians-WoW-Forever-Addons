@@ -71,6 +71,17 @@ def test_danger_and_guards_along_the_ways():
     assert max(w.danger or 0 for w in net.level.ways) == 12
 
 
+def test_the_join_field_is_runs_of_waypoints_per_cluster():
+    """(route.md "The join"): the nearest waypoint on foot per cell."""
+    net = network()
+    assert "join" not in graph_record(net)  # no field in the level: the key stays away
+    second = net.order[1].id
+    # cell (205, 150): column 507, row 505 of the world, 27 and 25 of cluster 495
+    net.level.join = [507, 505, second, 507, 400, 99999]  # an unknown waypoint is dropped
+    rec = graph_record(net)
+    assert rec["join"] == {WEST: "0*827,2,0*196"}
+
+
 def test_the_pack_strings():
     net = network()
     taxi = [

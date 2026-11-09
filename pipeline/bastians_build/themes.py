@@ -67,8 +67,37 @@ READABLE: tuple[tuple[tuple[str, ...], tuple[str, ...], int | str], ...] = (
     (UI_TEXT, ("bg", "panel"), 12),
     (("headerText",), ("header",), 15),
     (("tipText", "tipDim", "tipGold", "chat", "chatEmote"), (TOOLTIP_GROUND,), 12),
-    (("mapText", "mapTextDim"), ("mapTextRim",), 11),
+    (
+        (
+            "mapText",
+            "mapTextDim",
+            "mapDiffRed",
+            "mapDiffOrange",
+            "mapDiffYellow",
+            "mapDiffGreen",
+            "mapDiffGrey",
+        ),
+        ("mapTextRim",),
+        11,
+    ),
     ((TILE_GLYPH,), TILES, "icon"),
+)
+# The pocket atlas' grounds (ADR 0056, "readable by rule", PA7). A tile's plate lies over the
+# window's ground and over a panel ("card/bg": the first composited over the second by its alpha).
+# The quest sheet and the Browser's paper page are drawn on Core's Media/Parchment.tga: its mean
+# colour is the ground (measured 06.11.2026; the darkest twentieth of it is #c29b62, where the same
+# inks read at about 3.5:1). The theme PAPER_THEME lends its tokens to a paper page in every theme
+# (Style.lua, S.Palette), so its words must read on the parchment and on a plate over it.
+PAPER_GROUND = "#d5b175"
+PAPER_THEME = "parchment"
+SHEET_TEXT = ("sheetInk", "sheetDim", "sheetTitle", "sheetGood")
+READABLE += (
+    (UI_TEXT, ("card/bg", "card/panel"), 12),
+    (SHEET_TEXT, (PAPER_GROUND,), 12),
+    (("sheetTileText",), ("sheetTile",), 12),
+)
+PAPER_READABLE: tuple[tuple[tuple[str, ...], tuple[str, ...], int | str], ...] = (
+    (UI_TEXT, (PAPER_GROUND, "card/" + PAPER_GROUND), 12),
 )
 LARGE_PX = 24  # text this big or bigger reads at 3:1 (WCAG 1.4.3)
 
@@ -96,16 +125,26 @@ def contrast(a: list[float], b: list[float]) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
-def unreadable(colors: dict[str, list[float]]) -> list[str]:
-    """The readability pairs a theme fails: 'text on ground 3.21 < 4.5', empty when it passes."""
+def over(top: list[float], under: list[float]) -> list[float]:
+    """A colour laid over another by its alpha (the lower one taken as opaque)."""
+    alpha = top[3] if len(top) > 3 else 1.0
+    return [top[i] * alpha + under[i] * (1 - alpha) for i in range(3)]
+
+
+def unreadable(colors: dict[str, list[float]], paper: bool = False) -> list[str]:
+    """The readability pairs a theme fails: 'text on ground 3.21 < 4.5', empty when it passes.
+    `paper`: the theme is the paper palette, so the pairs of a paper page count too."""
 
     def colour(name: str) -> list[float]:
+        if "/" in name:  # "card/bg": the first over the second
+            top, under = name.split("/", 1)
+            return over(colour(top), colour(under))
         if name.startswith("#"):
             return parse_color(name, "readability")
         return colors[name]
 
     out = []
-    for texts, grounds, size in READABLE:
+    for texts, grounds, size in READABLE + (PAPER_READABLE if paper else ()):
         need = minimum_ratio(size)
         for text in texts:
             for ground in grounds:
@@ -185,7 +224,7 @@ def read_themes(folder: Path = THEMES_DIR) -> list[Theme]:
             raise ThemeError(f"{t.id}: shape needs {sorted(SHAPE_KEYS)}")
         if set(t.geometry) != set(GEOMETRY_KEYS):
             raise ThemeError(f"{t.id}: geometry needs {sorted(GEOMETRY_KEYS)}")
-        failing = unreadable(t.colors)
+        failing = unreadable(t.colors, paper=t.id == PAPER_THEME)
         if failing:
             raise ThemeError(f"{t.id}: unreadable (WCAG contrast): " + "; ".join(failing))
     return sorted(themes, key=lambda t: (t.order, t.id))

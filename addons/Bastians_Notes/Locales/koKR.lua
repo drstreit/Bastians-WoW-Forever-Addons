@@ -91,4 +91,8 @@ ns.L:Register("koKR", {
   ["Near here:"] = "이 근처:",
   ["No notes near here."] = "이 근처에 메모가 없습니다.",
   ["and %d more"] = "외 %d개",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "대상",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "아직 메모가 없습니다. 페이지의 메모 추가로 첫 메모를 쓰세요.",
 })

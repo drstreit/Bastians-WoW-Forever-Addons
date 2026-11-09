@@ -24,10 +24,13 @@ TREE = 7001
 GRASS = 9001
 
 
-def tile_bytes(x: int = X, y: int = Y) -> bytes:
-    """A hill in the west, a lake in the south-east, a house in the middle, one tree."""
+def tile_bytes(x: int = X, y: int = Y, holes=None) -> bytes:
+    """A hill in the west, a lake in the south-east, a house in the middle, one tree; `holes`: a
+    mask of terrain holes."""
     rows, cols = np.mgrid[0:N, 0:N].astype("f4")
     ground = (40 - cols).astype("f4")
+    if holes is not None:
+        ground[holes] = np.nan
     liquid = np.zeros((N, N), "u2")
     surface = np.full((N, N), np.nan, "f4")
     lake = (rows > 22) & (cols > 22)
@@ -129,6 +132,93 @@ def test_neighbouring_cells_meet_without_a_seam_and_are_emitted(tmp_path: Path):
     assert len(result["far"]["parchment"]) == 1  # both near cells in far cell 0
     lua = style_lua("parchment", "forever", "test", {0: [(0, 0), (1, 0)]}, {0: [(0, 0)]})
     assert "[0] = { 0, 16 }" in lua and 'client = "forever"' in lua
+
+
+def test_a_far_cell_draws_its_sea_where_the_map_has_no_tile(tmp_path: Path):
+    """a flat patch without the paper's grain south-east of Stranglethorn. A
+    place in a far cell without a tile holds the style's drawn sea: the same grain as the near
+    cells' open sea, and the sea cell stays out of the near cells the addon ships."""
+    from mapstyle.cells import build, read_rgba
+
+    folder = tmp_path / "Azeroth"
+    folder.mkdir()
+    (folder / "1_1.bmd.gz").write_bytes(tile_bytes(1, 1))  # near cell 0, 0
+    (folder / "9_1.bmd.gz").write_bytes(tile_bytes(9, 1))  # near cell 2, 0: far cell 1
+    (folder / "1_9.bmd.gz").write_bytes(tile_bytes(1, 9))  # near cell 0, 2: far cell 0, 1
+    cfg = tomllib.loads(
+        (ROOT / "pipeline" / "config" / "mapstyle.toml").read_text(encoding="utf-8")
+    )
+    names = {str(GRASS): "tileset/elwynn/elwynngrassbase_s.blp"}
+    out = tmp_path / "cells"
+    result = build(folder, 0, out, cfg, ["pencil"], names, {1: "Water"}, workers=1)
+    assert result["near"] == [(0, 0), (0, 2), (2, 0)]
+    assert (1, 0) in result["sea"] and (3, 3) in result["sea"]
+    assert not set(result["near"]) & set(result["sea"])
+    assert sorted(p.name for p in (out / "pencil" / "near").glob("*.rgba")) == [
+        "0_0_0.rgba",
+        "0_0_2.rgba",
+        "0_2_0.rgba",
+    ]
+    # the four far cells of the rectangle, the one without any tile too
+    assert len(result["far"]["pencil"]) == 4
+    side = 4 * N
+    far = np.asarray(read_rgba(out / "pencil" / "far" / "0_0_0.rgba")).astype("f4")[..., :3]
+    drawn = far[side // 2 : side, 3 * side // 2 :].std((0, 1))  # the open sea of near cell 0, 0
+    far = np.asarray(read_rgba(out / "pencil" / "far" / "0_1_1.rgba")).astype("f4")[..., :3]
+    empty = far.std((0, 1))  # a far cell of sea cells alone
+    assert (empty > 0.5 * drawn).all() and empty.max() > 1
+    # the same paper: the means of the two seas meet
+    sea = np.asarray(read_rgba(out / "pencil" / "sea" / "0_3_3.rgba")).astype("f4")[..., :3]
+    assert np.abs(sea.mean((0, 1)) - far.mean((0, 1))).max() < 2
+
+
+def test_a_run_of_some_tiles_leaves_an_unfinished_far_cell_alone(tmp_path: Path):
+    from mapstyle.cells import build
+
+    folder = tmp_path / "Azeroth"
+    folder.mkdir()
+    (folder / "1_1.bmd.gz").write_bytes(tile_bytes(1, 1))
+    (folder / "5_1.bmd.gz").write_bytes(tile_bytes(5, 1))
+    cfg = tomllib.loads(
+        (ROOT / "pipeline" / "config" / "mapstyle.toml").read_text(encoding="utf-8")
+    )
+    names = {str(GRASS): "tileset/elwynn/elwynngrassbase_s.blp"}
+    out = tmp_path / "cells"
+    only = (0, 0, 3, 3)
+    result = build(folder, 0, out, cfg, ["pencil"], names, {1: "Water"}, workers=1, only=only)
+    assert result["near"] == [(0, 0)] and result["far"]["pencil"] == []
+
+
+def test_a_range_without_tiles_is_sea_only_when_asked(tmp_path: Path):
+    folder = tmp_path / "Azeroth"
+    folder.mkdir()
+    (folder / "1_1.bmd.gz").write_bytes(tile_bytes(1, 1))
+    with pytest.raises(ValueError):
+        read_region(folder, 40, 40, 41, 41)
+    region = read_region(folder, 40, 40, 41, 41, N)
+    assert region.ground.shape == (2 * N, 2 * N) and not region.present.any()
+    assert len(region.doodads) == 0 and region.textures == {}
+
+
+def test_an_empty_hole_is_sea_and_a_spot_under_a_chunk_stays_land(tmp_path: Path):
+    """Zephras Isle (06.11.2026): the tiles around the floating island are holes with nothing in
+    them and were drawn as blocks of land."""
+    folder = tmp_path / "2991"
+    folder.mkdir()
+    holes = np.zeros((N, N), bool)
+    holes[:, :8] = True  # a wide hole along the west edge, nothing in it
+    holes[10, 12] = True  # one pixel: under a chunk (N / 16 = 2 pixels)
+    (folder / f"{X}_{Y}.bmd.gz").write_bytes(tile_bytes(holes=holes))
+    region = read_region(folder, X, Y, X, Y)
+    assert not region.present[:, :8].any()
+    assert region.present[10, 12] and region.present[:, 8:].all()
+    cfg = tomllib.loads(
+        (ROOT / "pipeline" / "config" / "mapstyle.toml").read_text(encoding="utf-8")
+    )
+    p = prepare(region, {}, {1: "Water"}, cfg)
+    s = p.w // N  # the supersample
+    assert p.water[:, : 6 * s].all()  # the hole is sea
+    assert not p.water[4 * s : 20 * s, 10 * s : 20 * s].any()  # the land beside it stays land
 
 
 def test_subzone_labels_sit_at_the_centre_of_their_largest_patch(tmp_path: Path):

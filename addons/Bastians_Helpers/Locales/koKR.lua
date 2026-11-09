@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("koKR", {
+  ["Level"] = "레벨",
   ["Helpers"] = "도우미",
   ["Merchant"] = "상인",
   ["Mail"] = "우편",
@@ -24,6 +25,10 @@ ns.L:Register("koKR", {
   ["Item level"] = "아이템 레벨",
   ["Warn when your gear is almost broken"] = "장비가 거의 망가지면 경고",
   ["Warn when your bags are almost full"] = "가방이 거의 차면 경고",
+  -- the rare alert (catalog review A3.3, 07.11.2026)
+  ["Warn when a rare creature is targeted or under the mouse"] = "희귀 생물을 대상으로 하거나 마우스를 올리면 알림",
+  ["Rare: %s"] = "희귀: %s",
+  ["Map"] = "지도",
   ["Hold to pause the helpers"] = "누르고 있으면 도우미 일시 정지",
   ["Shift"] = "Shift",
   ["Ctrl"] = "Ctrl",

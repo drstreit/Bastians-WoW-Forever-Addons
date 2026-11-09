@@ -13,6 +13,10 @@ ns.Mail = Mail
 Helpers.Mail = Mail
 
 Mail.STEP_WAIT = 0.5 -- seconds Take all waits for MAIL_INBOX_UPDATE before the next step
+Mail.BUTTON_W = 200 -- the Send to column's buttons
+Mail.COLUMN_W = 216
+Mail.BUTTON_H = 20 -- a button with a name only
+Mail.TALL_H = 34 -- a button that also says who it is
 
 local open = false
 local take -- { money, items, mails, seq, waiting } while Take all runs
@@ -97,18 +101,28 @@ end
 -- Send to and the last recipient
 -- ---------------------------------------------------------------------------------------------
 
+-- The surname a mail to one of the account's characters gets until that character has logged in
+--. Forever only: retail's second name is a realm.
+function Mail.Surname()
+  if Bastians.Client ~= "forever" then
+    return nil
+  end
+  return Model.SharedSurname(Helpers.Global().characters)
+end
+
 function Mail.Names()
   return Model.Recipients(
     Helpers.Global().characters,
     Helpers.Key(),
     Helpers.Char().recent,
-    Helpers.SEND_TO_MAX
+    Helpers.SEND_TO_MAX,
+    Mail.Surname()
   )
 end
 
 local function buildColumn(parent)
   column = CreateFrame("Frame", "BastiansHelpersSendTo", parent)
-  column:SetSize(120, 30)
+  column:SetSize(Mail.COLUMN_W, 30)
   if parent == UIParent then
     column:SetPoint("TOP", UIParent, "TOP", 240, -120)
   else
@@ -159,10 +173,38 @@ function Mail.SendByRule(batch)
   return put
 end
 
+-- The second line of a Send to button: "Level 4 Mage, Stormwind City" (
+-- "the mail buttons should state the class, level and place"), nil for a recipient we know nothing of.
+function Mail.WordsFor(name)
+  local c = Model.RecipientRecord(Helpers.Global().characters, Helpers.Key(), name)
+  local classes = rawget(_G, "LOCALIZED_CLASS_NAMES_MALE")
+  local word = c and (c.className or (type(classes) == "table" and classes[c.class])) or nil
+  return Model.Describe(c, word)
+end
+
+-- Lays a button out for `words` (SetLabel has just reset it). -> its height.
+local function withWords(b, words)
+  if not b.detail then
+    b.detail = S.text(b, 10, S.C.muted)
+    b.detail:SetPoint("BOTTOM", 0, 4)
+    b.detail:SetWidth(Mail.BUTTON_W - 12)
+    b.detail:SetJustifyH("CENTER")
+  end
+  b.detail:SetText(words or "")
+  b.detail:SetShown(words ~= nil)
+  if not words then
+    return Mail.BUTTON_H
+  end
+  b:SetHeight(Mail.TALL_H)
+  b.label:ClearAllPoints()
+  b.label:SetPoint("TOP", 0, -4)
+  return Mail.TALL_H
+end
+
 local function columnButton(list, i, onClick)
   local b = list[i]
   if not b then
-    b = S.button(column, "", 104, 20)
+    b = S.button(column, "", Mail.BUTTON_W, Mail.BUTTON_H)
     b:SetScript("OnClick", onClick)
     list[i] = b
   end
@@ -188,14 +230,17 @@ function Mail.UpdateColumn()
   column.title:SetShown(#names > 0)
   for i, name in ipairs(names) do
     local b = columnButton(column.buttons, i, function(self)
-      B.Compat.MailRecipient(self.name)
+      B.Compat.MailRecipient(self.full or self.name)
     end)
     b:ClearAllPoints()
     b:SetPoint("TOPLEFT", column, "TOPLEFT", 8, -y)
     b.name = name
+    local record = Model.RecipientRecord(Helpers.Global().characters, Helpers.Key(), name)
+    b.full = Model.MailName(record, Mail.Surname())
     b:SetLabel(name)
+    local height = withWords(b, Mail.WordsFor(name))
     b:Show()
-    y = y + 22
+    y = y + height + 2
   end
   for i = #names + 1, #column.buttons do
     column.buttons[i]:Hide()

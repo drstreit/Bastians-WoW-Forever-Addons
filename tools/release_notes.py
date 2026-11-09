@@ -52,6 +52,7 @@ APPS = {
     "library": "Bastians_Library",
     "tales": "Bastians_Library",
     "gestures": "Bastians_Gestures",
+    "courtesy": "Bastians_Courtesy",
     "campfire": "Bastians_Campfire",
     "data": "Bastians_Data",
     "pipeline": "Bastians_Data",

@@ -5,6 +5,30 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.1.0:1",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The gold stories' map scales smoothly with its window, which takes the map's shape; tokens light up under the cursor; the book opens on the map.",
+  },
+  {
+    id = "2.1.0:2",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The gold book's text follows the suite's text size and uses three font sizes instead of seven.",
+  },
+  {
+    id = "2.1.0:3",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The gold book's maps and the story map's marks open their place on the world map.",
+  },
+  {
+    id = "2.1.0:4",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The names in the gold book's pages are links: hover for the tooltip, click to open.",
+  },
+  {
     id = "1.0.0:1-core",
     date = "2026-10-30",
     version = "1.0.0",

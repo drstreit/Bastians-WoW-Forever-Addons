@@ -1,5 +1,5 @@
 -- The pure model of Bastian's Gestures (gestures.md): the default rings, the placeholders, the
--- split of long lines, the wedge under the cursor and the courtesy decision. Plain tables in,
+-- split of long lines, the wedge under the cursor. Plain tables in,
 -- plain tables out; no WoW API.
 local _, ns = ...
 local L = ns.L
@@ -11,8 +11,6 @@ Model.WEDGES = 8
 Model.RINGS = 3
 Model.PART_BYTES = 255 -- one chat message of the client, in bytes
 Model.MARK_BYTES = 8 -- room for " (12/15)"
-Model.COURTESY_SECONDS = 600 -- one answer per person in ten minutes
-Model.BUBBLE_SECONDS = 8
 
 -- The game's emotes the ring offers: the DoEmote token and the word (a curated sixty of the
 -- client's slash emotes; the tokens are the retail family's, assumed on Forever).
@@ -241,16 +239,6 @@ function Model.DefaultRings()
   }
 end
 
--- The default thank-you lines (courtesy); one at random when automatic.
-function Model.DefaultThanks()
-  return { L["Thank you, %t!"], L["Much obliged, %t."], L["May the road be kind to you, %t."] }
-end
-
--- The polite decline of a duel, a trade or an invite (S7); the first line is whispered.
-function Model.DefaultDeclines()
-  return { L["Thank you, but not today, %t."] }
-end
-
 -- The saved rings, made whole: three rings with eight slots each.
 function Model.Ensure(global)
   if type(global.rings) ~= "table" or #global.rings ~= Model.RINGS then
@@ -362,21 +350,27 @@ local KEYS = {
 Model.PLACEHOLDERS = KEYS
 
 -- The time of day of a game hour (0 to 23): morning from 5, afternoon from 12, evening from 17,
--- night from 21; nil for no hour.
-function Model.DayTime(hour)
+-- night from 21, as its English key; nil for no hour.
+function Model.DayKey(hour)
   hour = tonumber(hour)
   if not hour then
     return nil
   end
   hour = math.floor(hour) % 24
   if hour >= 5 and hour < 12 then
-    return L["morning"]
+    return "morning"
   elseif hour >= 12 and hour < 17 then
-    return L["afternoon"]
+    return "afternoon"
   elseif hour >= 17 and hour < 21 then
-    return L["evening"]
+    return "evening"
   end
-  return L["night"]
+  return "night"
+end
+
+-- The same in the player's language.
+function Model.DayTime(hour)
+  local key = Model.DayKey(hour)
+  return key and L[key] or nil
 end
 
 -- The word of UnitSex's answer: 2 he, 3 she; nil for 1 (unknown) or nothing.
@@ -606,51 +600,4 @@ function Model.Hovered(dx, dy, n, r0, r1)
   end
   local step = 2 * math.pi / n
   return math.floor((a + step / 2) / step) % n + 1
-end
-
--- The courtesy decision for `event` ({ kind = "buff" | "rez" | "emote", who }) with the saved
--- `state` ({ seen = { [who] = time } }) at `now` under `settings` ({ mode = "ask" | "auto" | "off",
--- instances, inInstance, inCombat }): "ask", "auto" or nil; an answer is noted in `state.seen`.
-function Model.Courtesy(event, state, now, settings)
-  settings = settings or {}
-  if not (event and event.who) or settings.mode == "off" or settings.mode == nil then
-    return nil
-  end
-  if settings.inCombat then
-    return nil
-  end
-  if settings.inInstance and not settings.instances then
-    return nil
-  end
-  state.seen = state.seen or {}
-  local last = state.seen[event.who]
-  if last and now - last < Model.COURTESY_SECONDS then
-    return nil
-  end
-  state.seen[event.who] = now
-  return settings.mode == "auto" and "auto" or "ask"
-end
-
--- Forgets the people answered more than COURTESY_SECONDS ago (nothing of them is kept).
-function Model.Forget(state, now)
-  for who, t in pairs(state.seen or {}) do
-    if now - t >= Model.COURTESY_SECONDS then
-      state.seen[who] = nil
-    end
-  end
-end
-
--- One of a list, by `rand` (math.random by default; the tests pass their own).
-function Model.Pick(list, rand)
-  if not list or #list == 0 then
-    return nil
-  end
-  rand = rand or math.random
-  return list[rand(#list)]
-end
-
--- Whether an emote line is aimed at the player: the game writes "X waves at you." for those.
-function Model.AimedAtMe(text)
-  text = " " .. string.lower(text or "") .. " "
-  return string.find(text, " you[ .,!]", 1) ~= nil or string.find(text, " your ", 1, true) ~= nil
 end

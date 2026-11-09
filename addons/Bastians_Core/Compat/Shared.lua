@@ -338,14 +338,20 @@ function Compat.EntityFromGUID(guid)
   return typ .. ":" .. tonumber(id)
 end
 
+-- The entity of a unit token ("target", "mouseover"): Creature and Vehicle GUIDs give npc:<id>,
+-- GameObject object:<id>; players, pets and a missing unit give nil (Helpers' rare alert, A3.3).
+define("shared", "UnitEntity", function(unit)
+  if type(UnitExists) == "function" and not UnitExists(unit) then
+    return nil
+  end
+  if type(UnitIsPlayer) == "function" and plain(UnitIsPlayer(unit)) then
+    return nil
+  end
+  return Compat.EntityFromGUID(type(UnitGUID) == "function" and plain(UnitGUID(unit)) or nil)
+end)
+
 define("shared", "TargetEntity", function()
-  if type(UnitExists) == "function" and not UnitExists("target") then
-    return nil
-  end
-  if type(UnitIsPlayer) == "function" and plain(UnitIsPlayer("target")) then
-    return nil
-  end
-  return Compat.EntityFromGUID(type(UnitGUID) == "function" and plain(UnitGUID("target")) or nil)
+  return Compat.UnitEntity("target")
 end)
 
 -- The game's objective tracker (C8, slim mode): ObjectiveTrackerFrame on retail (12.1.5), the
@@ -403,7 +409,7 @@ end)
 -- ---------------------------------------------------------------------------------------------
 
 define("shared", "GetPlayerFacts", function()
-  local _, class, classID = UnitClass("player")
+  local className, class, classID = UnitClass("player")
   local _, race, raceID = UnitRace("player")
   local faction = UnitFactionGroup("player")
   local health, max = plain(UnitHealth("player")), plain(UnitHealthMax("player")) -- secret on retail 12.x
@@ -413,14 +419,15 @@ define("shared", "GetPlayerFacts", function()
     classID = classID,
     faction = faction,
     class = class,
+    className = className, -- in the client's language (the class quests view's summary)
     race = race,
     health = (health and max and max > 0) and health / max or nil,
   }
 end)
 
 -- Bag counts (C_Item.GetItemCount: documented identically on both clients).
-define("shared", "GetItemCount", function(itemID)
-  return C_Item.GetItemCount(itemID) or 0
+define("shared", "GetItemCount", function(itemID, includeBank)
+  return C_Item.GetItemCount(itemID, includeBank) or 0
 end)
 
 -- Reputation: C_Reputation.GetFactionDataByID is documented on both; the legacy global is the fallback.
@@ -707,6 +714,20 @@ define("shared", "GetTeleportState", function(kind, id, reagent)
   return true, left == 0, left
 end)
 
+-- Whether the client would let the player use a toy now (C_ToyBox.IsToyUsable, in the P1 dump; its
+-- answer outside a toy's event assumed, Campfire's Violet Dust). nil when the client cannot tell.
+define("shared", "ToyUsable", function(itemID)
+  local toys = rawget(_G, "C_ToyBox")
+  if not has(toys, "IsToyUsable") then
+    return nil
+  end
+  local usable = plain(toys.IsToyUsable(itemID))
+  if usable == nil then
+    return nil
+  end
+  return usable and true or false
+end)
+
 define("shared", "GetItemSpell", function(itemID)
   if not has(C_Item, "GetItemSpell") then
     return nil
@@ -811,6 +832,33 @@ local function containerRows(bags)
   end
   return out
 end
+
+-- The name is in both P1 dumps (Forever 70450, 70532; retail 70448); the order of its answers is
+-- retail's and assumed on Forever (forever-api.md).
+define("shared", "GetInboxInvoices", function()
+  local read = rawget(_G, "GetInboxInvoiceInfo")
+  local header = rawget(_G, "GetInboxHeaderInfo")
+  local count = rawget(_G, "GetInboxNumItems")
+  local out = {}
+  if not (read and header and count) then
+    return out
+  end
+  for index = 1, count() do
+    local kind, item, _, bid, _, deposit, consignment, _, _, _, units = read(index)
+    if kind and item then
+      out[#out + 1] = {
+        kind = kind,
+        item = item,
+        bid = bid,
+        deposit = deposit,
+        consignment = consignment,
+        count = units,
+        daysLeft = select(7, header(index)),
+      }
+    end
+  end
+  return out
+end)
 
 define("shared", "GetBagItems", function()
   local last = rawget(_G, "NUM_TOTAL_EQUIPPED_BAG_SLOTS") or rawget(_G, "NUM_BAG_SLOTS") or 4
@@ -1269,6 +1317,21 @@ Compat.MODEL_SLOTS = {
   INVTYPE_SHOULDER = true,
 }
 
+-- What an item is in the client's words: its kind and slot ("Mail", "Chest"), each nil where the
+-- client has none or the item is not one to wear (ADR 0056, PA2.3). No request, no event: the
+-- instant answer. Forever assumed 06.11.2026 (forever-api.md).
+define("shared", "ItemKind", function(itemID)
+  local api = rawget(_G, "C_Item")
+  itemID = tonumber(itemID)
+  if not (itemID and api and type(api.GetItemInfoInstant) == "function") then
+    return nil, nil
+  end
+  local _, _, kind, equipLoc = api.GetItemInfoInstant(itemID)
+  local slot = equipLoc and equipLoc ~= "" and rawget(_G, equipLoc) or nil
+  note("ItemKind", "GetItemInfoInstant")
+  return kind ~= "" and kind or nil, type(slot) == "string" and slot or nil
+end)
+
 define("shared", "ShowItem", function(model, itemID)
   itemID = tonumber(itemID)
   local api = rawget(_G, "C_Item")
@@ -1560,11 +1623,21 @@ define("shared", "PlayerAuras", function()
   return out
 end)
 
+-- Whether the client hides auras from addons right now (C_Secrets.ShouldAurasBeSecret; false measured
+-- out of combat, Forever 08.11.2026). Reading one then raises, no pcall needed: ask first.
+define("shared", "AurasSecret", function()
+  local secrets = rawget(_G, "C_Secrets")
+  if not has(secrets, "ShouldAurasBeSecret") then
+    return false
+  end
+  return plain(secrets.ShouldAurasBeSecret()) ~= false
+end)
+
 -- A unit's helpful auras with their end (C_UnitAuras.GetAuraDataByIndex, the retail family's
 -- AuraData: expirationTime 0 for an aura without an end; assumed on Forever, probe C1).
 define("shared", "UnitAuras", function(unit)
   local out = {}
-  if not has(C_UnitAuras, "GetAuraDataByIndex") then
+  if not has(C_UnitAuras, "GetAuraDataByIndex") or Compat.AurasSecret() then
     return out
   end
   for i = 1, 80 do
@@ -1683,6 +1756,60 @@ define("shared", "HookItemUse", function(fn)
   end
   if fnOf("UseContainerItem") then
     hooksecurefunc("UseContainerItem", used)
+    return true
+  end
+  return false
+end)
+
+-- Whether a tracking spell that shows creatures is on (Track Beasts and its kin): the classes that
+-- have one, then an active spell that is not a gathering one. C_Minimap.GetTrackingInfo is in the
+-- Forever dump, its shape assumed (forever-api.md): a table on the retail family, a list on Classic.
+local CREATURE_TRACKERS = { HUNTER = true, DRUID = true, PALADIN = true, WARLOCK = true }
+local GATHERING_SPELLS = { [2383] = true, [2580] = true, [2481] = true, [43308] = true }
+define("shared", "CreatureTrackingOn", function()
+  local class = select(2, UnitClass("player"))
+  if not CREATURE_TRACKERS[plain(class)] then
+    return false
+  end
+  if not (has(C_Minimap, "GetNumTrackingTypes") and has(C_Minimap, "GetTrackingInfo")) then
+    return nil
+  end
+  for i = 1, C_Minimap.GetNumTrackingTypes() or 0 do
+    local a, _, c, d, _, f = C_Minimap.GetTrackingInfo(i)
+    local active, kind, spell = c, d, f
+    if type(a) == "table" then
+      active, kind, spell = a.active, a.type, a.spellID
+    end
+    if plain(active) and plain(kind) == "spell" and not GATHERING_SPELLS[plain(spell)] then
+      return true
+    end
+  end
+  return false
+end)
+
+-- The whole name of a unit, for a mail or a whisper. UnitName's second value is the surname on Forever
+-- (measured 08.11.2026, 1.60.1.70862; the first name alone does not deliver), a realm on retail,
+-- nil for the player's own realm. A mail takes "First Surname".
+define("shared", "FullName", function(unit)
+  local first, second = UnitName(unit)
+  first, second = plain(first), plain(second)
+  if type(first) ~= "string" or first == "" then
+    return nil
+  end
+  if type(second) ~= "string" or second == "" then
+    return first
+  end
+  return first .. (Bastians.Client == "forever" and " " or "-") .. second
+end)
+
+-- The client remembers a slash command's handler after its first use (hash_SlashCmdList, FrameXML;
+-- assumed on Forever, forever-api.md): a handler changed later needs that one entry gone (ADR 0062).
+-- Only an entry that exists is written.
+define("shared", "ForgetSlash", function(command)
+  local hash = rawget(_G, "hash_SlashCmdList")
+  local key = string.upper(command)
+  if type(hash) == "table" and hash[key] ~= nil then
+    hash[key] = nil
     return true
   end
   return false
@@ -2118,6 +2245,106 @@ define("shared", "QuestTakeReward", function(index)
   return invoke("GetQuestReward", index)
 end)
 
+-- A quest's rewards as the client says them (ADR 0053). All of these are in the Forever P1 dump,
+-- their answers assumed from retail (forever-api.md); a zero or a secret value says nothing here.
+local function paid(value)
+  value = plain(value)
+  return type(value) == "number" and value > 0 and value or nil
+end
+
+-- { { itemID, count } } of `n` rewards, nil without one. info(i) -> name, icon, count, quality,
+-- usable, itemID; the link stands in where the id is missing.
+local function rewardItems(n, info, link)
+  local out = {}
+  for i = 1, plain(n) or 0 do
+    local _, _, count, _, _, itemID = info(i)
+    itemID = plain(itemID) or tonumber(string.match(tostring(link and link(i) or ""), "item:(%d+)"))
+    if itemID then
+      out[#out + 1] = { itemID, plain(count) or 1 }
+    end
+  end
+  return #out > 0 and out or nil
+end
+
+local function lineOf(fn, ...)
+  local args = { ... }
+  return function(i)
+    if not fn then
+      return nil
+    end
+    local argv = { unpack(args) }
+    table.insert(argv, 2, i) -- GetQuestLogItemLink(kind, i, questID), GetQuestItemLink(kind, i)
+    return fn(unpack(argv))
+  end
+end
+
+-- The rewards of a log quest. On Classic Era these functions ignore the id and answer for the
+-- selected quest (EverythingQuests measured it, 2026-10-20), so the quest is selected first and the
+-- selection restored. Nil when the client says nothing: unknown, never "no reward".
+define("shared", "GetQuestLogRewards", function(questID)
+  if
+    not (
+      questID
+      and has(C_QuestLog, "SetSelectedQuest")
+      and has(C_QuestLog, "GetLogIndexForQuestID")
+      and C_QuestLog.GetLogIndexForQuestID(questID)
+    )
+  then
+    return nil
+  end
+  local money, xp = api("GetQuestLogRewardMoney"), api("GetQuestLogRewardXP")
+  local numItems, itemInfo = api("GetNumQuestLogRewards"), api("GetQuestLogRewardInfo")
+  local numChoices, choiceInfo = api("GetNumQuestLogChoices"), api("GetQuestLogChoiceInfo")
+  local link = api("GetQuestLogItemLink")
+  local before = has(C_QuestLog, "GetSelectedQuest") and C_QuestLog.GetSelectedQuest() or nil
+  C_QuestLog.SetSelectedQuest(questID)
+  local out = {
+    money = money and paid(money(questID)) or nil,
+    xp = xp and paid(xp(questID)) or nil,
+  }
+  if numItems and itemInfo then
+    out.items = rewardItems(numItems(questID), function(i)
+      return itemInfo(i, questID)
+    end, lineOf(link, "reward", questID))
+  end
+  if numChoices and choiceInfo then
+    out.choices = rewardItems(numChoices(questID, true), function(i)
+      return choiceInfo(i, questID)
+    end, lineOf(link, "choice", questID))
+  end
+  if before and before > 0 and before ~= questID then
+    C_QuestLog.SetSelectedQuest(before)
+  end
+  if next(out) == nil then
+    return nil
+  end
+  note("GetQuestLogRewards", "GetQuestLogRewardMoney")
+  return out
+end)
+
+-- The rewards of the quest a giver shows now (QUEST_DETAIL, QUEST_COMPLETE); nil when it says none.
+define("shared", "GetOfferRewards", function()
+  local money, xp = api("GetRewardMoney"), api("GetRewardXP")
+  local numItems, numChoices = api("GetNumQuestRewards"), api("GetNumQuestChoices")
+  local info, link = api("GetQuestItemInfo"), api("GetQuestItemLink")
+  local out = { money = money and paid(money()) or nil, xp = xp and paid(xp()) or nil }
+  if info and numItems then
+    out.items = rewardItems(numItems(), function(i)
+      return info("reward", i)
+    end, lineOf(link, "reward"))
+  end
+  if info and numChoices then
+    out.choices = rewardItems(numChoices(), function(i)
+      return info("choice", i)
+    end, lineOf(link, "choice"))
+  end
+  if next(out) == nil then
+    return nil
+  end
+  note("GetOfferRewards", "GetRewardMoney")
+  return out
+end)
+
 define("shared", "GreetingQuests", function()
   local active, available = {}, {}
   local numActive, activeTitle = api("GetNumActiveQuests"), api("GetActiveTitle")
@@ -2133,6 +2360,38 @@ define("shared", "GreetingQuests", function()
     available[#available + 1] = { index = i, title = availableTitle and plain(availableTitle(i)) or nil }
   end
   return active, available
+end)
+
+-- The giver of the open window (UnitGUID("npc"), as Voice reads it).
+define("shared", "NpcEntity", function()
+  return Compat.EntityFromGUID(type(UnitGUID) == "function" and plain(UnitGUID("npc")) or nil)
+end)
+
+-- UnitQuestTrivialLevelRange: in both clients' dumps, assumed until seen (forever-api.md).
+define("shared", "QuestTrivialRange", function()
+  local range = api("UnitQuestTrivialLevelRange")
+  return range and plain(range("player")) or nil
+end)
+
+-- The realm's clock (C_DateAndTime: in both clients' dumps, assumed until seen). A time without
+-- its hour is no time: 00:00 would read as before every event's start.
+define("shared", "CalendarNow", function()
+  if not has(C_DateAndTime, "GetCurrentCalendarTime") then
+    return nil
+  end
+  local t = C_DateAndTime.GetCurrentCalendarTime()
+  local month, day, hour = plain(t and t.month), plain(t and t.monthDay), plain(t and t.hour)
+  if not (month and day and hour) then
+    return nil
+  end
+  return {
+    year = plain(t.year),
+    month = month,
+    day = day,
+    weekday = plain(t.weekday),
+    hour = hour,
+    minute = plain(t.minute) or 0,
+  }
 end)
 
 define("shared", "GossipQuests", function()
@@ -2251,6 +2510,39 @@ define("shared", "NpcFramesHidden", function(hidden)
   return true
 end)
 
+-- The character's saved instances (the raid info; Alts' lockouts, A2.5): { { name, instance
+-- (Map.db2 id, the 14th value of GetSavedInstanceInfo), reset (seconds left), locked, raid } };
+-- nil when the client has no raid info API. RequestRaidInfo asks the server for a fresh list, which
+-- arrives with UPDATE_INSTANCE_INFO (assumed on Forever, forever-api.md).
+define("shared", "SavedInstances", function()
+  local count, info = fnOf("GetNumSavedInstances"), fnOf("GetSavedInstanceInfo")
+  if not (count and info) then
+    return nil
+  end
+  local out = {}
+  for i = 1, plain(count()) or 0 do
+    local name, _, reset, _, locked, _, _, raid, _, _, _, _, _, instanceID = info(i)
+    instanceID = plain(instanceID)
+    out[#out + 1] = {
+      name = plain(name),
+      instance = type(instanceID) == "number" and instanceID > 0 and instanceID or nil,
+      reset = plain(reset),
+      locked = plain(locked) == true,
+      raid = plain(raid) == true,
+    }
+  end
+  return out
+end)
+
+define("shared", "RequestRaidInfo", function()
+  local f = fnOf("RequestRaidInfo")
+  if f then
+    f()
+    return true
+  end
+  return false
+end)
+
 define("shared", "InstanceMap", function()
   local inside = fnOf("IsInInstance")
   local info = fnOf("GetInstanceInfo")
@@ -2332,6 +2624,16 @@ define("shared", "ChatFrameNamed", function(name)
     end
   end
   return nil
+end)
+
+-- Links in a frame's texts (`|H...|h...|h`): Frame:SetHyperlinksEnabled, then the frame's
+-- OnHyperlinkEnter, OnHyperlinkLeave and OnHyperlinkClick scripts fire (retail's API docs; assumed
+-- on Forever, forever-api.md: the gold book's names, 07.11.2026). -> true when the frame took it.
+define("shared", "EnableLinks", function(frame)
+  local ok = pcall(function()
+    frame:SetHyperlinksEnabled(true)
+  end)
+  return ok
 end)
 
 local MODIFIERS = { shift = "IsShiftKeyDown", ctrl = "IsControlKeyDown", alt = "IsAltKeyDown" }

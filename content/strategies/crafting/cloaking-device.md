@@ -10,12 +10,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 186651072597781
-stamp = "true"
 why = "At the 7-day medians the device sold for about three times its parts on the normal realms and for more on the PvP realms, at a few sales a day on most markets."
 
 [[rumours]]
 claim = 122058710210018
-stamp = "true"
 why = "Our vendor data has the schematic at 24 silver in limited stock from Zan Shivsproket at Ravenholdt Manor, and the recipe at Engineering 200."
 
 [plate]

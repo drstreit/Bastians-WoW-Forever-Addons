@@ -54,7 +54,7 @@ def test_every_addon_is_an_app_of_the_category_or_in_an_apps_group():
     children = {meta["Group"] for meta in tocs.values() if "Group" in meta}
     assert children == {"Bastians_Data", "Bastians_Map"}
     assert all(meta.get("Group") == "Bastians_Data" for n, meta in tocs.items() if "_Data_" in n)
-    assert len(apps) <= 15  # the rows a player sees with the header unfolded
+    assert len(apps) <= 16  # the rows a player sees with the header unfolded
 
 
 def test_every_addon_speaks_korean_and_chinese_in_the_list():

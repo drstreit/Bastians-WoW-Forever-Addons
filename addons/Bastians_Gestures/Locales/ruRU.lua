@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("ruRU", {
+  -- /bgest try (gestures.md "The voice", 08.11.2026)
   -- the owner's follow-ups (retail 01.11.2026, late)
   ["(a macro)"] = "(макрос)",
   ["A macro of the account"] = "Макрос учетной записи",
@@ -52,29 +53,19 @@ ns.L:Register("ruRU", {
   ["Show or hide the cloak"] = "Показать или скрыть плащ",
   ["A random favourite mount"] = "Случайный любимый ездовой питомец",
   -- plan-second-wave.md S7 (01.11.2026)
-  ["%s challenges you to a duel"] = "%s вызывает вас на дуэль",
-  ["%s wants to trade"] = "%s хочет обменяться",
-  ["%s invites you to a group"] = "%s приглашает вас в группу",
   ["Answer?"] = "Ответить?",
   ["Bow"] = "Поклон",
   ["Wave"] = "Помахать",
-  ["Decline politely"] = "Вежливо отказаться",
-  ["Thank you, but not today, %t."] = "Спасибо, но не сегодня, %t.",
   ["The polite decline of a duel, a trade or an invite (press Enter; %t is who asked)"] = "Вежливый отказ от дуэли, обмена или приглашения (нажмите Enter; %t - тот, кто спросил)",
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark heard"] = "Отметить как услышанное",
   ["Toggle the tracker"] = "Показать или скрыть отслеживание",
-  ["%s buffed you"] = "%s наложил(а) на вас усиление",
-  ["%s cast %s on you"] = "%s применил(а) на вас: %s",
-  ["%s greets you"] = "%s приветствует вас",
-  ["%s resurrected you"] = "%s воскресил(а) вас",
   ["(a ring)"] = "(кольцо)",
   ["A line for slot %d"] = "Строка для ячейки %d",
   ["A ring of its own"] = "Собственное кольцо",
   ["A short title for the wedge"] = "Короткое название сектора",
   ["Actions"] = "Действия",
   ["Add a thank-you line (press Enter; %t is who to thank)"] = "Добавить строку благодарности (нажмите Enter; %t - кого благодарить)",
-  ["Also in dungeons and battlegrounds"] = "Также в подземельях и на полях боя",
   ["Ask"] = "Спрашивать",
   ["Ask (a bubble)"] = "Спрашивать (облачко)",
   ["Automatic"] = "Автоматически",
@@ -89,7 +80,6 @@ ns.L:Register("ruRU", {
   ["Clear the screen"] = "Очистить экран",
   ["Click: set this slot"] = "Щелчок: назначить эту ячейку",
   ["Click: the options. Right click: edit the rings."] = "Щелчок: параметры. Правый щелчок: изменить кольца.",
-  ["Courtesy"] = "Вежливость",
   ["Courtesy: %s"] = "Вежливость: %s",
   ["Default rings"] = "Кольца по умолчанию",
   ["Edit the ring"] = "Изменить кольцо",
@@ -105,13 +95,9 @@ ns.L:Register("ruRU", {
   ["Long road"] = "Долгий путь",
   ["Looks around"] = "Осматривается",
   ["Lore here"] = "История этого места",
-  ["May the road be kind to you, %t."] = "Пусть дорога будет к вам добра, %t.",
-  ["Much obliged, %t."] = "Премного обязан, %t.",
   ["My thanks, friend."] = "Моя благодарность, друг.",
   ["Needs Bastian's %s"] = "Требуется Bastian's %s",
-  ["Not now"] = "Не сейчас",
   ["Note here"] = "Заметка здесь",
-  ["Off"] = "Выкл.",
   ["Ring"] = "Кольцо",
   ["Ring %d: %s"] = "Кольцо %d: %s",
   ["Route home"] = "Маршрут домой",
@@ -124,7 +110,6 @@ ns.L:Register("ruRU", {
   ["Spoken as"] = "Произносится как",
   ["Thank"] = "Благодарить",
   ["Thank them?"] = "Поблагодарить?",
-  ["Thank you, %t!"] = "Спасибо, %t!",
   ["Thanks, friend"] = "Спасибо, друг",
   ["The common tongue"] = "Всеобщий язык",
   ["The key opens and closes the ring (else: hold it, release on a wedge)"] = "Клавиша открывает и закрывает кольцо (иначе: удерживайте ее, отпустите на секторе)",
@@ -143,5 +128,4 @@ ns.L:Register("ruRU", {
   ["say"] = "сказать",
   ["yell"] = "крикнуть",
   -- Bastian's Campfire (plan-second-wave.md S5, 02.11.2026)
-  ["%s's camp warmed you"] = "Лагерь игрока %s согрел вас",
 })

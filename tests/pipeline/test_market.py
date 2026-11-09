@@ -9,7 +9,7 @@ import pytest
 from bastians_build.__main__ import main
 from bastians_build.build import build
 from bastians_build.config import MarketConfig, MarketFill, load_config
-from bastians_build.market import add_market, place_map, zone_names
+from bastians_build.market import add_market, market_list, old_rows, place_map, zone_names
 from bastians_build.model import World
 from bastians_build.pack import pack_table
 from bastians_build.sources.ahsync_export import ExportError, read_export, resolve_folder
@@ -74,6 +74,36 @@ def test_reader_rejects_bad_exports(tmp_path):
         read_export(folder)
 
 
+def test_a_market_may_read_a_market_that_is_filled_itself():
+    world = World(client="forever")
+    rp, normal = "forever/rp/alliance/eu", "forever/normal/alliance/eu"
+    config = MarketConfig(
+        labels={US: "US normal"},
+        fill=[
+            MarketFill(to=rp, source=normal, label="EU normal"),
+            MarketFill(to=normal, source=US, label="US normal"),
+            MarketFill(to="forever/rp/horde/eu", source="forever/normal/horde/eu", label="x"),
+        ],
+    )
+    add_market(world, read_export(EXPORT), config)
+    assert world.market_aliases[rp] == (normal, "EU normal")
+    assert world.market_aliases[normal] == (US, "US normal")
+    assert "forever/rp/horde/eu" not in world.market_aliases  # nothing at the end of its chain
+    listed = market_list(world)
+    assert listed[rp]["alias"] == normal and listed[rp]["items"] == 2
+
+
+def test_a_row_far_older_than_its_market_keeps_its_price_under_the_old_label():
+    rows = [
+        {"market": "a", "scan_ts": 100 * 86400},
+        {"market": "a", "scan_ts": 91 * 86400},
+        {"market": "a", "scan_ts": 89 * 86400},
+        {"market": "a", "scan_ts": None},  # unknown is not old
+        {"market": "b", "scan_ts": 89 * 86400},  # each market by its own newest
+    ]
+    assert old_rows(rows, 10) == {2}
+
+
 def test_records_fills_and_indexes():
     world = World(client="forever")
     config = MarketConfig(
@@ -99,9 +129,9 @@ def test_records_fills_and_indexes():
         "market forever/normal/alliance/eu: reads the 2 prices of forever/normal/alliance/us "
         "as 'US beta'",
         "market forever/normal/horde/eu: nothing to fill, forever/normal/horde/us has no rows",
-        "market retail/normal/neutral/eu has its own rows; "
-        "fill from forever/normal/alliance/us not applied",
+        "market retail/normal/neutral/eu: falls back to forever/normal/alliance/us per item",
     ]
+    assert world.market_fallbacks == {EU_RETAIL: US}  # it has rows: only what it lacks
     signals = world.records["signal"]
     assert signals[f"{US}:2"]["flags"] == ["spot:1"] and signals[f"{US}:2"]["src"] == "ahsync"
     assert "forever/normal/alliance/eu:2" not in signals

@@ -64,6 +64,10 @@ ns.L:Register("zhCN", {
   ["Route by default"] = "默认路线类型",
   ["Switch to this kind of route; it stays the default."] = "切换到这种路线类型;它将保持为默认。",
   ["Careful: level %d creatures"] = "小心: %d级生物",
+  -- the route's verdict (catalog review A4.3, 07.11.2026)
+  ["Safe trip"] = "安全旅程",
+  ["Watch out"] = "小心",
+  ["Risky trip"] = "危险旅程",
   ["elite"] = "精英",
 
   -- Death.lua (R26.8)
@@ -112,6 +116,10 @@ ns.L:Register("zhCN", {
   ["All flight masters"] = "所有飞行管理员",
   ["Open the step list when a route starts"] = "路线开始时打开步骤列表",
   ["Show an arrow to the next step while a route is active"] = "路线进行时显示指向下一步的箭头",
+  -- Flight.lua: the flight bar (catalog review A4.1, 07.11.2026)
+  ["Show a flight bar with the time left while flying"] = "飞行时显示带剩余时间的飞行条",
+  ["%s to %s"] = "%s 到 %s",
+  ["%s left"] = "剩余 %s",
   ["Route here"] = "前往此处的路线",
   ["Route to"] = "路线前往",
   ["Open Bastian's Route"] = "打开 Bastian's Route",
@@ -150,4 +158,13 @@ ns.L:Register("zhCN", {
 
   -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
   ["Next: %s"] = "下一步：%s",
+  -- the /way command (ADR 0062, 08.11.2026)
+  ["/way: %s"] = "/way：%s",
+  ["New route"] = "新路线",
+  ["Add to route"] = "添加到路线",
+  ["Waypoints"] = "路径点",
+  ["What /way does while a route runs: start a new route, or add the place to the route."] = "路线进行中 /way 的作用：开始新路线，或把该地点添加到路线中。",
+  ["Which addon answers /way: Bastian's Route, or the one that had it first."] = "由哪个插件响应 /way：Bastian's Route，或最先占用它的插件。",
+  ["No zone called %s."] = "没有名为 %s 的区域。",
+  ["Several zones match %s: %s"] = "有多个区域匹配 %s：%s",
 })

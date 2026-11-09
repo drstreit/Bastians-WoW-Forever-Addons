@@ -193,14 +193,17 @@ def test_an_entry_reads_in_the_clients_language(wow: WowRuntime):
 
 
 @pytest.mark.parametrize("locale", ["deDE", "ruRU", "ptBR"])
-def test_every_entry_of_the_launch_release_is_translated(wow: WowRuntime, locale: str):
-    """LG5: 1.3.0's entries read in the client's language (every language carries the same keys:
-    tests/lua/core/test_locales.py; Russian and Portuguese since #21, 04.11.2026)."""
+def test_every_entry_of_the_newest_release_is_translated(wow: WowRuntime, locale: str):
+    """LG5: the newest release's entries read in the client's language (every language carries the
+    same keys: tests/lua/core/test_locales.py; Russian and Portuguese since #21, 04.11.2026). Not
+    a version by name: a release's notes push the old ones out of the list (NEWS_KEEP)."""
     wow.mock.locale = locale
     wow.start(CORE)
     wow.run_frames(5)
-    english = [e.text for e in wow.eval(CORE_NEWS).values() if e.version == "1.3.0"]
-    shown = [e.text for e in wow.eval(f"{NEWS}.Entries()").values() if e.version == "1.3.0"]
-    assert len(english) == len(shown) >= 20
+    entries = list(wow.eval(CORE_NEWS).values())
+    newest = entries[0].version
+    english = [e.text for e in entries if e.version == newest]
+    shown = [e.text for e in wow.eval(f"{NEWS}.Entries()").values() if e.version == newest]
+    assert len(english) == len(shown) >= 1
     assert not set(english) & set(shown)  # none left in English
     assert wow.errors == []

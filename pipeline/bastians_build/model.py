@@ -20,8 +20,11 @@ class World:
     notes: list[str] = field(default_factory=list)  # report notes that do not fail a build
     dropped: list[tuple[str, object, str]] = field(default_factory=list)  # (type, id, reason)
     area_to_map: dict[int, int] = field(default_factory=dict)  # AreaTable id -> uiMapID (QuestieDB)
+    gather_objects: dict[int, str] = field(default_factory=dict)  # game object id -> herb or mine
     # filled market -> (source market, label): the Market pack's fills (market.py)
     market_aliases: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # thin market -> the market its missing items come from (data.md "Market pack")
+    market_fallbacks: dict[str, str] = field(default_factory=dict)
 
     def add(self, record_type: str, record_id: int, record: Record) -> None:
         self.records.setdefault(record_type, {})[record_id] = record

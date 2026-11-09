@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("ruRU", {
+  ["%s is forgotten. Logging in with that character records it again."] = "%s забыт. При входе этим персонажем он будет записан снова.",
+  ["Forget %s? Use the action again within 5 seconds."] = "Забыть %s? Повторите действие в течение 5 секунд.",
+  ["Forget this character"] = "Забыть этого персонажа",
   ["Alts"] = "Персонажи",
   ["Characters"] = "Персонажи",
   ["Your characters"] = "Ваши персонажи",
@@ -12,6 +15,32 @@ ns.L:Register("ruRU", {
   ["You have it"] = "Есть у вас",
   ["you"] = "вы",
   ["Known by: %s"] = "Известно: %s",
+  -- Runs.lua, dungeon runs and lockouts (catalog review A2.5, 07.11.2026)
+  ["Your runs"] = "Ваши походы",
+  ["%s: one run"] = "%s: один поход",
+  ["%s: %d runs"] = "%s: %d походов",
+  ["last %s"] = "последний %s",
+  ["locked, resets in %s"] = "закрыто, сброс через %s",
+  ["No run recorded yet."] = "Походов пока не записано.",
+  ["Dungeon runs"] = "Походы в подземелья",
+  -- Train.lua, the trainer view (catalog review A5.7, 07.11.2026)
+  ["Trainer"] = "Учитель",
+  ["what your class trainers teach you next"] = "чему ваши классовые учителя научат вас дальше",
+  ["Learn now"] = "Выучить сейчас",
+  ["Later"] = "Позже",
+  ["at %s, %s"] = "у %s, %s",
+  ["at %s"] = "у %s",
+  ["You know every spell for your level."] = "Вы знаете все заклинания для своего уровня.",
+  ["Nothing to learn now; %d at later levels"] = "Сейчас учить нечего; %d на следующих уровнях",
+  ["%d spells to learn now for %s; %d at later levels"] = "%d заклинаний выучить сейчас за %s; %d на следующих уровнях",
+  ["; %d unknown whether known"] = "; %d неизвестно, выучены ли",
+  ["The trainer view needs Bastian's Data."] = "Виду учителей нужен Bastian's Data.",
+  -- the gold goals (catalog review A5.5, 07.11.2026)
+  ["Next training"] = "Следующее обучение",
+  ["Training at level %d"] = "Обучение на %d уровне",
+  ["Riding at level %d"] = "Верховая езда на %d уровне",
+  ["A mount at level %d"] = "Верховое животное на %d уровне",
+  ["Spell"] = "Заклинание",
   ["Owned"] = "В наличии",
   ["You"] = "Вы",
   ["Nobody"] = "Никто",
@@ -77,4 +106,7 @@ ns.L:Register("ruRU", {
   ["Click a line: its page. Right click: its entity menu."] = "Щелчок по строке: ее страница. Правый щелчок: ее меню.",
   ["Click: your characters' window. Right click: its settings."] = "Щелчок: окно ваших персонажей. Правый щелчок: его настройки.",
   ["Item"] = "Предмет",
+  -- Alts.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Gold on all"] = "Золото на всех",
+  ["Highest level"] = "Высший уровень",
 })

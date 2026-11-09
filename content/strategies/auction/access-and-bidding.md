@@ -22,7 +22,6 @@ claim = 188267096417265
 
 [[rumours]]
 claim = 50979863535063
-stamp = "true"
 why = "The Forever client carries the black market window with a current bid, your own bid and the time left (API probe, build 70532)."
 
 [plate]

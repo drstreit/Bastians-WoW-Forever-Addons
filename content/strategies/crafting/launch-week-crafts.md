@@ -9,12 +9,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 66856484594040
-stamp = "true"
 why = "At the 7-day medians the wand sold for more than its wood and essence on all four beta markets."
 
 [[rumours]]
 claim = 69337613633637
-stamp = "true"
 why = "The recipe makes two Bronze Bars from one Copper Bar and one Tin Bar. At the 7-day medians the smelt gained on all four beta markets, from a few copper to two silver."
 
 [[rumours]]

@@ -138,6 +138,7 @@ local function questStep(step)
   )
   q.onClick = nil
   q.hint = L["The giver speaks about it"]
+  q.detail = { text = detail.text, objectives = detail.objectives } -- for the quest sheet
   state.quests[1] = q
   if step == "detail" then
     current.actions[1] = actItem(L["Accept"], Talk.Accept, L["Takes the quest; the tracker shows it"], "done")
@@ -161,6 +162,7 @@ local function questStep(step)
         title = ref and B:Entity(ref):Name() or L["Reward"],
         index = choice.index,
         count = choice.count,
+        itemID = choice.itemID,
         hint = L["Click chooses this reward"],
         onClick = function()
           current.choice = choice.index

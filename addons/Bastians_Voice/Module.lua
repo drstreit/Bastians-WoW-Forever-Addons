@@ -66,6 +66,7 @@ local function registerAction(self)
   })
   B:RegisterAction(self, {
     id = "voice.play",
+    main = true, -- a button of the sheet (ADR 0054)
     label = L["Play the voice line"],
     short = L["Play"],
     activeShort = L["Stop"],

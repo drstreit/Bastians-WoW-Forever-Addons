@@ -38,12 +38,8 @@ def test_every_released_folder_belongs_to_one_project():
     cfg = config()
     folders = [f for p in cfg["projects"].values() for f in p["folders"]]
     assert len(folders) == len(set(folders))
-    released = {
-        d.name
-        for d in ADDONS.iterdir()
-        if d.is_dir() and d.name not in {*DEV_ONLY, "Bastians_Data_Nav"}
-    }
-    assert set(folders) == released  # Nav ships no file yet (release.py skips it)
+    released = {d.name for d in ADDONS.iterdir() if d.is_dir() and d.name not in DEV_ONLY}
+    assert set(folders) == released  # every shipped folder, the Nav pack too (06.11.2026)
 
 
 def test_the_relations_cover_every_toc_dependency():
@@ -147,6 +143,7 @@ def test_the_plan_merges_datas_packs_and_names_what_blocks_an_upload(tmp_path: P
     assert tops == [
         "Bastians_Data",
         "Bastians_Data_Items",
+        "Bastians_Data_Nav",
         "Bastians_Data_Quests",
         "Bastians_Data_Strategies",
         "Bastians_Data_Text_deDE",

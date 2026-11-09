@@ -147,6 +147,7 @@ function Plan.Apply()
         id = Plan.VIEW,
         title = L["Session plan"],
         group = L["Gold"],
+        rail = "gold", -- the Atlas's rail entry (ADR 0058)
         order = 40,
         render = render,
         summary = function()

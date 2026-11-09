@@ -10,12 +10,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 193779913665152
-stamp = "true"
 why = "The loot tables agree: a Greater Sagefish school gives its fish on 85 casts in 100 and an Iron Bound Trunk on 5. Our data calls the crates trunks."
 
 [[rumours]]
 claim = 55984557128163
-stamp = "half"
 why = "The trout is item level 35 and wants level 25 to eat. That the lake gives it most often we could not check."
 
 [[rumours]]
@@ -26,7 +24,6 @@ claim = 126581303461542
 
 [[rumours]]
 claim = 47056072323722
-stamp = "lies"
 why = "The sum rests on beta prices. On our markets today a raw catfish sells for a small part of what it assumed."
 
 [plate]

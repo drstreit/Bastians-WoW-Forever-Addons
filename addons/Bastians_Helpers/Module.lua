@@ -25,13 +25,22 @@ local function ensure(db)
   end
 end
 
-function Helpers.RecordMe()
+-- `level`: PLAYER_LEVEL_UP's own, the client may still answer the old one. A zone the client does
+-- not know yet (right after the loading screen) keeps the last one.
+function Helpers.RecordMe(_, _, level)
   local facts = B.Compat.GetPlayerFacts()
-  Helpers.Global().characters[Helpers.Key()] = {
-    name = UnitName("player"),
+  local characters, key = Helpers.Global().characters, Helpers.Key()
+  local zone = B.Compat.Plain(GetZoneText())
+  local before = characters[key]
+  characters[key] = {
+    name = (UnitName("player")),
+    full = B.Compat.FullName("player"), -- what a mail needs (Forever: with the surname)
     realm = GetRealmName(),
     faction = facts.faction,
     class = facts.class,
+    className = B.Compat.Plain(facts.className),
+    level = tonumber(level) or B.Compat.Plain(facts.level),
+    zone = zone ~= "" and zone or (before and before.zone) or nil,
   }
 end
 
@@ -121,6 +130,7 @@ local function register(self)
   })
   B:RegisterDetailSection(self, {
     id = "helpers.item",
+    chapter = "yours", -- on the sheet (ADR 0054)
     title = L["Helpers"],
     types = { "item" },
     order = 90,
@@ -179,6 +189,11 @@ local OPTIONS = {
   { type = "toggle", key = "warnDurability", label = L["Warn when your gear is almost broken"] },
   { type = "toggle", key = "warnBags", label = L["Warn when your bags are almost full"] },
   {
+    type = "toggle",
+    key = "warnRares",
+    label = L["Warn when a rare creature is targeted or under the mouse"],
+  },
+  {
     type = "select",
     key = "pauseKey",
     label = L["Hold to pause the helpers"],
@@ -204,6 +219,7 @@ mod = B:NewModule("Helpers", {
     ns.Info.Open()
   end,
   title = L["Helpers"],
+  data = { "world" }, -- the rare alert reads the creature's record (A3.3); optional like Data itself
   apiVersion = 1,
   optional = { "Bastians_Data", "Bastians_Browser" },
   defaults = {
@@ -223,6 +239,7 @@ mod = B:NewModule("Helpers", {
       tooltipItemLevel = true,
       warnDurability = true,
       warnBags = true,
+      warnRares = true, -- catalog review A3.3 (07.11.2026)
       pauseKey = "shift",
     },
     char = {},
@@ -232,6 +249,12 @@ mod = B:NewModule("Helpers", {
   OnEnable = function(self)
     ensure(self.db)
     register(self)
+    -- the never-sell service (core-contracts section 11, ADR 0058 PH6): Gold's Bags keep what is on the list
+    B:ProvideService(self, "neversell", {
+      Is = function(_, itemID)
+        return Helpers.IsNeverSell(itemID)
+      end,
+    }, { priority = 100 })
     ns.Feed.Register(self)
     ns.Merchant.Attach(self)
     ns.Mail.Attach(self)
@@ -239,6 +262,11 @@ mod = B:NewModule("Helpers", {
     ns.Tooltips.Attach(self)
     ns.Info.Attach(self)
     self:RegisterEvent("PLAYER_ENTERING_WORLD", Helpers.RecordMe)
+    self:RegisterEvent("ZONE_CHANGED_NEW_AREA", Helpers.RecordMe)
+    self:On("BASTIANS_CHARACTER_FORGOTTEN", function(_, _, key) -- Alts: deleted in the game
+      Helpers.Global().characters[key] = nil
+    end)
+    self:RegisterEvent("PLAYER_LEVEL_UP", Helpers.RecordMe)
     if IsLoggedIn and IsLoggedIn() then
       Helpers.RecordMe()
     end

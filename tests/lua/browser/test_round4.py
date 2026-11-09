@@ -13,24 +13,23 @@ MOD = "Bastians:GetModule('Browser')"
 def test_the_filter_bar_lays_out_again_at_the_panes_width(wow: WowRuntime):
     boot(wow)
     open_list(wow, "npc")
-    bar = f"{MOD}.tree.filterBar"
-    assert wow.eval(f"{bar}.laidOutAt") is not None
-    # the bar's frame grows: a frame later the pills are laid out at the new width
-    wow.execute(
-        f"{bar}.frame:SetWidth(900) {bar}.frame:GetScript('OnSizeChanged')({bar}.frame, 900)"
-    )
-    wow.advance(0.01)
+    bar, host = f"{MOD}.tree.filterBar", f"{MOD}.filterHost"
+    # since ADR 0056 (PA1.2) the bar stands beside the search, in the Browser's own frame, and
+    # flows in the width the window leaves it there
+    wide = wow.eval(f"{bar}.laidOutAt")
+    assert wide is not None and wide == wow.eval(f"{host}:GetWidth()")
+    one_line = wow.eval(f"{bar}:Height()")
+    assert wow.eval(f"{host}:GetHeight()") == one_line  # the host is as high as the bar says
+    # the window narrows: the pills are laid out again at the new width, in more lines
+    wow.execute(f"{MOD}.win.frame:SetWidth(700); {MOD}.win.opts.onResize({MOD}.win, false)")
     wow.run_frames(3)
-    assert wow.eval(f"{bar}.laidOutAt") == 900
-    # the rows start under the bar: the chips frame is as high as the bar says
-    assert wow.eval(f"{MOD}.tree.chips:GetHeight()") == wow.eval(f"{bar}:Height()")
-    wow.execute(
-        f"{bar}.frame:SetWidth(120) {bar}.frame:GetScript('OnSizeChanged')({bar}.frame, 120)"
-    )
-    wow.advance(0.01)
+    assert wow.eval(f"{bar}.laidOutAt") == wow.eval(f"{host}:GetWidth()") < wide
+    wow.execute(f"{MOD}.win.frame:SetWidth(330); {MOD}.win.opts.onResize({MOD}.win, false)")
     wow.run_frames(3)
-    assert wow.eval(f"{bar}:Height()") > 30  # more lines at 120 px
-    assert wow.eval(f"{MOD}.tree.chips:GetHeight()") == wow.eval(f"{bar}:Height()")
+    assert wow.eval(f"{bar}:Height()") > one_line  # more lines at 318 px
+    assert wow.eval(f"{host}:GetHeight()") == wow.eval(f"{bar}:Height()")
+    # the tree's own chips row keeps no room for a bar that stands elsewhere
+    assert wow.eval(f"{MOD}.tree.chips:GetHeight()") == 1
     assert wow.errors == []
 
 
@@ -40,11 +39,14 @@ def test_the_mobs_search_finds_mobs_only(wow: WowRuntime):
     word = flat(wow)[0].split(" ")[0].lower()  # the first mob's first word
     wow.execute(f"{MOD}.search:SetText({word!r})")
     wow.run_frames(30)
+    assert wow.eval(f"{BR}.HomeType()") is None  # the search is global
+    wow.execute(f"{BR}.Navigate({{ kind = 'list', type = 'mob' }})")  # the Mobs tab narrows it
+    wow.run_frames(30)
     wow.advance(0.5)
     wow.run_frames(30)
     rows = flat(wow)
     assert rows and all(word in r.lower() for r in rows), (word, rows)
-    assert wow.eval(f"{BR}.HomeType()") == "npc"
+    assert wow.eval(f"{BR}.HomeType()") == "mob"
     # the NPCs with a service stay out: the keep rule of the Mobs list
     d = "Bastians:GetService('data')"
     refs = [r.ref for r in wow.eval(f"{MOD}.tree.flat").values() if r.ref]

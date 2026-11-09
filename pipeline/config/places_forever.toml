@@ -359,9 +359,47 @@ level = 51
 src = "client trigger 4055"
 verified = ""
 
-# Open (not in any source we use): the instances Forever added (The Searing Basin, Demon
-# Fall Canyon, Karazhan Crypts, Scarlet Enclave, ... in Map.db2) and the later expansions'
-# instances on retail; added when measured in game.
+# The dungeons Forever added whose door ForeverDB's players saw (Dungeons.lua `ent`, 06.11.2026);
+# the height is unknown, the level its `lv`
+[[entrance]]
+id = "2959-1"
+instance = 2959
+name = "City of Dalaran"
+place = [0, 375.9, 526.8]
+level = 28
+src = "ForeverDB ent"
+verified = ""
+
+[[entrance]]
+id = "2998-1"
+instance = 2998
+name = "Excavation Site: Wetlands"
+place = [0, -4171.0, -1402.8]
+level = 26
+src = "ForeverDB ent"
+verified = ""
+
+[[entrance]]
+id = "2999-1"
+instance = 2999
+name = "Ruins of Lordaeron"
+place = [0, 1804.1, 173.0]
+level = 15
+src = "ForeverDB ent"
+verified = ""
+
+[[entrance]]
+id = "3065-1"
+instance = 3065
+name = "The Hall of Thanes"
+place = [0, -4839.9, -1323.2]
+level = 13
+src = "ForeverDB ent"
+verified = ""
+
+# Open (not in any source we use): the door of the other instances Forever added (The Searing
+# Basin, Demon Fall Canyon, Karazhan Crypts, Scarlet Enclave, ... in Map.db2) and the later
+# expansions' instances on retail; added when measured in game.
 
 # ============================================================================================
 # Transports (moved here from transports_forever.toml on 25.10.2026, ADR 0026 W4)
@@ -389,7 +427,9 @@ verified = ""
 # "Transport, Booty Bay - Ratchet", "Transport, Orgrimmar Zepplins", "Transport, Grom'gol - Orgrimmar",
 # "Transport, Feathermoon - Feralas", "Southshore Ferry, Hillsbrad", "Fishing Village, Teldrassil",
 # "Powderfuse Port, Riverglades", "Tidegear Coast, Dun Morogh". The last five are new in Forever and
-# have no row yet: measure them in game (B9.1 owner check) and add them here.
+# had no row: 06.11.2026 the routes ForeverDB knows are below, still to measure in game (B9.1 owner
+# check). ForeverDB has no route for "Fishing Village, Teldrassil" or "Tidegear Coast, Dun Morogh";
+# Tidegear Coast is a flight master in its Data/Travel.lua (node 3205).
 
 [[transport]]
 id = "boat-menethil-auberdine"
@@ -508,6 +548,97 @@ departs = [60, 215.978]
 dock = 60
 verified = false
 note = "Loop and departures from NauticusClassic (MIT, its transport 3, measured on Classic); dock positions estimates until measured on Forever."
+
+# The routes Forever added and the two Classic ones missing above (06.11.2026). Stops, ride and wait
+# from ForeverDB's Data/RouteMaps.lua `routeLinks` (GPL-3.0, its src "client"); `cycle` is twice its
+# wait, the wait being half a loop on a two-stop shuttle: assumed. Its figures run shorter than
+# Nauticus's where both exist (Menethil - Auberdine: ride 70 against 87.8, wait 130 against 148).
+# the first stops: Dalaran's skyboat (ForeverDB called it the
+# Silverpine airship; it lies 80 yards from QuestieDB's Skyborne portal in Dalaran, and the client
+# has the maps "Dalaran Skycuter" and "Mulgore Skycuter"). The notes give the skyboat to the
+# Alliance and the skycutter to the Horde; ForeverDB marks both for both sides, kept until measured.
+
+[[transport]]
+id = "zeppelin-zephras-dalaran"
+kind = "zeppelin"
+name = "Dalaran - Valanaar skyboat"
+faction = "both"
+stops = [[1421, 0.7205, 0.4051, "Dalaran, north side, the skyboat"], [2521, 0.6575, 0.8356, "Valanaar Skydocks"]]
+ride = 108
+cycle = 336
+dock = 60
+verified = false
+note = "From ForeverDB's route links; times are estimates until measured on Forever."
+
+[[transport]]
+id = "zeppelin-zephras-thunderbluff"
+kind = "zeppelin"
+name = "Skywatcher Plateau - Valanaar skycutter"
+faction = "both"
+stops = [[1412, 0.3427, 0.2582, "Skywatcher Plateau, north-west of Thunder Bluff"], [2521, 0.5785, 0.7975, "Valanaar Skydocks"]]
+ride = 102
+cycle = 324
+dock = 60
+verified = false
+note = "From ForeverDB's route links; times are estimates until measured on Forever."
+
+[[transport]]
+id = "portal-stormwind-valanaar"
+kind = "portal"
+name = "Stormwind - Valanaar portal"
+faction = "Alliance"
+stops = [[1453, 0.503, 0.862, "Wizard's Sanctum, top floor"], [2521, 0.6337, 0.7741, "Valanaar"]]
+ride = 3
+verified = false
+note = ", not measured. In Stormwind at Larimaine Purdue, the portal trainer ForeverDB saw in Forever; in Valanaar the middle of the town, the landing is unknown."
+
+[[transport]]
+id = "boat-riverglades-tanaris"
+kind = "boat"
+name = "Riverglades - Tanaris"
+faction = "both"
+stops = [[2548, 0.806, 0.5461, "Riverglades dock"], [1446, 0.6858, 0.2299, "Tanaris dock"]]
+ride = 56
+cycle = 232
+dock = 60
+verified = false
+note = "From ForeverDB's route links; times are estimates until measured on Forever."
+
+[[transport]]
+id = "boat-auberdine-southshore"
+kind = "boat"
+name = "Auberdine - Southshore"
+faction = "both"
+stops = [[1439, 0.3233, 0.4416, "Auberdine dock"], [1424, 0.5068, 0.7045, "Southshore dock"]]
+ride = 156
+cycle = 432
+dock = 60
+verified = false
+note = "From ForeverDB's route links; times are estimates until measured on Forever."
+
+[[transport]]
+id = "boat-stormwind-auberdine"
+kind = "boat"
+name = "Stormwind Harbor - Auberdine"
+faction = "Alliance"
+stops = [[1453, 0.2175, 0.5691, "Stormwind Harbor"], [1439, 0.3052, 0.4086, "Auberdine dock"]]
+ride = 51
+cycle = 222
+dock = 60
+verified = false
+note = "From ForeverDB's route links; times are estimates until measured on Forever."
+
+[[transport]]
+id = "boat-feathermoon"
+kind = "boat"
+name = "Feathermoon Stronghold ferry"
+faction = "Alliance"
+stops = [[1444, 0.3104, 0.3963, "Feathermoon Stronghold dock"], [1444, 0.4312, 0.4274, "Feralas coast dock"]]
+ride = 80
+cycle = 280
+dock = 60
+verified = false
+note = "From ForeverDB's route links; times are estimates until measured on Forever."
 
 # Teleports a character may have (route.md "Home and every way back", R26.7, 26.10.2026). `place`
 # from CMaNGOS spell_target_position (the classic DB) unless the note says otherwise; `verified`

@@ -3,6 +3,7 @@ Quests logic (start and turn-in map, followers, chain components). Pure over the
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterable
 
 from bastians_build import book, market, mill
@@ -224,12 +225,28 @@ def area_to_map(world: World) -> dict[object, list[int]]:
     return {area: ui_map for area, ui_map in sorted(world.area_to_map.items()) if ui_map}
 
 
+LOOSE_VEIN = re.compile(r" (Vein|Deposit)$")
+
+
+def node_objects(world: World) -> dict[object, str]:
+    """Game object id -> "herb" or "mine": what the minimap's tracking may name (Tracked.lua). The
+    objects of the gather kinds, and the veins no kind lists (Ooze Covered ..., Incendicite, Lesser
+    Bloodstone, Indurium, Hakkari Thorium; measured 05.11.2026). By id, because the client names
+    them in its language and the text packs translate objects, not nodes."""
+    out = dict(world.gather_objects)
+    for object_id, rec in world.records.get("object", {}).items():
+        if object_id not in out and LOOSE_VEIN.search(rec.get("name") or ""):
+            out[object_id] = "mine"
+    return dict(sorted(out.items()))
+
+
 BUILDERS: dict[str, Callable[[World], Index]] = {
     "area.toMap": area_to_map,
     "npc.byZone": lambda w: by_zone(w, "npc"),
     "npc.bySoldItem": npcs_by_sold_item,
     "object.byZone": lambda w: by_zone(w, "object"),
     "node.byZone": lambda w: by_zone(w, "node"),
+    "node.objects": node_objects,
     "entrance.byZone": lambda w: by_zone(w, "entrance"),
     "entrance.byInstance": entrances_by_instance,
     "quest.byDungeon": quests_by_dungeon,

@@ -10,12 +10,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 63778355483733
-stamp = "half"
 why = "A vendor pays 8s 25c a plume, not quite ten. The harpies drop one in about seven kills."
 
 [[rumours]]
 claim = 29614208593364
-stamp = "true"
 why = "The loot tables give Silk Cloth in one harpy kill out of four."
 
 [[rumours]]
@@ -23,12 +21,10 @@ claim = 125974725827568
 
 [[rumours]]
 claim = 186797016117903
-stamp = "open"
 why = "Our data has no coin ranges, so we can't check it."
 
 [[rumours]]
 claim = 14851988811196
-stamp = "lies"
 why = "Harpies drop Light Feather in 29 % of kills. The Cloud Serpents of the same zone drop it in 52 to 62 %."
 
 [plate]

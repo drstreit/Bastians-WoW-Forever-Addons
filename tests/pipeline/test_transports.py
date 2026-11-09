@@ -13,6 +13,18 @@ from bastians_build.transports import TransportError, add_transports, read_trans
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_the_skyboats_reach_zephras_isle_from_both_continents():
+    # the island's frame from UiMapAssignment 69208 (client dump, build 1.60.1.70790)
+    island = Transform(2521, 2991, 4956.25, 0.0, -3708.333, 4231.25, -5562.5, 0.0, True)
+    rows = {r["id"]: r for r in read_transports(CONFIG_DIR / "places_forever.toml")}
+    for route in ("zeppelin-zephras-dalaran", "zeppelin-zephras-thunderbluff"):
+        stop = rows[route]["stops"][1]
+        continent, wx, wy = stop_world({2521: island}, stop)
+        assert continent == 2991
+        assert 1800 < wx < 2050 and 550 < wy < 1050  # the Valanaar side of the island
+        assert rows[route]["faction"] == "both" and rows[route]["cycle"] > 2 * rows[route]["ride"]
+
+
 def test_forever_table_is_valid_and_covers_both_continents():
     rows = read_transports(CONFIG_DIR / "places_forever.toml")
     ids = {r["id"] for r in rows}

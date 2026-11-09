@@ -720,3 +720,97 @@ def test_the_button_box_filters_by_name_as_you_type(wow: WowRuntime):
     wow.execute(f"{win}.filter:SetText(''); {win}.filter:GetScript('OnTextChanged')({win}.filter)")
     assert wow.eval(f"{MB}.rows") == 4 and wow.eval("LibDBIcon10_Addon7:IsShown()") is True
     assert wow.errors == []
+
+
+def test_the_grounds_menu_says_show_on_map_once(wow: WowRuntime):
+    """the menu of a point on the ground listed "Show on map" twice (the
+    point's and the zone's). With a point only map.show offers it; a zone without one keeps
+    map.zone."""
+    boot(wow)
+    point = "{ point = { 0, -9000, 400, 'x' } }"
+    ids = [a.id for a in wow.eval(f"Bastians:GetActions('zone:1429', {point})").values()]
+    labels = [a.label for a in wow.eval(f"Bastians:GetActions('zone:1429', {point})").values()]
+    assert labels.count("Show on map") == 1 and "map.show" in ids and "map.zone" not in ids
+    ids = [a.id for a in wow.eval("Bastians:GetActions('zone:1429', {})").values()]
+    assert "map.zone" in ids
+    assert wow.errors == []
+
+
+def physical(wow: WowRuntime) -> WowRuntime:
+    boot(wow)
+    wow.execute(f"{MOD}.db.profile.miniWarned = true; {MINI}.SetStyle('physical')")
+    wow.run_frames(2)
+    return wow
+
+
+def ticking(wow: WowRuntime) -> bool:
+    return wow.eval("BastiansMiniMap:GetScript('OnUpdate')") is not None
+
+
+def test_a_player_moved_without_a_movement_event_is_followed(wow: WowRuntime):
+    """ "the minimap sometimes does not move with the character" (ADR 0066)."""
+    physical(wow)
+    wow.advance(1.1)  # the first look notes where the player is
+    assert ticking(wow) is False  # standing: nothing runs
+    before = wow.eval(f"{MINI}.Camera().wx"), wow.eval(f"{MINI}.Camera().wy")
+    wow.execute("Mock.playerMapPos.x = Mock.playerMapPos.x + 0.01")  # a boat: no event
+    wow.advance(1.1)
+    assert ticking(wow) is True
+    wow.run_frames(20)  # a tick and a little more: the player still moved since the look? no more
+    cam = wow.eval(f"{MINI}.Camera()")
+    assert (cam.wx, cam.wy) != before
+    wow.run_frames(20)
+    assert ticking(wow) is False  # the boat stopped: nothing runs again
+    assert wow.errors == []
+
+
+def test_a_zoom_during_a_walk_does_not_let_go_of_the_player(wow: WowRuntime):
+    physical(wow)
+    wow.fire("PLAYER_STARTED_MOVING")
+    wow.run_frames(2)
+    wow.execute(f"{MINI}.Zoom(1)")  # the mock's cursor is off the centre: a zoom at the cursor
+    wow.run_frames(2)
+    assert wow.eval(f"{MINI}.Following()") is True
+    wow.fire("PLAYER_STOPPED_MOVING")
+    wow.run_frames(2)
+    wow.execute(f"{MINI}.Zoom(1)")
+    wow.run_frames(2)
+    assert wow.eval(f"{MINI}.Following()") is False  # standing still keeps the look
+    assert wow.errors == []
+
+
+def test_shown_during_a_walk_the_view_follows_at_once(wow: WowRuntime):
+    physical(wow)
+    wow.fire("PLAYER_STARTED_MOVING")
+    wow.run_frames(2)
+    wow.execute("BastiansMiniMap:Hide()")
+    assert ticking(wow) is False
+    wow.execute("BastiansMiniMap:Show()")
+    assert ticking(wow) is True
+    wow.fire("PLAYER_STOPPED_MOVING")
+    wow.run_frames(2)
+    assert ticking(wow) is False
+    assert wow.errors == []
+
+
+def test_the_look_stops_with_the_minimap(wow: WowRuntime):
+    physical(wow)
+    wow.execute("BastiansMiniMap:Hide()")
+    wow.execute("Mock.playerMapPos.x = Mock.playerMapPos.x + 0.01")
+    wow.advance(2.5)
+    assert ticking(wow) is False
+    assert wow.errors == []
+
+
+def test_the_look_runs_only_with_a_map_style_shown(wow: WowRuntime):
+    boot(wow)
+    assert wow.eval("Mock.ActiveTimers(true)") == 0  # the game's own minimap follows by itself
+    wow.execute(f"{MOD}.db.profile.miniWarned = true; {MINI}.SetStyle('physical')")
+    assert wow.eval("Mock.ActiveTimers(true)") == 1
+    wow.execute("BastiansMiniMap:Hide()")
+    assert wow.eval("Mock.ActiveTimers(true)") == 0
+    wow.execute("BastiansMiniMap:Show()")
+    assert wow.eval("Mock.ActiveTimers(true)") == 1
+    wow.execute(f"{MINI}.SetStyle('game')")
+    assert wow.eval("Mock.ActiveTimers(true)") == 0
+    assert wow.errors == []

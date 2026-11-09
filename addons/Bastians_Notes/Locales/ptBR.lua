@@ -92,4 +92,8 @@ ns.L:Register("ptBR", {
   ["Near here:"] = "Perto daqui:",
   ["No notes near here."] = "Não há notas perto daqui.",
   ["and %d more"] = "e mais %d",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "Sobre",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "Ainda não há notas. Adicionar nota em uma página escreve a primeira.",
 })

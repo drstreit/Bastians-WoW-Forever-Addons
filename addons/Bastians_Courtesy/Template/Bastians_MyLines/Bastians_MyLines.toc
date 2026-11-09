@@ -1,0 +1,8 @@
+## Interface: 16001, 120105
+## Title: Bastian's My Lines
+## Notes: Your own lines for Bastian's Courtesy. Updates of the suite never touch this folder.
+## Category: Bastian's Suite
+## Version: 1.0.0
+## Dependencies: Bastians_Core
+
+MyLines.lua

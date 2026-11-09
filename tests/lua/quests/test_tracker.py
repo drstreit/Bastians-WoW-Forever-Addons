@@ -96,31 +96,29 @@ def test_objective_rows_and_the_quest_row_carry_the_progress_colour(wow: WowRunt
     open_log(wow)
     texts = raw(wow)
     quest = next(t for t in texts if "[11] The Fargodeep Mine" in strip(t))
-    assert "|cffffaa151/3|r" in quest  # one of three objectives done: orange-red
-    kobolds = next(t for t in texts if "Kobolds slain" in t)
-    assert kobolds.count("|cffffe000") == 2  # the words and the count, half way: yellow
-    candles = next(t for t in texts if "Candles taken" in t)
-    assert "|cff40c040Candles taken|r" in candles and "|cff40c0403/3|r" in candles
-    explore = next(t for t in texts if "Explore the mine" in t)
-    assert explore == "|cffffffffExplore the mine|r"  # no count: white, no progress fragment
+    # every objective shows, its count in colour: half way is
+    # yellow, a finished one green, one without a count in plain words
+    assert "|cffffe0002/4|r" in quest and "Kobolds slain" in quest
+    assert "|cff40c0403/3|r" in quest and "Candles taken" in quest
+    assert "Explore the mine" in quest and "+" not in strip(quest)
     assert wow.errors == []
 
 
 def test_hide_done_hides_the_complete_quests_on_the_toolbar_and_in_the_hub(wow: WowRuntime):
     boot(wow)
     open_log(wow)
-    assert flat(wow)[0] == "HAND IN HERE  1"
+    assert flat(wow)[0] == "HAND IN, THIS ZONE  1"
     assert wow.eval(f"{MOD}.db.profile.logHideDone") is False
     wow.execute(f"{WIN}.bar.byId.logHideDone:Click()")
     wow.run_frames(5)
     assert wow.eval(f"{MOD}.db.profile.logHideDone") is True
-    assert "HAND IN HERE  1" not in flat(wow) and "OBJECTIVES HERE  1" in flat(wow)
+    assert "HAND IN, THIS ZONE  1" not in flat(wow) and "IN PROGRESS  1" in flat(wow)
     assert summary(wow) == "2 in the log - 0 to hand in - 1 objectives here - 1 hidden"
     # the hub's toggle is the same flag: the window follows a setting change
     wow.execute(f"{MOD}.db.profile.logHideDone = false")
     wow.execute("Bastians:Fire('BASTIANS_SETTING_CHANGED', 'Quests', 'logHideDone', false)")
     settle(wow)
-    assert flat(wow)[0] == "HAND IN HERE  1"
+    assert flat(wow)[0] == "HAND IN, THIS ZONE  1"
     # everything complete and hidden: the view says why instead of showing nothing
     wow.execute("Mock.questLog[2].complete = true")
     wow.fire("QUEST_LOG_UPDATE")
@@ -142,14 +140,14 @@ def test_tracked_only_follows_the_objective_tracker(wow: WowRuntime):
     # a Track action re-renders the view through BASTIANS_TRACKED_CHANGED
     wow.execute("Bastians:RunAction('quests.track', 'quest:176', { source = 'test' })")
     settle(wow)
-    assert flat(wow)[0] == "OBJECTIVES HERE  1" and "HAND IN HERE  1" not in flat(wow)
+    assert flat(wow)[0] == "IN PROGRESS  1" and "HAND IN, THIS ZONE  1" not in flat(wow)
     assert summary(wow).endswith("1 hidden")
     wow.execute("Bastians:RunAction('quests.untrack', 'quest:176', { source = 'test' })")
     settle(wow)
     assert flat(wow) == ["No tracked quest: track one from its row, or switch Tracked off."]
     wow.execute(f"{WIN}.bar.byId.logTrackedOnly:Click()")
     wow.run_frames(5)
-    assert flat(wow)[0] == "HAND IN HERE  1"
+    assert flat(wow)[0] == "HAND IN, THIS ZONE  1"
     assert wow.errors == []
 
 
@@ -165,8 +163,8 @@ def test_the_here_column_honours_the_tracker_filters(wow: WowRuntime):
     settle(wow)
     rows = block_rows(wow, HD, "My quests here  1")
     assert len(rows) == 1 and "Fargodeep Mine II" not in rows[0]
-    # the toggles sit on the tracker's toolbar in the Browser too (slim mode)
-    wow.execute(f"{BMOD}.Browser.SetSlim(true)")
+    # the toggles sit on the log view's bar in the Browser too
+    wow.execute(f"{BMOD}.Browser.ShowView('quests.log')")
     wow.run_frames(5)
     assert wow.eval(f"{BMOD}.controlBar.byId.logHideDone:IsShown()") is True
     assert wow.eval(f"{BMOD}.controlBar.byId.logTrackedOnly:IsShown()") is True
@@ -376,16 +374,17 @@ def test_the_tracker_frame_shows_the_log_under_the_minimap_and_replaces_the_game
 
 
 def test_the_game_tracker_comes_back_when_the_last_claim_goes(wow: WowRuntime):
-    """The Companion's slim mode and the tracker frame both claim the game's tracker (Core): it
-    returns only when neither needs it."""
+    """Whoever replaces the game's tracker claims it through Core: it returns only when no
+    claim is left. (The Browser's slim mode was the second claimant until ADR 0056; another
+    window's claim stands in for it here.)"""
     boot_tracker(wow, CORE, DATA, QUESTS, BROWSER)
     assert wow.eval(f"{GAME}:IsShown()") is False  # the tracker frame's claim
     wow.slash("/bq")
-    wow.execute(f"{BMOD}.Browser.SetSlim(true)")
+    wow.execute("Bastians.UI.ClaimGameTracker('another-window', true)")
     assert wow.eval(f"{GAME}:IsShown()") is False
     wow.execute(f"{TRACKER}.Hide()")
-    assert wow.eval(f"{GAME}:IsShown()") is False  # slim still claims it
-    wow.execute(f"{BMOD}.Browser.SetSlim(false)")
+    assert wow.eval(f"{GAME}:IsShown()") is False  # the other claim still stands
+    wow.execute("Bastians.UI.ClaimGameTracker('another-window', false)")
     assert wow.eval(f"{GAME}:IsShown()") is True
     assert wow.eval("Bastians.UI.GameTrackerHidden()") is False
     assert wow.errors == []

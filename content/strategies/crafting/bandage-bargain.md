@@ -9,22 +9,18 @@ updated = "2026-10-24"
 
 [[rumours]]
 claim = 214701097011033
-stamp = "half"
 why = "True for Mageweave and Silk. Linen and Wool bandages fetch less than their cloth."
 
 [[rumours]]
 claim = 74994738448601
-stamp = "true"
 why = "Both vendor prices match the item data."
 
 [[rumours]]
 claim = 160453389578959
-stamp = "true"
 why = "It works whenever the cloth costs less than the bandage pays."
 
 [[rumours]]
 claim = 209406339947168
-stamp = "true"
 why = "Simple arithmetic: buying costs no deposit and no cut."
 
 [plate]

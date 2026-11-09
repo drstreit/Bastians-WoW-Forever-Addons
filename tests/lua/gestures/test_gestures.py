@@ -1,6 +1,6 @@
 """Bastian's Gestures (gestures.md, plan-launch-review R5.1 and R5.2): the model (placeholders,
-the split, the wedge under the cursor, the courtesy decision), the ring on the key (a gesture, a
-line with its language, a sub-ring, a dimmed action), courtesy in its three modes, the editor,
+the split, the wedge under the cursor), the ring on the key (a gesture, a
+line with its language, a sub-ring, a dimmed action), the editor,
 and life with the clear-screen key."""
 
 from harness import WowRuntime
@@ -16,7 +16,6 @@ VOICE, MAP, ROUTE, NOTES, QUESTS = (
 MOD = "Bastians:GetModule('Gestures')"
 M = f"{MOD}.Model"
 R = f"{MOD}.Ring"
-C = f"{MOD}.Courtesy"
 E = f"{MOD}.Editor"
 KIT = "Bastians.UI.Ring"
 
@@ -89,36 +88,6 @@ def test_the_model_fills_splits_and_finds_the_wedge(wow: WowRuntime):
     assert wow.eval(f"{hov}(0, 10, 8, 38, 126)") is None
     assert wow.eval(f"{hov}(0, 200, 8, 38, 126)") is None
     assert wow.eval(f"{KIT}.Hovered(-57, 57, 8, 38, 126)") == 8
-    # the courtesy decision: once per person in ten minutes, never in combat, instances by choice
-    wow.execute("ST = { seen = {} }")
-    ask = f"{M}.Courtesy({{ kind = 'buff', who = 'Thalendra' }}, ST, %d, {{ mode = 'ask' }})"
-    assert wow.eval(ask % 100) == "ask"
-    assert wow.eval(ask % 200) is None
-    assert wow.eval(ask % 800) == "ask"
-    assert (
-        wow.eval(f"{M}.Courtesy({{ kind = 'buff', who = 'X' }}, ST, 1, {{ mode = 'off' }})") is None
-    )
-    assert (
-        wow.eval(
-            f"{M}.Courtesy({{ kind = 'buff', who = 'Y' }}, ST, 1, {{ mode = 'auto', inCombat = true }})"
-        )
-        is None
-    )
-    assert (
-        wow.eval(
-            f"{M}.Courtesy({{ kind = 'buff', who = 'Y' }}, ST, 1, {{ mode = 'auto', inInstance = true }})"
-        )
-        is None
-    )
-    assert (
-        wow.eval(
-            f"{M}.Courtesy({{ kind = 'buff', who = 'Y' }}, ST, 1, "
-            "{ mode = 'auto', inInstance = true, instances = true })"
-        )
-        == "auto"
-    )
-    assert wow.eval(f"{M}.AimedAtMe('Grimtok waves at you.')") is True
-    assert wow.eval(f"{M}.AimedAtMe('Grimtok waves at Bob.')") is False
     assert len(wow.eval(f"{M}.FindEmotes('wa')")) >= 2  # Wave, Wait, ...
     assert errors(wow) == []
 
@@ -254,6 +223,9 @@ def test_the_wheel_cycles_the_rings_and_a_wedge_opens_its_sub_ring(wow: WowRunti
     assert wow.eval(f"{R}.IsOpen()") is True
     wow.execute(f"{R}.kit.wedges[1]:Click()")
     assert emotes(wow)[-1] == ("WAVE", None)
+    assert wow.eval(f"{R}.IsOpen()") is True  # it stays until the key is pressed again
+    wow.execute(f"{R}.Key('down')")
+    assert wow.eval(f"{R}.IsOpen()") is False
     assert errors(wow) == []
 
 
@@ -289,87 +261,6 @@ def buff(wow: WowRuntime, unit: str, name: str, spell: str = "Mark of the Wild")
         Mock.Fire('UNIT_AURA', 'player', {{ addedAuras = {{ {{ sourceUnit = '{unit}', isHelpful = true,
           name = '{spell}' }} }} }})"""
     )
-
-
-def test_courtesy_asks_once_per_person_and_answers(wow: WowRuntime):
-    boot(wow)
-    buff(wow, "nameplate3", "Thalendra")
-    assert wow.eval(f"{C}.IsShown()") is True
-    assert wow.eval(f"{C}.Pending().who") == "Thalendra"
-    assert (
-        wow.eval("BastiansGesturesCourtesy.who:GetText()")
-        == "Thalendra cast Mark of the Wild on you"
-    )
-    # the thank emote at them
-    wow.execute("BastiansGesturesCourtesy.emote:Click()")
-    assert emotes(wow) == [("THANK", "nameplate3")]
-    assert wow.eval(f"{C}.IsShown()") is False
-    # the same person again within ten minutes: nothing
-    buff(wow, "nameplate3", "Thalendra")
-    assert wow.eval(f"{C}.IsShown()") is False
-    # another person: the bubble, a thank-you line this time, filled with the name
-    buff(wow, "nameplate4", "Grimtok", "Power Word: Fortitude")
-    assert wow.eval(f"{C}.IsShown()") is True
-    wow.execute("BastiansGesturesCourtesy.line:Click()")
-    assert len(sent(wow)) == 1 and "Grimtok" in sent(wow)[0][0] and sent(wow)[0][1] == "SAY"
-    # Not now and the eight seconds
-    buff(wow, "nameplate5", "Aquinne")
-    wow.execute("BastiansGesturesCourtesy.no:Click()")
-    assert wow.eval(f"{C}.IsShown()") is False and len(emotes(wow)) == 1
-    buff(wow, "nameplate6", "Bob")
-    wow.advance(9)
-    wow.run_frames(2)
-    assert wow.eval(f"{C}.IsShown()") is False
-    # my own buff and a group member's: nothing
-    wow.execute("Mock.groupUnits = { party1 = true }; Mock.groupSize = 2")
-    buff(wow, "party1", "Friend")
-    wow.execute(
-        "Mock.Fire('UNIT_AURA', 'player', { addedAuras = { { sourceUnit = 'player', isHelpful = true } } })"
-    )
-    assert wow.eval(f"{C}.IsShown()") is False
-    # a resurrection and an emote aimed at me ask too; one aimed at someone else does not
-    wow.execute("Mock.Fire('RESURRECT_REQUEST', 'Sister Aquinne')")
-    assert wow.eval(f"{C}.Pending().kind") == "rez"
-    wow.execute(f"{C}.Hide()")
-    wow.execute("Mock.Fire('CHAT_MSG_TEXT_EMOTE', 'Grimtok waves at you.', 'Grimtok-Realm')")
-    assert wow.eval(f"{C}.IsShown()") is False  # Grimtok was answered ten minutes ago: not yet
-    wow.execute("Mock.Fire('CHAT_MSG_TEXT_EMOTE', 'Zug bows before you.', 'Zug-Realm')")
-    assert wow.eval(f"{C}.Pending().who") == "Zug"
-    wow.execute("BastiansGesturesCourtesy.emote:Click()")
-    assert emotes(wow)[-1][0] == "WAVE"
-    wow.execute("Mock.Fire('CHAT_MSG_TEXT_EMOTE', 'Zug waves at Bob.', 'Zug-Realm')")
-    assert wow.eval(f"{C}.IsShown()") is False
-    assert errors(wow) == []
-
-
-def test_courtesy_automatic_off_and_in_combat(wow: WowRuntime):
-    boot(wow)
-    wow.execute(f"{MOD}.db.profile.courtesy = 'auto'")
-    buff(wow, "nameplate3", "Thalendra")
-    assert wow.eval(f"{C}.IsShown()") is False
-    assert len(emotes(wow)) + len(sent(wow)) == 1  # one answer, an emote or a line
-    if sent(wow):
-        assert "Thalendra" in sent(wow)[0][0]
-    # in combat nothing; off nothing
-    wow.execute("Mock.SetCombat(true)")
-    buff(wow, "nameplate4", "Grimtok")
-    assert len(emotes(wow)) + len(sent(wow)) == 1
-    wow.execute("Mock.SetCombat(false)")
-    wow.execute(f"{MOD}.db.profile.courtesy = 'off'")
-    buff(wow, "nameplate5", "Aquinne")
-    assert len(emotes(wow)) + len(sent(wow)) == 1 and wow.eval(f"{C}.IsShown()") is False
-    # in an instance only with the setting
-    wow.execute(f"{MOD}.db.profile.courtesy = 'ask'; Mock.instanceType = 'party'")
-    wow.execute(
-        "local f = IsInInstance; IsInInstance = function() return true, Mock.instanceType end"
-    )
-    buff(wow, "nameplate6", "Bob")
-    assert wow.eval(f"{C}.IsShown()") is False
-    wow.execute(f"{MOD}.db.profile.courtesyInstances = true")
-    buff(wow, "nameplate7", "Carl")
-    assert wow.eval(f"{C}.IsShown()") is True
-    assert wow.eval(f"{C}.Remembered()") >= 1
-    assert errors(wow) == []
 
 
 def test_the_editor_changes_a_slot_and_the_change_survives_a_reload(wow: WowRuntime):

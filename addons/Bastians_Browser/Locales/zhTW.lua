@@ -63,10 +63,6 @@ ns.L:Register("zhTW", {
   ["Your bookmarks and the pages you opened last."] = "你的書籤與最近開啟的頁面。",
   ["The pages you kept with Bookmark on a page."] = "你用頁面上的「書籤」保存的頁面。",
   ["Drag to widen the Here column"] = "拖曳以加寬「此處」欄",
-  ["Slim"] = "精簡",
-  ["Slim or wide"] = "精簡或寬版",
-  ["Slim keeps only the Here column (your zone, your quests here) and hides the game's quest tracker; Wide shows the page beside it."] = "精簡模式只保留「此處」欄（你的區域、你在此處的任務）並隱藏遊戲的任務追蹤清單；寬版則在旁邊顯示頁面。",
-  ["Wide"] = "寬版",
   ["Dock"] = "停靠",
   ["Dock to the map"] = "停靠到地圖",
   ["The window sits beside the map at its height and moves with it. Click again to undock."] = "視窗會以相同高度停靠在地圖旁並隨之移動。再次點擊可取消停靠。",
@@ -74,19 +70,17 @@ ns.L:Register("zhTW", {
   -- settings, tooltip hint
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "在列上顯示任務與物品的價值（獎勵、價格）",
   ["Follow the target: an NPC or object you target becomes the subject"] = "跟隨目標：你選取的 NPC 或世界物件會成為主題",
-  ["Hide the game's objective tracker in slim mode"] = "在精簡模式下隱藏遊戲的任務目標追蹤清單",
   ["Preview a row in the page pane"] = "在頁面窗格中預覽一行",
   ["While Shift is held"] = "按住 Shift 時",
   ["On every hover"] = "每次懸停時",
   ["Never"] = "從不",
   ["Open in Browser"] = "在瀏覽器中開啟",
-  ["Right click: open in the Browser"] = "右鍵點擊：在瀏覽器中開啟",
+  ["%s: open in the Browser"] = "%s：在瀏覽器中開啟",
+  ["Open what is under the mouse in the Browser"] = "在瀏覽器中開啟滑鼠下的對象",
 
   -- list types (Browser.LISTS and registered lists)
-  ["NPCs"] = "NPC",
   ["Items"] = "物品",
   ["Objects"] = "世界物件",
-  ["Nodes"] = "採集點",
   ["Zones"] = "區域",
   ["Recipes"] = "配方",
   ["Quests"] = "任務",
@@ -94,7 +88,6 @@ ns.L:Register("zhTW", {
   ["Dungeon"] = "地城",
   ["Raid"] = "團隊副本",
   ["Farm spots"] = "打怪點",
-  ["Quest chains"] = "任務鏈",
 
   -- dimension titles and their values
   ["Service"] = "服務",
@@ -208,9 +201,6 @@ ns.L:Register("zhTW", {
   ["First Aid"] = "急救",
 
   -- spot statuses
-  ["Verified"] = "已驗證",
-  ["Unverified"] = "未驗證",
-  ["Refuted"] = "已推翻",
 
   -- sort labels registered by the apps (the Browser translates them once more)
   ["Loot per kill"] = "每次擊殺的戰利品",
@@ -241,18 +231,62 @@ ns.L:Register("zhTW", {
   ["Here, your quests, the lists, bookmarks and recent pages."] = "此處、你的任務、列表、書籤與最近的頁面。",
   ["Search: a name, or a type first (npc wel)"] = "搜尋：名稱，或先輸入類型（npc wel）",
   ["Drag to widen the list or the page"] = "拖曳以加寬列表或頁面",
-  ["Slim keeps only your quests (the tracker) in a narrow window and hides the game's quest tracker; Wide brings the lists and the page back."] = "精簡模式只在狹窄的視窗中保留你的任務（追蹤清單）並隱藏遊戲的任務追蹤清單；寬版則恢復列表與頁面。",
   ["Copy Wowhead link"] = "複製 Wowhead 連結",
   ["Wowhead"] = "Wowhead",
   ["The link is in the chat input: copy it with Ctrl+C."] = "連結已在聊天輸入框中：請用 Ctrl+C 複製。",
   ["Slide the list in"] = "滑入列表",
   ["Slide the list out"] = "滑出列表",
   -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
-  ["Mobs"] = "怪物",
   ["Filter"] = "篩選",
+  ["Filter this page"] = "篩選本頁",
   -- the search syntax (ADR 0045)
   ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
   -- the broker displays' feed (ADR 0043, 31.10.2026)
   ["Click: the Browser. Right click: the bookmarks."] = "點擊：瀏覽器。右鍵點擊：書籤。",
   ["Everything the suite knows: quests, NPCs, items, places."] = "套件所知的一切：任務、NPC、物品、地點。",
+  ["in %s"] = "在%s",
+  ["Everywhere"] = "所有地方",
+  ["%d more elsewhere. Click to look everywhere."] = "其他地方還有 %d 個。點擊在所有地方尋找。",
+  ["%d in the other lists. Click to look in all."] = "其他清單中有 %d 個。點擊在全部清單中尋找。",
+  ["The search failed. See /bastians log."] = "搜尋失敗。請查看 /bastians log。",
+  ["Where the search looks: in your zone, on your continent, or everywhere."] = "搜尋範圍：你所在的區域、你所在的大陸，或所有地方。",
+  ["Look everywhere"] = "在所有地方尋找",
+  -- Browser.lua: a list grouped by one of its dimensions (PA5.4)
+  ["Zone"] = "區域",
+  ["The rows under a heading: what they are grouped by."] = "標題下的列：依什麼分組。",
+  -- Browser.lua: the lists by the model's words (ADR 0056, PA2.3)
+  ["People"] = "居民",
+  ["Monsters"] = "怪物",
+  ["Gathering"] = "採集",
+  ["Chains"] = "任務鏈",
+  -- Browser.lua:
+  ["All Notes"] = "全部筆記",
+  ["Gold Stories"] = "金幣故事",
+  ["Chapter"] = "章節",
+  ["Map style of the mini maps"] = "小地圖的地圖樣式",
+  ["As on the large map"] = "與大地圖相同",
+  ["The client's painting"] = "遊戲的繪圖",
+  -- Browser.lua: the rail, the tabs and More (ADR 0058, 07.11.2026)
+  ["%d-%d of %d"] = "%d-%d / 共 %d",
+  ["Previous page"] = "上一頁",
+  ["Next page"] = "下一頁",
+  ["Opens the search box over the title; a second click brings the title back."] = "在標題上開啟搜尋框；再次點擊恢復標題。",
+  ["World"] = "世界",
+  ["Characters"] = "角色",
+  ["Gold"] = "金幣",
+  ["More"] = "更多",
+  ["%s needs %s"] = "%s需要%s",
+  ["Settings"] = "設定",
+  ["Help"] = "說明",
+  ["What's new"] = "新功能",
+  ["About"] = "關於",
+  ["Every app, the looks, the keys."] = "每個應用程式、外觀和按鍵。",
+  ["The story, the commands, the keys."] = "故事、指令和按鍵。",
+  ["The last releases."] = "最近的版本。",
+  ["The sources and their licences."] = "來源及其授權。",
+  ["Everything else: the other apps' views, your bookmarks, the settings."] = "其他一切：其他應用程式的檢視、你的書籤、設定。",
+  -- Browser.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Lands for you"] = "適合你的地區",
+  ["at your level"] = "與你等級相符",
+  ["unknown"] = "未知",
 })

@@ -22,6 +22,11 @@ end
 
 function ns.noteError(owner, err)
   B:Log(owner, "error", "%s", tostring(err))
+  -- the player's error list too: what only stood in our log was never seen (owner, Forever
+  -- 06.11.2026: a search stuck on "Searching ..." left BugSack empty)
+  if BugGrabber and geterrorhandler then
+    pcall(geterrorhandler(), tostring(err))
+  end
   if type(owner) ~= "table" or not owner.errors then
     return
   end

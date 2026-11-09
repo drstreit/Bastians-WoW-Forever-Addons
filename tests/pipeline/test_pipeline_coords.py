@@ -3,7 +3,9 @@
 import pytest
 
 from bastians_build.coords import (
+    CAPITALS,
     best_map,
+    city_map,
     named_map,
     pct_to_fraction,
     place_world_point,
@@ -85,6 +87,26 @@ def test_place_world_point_uses_the_cmangos_map_as_continent():
     assert 0 <= spawn.x <= 1 and 0 <= spawn.y <= 1
     assert place_world_point(TABLE, 1, -10000, -1500, "classic") is None
     assert place_world_point(TABLE, 530, 0, 0, "classic") is None  # Outland: no continent mapping
+
+
+def test_a_point_inside_a_capital_belongs_to_the_city():
+    """AT7 D3: the central rule prefers the zone around a capital
+    for a point off the city's centre; with the capitals named, the city wins when its map holds
+    the point clear of the rim."""
+    # a point at (0.9, 0.9) of the city's map: off its centre, nearer the middle of the zone's
+    wx = STORMWIND.wx0 + 0.9 * STORMWIND.wx_dx + 0.9 * STORMWIND.wx_dy
+    wy = STORMWIND.wy0 + 0.9 * STORMWIND.wy_dx + 0.9 * STORMWIND.wy_dy
+    assert best_map(TABLE, 0, wx, wy)[0] == 1429
+    assert place_world_point(TABLE, 0, wx, wy, "classic").ui_map_id == 1429  # no capitals named
+    spawn = place_world_point(TABLE, 0, wx, wy, "classic", cities=CAPITALS["forever"])
+    assert (spawn.ui_map_id, spawn.x, spawn.y) == (1453, 0.9, 0.9)
+    # on the rim the central rule decides, and outside the city nothing changes
+    rim_x = STORMWIND.wx0 + 0.99 * STORMWIND.wx_dx + 0.8 * STORMWIND.wx_dy
+    rim_y = STORMWIND.wy0 + 0.99 * STORMWIND.wy_dx + 0.8 * STORMWIND.wy_dy
+    assert city_map(TABLE, CAPITALS["forever"], 0, rim_x, rim_y) is None
+    assert city_map(TABLE, CAPITALS["forever"], 0, -10000, -1500) is None
+    assert city_map(TABLE, CAPITALS["forever"], 1, wx, wy) is None  # another continent
+    assert CAPITALS.get("retail", ()) == ()  # the retail test client keeps the central rule
 
 
 def test_place_world_point_keeps_the_height():

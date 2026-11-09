@@ -19,6 +19,7 @@ local VIEWS = {
   { "log", "My quests" },
   { "all", "All quests" },
   { "attune", "Attunements" },
+  { "class", "Class quests" }, -- quests.md "Class quests" (catalog review A3.1)
 }
 W.VIEWS = VIEWS
 W.REFRESH = "BASTIANS_QUESTS_VIEWS" -- Quests' own re-render message (bags, factions, Spoken)
@@ -66,15 +67,6 @@ W.PlayerOn = playerOn
 -- ---------------------------------------------------------------------------------------------
 -- Quest text and quest item sources for the log view
 -- ---------------------------------------------------------------------------------------------
-
-local function questTextOf(qid)
-  local d = data()
-  local rec = d and d:Get("questText", qid)
-  if rec then
-    return rec.details, rec.objectives
-  end
-  return B.Compat.GetQuestText(qid)
-end
 
 local function questItemOf(entry)
   local item = B.Compat.GetQuestItem(entry.index)
@@ -228,7 +220,6 @@ function W.LogFilters()
   return {
     hideDone = p.logHideDone == true,
     trackedOnly = p.logTrackedOnly == true,
-    chainNext = mod.FollowedChains and mod.FollowedChains() or nil,
   }
 end
 
@@ -288,7 +279,7 @@ local function renderLog(host, args)
   host:SetControls(controls)
   local px, py = playerOn(map)
   local opts = W.LogFilters()
-  opts.questText, opts.questItem = questTextOf, questItemOf
+  opts.questItem, opts.onOpen = questItemOf, ns.Sheet.Toggle
   local rows, s = V.active(map, px, py, opts)
   local tales = V.tales(W.Leads(), function(tale)
     local lib = B:GetService("library")
@@ -401,6 +392,8 @@ local function distanceYards(m1, x1, y1, m2, x2, y2)
   return math.sqrt((wx1 - wx2) ^ 2 + (wy1 - wy2) ^ 2)
 end
 
+W.Yards = distanceYards
+
 -- Seconds through the travel service (Data's shim over the world graph's cache); false when the
 -- graph holds the place but has no time for it yet (an unknown leg, ranked again on
 -- BASTIANS_GRAPH_TIMES); nil without an answer (no network there, a leg that does not start at the
@@ -465,10 +458,76 @@ local function renderAttune(host)
   host:SetSummary(V.attunementSummary(s))
 end
 
+-- Class quests (quests.md "Class quests", catalog review A3.1, 07.11.2026): every quest the data
+-- restricts to classes and that this character's class and race may take, under the status headers
+-- of the shared quest rows, by level in each. The ids are built once per data generation and
+-- character in a job over every quest; a render after that draws them at once with fresh statuses
+-- (a click on a class quest emptied the list to "Building the list ..."
+-- and scanned every quest again).
+local function drawClass(host, ids)
+  local Logic = ns.Logic
+  host:SetRows(ns.Registrations.QuestRowsFor(ids, true, "class") or {})
+  if #ids == 0 then
+    local facts = B.Compat.GetPlayerFacts()
+    host:SetSummary(string.format(L["No class quests known for %s."], facts.className or facts.class or "?"))
+    return
+  end
+  local state = State.ForLogic()
+  local done = 0
+  for _, qid in ipairs(ids) do
+    if Logic.status(qid, state) == "done" then
+      done = done + 1
+    end
+  end
+  host:SetSummary(string.format(L["%d of %d class quests done"], done, #ids))
+end
+
+local function classKey()
+  local facts = B.Compat.GetPlayerFacts()
+  return tostring(ns.Logic.generation) .. ":" .. tostring(facts.class) .. ":" .. tostring(facts.race)
+end
+
+local function renderClass(host)
+  host:SetControls({})
+  local key = classKey()
+  if W.classIds and W.classKey == key then
+    drawClass(host, W.classIds)
+    return
+  end
+  local job = W.classJob
+  if job and not (job:IsDone() or job:IsCancelled()) and W.classJobKey == key then
+    host:SetSummary(L["Building the list ..."])
+    return
+  end
+  host:SetSummary(L["Building the list ..."])
+  host:SetChips({}, nil, nil)
+  local Logic = ns.Logic
+  local state = State.ForLogic()
+  local ids = {}
+  W.classJobKey = key
+  W.classJob = host:Job("quests-class", function(yield)
+    local n = 0
+    for _, qid in ipairs(Logic.allQuestIDs()) do
+      n = n + 1
+      if yield and n % 100 == 0 then
+        yield()
+      end
+      local q = Logic.quest(qid)
+      if q and Logic.isClassQuest(q) and Logic.canEverTake(q, state) then
+        ids[#ids + 1] = qid
+      end
+    end
+  end, function()
+    W.classIds, W.classKey = ids, key
+    drawClass(host, ids)
+  end)
+end
+
 local RENDER = {
   log = renderLog,
   all = renderAll,
   attune = renderAttune,
+  class = renderClass,
 }
 
 -- ---------------------------------------------------------------------------------------------
@@ -657,7 +716,7 @@ function W.Render()
     win:SetTitle(e:Name() or shown.page)
     bar:SetControls({})
     showTree(false)
-    local sections = B:GetDetailSections(shown.page)
+    local sections = dossier:Sections(shown.page) -- built in the page's palette
     dossier:SetSubject(shown.page, sections, { source = "quests" })
     if e:Name() == nil and #sections == 0 then
       summary:SetText(L["No data for this entity. Is Bastian's Data installed and loaded?"])
@@ -685,6 +744,7 @@ local function fallbackOpen(entry)
   end
   shown = entry
   if win:IsShown() then
+    win:Show() -- to the front
     W.Render()
   else
     win:Show() -- onShow renders
@@ -736,13 +796,6 @@ function W.Open(which, arg)
   end
   if which == nil then
     return W.OpenZone(arg) -- the window with the Here column (C4), the zone page without one
-  elseif which == "slim" then -- the Here column alone as the tracker (C8), where the host has it
-    local host = B:GetService("views")
-    if host and host.Slim then
-      return host:Slim(arg)
-    end
-    B:Say(L["Slim mode needs Bastian's Browser."])
-    return false
   elseif which == "zone" or which == "here" then
     return W.OpenZone(arg, true) -- the zone page as the subject, said so
   elseif which == "active" then
@@ -827,6 +880,7 @@ function W.Schedule()
   if ns.Tracker then
     ns.Tracker.Schedule() -- the tracker frame follows the same changes (R6)
   end
+  ns.Sheet.Schedule()
   if win and win:IsShown() then
     mod:Coalesce("render", RENDER_DELAY, W.Render)
   end
@@ -847,6 +901,7 @@ function W.Register(self)
       id = viewID(key),
       title = L[t[2]],
       group = L["Quests"],
+      rail = "quests", -- the Atlas's rail entry (ADR 0058)
       order = i * 10,
       pinned = key == "log" or nil, -- "My quests" is a toolbar button of the host
       -- All quests is the Browser's Quests list with its Status and Type filters (owner, retail
@@ -919,15 +974,20 @@ function W.Register(self)
       ns.Tracker.Render()
     end
   end)
-  self:On("BASTIANS_SETTING_CHANGED", function(_, _, name) -- the hub's tracker toggles
+  self:On("BASTIANS_SETTING_CHANGED", function(_, _, name, key) -- the hub's tracker toggles
     if name == self.name then
       if ns.Tracker then
         ns.Tracker.Apply() -- the frame, its lock and the game-tracker claim follow the settings
       end
       W.Schedule()
+    elseif key == "mapStyle" then
+      W.Schedule() -- the mini maps' style
     end
   end)
   self:RegisterEvent("BAG_UPDATE_DELAYED", function()
+    if ns.Registrations then
+      ns.Registrations.ResetCaches() -- a book picked up: its place offers nothing any more
+    end
     W.Schedule() -- quest items appear and vanish with the bags, not with the log
   end)
   self:RegisterEvent("UPDATE_FACTION", W.Schedule)
@@ -964,12 +1024,12 @@ SlashCmdList.BASTIANSQUESTS = function(msg)
     or msg == "active"
     or msg == "all"
     or msg == "attune"
-    or msg == "slim"
+    or msg == "class"
   then
     W.Open(msg)
   elseif tonumber(msg) then
     W.Open(tonumber(msg))
   else
-    B:Say(L["Usage: /bq [here | log | all | attune | slim | tracker | journey | round | <questID>]"])
+    B:Say(L["Usage: /bq [here | log | all | attune | class | tracker | journey | round | <questID>]"])
   end
 end

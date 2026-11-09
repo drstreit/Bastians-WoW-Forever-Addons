@@ -17,7 +17,10 @@ dev = ["pytest", "ruff", "lupa", "pillow", "numpy", "fonttools"]
 where = ["pipeline"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# AHSync lives in ahsync/ since 08.11.2026 (ADR 0060): one command runs both suites; its
+# src-layout package `ahsync` is importable without an install
+testpaths = ["tests", "ahsync/tests"]
+pythonpath = ["ahsync/src"]
 
 [tool.ruff]
 line-length = 100

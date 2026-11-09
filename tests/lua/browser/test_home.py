@@ -42,7 +42,7 @@ def chips(wow: WowRuntime) -> list[str]:
     return pills(wow, f"{MOD}.tree")
 
 
-TYPES = {"Quests": "quest", "NPCs": "npc", "Zones": "zone"}
+TYPES = {"Quests": "quest", "People": "npc", "Monsters": "mob", "Zones": "zone"}
 
 
 def click_chip(wow: WowRuntime, label: str) -> None:
@@ -59,23 +59,22 @@ def test_open_lands_on_the_home_with_here_views_and_chips(wow: WowRuntime):
     assert wow.eval(f"{MOD}.toolbar.types") is None  # the dropdown is gone (ADR 0013 F)
     assert chips(wow) == []  # the types are the navigation's lists (ADR 0018)
     assert nav_lists(wow) == [
-        "Dungeons",
-        "Farm spots",
-        "Items",
-        "Mobs",
-        "NPCs",
-        "Nodes",
-        "Objects",
-        "Quest chains",
         "Quests",
-        "Recipes",
+        "Chains",
         "Zones",
-    ]  # by name; chains from Quests
+        "People",
+        "Monsters",
+        "Objects",
+        "Dungeons",
+        "Items",
+        "Recipes",
+        "Farm spots",  # its pack is not loaded here: unknown, so shown
+    ]  # the rail's sections in order (ADR 0058); chains from Quests
     texts = flat(wow)
     # the player's zone is Here in the navigation (ADR 0018), not a section of the home; the
     # detail pane shows the zone's page before any other
     assert texts[0] == "Quests" and "Here" not in texts
-    assert nav_rows(wow)[0] == ("nav:here", "Here: Elwynn Forest")
+    assert nav_rows(wow)[0] == ("nav:here", "Here")  # a button; the zone is its tip
     assert band(wow, f"{MOD}.dossier")["name"] == "Elwynn Forest"
     quests = texts.index("Quests")
     assert texts[quests + 1 : quests + 3] == [  # All quests: the Quests list (31.10.2026)
@@ -100,11 +99,9 @@ def test_the_home_lists_bookmarks_and_recent_pages(wow: WowRuntime):
     wow.execute(f"{BR}.ToggleBookmark('item:2589')")
     wow.execute(f"{BR}.Home()")
     wow.execute(SIZE)
-    # the navigation lists them too (ADR 0018), each once, the recent pages newest first
-    rows = nav_rows(wow)
-    assert ("nav:bm:item:2589", "Linen Cloth") in rows
-    recent = [t for rid, t in rows if rid.startswith("nav:recent:")]
-    assert recent == ["Hogger", "Linen Cloth"]
+    # the category bar has one button for the bookmarks (ADR 0056); the pages themselves are
+    # the home's rows below, and the recent pages the history's
+    assert ("nav:bookmarks", "Bookmarks") in nav_rows(wow)
     assert wow.eval(f"{BR}.Current().kind") == "home"
     texts = flat(wow)
     marks = texts.index("Bookmarks")
@@ -130,13 +127,10 @@ def test_typing_searches_and_a_type_word_narrows(wow: WowRuntime):
     rows = flat(wow)
     assert any(r.startswith("Hogger") and "npc" in r for r in rows)
     assert any("Hogger" in r and "quest" in r for r in rows)
-    # the names that start with the text come first, a rule divides them from the rest (second
-    # round 21.10.2026); the rule row is the divider kind the tree draws as a line
-    kinds = [r.kind for r in wow.eval(f"{MOD}.tree.flat").values()]
-    assert kinds.count("rule") == 1
-    rule = kinds.index("rule")
-    assert all(r.lower().startswith("hog") for r in rows[:rule]) and rows[:rule]
-    assert rows[rule] == "" and not any(r.lower().startswith("hog") for r in rows[rule + 1 :])
+    # hits of several lists stand in sections (ADR 0056, test_search_groups.py); of one list the
+    # names that start with the text come first, a rule divides them from the rest (second round
+    # 21.10.2026); the rule row is the divider kind the tree draws as a line
+    assert "section" in [r.kind for r in wow.eval(f"{MOD}.tree.flat").values()]
     # the rows helper alone: no rule when one group is empty
     assert (
         wow.eval(
@@ -185,15 +179,15 @@ def test_a_type_chip_sets_the_type(wow: WowRuntime):
     assert wow.eval(f"{BR}.HomeType()") == "quest"
     rows = flat(wow)
     assert rows and all("quest" in r for r in rows)
-    click_chip(wow, "NPCs")
+    click_chip(wow, "Monsters")  # the list's own keep rule: Hogger is no person
     wow.run_frames(20)
     assert [r.split(" - ")[0] for r in flat(wow)] == ["Hogger  npc"]
-    assert wow.eval(f"{MOD}.navTree.selectedID") == "nav:list:npc"  # the filter shows
+    assert wow.eval(f"{MOD}.tabs.active") == "nav:list:mob"  # the filter shows
     # a type word in the text wins over the list
     wow.execute(f"{MOD}.search:SetText('quest hog')")
     wow.run_frames(20)
     assert all("quest" in r for r in flat(wow))
-    click_chip(wow, "NPCs")  # the filtering list again: every type
+    click_chip(wow, "Monsters")  # the filtering list again: every type
     wow.run_frames(20)
     assert wow.eval(f"{BR}.HomeType()") is None
     # a chip with nothing typed opens that type's list

@@ -6,7 +6,7 @@ results are rows with the worth and open their page on a click."""
 import re
 
 from harness import WowRuntime
-from pages import clear, menu, pick, pills
+from pages import clear, menu, near_by_default, pick, pills, scope
 
 CORE, DATA, QUESTS, GOLD, BROWSER = (
     "Bastians_Core",
@@ -52,10 +52,12 @@ def open_list(wow: WowRuntime, typ: str) -> None:
 
 def test_the_npc_list_opens_on_the_players_zone_then_widens(wow: WowRuntime):
     boot(wow)
+    near_by_default(wow)  # the narrowing itself is what this test is about
     open_list(wow, "npc")
     current = wow.eval(f"{BR}.Current()")
     assert current.near == "here"
-    assert chips(wow)[0] == "Where: Here"
+    assert scope(wow) == "in Elwynn Forest"  # the scope chip in the search box
+    assert not any(c.startswith("Where") for c in chips(wow))  # and no pill of the bar
     assert menu(wow, TREE, "where") == ["All  6", "Here  5", "Continent  6"]
     rows = flat(wow)
     assert len(rows) == 5 and not any("Gryan" in r for r in rows)  # Westfall's NPC is not here
@@ -68,7 +70,7 @@ def test_the_npc_list_opens_on_the_players_zone_then_widens(wow: WowRuntime):
     clear(wow, TREE, "where")  # the x: All
     # All: the continent's six (the Deadmines bosses, on no map, are in the Mobs list)
     assert wow.eval(f"{BR}.Current().near") is None and len(flat(wow)) == 6
-    assert chips(wow)[0] == "Where: All"
+    assert scope(wow) == "Everywhere"
     # the choice sticks on a re-render
     wow.execute(f"{BR}.Render()")
     assert wow.eval(f"{BR}.Current().near") is None
@@ -79,7 +81,7 @@ def test_lists_without_places_open_with_everything(wow: WowRuntime):
     boot(wow)
     open_list(wow, "item")
     assert wow.eval(f"{BR}.Current().near") is None
-    assert not any(c.startswith("Where") for c in chips(wow))  # no places, no Where pill
+    assert scope(wow) is None  # no places, no scope
     assert len(flat(wow)) > 0 and not flat(wow)[0].startswith("No entries")
     # the zone index (R5): no near chips, the player's continent as the facet, band rows
     open_list(wow, "zone")
@@ -107,9 +109,12 @@ def test_search_results_carry_the_worth_and_open_their_page(wow: WowRuntime):
     assert any(r.startswith("Linen Cloth") for r in rows)
     pool = [f for f in wow.eval(f"{MOD}.tree.pool").values() if f.IsShown(f)]
     linen = next(f for f in pool if f.row.ref == "item:2589")
-    # one line per result: the icon, the name,
-    # the type and summary in grey, the worth in the value column (C3)
-    assert linen.twoLine is False and "item" in strip(linen.text.GetText(linen.text))
+    # a tile: the icon, the name, under
+    # it the type and summary in grey, the worth at the right (C3)
+    assert linen.tile is True and linen.twoLine is True
+    assert strip(linen.text.GetText(linen.text)) == "Linen Cloth"
+    assert strip(linen.meta.GetText(linen.meta)).startswith("item")
+    assert linen.GetHeight(linen) == 52 and linen.plate.IsShown(linen.plate) is True
     assert linen.icon.IsShown(linen.icon) is True
     # the worth: Gold's auction price; without Gold Data's vendor price
     worth = "AH " if wow.made_for(GOLD) else "vendor "
@@ -126,7 +131,8 @@ def test_the_zones_list_merges_instances_and_lists_are_cached(wow: WowRuntime):
     pack loads or the zone changes."""
     boot(wow)
     open_list(wow, "zone")
-    assert chips(wow)[0] == "Continent: Eastern Kingdoms"  # no Where pill on the zone index
+    assert chips(wow)[0] == "Continent: Eastern Kingdoms"  # the zone index has its own
+    assert scope(wow) is None
     assert menu(wow, TREE, "continent") == ["All  4", "Eastern Kingdoms  3", "Instances  1"]
     pick(wow, TREE, "continent", "Instances")
     wow.run_frames(3)

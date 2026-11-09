@@ -12,7 +12,6 @@ claim = 11
 
 [[rumours]]
 claim = 12
-stamp = "half"
 why = "Only the kobolds near the entrance."
 
 [plate]

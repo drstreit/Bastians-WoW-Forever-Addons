@@ -17,6 +17,7 @@ local FRONT = "front" -- the chapter of the front matter (preface, before you st
 local NEWS_SHOWN = 12
 
 local win, bar, left, right, folio, measure
+local layoutPages -- the spread's scale and the pages' places, with the window below
 local current = { kind = "title" }
 Window.PLATE_CTX = {}
 
@@ -58,8 +59,8 @@ function Window.News()
   return out
 end
 
--- The Rumour mill of a chapter (strategies-design.md section 7): the strongest rumours no page
--- tells yet, by rank. -> { { id = claim id, mill, rumour } }, empty without them.
+-- The Rumour mill of a chapter (ADR 0057): what the road says that no page tells yet, by rank.
+-- -> { { id = claim id, mill, rumour } }, empty without them.
 function Window.Mill(chapter)
   local d, out = data(), {}
   local idx = d and d:Index("book.mill")
@@ -113,6 +114,40 @@ end
 -- A page of the book: a scroll frame; widgets are laid out top-down and pooled per page
 -- ---------------------------------------------------------------------------------------------
 
+-- The thing a link of the page's text names (`Window.LINK` .. ref), nil for another link.
+function Window.LinkRef(link)
+  local ref = type(link) == "string" and string.match(link, "^" .. Window.LINK .. "(.+)$") or nil
+  return ref and B.Entity.Parse(ref) and ref or nil
+end
+
+-- A page's links: the mouse shows the thing on the game's tooltip, a click opens it (the Browser
+-- when it is there; Window.OpenRef).
+function Window.Linkable(frame)
+  if not B.Compat.EnableLinks(frame) then
+    return false
+  end
+  frame:SetScript("OnHyperlinkEnter", function(self, link)
+    local ref = Window.LinkRef(link)
+    if ref and GameTooltip then
+      GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+      S.EntityTip(GameTooltip, ref)
+      GameTooltip:Show()
+    end
+  end)
+  frame:SetScript("OnHyperlinkLeave", function()
+    if GameTooltip then
+      GameTooltip:Hide()
+    end
+  end)
+  frame:SetScript("OnHyperlinkClick", function(_, link)
+    local ref = Window.LinkRef(link)
+    if ref then
+      Window.OpenRef(ref)
+    end
+  end)
+  return true
+end
+
 local function newPage(parent)
   local p = CreateFrame("Frame", nil, parent)
   S.panel(p, S.C.panel)
@@ -122,6 +157,7 @@ local function newPage(parent)
   local content = CreateFrame("Frame", nil, scroll)
   content:SetSize(1, 1)
   scroll:SetScrollChild(content)
+  Window.Linkable(content)
   p.scroll, p.content = scroll, content
   p.bar = S.scrollbar(scroll, p, nil)
   p.fs, p.rows, p.plates, p.boxes, p.edits, p.pics = {}, {}, {}, {}, {}, {}
@@ -160,6 +196,7 @@ end
 
 -- The height a wrapped text takes at `width` (the client's measure; an estimate where it has none).
 local function heightOf(text, size, width)
+  size = ns.Book.Size(size)
   measure:SetWidth(width)
   S.setSize(measure, size)
   measure:SetText(text)
@@ -176,6 +213,7 @@ Window.HeightOf = function(text, size, width)
 end
 
 local function addText(page, text, size, color, indent, gap)
+  size = ns.Book.Size(size)
   indent = indent or 0
   page.nfs = page.nfs + 1
   local fs = page.fs[page.nfs]
@@ -228,7 +266,7 @@ local function addRow(page, text, onClick, opts)
     page.rows[page.nrows] = row
   end
   local indent = opts.indent or 0
-  local size = opts.size or 12
+  local size = ns.Book.Size(opts.size or 12)
   row.onClick = onClick
   row.tip = opts.tip
   row.ref = opts.ref
@@ -289,11 +327,16 @@ local function nameOf(kind, id)
   return B:Entity(ref):Name() or ref
 end
 
--- The tokens drawn: names in the accent colour, prices as money, unknown said so.
+-- The tokens drawn: names in the accent colour as links (the mouse shows the thing, a click
+-- opens it; "the text has green items - I would expect that these are
+-- links - but they are only text"), prices as money, unknown said so.
+Window.LINK = "bastians:"
+
 function Window.Expand(text)
   return Book.Expand(text, {
     name = function(kind, id)
-      return S.H.accent .. nameOf(kind, id) .. "|r"
+      local ref = kind .. ":" .. tostring(id)
+      return "|H" .. Window.LINK .. ref .. "|h" .. S.H.accent .. nameOf(kind, id) .. "|r|h"
     end,
     price = function(id)
       return S.H.gold .. money(priceOf(id)) .. "|r"
@@ -307,22 +350,6 @@ end
 -- ---------------------------------------------------------------------------------------------
 -- Blocks
 -- ---------------------------------------------------------------------------------------------
-
--- the export's status as a stamp, where our own check did not set one (the Rumour mill)
-local STATUS_STAMP = { verified = "true", refuted = "lies", unverified = "open" }
-
-local STAMPS = {
-  ["true"] = { "Checked", "good" },
-  half = { "Half right", "warn" },
-  lies = { "Did not hold", "bad" },
-  open = { "Heard, not checked", "muted" },
-}
-Window.STAMPS = STAMPS
-
-function Window.StampText(stamp)
-  local s = STAMPS[stamp] or STAMPS.open
-  return S.H[s[2]] .. "[" .. L[s[1]] .. "]|r"
-end
 
 local function liveLines(spec)
   local lines = {}
@@ -614,24 +641,6 @@ local function shelfWord(p)
   return c and c.name or ""
 end
 
-local function sealedText(p)
-  local zones = {}
-  for _, z in ipairs(p.zones or {}) do
-    zones[#zones + 1] = nameOf("zone", z)
-  end
-  if #zones > 0 then
-    return string.format(
-      L["This page is sealed. It opens at level %d, or the first time you set foot in %s."],
-      math.max(1, p.levelMin - Book.UNSEAL_EARLY),
-      table.concat(zones, ", ")
-    )
-  end
-  return string.format(
-    L["This page is sealed. It opens at level %d."],
-    math.max(1, p.levelMin - Book.UNSEAL_EARLY)
-  )
-end
-
 -- The page's picture (content/strategies/art), the page's width at 2:1. A picture that came with a
 -- new Data edition is a new file: the client takes it without an error but shows it only after
 -- a full restart (GetTexture stays nil, Forever 22.10.2026), so until then the page has none.
@@ -708,17 +717,10 @@ local function rumourLines(target, p)
   addSpace(target, 4)
   addText(target, caps(L["The rumours on this page"]), 11, S.C.accent, 0, 3)
   for _, r in ipairs(p.rumours) do
-    local claimID, stamp, why = r[1], r[2], r[3]
+    local claimID, why = r[1], r[3] -- r[2] held the stamp: the packs keep its place
     local rumour = get("rumour", claimID)
     if rumour then
-      addText(
-        target,
-        Window.StampText(stamp) .. " " .. (rumour.claim or rumour.subject or ""),
-        12,
-        S.C.text,
-        0,
-        2
-      )
+      addText(target, rumour.claim or rumour.subject or "", 12, S.C.text, 0, 2)
       if why then
         addText(target, why, 11, S.C.dim, 10, 2)
       end
@@ -767,11 +769,6 @@ local function renderPage(id)
     end
     return p.name
   end
-  local level = facts().level
-  if not Book.IsOpen(p, level, db().char.entered) and p.chapter ~= FRONT then
-    addText(left, sealedText(p), 13, S.C.text)
-    return p.name
-  end
   if p.art then
     addPicture(left, id)
   end
@@ -786,22 +783,14 @@ local function renderPage(id)
   return p.name
 end
 
--- The Rumour mill of a chapter: one rumour after the other, flowing onto the right page.
+-- The Rumour mill of a chapter: a plain list, one line per rumour with its channel and video, on
+-- to the right page. Nothing in it is judged.
 local function renderMill(chapter)
   local c = get("chapter", chapter)
   local name = c and c.name or chapter
   addText(left, caps(L["The rumour mill"]), 10, S.C.dim, 0, 2)
   addText(left, name, 18, S.C.bright, 0, 4)
-  addText(
-    left,
-    L["What the travellers say and I have not tried yet, with the stamp and where to hear it."]
-      .. " "
-      .. L["When one of them holds up, it gets a page."],
-    12,
-    S.C.dim,
-    0,
-    8
-  )
+  addText(left, L["This is what they're saying on the road. Make of it what you will."], 12, S.C.dim, 0, 8)
   local entries = Window.Mill(chapter)
   if #entries == 0 then
     addText(left, L["Nothing in the mill for this chapter today."], 12, S.C.dim)
@@ -812,19 +801,8 @@ local function renderMill(chapter)
     if target == left and left.y + 60 > leftMax then
       target = right
     end
-    local stamp = STATUS_STAMP[e.rumour.status or ""] or "open"
-    addText(
-      target,
-      Window.StampText(stamp) .. " " .. (e.rumour.claim or e.rumour.subject or ""),
-      12,
-      S.C.text,
-      0,
-      2
-    )
-    local place = e.mill.zone and nameOf("zone", e.mill.zone) or e.mill.where
-    local told = string.format(L["told by %d channels"], e.mill.channels or 0)
-    addText(target, (place and (place .. "  /  ") or "") .. told, 11, S.C.dim, 10, 2)
-    sourceRows(target, e.rumour.sources)
+    addText(target, e.rumour.claim or e.rumour.subject or "", 12, S.C.text, 0, 2)
+    sourceRows(target, { e.rumour.sources and e.rumour.sources[1] })
     addSpace(target, 4)
   end
   return string.format(L["Rumour mill: %s"], name)
@@ -838,7 +816,7 @@ local function renderTitle()
     addSpace(left, 40)
   end
   addText(left, caps(L["Bastian's Strategies"]), 11, S.C.dim, 0, 8)
-  addText(left, L["Bastian's Gold Rumours"], 24, S.C.bright, 0, 12)
+  addText(left, L["Bastian's Gold Adventures"], 24, S.C.bright, 0, 12)
   addText(
     left,
     L["Every way to get rich I was ever told about, written down by a man who is still not rich"],
@@ -891,26 +869,17 @@ local function renderTitle()
     end
     B:UpdateFeed(ns.mod) -- the bar's "2 new" (ADR 0043)
   end
-  return L["Bastian's Gold Rumours"]
+  return L["Bastian's Gold Adventures"]
 end
 
-local function pageLine(id, p, level, entered)
+local function pageLine(id, p)
   local band = p.levelMin and string.format(L["level %d-%d"], p.levelMin, p.levelMax) or ""
-  local open = Book.IsOpen(p, level, entered)
-  return (open and "" or S.H.muted)
-    .. (p.name or id)
-    .. "  "
-    .. S.H.muted
-    .. band
-    .. (open and "" or ("  " .. L["sealed"]))
-    .. "|r",
-    open
+  return (p.name or id) .. "  " .. S.H.muted .. band .. "|r"
 end
 
 local function renderContents()
   addText(left, caps(L["Contents"]), 11, S.C.accent, 0, 6)
   local toc = Window.Toc()
-  local level, entered = facts().level, db().char.entered
   for _, cid in ipairs(toc and toc.chapters or {}) do
     if cid ~= FRONT then
       local c = get("chapter", cid)
@@ -922,15 +891,14 @@ local function renderContents()
       for _, id in ipairs(ids) do
         local p = get("page", id)
         if p then
-          local text = pageLine(id, p, level, entered)
-          addRow(left, text, function()
+          addRow(left, pageLine(id, p), function()
             Window.Show({ kind = "page", id = id })
           end, { indent = 10, entry = { kind = "page", id = id } })
         end
       end
       local mill = #Window.Mill(cid)
       if mill > 0 then
-        addRow(left, string.format(L["Rumour mill: %d rumours I have not tried yet"], mill), function()
+        addRow(left, string.format(L["Rumour mill: %d rumours"], mill), function()
           Window.Show({ kind = "mill", id = cid })
         end, { indent = 10, color = S.C.dim, entry = { kind = "mill", id = cid } })
       end
@@ -953,18 +921,6 @@ local function renderContents()
       { color = S.C.dim }
     )
   end
-  -- the legend of the stamps, the right page
-  addText(right, caps(L["The stamps"]), 11, S.C.accent, 0, 4)
-  for _, key in ipairs({ "true", "half", "lies", "open" }) do
-    local what = {
-      ["true"] = L["I held the rumour against the prices and the loot tables, and it stood."],
-      half = L["True for part of it. The page says which part."],
-      lies = L["It failed the check. The page stays as a warning."],
-      open = L["Nobody has managed to check it yet."],
-    }
-    addText(right, Window.StampText(key) .. " " .. what[key], 12, S.C.text, 0, 3)
-  end
-  addSpace(right, 6)
   addText(right, caps(L["Your bookmarks and notes"]), 11, S.C.accent, 0, 4)
   addText(
     right,
@@ -1089,6 +1045,270 @@ local function renderBookmarks()
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- The story map (ADR 0057): the stories on one picture of the world, the general ones on two boards
+-- in the ocean. A view of the book: the Map tab, the book's front door.
+--
+-- The picture is laid out once at its base size (ATLAS_W x ATLAS_H, the world's 2:1) and scaled as
+-- one piece into the room the window gives it ("only the map scales,
+-- not the button row", "scaling is bumpy"): a size change costs one SetScale, so the map follows
+-- every size event of the grip, and the tokens grow with the land.
+-- ---------------------------------------------------------------------------------------------
+
+local ATLAS_W = 900 -- the picture's base width; its height follows the world's proportions
+local ATLAS_H = ATLAS_W * Book.WORLD.height / Book.WORLD.width
+local TOKEN, BOARD_TOKEN = 40, 34 -- a story's picture on the land and on a board
+local TOKEN_GAP = 14 -- under a token: its level
+local RING, RING_HOVER = 2, 4 -- the rim around a token's picture, and lit under the cursor
+local BOARD_W, BOARD_HEAD, BOARD_PAD = 0.15, 22, 10 -- a board's share of the picture's width
+local SCREEN_MARGIN = 20 -- a window fitted to the map stays this far from the screen's bottom
+local ROUND_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask" -- as Bastian's minimap's
+local atlas
+
+local function tokenTip(self)
+  local p = self.story.page
+  local band = p.levelMin and string.format(L["level %d-%d"], p.levelMin, p.levelMax) or ""
+  local how = L["Click: open the story"]
+  if p.plate and p.plate.place then
+    how = how .. "\n" .. L["Right click: show on the map"]
+  end
+  return p.name or self.story.id, band .. (band ~= "" and "\n" or "") .. how
+end
+
+-- The rim: the token's own colour, lit bright and wider under the cursor.
+local function drawRing(b, lit)
+  S.tint(b.ring, lit and S.C.bright or b.ringColor)
+  local r = lit and RING_HOVER or RING
+  b.ring:ClearAllPoints()
+  b.ring:SetPoint("TOPLEFT", b, "TOPLEFT", -r, r)
+  b.ring:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", r, -r)
+end
+
+local function newToken()
+  local b = CreateFrame("Button", nil, atlas.picture)
+  b.ring = b:CreateTexture(nil, "BORDER")
+  b.ring:SetTexture(S.DISC)
+  b.pic = b:CreateTexture(nil, "ARTWORK")
+  if b.CreateMaskTexture then
+    b.mask = b:CreateMaskTexture()
+    b.mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    b.mask:SetAllPoints(b.pic)
+    b.pic:AddMaskTexture(b.mask)
+  end
+  b.plate = S.fill(b, S.C.header, "OVERLAY")
+  b.band = S.text(b, 10, S.C.headerText)
+  b.band:SetDrawLayer("OVERLAY", 2)
+  b.tip = tokenTip
+  b:SetScript("OnEnter", function(self)
+    drawRing(self, true)
+    S.TipEnter(self)
+  end)
+  b:SetScript("OnLeave", function(self)
+    drawRing(self, false)
+    S.TipLeave(self)
+  end)
+  b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  b:SetScript("OnClick", function(self, button)
+    -- a right click shows the story's place on the world map ("all
+    -- maps need to be able to open in world map")
+    if button == "RightButton" and Window.ShowStoryOnMap(self.story) then
+      return
+    end
+    Window.Show({ kind = "page", id = self.story.id })
+  end)
+  return b
+end
+
+-- A story's place on the world map: its page's plate. -> true when shown.
+function Window.ShowStoryOnMap(story)
+  local page = story and story.page
+  local spec = page and page.plate
+  if type(spec) == "table" and spec.place then
+    return ns.Plate.ShowOnMap(spec.place, page.name)
+  end
+  return false
+end
+
+-- One story's token: its picture cut round (the picture's middle square), its level under it.
+local function drawToken(i, story, x, y, size, ring)
+  local b = atlas.tokens[i]
+  if not b then
+    b = newToken()
+    atlas.tokens[i] = b
+  end
+  b.story = story
+  b:SetSize(size, size)
+  b:ClearAllPoints()
+  b:SetPoint("CENTER", atlas.picture, "TOPLEFT", x, -y)
+  b:SetFrameLevel((atlas.picture:GetFrameLevel() or 0) + (story.onBoard and 6 or 4))
+  b.ringColor = ring
+  drawRing(b, b:IsMouseOver())
+  b.pic:SetAllPoints(b)
+  b.pic:SetTexture(story.page.art and (ART .. story.id) or nil)
+  if b.pic:GetTexture() then
+    b.pic:SetTexCoord(0.25, 0.75, 0, 1)
+  else -- no picture, or a new file before a full restart
+    b.pic:SetTexCoord(0, 1, 0, 1)
+    b.pic:SetTexture(B.UI.IconTexture("ledger"))
+  end
+  local p = story.page
+  local lo, hi = p.levelMin, p.levelMax
+  b.band:SetText(lo and (lo == hi and tostring(lo) or (lo .. "-" .. tostring(hi))) or "")
+  b.band:ClearAllPoints()
+  b.band:SetPoint("TOP", b, "BOTTOM", 0, 3)
+  b.plate:ClearAllPoints()
+  b.plate:SetPoint("TOPLEFT", b.band, "TOPLEFT", -4, 1)
+  b.plate:SetPoint("BOTTOMRIGHT", b.band, "BOTTOMRIGHT", 4, -1)
+  b.plate:SetShown(lo ~= nil)
+  b:Show()
+  return b
+end
+
+-- A board in the ocean: its title and its stories in two columns.
+local function drawBoard(key, title, stories, onLeft, pw, n)
+  local board = atlas.boards[key]
+  if not board then
+    board = CreateFrame("Frame", nil, atlas.picture)
+    board.ground = S.fill(board, S.C.card, "BACKGROUND")
+    board.edges = S.roundEdges(board, S.C.line, "radiusSmall")
+    board.title = S.text(board, 11, S.C.bright)
+    board.title:SetPoint("TOPLEFT", board, "TOPLEFT", 6, -5)
+    board.title:SetPoint("TOPRIGHT", board, "TOPRIGHT", -6, -5)
+    atlas.boards[key] = board
+  end
+  local w = pw * BOARD_W
+  local pitch = BOARD_TOKEN + TOKEN_GAP + 8
+  local rows = math.ceil(#stories / 2)
+  local x0 = onLeft and BOARD_PAD or (pw - w - BOARD_PAD)
+  board:SetFrameLevel((atlas.picture:GetFrameLevel() or 0) + 2)
+  board:ClearAllPoints()
+  board:SetPoint("TOPLEFT", atlas.picture, "TOPLEFT", x0, -BOARD_PAD)
+  board:SetSize(w, BOARD_HEAD + rows * pitch + 4)
+  board.title:SetText(title)
+  board:SetShown(#stories > 0)
+  for i, story in ipairs(stories) do
+    story.onBoard = true
+    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
+    n = n + 1
+    local x = x0 + w * (col == 0 and 0.27 or 0.73)
+    local y = BOARD_PAD + BOARD_HEAD + row * pitch + BOARD_TOKEN / 2 + 2
+    drawToken(n, story, x, y, BOARD_TOKEN, S.C.line)
+  end
+  return n
+end
+
+local function dotAt(i, x, y, ring)
+  local dot = atlas.dots[i]
+  if not dot then
+    dot = atlas.picture:CreateTexture(nil, "OVERLAY")
+    dot:SetTexture(S.DISC)
+    dot:SetSize(7, 7)
+    atlas.dots[i] = dot
+  end
+  S.tint(dot, ring)
+  dot:ClearAllPoints()
+  dot:SetPoint("CENTER", atlas.picture, "TOPLEFT", x, -y)
+  dot:Show()
+end
+
+-- The picture into the room the atlas has: one scale, the picture centred. Runs on every size
+-- change of the window, so it does nothing else.
+local function fitAtlas()
+  local w, h = atlas:GetWidth() or 0, atlas:GetHeight() or 0
+  if w < 1 or h < 1 then
+    return
+  end
+  local k = math.min(w / ATLAS_W, h / ATLAS_H)
+  if math.abs((atlas.picture:GetScale() or 1) - k) > 0.0005 then
+    atlas.picture:SetScale(k)
+  end
+end
+
+-- The window takes the map's proportions (the window's size "bound to the
+-- map"; before, the map and the window grew apart): after the grip is let go and on the way onto
+-- the map, the height follows the width so that the picture fills the window, within the screen
+-- and the window's smallest height. The place is saved as after a drag.
+local function fitWindowToMap()
+  if not (win and atlas:IsShown()) or win.full or win.dock then
+    return
+  end
+  local frame = win.frame
+  local fw, fh = frame:GetWidth() or 0, frame:GetHeight() or 0
+  local aw, ah = atlas:GetWidth() or 0, atlas:GetHeight() or 0
+  if fw < 1 or fh < 1 or aw < 1 or ah < 1 then
+    return
+  end
+  local edgeW, edgeH = fw - aw, fh - ah -- what the window adds around the map
+  local minH = win.opts.minHeight or 0
+  local maxH = (UIParent:GetHeight() or 0) - SCREEN_MARGIN
+  local h = aw * ATLAS_H / ATLAS_W + edgeH
+  local w = fw
+  if h < minH then
+    h = minH
+    w = (h - edgeH) * ATLAS_W / ATLAS_H + edgeW
+  elseif maxH > minH and h > maxH then
+    h = maxH
+    w = (h - edgeH) * ATLAS_W / ATLAS_H + edgeW
+  end
+  if math.abs(w - fw) > 0.5 or math.abs(h - fh) > 0.5 then
+    frame:SetSize(w, h)
+    win:SavePlace()
+  end
+end
+
+local function renderAtlas()
+  local pw, ph = ATLAS_W, ATLAS_H
+  fitAtlas()
+  atlas.world:SetTexture(ART .. "world")
+  local drawn = atlas.world:GetTexture() ~= nil
+  atlas.world:SetShown(drawn)
+  atlas.note:SetShown(not drawn) -- a new file: the client sees it after a full restart
+  local spots, boards = Book.Atlas(Window.Pages(), B.Coords.ToWorld, FRONT)
+  -- the land's tokens part where they would cover each other, between the boards
+  local points = {}
+  for i, s in ipairs(spots) do
+    points[i] = { x = s.fx * pw, y = s.fy * ph }
+  end
+  local pad = pw * BOARD_W + BOARD_PAD + TOKEN / 2
+  Book.Spread(points, TOKEN + TOKEN_GAP, pad, TOKEN / 2, pw - pad, ph - TOKEN / 2 - TOKEN_GAP)
+  local n = 0
+  for i, s in ipairs(spots) do
+    n = n + 1
+    local ring = s.exact and S.C.gold or S.C.dim
+    dotAt(i, s.fx * pw, s.fy * ph, ring)
+    drawToken(n, s, points[i].x, points[i].y, TOKEN, ring)
+  end
+  for i = #spots + 1, #atlas.dots do
+    atlas.dots[i]:Hide()
+  end
+  n = drawBoard("market", L["The market"], boards.market, true, pw, n)
+  n = drawBoard("trades", L["Making and gathering"], boards.trades, false, pw, n)
+  atlas.mill.chapter = nil -- the mill from the map: the first chapter with rumours
+  for _, entry in ipairs(Window.Order()) do
+    if entry.kind == "mill" and not atlas.mill.chapter then
+      atlas.mill.chapter = entry.id
+    end
+  end
+  atlas.mill:SetShown(atlas.mill.chapter ~= nil)
+  for i = n + 1, #atlas.tokens do
+    atlas.tokens[i]:Hide()
+    atlas.tokens[i].story = nil
+  end
+  return L["Map"]
+end
+
+-- What a test and the hub read: the tokens shown, { id, x, y, size }.
+function Window.AtlasTokens()
+  local out = {}
+  for _, b in ipairs(atlas and atlas.tokens or {}) do
+    if b:IsShown() and b.story then
+      local _, _, _, x, y = b:GetPoint(1)
+      out[#out + 1] = { id = b.story.id, x = x, y = -y, size = b:GetWidth(), onBoard = b.story.onBoard }
+    end
+  end
+  return out
+end
+
+-- ---------------------------------------------------------------------------------------------
 -- The window
 -- ---------------------------------------------------------------------------------------------
 
@@ -1103,6 +1323,7 @@ local function updateBar()
   bar.mark.spec.label = on and L["Bookmarked"] or L["Bookmark"]
   bar.mark:SetOn(on) -- the look draws the state (ADR 0046)
   bar.mark:SetEnabledFlat(isPage)
+  bar.map:SetOn(current.kind == "atlas")
   local order = Window.Order()
   local at
   for i, e in ipairs(order) do
@@ -1119,10 +1340,18 @@ function Window.Render()
   if not (win and win:IsShown()) then
     return
   end
+  local isMap = current.kind == "atlas" -- the map takes the place of the two pages
+  left:SetShown(not isMap)
+  right:SetShown(not isMap)
+  folio:SetShown(not isMap)
+  atlas:SetShown(isMap)
+  layoutPages() -- the spread's scale is the view's: one for the map, the window's for the pages
   begin(left)
   begin(right)
   local title
-  if current.kind == "title" then
+  if isMap then
+    title = renderAtlas()
+  elseif current.kind == "title" then
     title = renderTitle()
   elseif current.kind == "contents" then
     title = renderContents()
@@ -1138,8 +1367,8 @@ function Window.Render()
   finish(left)
   finish(right)
   win:SetTitle(
-    L["Bastian's Gold Rumours"]
-      .. (title and title ~= L["Bastian's Gold Rumours"] and ("  " .. S.H.muted .. title .. "|r") or "")
+    L["Bastian's Gold Adventures"]
+      .. (title and title ~= L["Bastian's Gold Adventures"] and ("  " .. S.H.muted .. title .. "|r") or "")
   )
   updateBar()
 end
@@ -1150,22 +1379,27 @@ function Window.Schedule()
   end
 end
 
--- Shows an entry ({ kind = "title" | "contents" | "index" | "bookmarks" | "page" | "mill" |
--- "search", id }; a mill's id is its chapter, a search's its query) and keeps
--- it as the character's last place (strategies-design.md section 7: by the page's permanent id).
+-- Shows an entry ({ kind = "atlas" | "title" | "contents" | "index" | "bookmarks" | "page" | "search",
+-- id };
+-- a search's id is its query) and keeps it as the character's last place (strategies-design.md
+-- section 7: by the page's permanent id).
 function Window.Show(entry)
   if not win then
     Window.Build()
   end
   current = entry or { kind = "title" }
   if current.kind == "index" then
-    current = { kind = "search", id = "" } -- the index page is gone (30.10.2026); an old last place
+    current = { kind = "search", id = "" } -- the index page went 30.10.2026: an old last place
   end
   db().char.last = { kind = current.kind, id = current.id }
   if win:IsShown() then
+    win:Show() -- to the front
     Window.Render()
   else
     win:Show()
+  end
+  if current.kind == "atlas" then
+    fitWindowToMap() -- the window takes the map's proportions
   end
   return true
 end
@@ -1189,13 +1423,11 @@ function Window.Turn(step)
   Window.Show({ kind = "contents" })
 end
 
--- Opens the book where the character left it, else on the title page.
+-- Opens the book on the story map, its front door ("the map is really
+-- hard to find", the minimap button opens it); every page is a click from there. ~~Where the
+-- character left it~~ (ADR 0057, point 4, until then). A book without pages opens on its title.
 function Window.Open()
-  local last = db().char.last
-  if type(last) == "table" and last.kind then
-    return Window.Show({ kind = last.kind, id = last.id })
-  end
-  return Window.Show({ kind = "title" })
+  return Window.Show({ kind = next(Window.Pages()) and "atlas" or "title" })
 end
 
 function Window.Toggle()
@@ -1224,17 +1456,21 @@ function Window.ToggleBookmark()
 end
 
 -- The book's base size: a larger window scales the whole spread up (
--- the grip "enlarges the window, no scaling possible"), never below 1.
-local BASE_W, BASE_H = 940, 640
+-- the grip "enlarges the window, no scaling possible"), never below 1. The bar with the tabs
+-- never scales, and the map has its own
+-- scale (fitAtlas), so the content stays at 1 under it.
+local BAR_H = 26
 
-local function layoutPages()
+function layoutPages()
   local content = win.content
-  local fw, fh = win.frame:GetWidth() or BASE_W, win.frame:GetHeight() or BASE_H
-  local k = math.max(1, math.min(fw / BASE_W, fh / BASE_H))
+  -- the pages are not scaled ("the font scaling of the book is too
+  -- large, should follow a global setting"): a larger window gives the pages more room and the
+  -- text keeps Core's text size; ~~a larger window scaled the whole spread up~~
+  local k = 1
   if math.abs((content:GetScale() or 1) - k) > 0.001 then
     content:SetScale(k)
   end
-  local top = -(30 + 6)
+  local top = -(BAR_H + 6 + 4) / k -- under the unscaled bar
   left:ClearAllPoints()
   right:ClearAllPoints()
   local w = (content:GetWidth() or 0) > 0 and content:GetWidth() - 12 or 900
@@ -1249,7 +1485,7 @@ end
 function Window.Build()
   win = B.UI.Window("BastiansStrategiesFrame", {
     module = "Strategies", -- the options button opens this page (R27.1)
-    title = L["Bastian's Gold Rumours"],
+    title = L["Bastian's Gold Adventures"],
     width = 940,
     height = 640,
     minWidth = 660,
@@ -1259,13 +1495,16 @@ function Window.Build()
     maxHeight = B.UI.NO_LIMIT,
     db = ns.mod.db.profile.window,
     onShow = function()
-      layoutPages()
       Window.Render()
     end,
+    -- while the grip is held the map follows by itself (the atlas' OnSizeChanged); the pages
+    -- follow the coalesced calls, and the final one renders the view and fits the window to the map
     onResize = function(_, sizing)
-      layoutPages()
-      if not sizing then
+      if sizing then
+        layoutPages()
+      else
         Window.Render()
+        fitWindowToMap()
       end
     end,
   })
@@ -1273,12 +1512,15 @@ function Window.Build()
   measure = S.text(content, 12)
   measure:SetWordWrap(true)
   measure:Hide()
-  bar = CreateFrame("Frame", nil, content)
+  -- the bar on the window, not in the content: it never scales with the spread
+  bar = CreateFrame("Frame", nil, win.frame)
   bar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -6)
   bar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
-  bar:SetHeight(26)
+  bar:SetHeight(BAR_H)
+  bar:SetFrameLevel((content:GetFrameLevel() or 0) + 2)
   local x = 0
-  -- the tabs as declared actions with their pictograms (ADR 0046): the look sizes them
+  -- the tabs as declared actions with their pictograms (ADR 0046): the look sizes them; the first
+  -- is the story map (ADR 0057), any other leads into the book
   local function tab(icon, label, tip, onClick)
     local b = S.action(bar, { icon = icon, label = label, boxed = true })
     b.tip = tip
@@ -1287,17 +1529,15 @@ function Window.Build()
     x = x + b:GetWidth() + 4
     return b
   end
+  bar.map = tab("zone", L["Map"], L["The gold stories on the world map."], function()
+    Window.Show({ kind = "atlas" })
+  end)
   bar.title = tab("ledger", L["Title page"], L["The title page and What's new."], function()
     Window.Show({ kind = "title" })
   end)
-  bar.contents = tab(
-    "layers",
-    L["Contents"],
-    L["Every chapter and its pages; sealed pages say when they open."],
-    function()
-      Window.Show({ kind = "contents" })
-    end
-  )
+  bar.contents = tab("layers", L["Contents"], L["Every chapter and its pages."], function()
+    Window.Show({ kind = "contents" })
+  end)
   -- the search page in the index's place ("drop the index page, its
   -- confusing; add a search page instead, full text search of all articles")
   bar.find = tab("search", L["Search"], L["Every page of the book by its words."], function()
@@ -1350,6 +1590,32 @@ function Window.Build()
   end)
   left = newPage(content)
   right = newPage(content)
+  atlas = CreateFrame("Frame", nil, content)
+  atlas:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -36)
+  atlas:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
+  atlas.ground = S.fill(atlas, S.C.panel, "BACKGROUND")
+  -- the picture at its base size, scaled as one piece into the atlas (fitAtlas)
+  atlas.picture = CreateFrame("Frame", nil, atlas)
+  atlas.picture:SetSize(ATLAS_W, ATLAS_H)
+  atlas.picture:SetPoint("CENTER", atlas, "CENTER", 0, 0)
+  atlas.world = atlas.picture:CreateTexture(nil, "BORDER")
+  atlas.world:SetAllPoints(atlas.picture)
+  atlas.note = S.text(atlas.picture, 12, S.C.dim)
+  atlas.note:SetPoint("BOTTOM", atlas.picture, "BOTTOM", 0, 8)
+  atlas.note:SetText(L["The map appears after a full restart of the game."])
+  atlas.tokens, atlas.boards, atlas.dots = {}, {}, {}
+  -- the mill's button is a button, not part of the land: on the atlas, unscaled, at the
+  -- picture's corner
+  atlas.mill = S.action(atlas, { icon = "note", label = L["The rumour mill"], boxed = true })
+  atlas.mill:SetPoint("BOTTOMLEFT", atlas.picture, "BOTTOMLEFT", BOARD_PAD, BOARD_PAD)
+  atlas.mill:SetFrameLevel((atlas.picture:GetFrameLevel() or 0) + 10)
+  atlas:SetScript("OnSizeChanged", fitAtlas) -- every size event of the grip, nothing coalesced
+  atlas.mill.tip = L["This is what they're saying on the road. Make of it what you will."]
+  atlas.mill:SetScript("OnClick", function(self)
+    Window.Show({ kind = "mill", id = self.chapter })
+  end)
+  atlas:Hide()
+  Window.atlas = atlas
   folio = CreateFrame("Frame", nil, content)
   folio:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 6, 6)
   folio:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)

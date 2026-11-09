@@ -103,3 +103,14 @@ def test_the_books_own_pages_bring_their_pictures(tmp_path):
     assert done == ["baeldun-dig", "title"]
     # without the export's pictures the book's own still come
     assert book_art.install(None, packs, {"baeldun-dig"}, front=front) == ["title"]
+
+
+def test_the_world_picture_ships_whole_and_large(tmp_path):
+    """ADR 0057: its pixels are coordinates: nothing is trimmed, at the size the Lua expects."""
+    path = tmp_path / "world.jpg"
+    picture(path, (2048, 1024))
+    data = book_art.game_texture(path)
+    assert data[:4] == b"BLP2"
+    width, height = struct.unpack_from("<II", data, 12)
+    assert (width, height) == book_art.WHOLE["world"] == (2048, 1024)
+    assert "world" in book_art.FRONT_IDS

@@ -11,15 +11,27 @@ B.deferred[#B.deferred + 1] = {
     client = "forever",
     index = {
       ["market.list"] = {
+        ["forever/normal/alliance/eu"] = {
+          alias = "forever/normal/alliance/us",
+          items = 2,
+          label = "US normal",
+          scanTs = 1760000000,
+        },
         ["forever/normal/alliance/us"] = {
           items = 2,
-          label = "US beta",
+          label = "US normal",
           scanTs = 1760000000,
         },
         ["forever/rp/alliance/eu"] = {
+          alias = "forever/normal/alliance/eu",
+          items = 2,
+          label = "EU normal",
+          scanTs = 1760000000,
+        },
+        ["forever/rp/alliance/us"] = {
           alias = "forever/normal/alliance/us",
           items = 2,
-          label = "US beta",
+          label = "US normal",
           scanTs = 1760000000,
         },
         ["retail/normal/neutral/eu"] = {
@@ -29,12 +41,22 @@ B.deferred[#B.deferred + 1] = {
         },
       },
       ["signal.byMarket"] = {
+        ["forever/normal/alliance/eu"] = {
+          "forever/normal/alliance/us:1", "forever/normal/alliance/us:2", "forever/normal/alliance/us:3",
+          "forever/normal/alliance/us:4", "forever/normal/alliance/us:5", "forever/normal/alliance/us:6",
+          "forever/normal/alliance/us:7",
+        },
         ["forever/normal/alliance/us"] = {
           "forever/normal/alliance/us:1", "forever/normal/alliance/us:2", "forever/normal/alliance/us:3",
           "forever/normal/alliance/us:4", "forever/normal/alliance/us:5", "forever/normal/alliance/us:6",
           "forever/normal/alliance/us:7",
         },
         ["forever/rp/alliance/eu"] = {
+          "forever/normal/alliance/us:1", "forever/normal/alliance/us:2", "forever/normal/alliance/us:3",
+          "forever/normal/alliance/us:4", "forever/normal/alliance/us:5", "forever/normal/alliance/us:6",
+          "forever/normal/alliance/us:7",
+        },
+        ["forever/rp/alliance/us"] = {
           "forever/normal/alliance/us:1", "forever/normal/alliance/us:2", "forever/normal/alliance/us:3",
           "forever/normal/alliance/us:4", "forever/normal/alliance/us:5", "forever/normal/alliance/us:6",
           "forever/normal/alliance/us:7",
@@ -58,8 +80,8 @@ B.deferred[#B.deferred + 1] = {
       },
     },
     price = {
-      ["forever/normal/alliance/us:1185"] = [=[{ 5000, 4500, 3, nil, nil, nil, nil, nil, 1760000000, "US beta" }]=],
-      ["forever/normal/alliance/us:2589"] = [=[{ 38, 20, 7955, 42, 75, 5, 120, 21.9, 1760000000, "US beta" }]=],
+      ["forever/normal/alliance/us:1185"] = [=[{ 5000, 4500, 3, nil, nil, nil, nil, nil, 1760000000, "US normal" }]=],
+      ["forever/normal/alliance/us:2589"] = [=[{ 38, 20, 7955, 42, 75, 5, 120, 21.9, 1760000000, "US normal" }]=],
       ["retail/normal/neutral/eu:2589"] = [=[{ 40, 25, 1000, nil, nil, nil, nil, nil, 1760000000, "retail EU" }]=],
     },
     schema = {
@@ -71,11 +93,8 @@ B.deferred[#B.deferred + 1] = {
         "module", "action", "item", "horizon", "confidence", "rationale", "capital", "profit", "minutes",
         "flags", "validUntil", "src",
       },
-      spot = { "name", "map", "x", "y", "radius", "levelMin", "levelMax", "items", "status", "strategy", "src" },
-      strategy = {
-        "kind", "subject", "item", "map", "x", "y", "weight", "reach", "status", "build", "firstSeen",
-        "lastSeen", "src",
-      },
+      spot = { "name", "map", "x", "y", "radius", "levelMin", "levelMax", "items", "strategy", "src" },
+      strategy = { "kind", "subject", "item", "map", "x", "y", "weight", "reach", "build", "firstSeen", "lastSeen", "src" },
     },
     signal = {
       ["forever/normal/alliance/us:1"] = [=[{ "m1", "sell", 2589, "day", 0.8, "Linen sells 20 % above the 30-day median", 0, 800, 5, nil, 1760090000, "ahsync" }]=],
@@ -89,14 +108,14 @@ B.deferred[#B.deferred + 1] = {
     },
     sources = { "hand-written fixture world-mini" },
     spot = {
-      [1] = [=[{ "Hogger's camp", 1429, 0.27, 0.86, 120, 8, 12, { { 2589, 30 }, { 1931, 1 } }, "verified", 11, "ahsync" }]=],
-      [2] = [=[{ "Fargodeep Mine", 1429, 0.4, 0.8, 80, 6, 10, { { 2589, 20 }, { 1185, 0.5 } }, "unverified", 12, "ahsync" }]=],
-      [3] = [=[{ "Westfall farms", 1436, 0.5, 0.5, 150, 10, 15, { { 424242, 5 } }, "refuted", nil, "ahsync" }]=],
+      [1] = [=[{ "Hogger's camp", 1429, 0.27, 0.86, 120, 8, 12, { { 2589, 30 }, { 1931, 1 } }, 11, "ahsync" }]=],
+      [2] = [=[{ "Fargodeep Mine", 1429, 0.4, 0.8, 80, 6, 10, { { 2589, 20 }, { 1185, 0.5 } }, 12, "ahsync" }]=],
+      [3] = [=[{ "Westfall farms", 1436, 0.5, 0.5, 150, 10, 15, { { 424242, 5 } }, nil, "ahsync" }]=],
     },
     strategy = {
-      [11] = [=[{ "farm", "Hogger's camp linen farm", 2589, 1429, 0.27, 0.86, 3, 12000, "verified", "1.60.1.70450", 1759900000, 1760000000, "ahsync" }]=],
-      [12] = [=[{ "farm", "Fargodeep Mine kobolds", 2589, 1429, 0.4, 0.8, 1, 800, "unverified", "1.60.1.70450", 1759950000, 1760000000, "ahsync" }]=],
-      [13] = [=[{ "farm_spot", "Hogger for the Blood Saber", 1185, 1429, 0.27, 0.86, 2, 4000, "unverified", "1.60.1.70450", 1759917600, 1759996800, "ahsync" }]=],
+      [11] = [=[{ "farm", "Hogger's camp linen farm", 2589, 1429, 0.27, 0.86, 3, 12000, "1.60.1.70450", 1759900000, 1760000000, "ahsync" }]=],
+      [12] = [=[{ "farm", "Fargodeep Mine kobolds", 2589, 1429, 0.4, 0.8, 1, 800, "1.60.1.70450", 1759950000, 1760000000, "ahsync" }]=],
+      [13] = [=[{ "farm_spot", "Hogger for the Blood Saber", 1185, 1429, 0.27, 0.86, 2, 4000, "1.60.1.70450", 1759917600, 1759996800, "ahsync" }]=],
     },
     version = "0.1.0",
   },

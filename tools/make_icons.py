@@ -53,6 +53,7 @@ GLYPH_ICONS = {
     "Bastians_Voice": "orbit",  # Bastian's Orbiter
     "Bastians_Chat": "app_chat",
     "Bastians_Gestures": "app_gestures",
+    "Bastians_Courtesy": "app_courtesy",
     "Bastians_Campfire": "app_campfire",
     "Bastians_Library": "tale",
     **{

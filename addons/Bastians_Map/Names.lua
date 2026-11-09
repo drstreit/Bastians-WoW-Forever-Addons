@@ -183,7 +183,7 @@ function Names.Query(view)
   if view.minimap then
     return {}
   end
-  local st = ns.Styles and ns.Styles.Get(Map.Style())
+  local st = ns.Styles and ns.Styles.Get(Map.StyleOn(view.continent))
   if st and st.labels then
     return Names.StyleQuery(view, st.labels[view.continent], face(st))
   end

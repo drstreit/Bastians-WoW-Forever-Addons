@@ -11,16 +11,23 @@ local Today, Spots = ns.Today, ns.Spots
 local W = {}
 ns.Window = W
 
-local TABS = { { "today", "Today" }, { "spots", "Farm spots" }, { "price", "Price" }, { "bags", "Bags" } }
+local TABS = {
+  { "today", "Today" },
+  { "spots", "Farm spots" },
+  { "price", "Price" },
+  { "bags", "Bags" },
+  { "ledger", "Ledger" },
+}
 -- what each tab shows, after the hover delay
 local TAB_TIPS = {
   today = L["Your income today and this week, and what the market does."],
   spots = L["Farm spots and strategies with gold per hour."],
   price = L["The price of an item: auction house, vendor, history."],
   bags = L["What to sell, post or keep from your bags."],
+  ledger = L["What you bought and sold, and when the market runs high."],
 }
 -- the tabs' pictograms (ADR 0046): income, farm spots, the price of an item, the bags
-local TAB_ICONS = { today = "gold", spots = "spot", price = "ledger", bags = "item" }
+local TAB_ICONS = { today = "gold", spots = "spot", price = "ledger", bags = "item", ledger = "note" }
 local RENDER_DELAY = 0.05
 
 local mod, win, tree, summary, hint
@@ -64,21 +71,24 @@ end
 
 -- The income block: gold per day, AH apart from loot, the
 -- account's total with a line per character, today and the last seven days.
+-- "AH 25s, loot 1g 80s, spent 1g 30s"
+local function incomeWords(b)
+  return string.format(
+    "%s %s, %s %s, %s %s",
+    L["AH"],
+    B.UI.Money(b.ah or 0),
+    L["loot"],
+    B.UI.Money(b.loot or 0),
+    L["spent"],
+    B.UI.Money(b.spent or 0)
+  )
+end
+
 local function incomeRows()
   local Income = ns.Income
   local today = Income.Day() or { ah = 0, loot = 0, spent = 0, chars = {} }
   local week = Income.Total(7)
-  local function words(b)
-    return string.format(
-      "%s %s, %s %s, %s %s",
-      L["AH"],
-      B.UI.Money(b.ah or 0),
-      L["loot"],
-      B.UI.Money(b.loot or 0),
-      L["spent"],
-      B.UI.Money(b.spent or 0)
-    )
-  end
+  local words = incomeWords
   local rows = {
     {
       id = "income:today",
@@ -273,6 +283,21 @@ local function priceRows()
   return roots, B:Entity(ref):Name() or ref
 end
 
+-- The ledger: the book by item, then the market's hours (gold.md "The ledger").
+local function ledgerRows()
+  local roots, text = ns.Ledger.Tree()
+  local hours = ns.History.HourRows()
+  if #hours > 0 then
+    roots[#roots + 1] = {
+      id = "ledger:hours",
+      kind = "section",
+      text = S.accent() .. string.upper(L["When the market runs high"]) .. "|r",
+      children = hours,
+    }
+  end
+  return roots, text
+end
+
 -- The bag advisor (S4): three groups, post, vendor and keep, each item with its count, the
 -- reason in grey and what the advised way brings in the value column.
 local function bagRows()
@@ -346,6 +371,8 @@ function W.Render()
     rows, text = priceRows()
   elseif v == "bags" then
     rows, text = bagRows()
+  elseif v == "ledger" then
+    rows, text = ledgerRows()
   else
     rows, text = todayRows()
   end
@@ -415,7 +442,7 @@ local function build()
   W.win, W.tree, W.summary, W.tabs = win, tree, summary, tabs
 end
 
--- Open a tab: "today", "spots" (arg = itemID or nil), "price" (arg = itemID), "bags".
+-- Open a tab: "today", "spots" (arg = itemID or nil), "price" (arg = itemID), "bags", "ledger".
 function W.Open(which, arg)
   if not (mod and mod:IsEnabled()) then
     return false
@@ -430,6 +457,7 @@ function W.Open(which, arg)
     filterItem = arg
   end
   if win:IsShown() then
+    win:Show() -- to the front
     W.Render()
   else
     win:Show()
@@ -455,13 +483,182 @@ function W.IsShown()
   return win ~= nil and win:IsShown()
 end
 
+-- Gold's Overview on the Atlas (ADR 0058, PH4): the income per day, the farm spots here.
+function W.OverviewRows()
+  local rows = { incomeRows() }
+  local map = B.Coords.PlayerMap()
+  local list = map and ns.Spots.HereList(map) or {}
+  if #list > 0 then
+    local children = {}
+    for _, it in ipairs(list) do
+      children[#children + 1] = {
+        id = "overview:spot:" .. it.s.id,
+        ref = "spot:" .. it.s.id,
+        text = it.s.name .. "  " .. S.H.muted .. ns.Spots.Words(it.s) .. "|r",
+      }
+    end
+    rows[#rows + 1] = {
+      id = "overview:spots",
+      kind = "section",
+      text = S.accent() .. string.upper(L["Farm spots here"]) .. "|r",
+      children = children,
+    }
+  end
+  return rows
+end
+
+-- The stat tiles (ADR 0058, PH4): Gold's four on its Overview, the best spot here on Here.
+local function registerStats(self)
+  local Income = ns.Income
+  local INCOME = { "BASTIANS_GOLD_INCOME" }
+  B:RegisterStat(self, {
+    id = "gold.stat.money",
+    rail = "gold",
+    order = 10,
+    title = L["Gold on hand"],
+    invalidateOn = INCOME,
+    build = function()
+      local money = B.Compat.GetMoney()
+      return { value = money and B.UI.Money(money) or nil }
+    end,
+  })
+  B:RegisterStat(self, {
+    id = "gold.stat.income",
+    rail = "gold",
+    order = 20,
+    title = L["Income"],
+    invalidateOn = INCOME,
+    build = function()
+      local t = Income.Day() or { ah = 0, loot = 0, spent = 0 }
+      return { value = B.UI.Money((t.ah or 0) + (t.loot or 0)), note = L["Today"] .. ": " .. incomeWords(t) }
+    end,
+  })
+  B:RegisterStat(self, {
+    id = "gold.stat.spent",
+    rail = "gold",
+    order = 30,
+    title = L["Spent"],
+    invalidateOn = INCOME,
+    build = function()
+      local t = Income.Day() or { spent = 0 }
+      return { value = B.UI.Money(t.spent or 0), note = L["Today"] }
+    end,
+  })
+  B:RegisterStat(self, {
+    id = "gold.stat.week",
+    rail = "gold",
+    order = 40,
+    title = L["Last 7 days"],
+    invalidateOn = INCOME,
+    build = function()
+      local w = Income.Total(7)
+      local net = (w.ah or 0) + (w.loot or 0) - (w.spent or 0)
+      return { value = (net < 0 and "-" or "") .. B.UI.Money(math.abs(net)), note = incomeWords(w) }
+    end,
+  })
+  B:RegisterStat(self, {
+    id = "gold.stat.spot",
+    rail = "here",
+    order = 40,
+    title = L["Best spot here"],
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_PLAYER_MOVED_ZONE", "BASTIANS_DATA_LOADED" },
+    build = function()
+      local map = B.Coords.PlayerMap()
+      local best = map and ns.Spots.HereList(map)[1] or nil
+      if not best then
+        return nil -- no spot on this zone: no tile
+      end
+      return {
+        value = best.gph and (B.UI.Money(best.gph) .. "/h") or nil, -- no market: unknown, not 0
+        note = best.s.name,
+        ref = "spot:" .. best.s.id,
+      }
+    end,
+  })
+end
+
 function W.Register(self)
   mod = self
   self:On("BASTIANS_DATA_LOADED", W.Schedule)
   self:On("BASTIANS_GRAPH_TIMES", W.Schedule) -- the spots' travel times (W8)
   self:On("BASTIANS_THEME_CHANGED", W.Schedule) -- the colour codes of the rows (ST3)
+  B:DeclareMessage("BASTIANS_GOLD_INCOME") -- the day's income moved (the stat tiles, the Overview)
   self:RegisterEvent("PLAYER_MONEY", function()
     ns.Income.OnMoney() -- the day's income first (R9; one handler per event per module)
+    self:Fire("BASTIANS_GOLD_INCOME")
     W.Schedule()
   end)
+  registerStats(self)
+  B:RegisterView(self, {
+    id = "gold.overview",
+    title = L["Overview"],
+    group = L["Gold"],
+    rail = "gold", -- the Atlas's rail entry, its first tab (ADR 0058)
+    first = true,
+    order = 1,
+    invalidateOn = {
+      "BASTIANS_GOLD_INCOME",
+      "BASTIANS_PRICES_UPDATED",
+      "BASTIANS_PLAYER_MOVED_ZONE",
+      "BASTIANS_GRAPH_TIMES",
+    },
+    render = function(host)
+      host:SetRows(W.OverviewRows())
+      host:SetSummary(L["gold per day"])
+    end,
+  })
+  -- Bags (ADR 0058, PH6; A5.4): one answer per bag item with the reason; a tab of Gold
+  B:RegisterView(self, {
+    id = "gold.bags",
+    title = L["Bags"],
+    group = L["Gold"],
+    rail = "gold",
+    order = 60,
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_ALTS_CHANGED", "BASTIANS_GOLD_INCOME" },
+    render = function(host)
+      local rows, words = W.BagAnswerRows()
+      host:SetRows(rows)
+      host:SetSummary(words)
+    end,
+  })
+end
+
+-- The rows of the Bags view (ADR 0058, PH6): a tile per bag slot, the answer as its badge, the
+-- reason under the name, what the way brings as the value. -> rows, the summary line.
+local ANSWER_WORDS =
+  { sell = "Sell", auction = "Auction", disenchant = "Disenchant", mail = "Mail to %s", keep = "Keep" }
+
+function W.BagAnswerRows()
+  local answers = ns.Advisor.Answers()
+  if #answers == 0 then
+    return { { text = S.H.muted .. L["Your bags are empty."] .. "|r", kind = "para" } },
+      L["Bags: nothing to advise"]
+  end
+  local rows, counts = {}, {}
+  for _, a in ipairs(answers) do
+    local it = a.item
+    counts[a.answer] = (counts[a.answer] or 0) + 1
+    local word = a.answer == "mail" and string.format(L[ANSWER_WORDS.mail], a.to or "?")
+      or L[ANSWER_WORDS[a.answer]]
+    rows[#rows + 1] = {
+      id = "bag:" .. tostring(it.bag) .. ":" .. tostring(it.slot),
+      ref = "item:" .. it.itemID,
+      icon = it.icon,
+      text = it.name .. (it.count > 1 and (" x" .. it.count) or ""),
+      meta = a.reason,
+      badge = word,
+      answer = a.answer,
+      value = a.total,
+      valueKind = a.total and "money" or nil,
+    }
+  end
+  local words = string.format(
+    L["%d items: %d to sell, %d to auction, %d to disenchant, %d to mail"],
+    #answers,
+    counts.sell or 0,
+    counts.auction or 0,
+    counts.disenchant or 0,
+    counts.mail or 0
+  )
+  return rows, words
 end

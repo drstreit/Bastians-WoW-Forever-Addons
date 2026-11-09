@@ -41,12 +41,13 @@ B.deferred[#B.deferred + 1] = {
         [1436] = { "36-1" },
       },
       ["node.byZone"] = {},
+      ["node.objects"] = {},
       ["npc.bySoldItem"] = {
         [1185] = { 54 },
         [2589] = { 54 },
       },
       ["npc.byZone"] = {
-        [1429] = { 54, 198, 240, 295, 327, 448, 8719 },
+        [1429] = { 54, 198, 240, 295, 327, 448, 1260, 8719 },
         [1436] = { 234 },
       },
       ["object.byZone"] = {
@@ -80,6 +81,7 @@ B.deferred[#B.deferred + 1] = {
         [448] = "Hogger",
         [639] = "Edwin VanCleef",
         [644] = "Rhahk'Zor",
+        [1260] = "Leprithus",
         [8719] = "Auctioneer Fitch",
       },
       object = {
@@ -113,6 +115,7 @@ B.deferred[#B.deferred + 1] = {
       [448] = [=[{ "Hogger", nil, 11, nil, 1429, "elite", nil, { { 1429, 0.27, 0.86, "eq" }, { 1429, 0.3, 0.8, "questie" } }, nil, nil, { { 2589, 45.5 }, { 1185, 3.2 } }, nil, "classic" }]=],
       [639] = [=[{ "Edwin VanCleef", nil, nil, nil, nil, { "boss" }, nil, nil, nil, nil, nil, nil, "forever", 36 }]=],
       [644] = [=[{ "Rhahk'Zor", nil, nil, nil, nil, { "boss" }, nil, nil, nil, nil, { { 1185 } }, "forever", "forever", 36 }]=],
+      [1260] = [=[{ "Leprithus", nil, 18, nil, 1429, "rare", nil, { { 1429, 0.15, 0.9, "classic", 40 } }, nil, nil, nil, nil, "classic" }]=],
       [8719] = [=[{ "Auctioneer Fitch", "Auctioneer", 30, nil, 1429, "auctioneer", nil, { { 1429, 0.425, 0.645, "eq" } }, nil, nil, nil, nil, "forever" }]=],
     },
     object = {
@@ -143,7 +146,10 @@ B.deferred[#B.deferred + 1] = {
         "name", "kind", "faction", "stops", "world", "ride", "cycle", "verified", "note", "spawns", "src",
         "departs", "dock",
       },
-      zone = { "name", "parent", "continent", "levelLo", "levelHi", "levelMed", "questsA", "questsH", "mapType" },
+      zone = {
+        "name", "parent", "continent", "levelLo", "levelHi", "levelMed", "questsA", "questsH", "mapType",
+        "fishing",
+      },
     },
     sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
     teleport = {
@@ -158,8 +164,8 @@ B.deferred[#B.deferred + 1] = {
     version = "0.1.0",
     zone = {
       [1415] = [=[{ "Eastern Kingdoms", 947, 0, nil, nil, nil, nil, nil, 2 }]=],
-      [1429] = [=[{ "Elwynn Forest", 1415, 0, 7, 11, 9, 3, 3, 3 }]=],
-      [1436] = [=[{ "Westfall", 1415, 0, 9, 10, 10, 1, 2 }]=],
+      [1429] = [=[{ "Elwynn Forest", 1415, 0, 7, 11, 9, 3, 3, 3, 25 }]=],
+      [1436] = [=[{ "Westfall", 1415, 0, 9, 10, 10, 2, 3 }]=],
       [1581] = [=[{ "The Deadmines", 1436, 0, nil, nil, nil, nil, nil, 4 }]=],
       [1582] = [=[{ "The Deadmines", 1436, 0, nil, nil, nil, nil, nil, 4 }]=],
     },

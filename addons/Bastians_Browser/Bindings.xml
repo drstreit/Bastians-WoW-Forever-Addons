@@ -1,0 +1,5 @@
+<Bindings>
+  <Binding name="BASTIANS_BROWSER_HOVERED" header="BASTIANS_BROWSER" category="ADDONS">
+    Bastians:GetModule("Browser").Browser.OpenHovered()
+  </Binding>
+</Bindings>

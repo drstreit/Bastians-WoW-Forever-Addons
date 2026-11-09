@@ -253,14 +253,20 @@ function Imagery.Render(cam)
   if not parent then
     return
   end
-  local style = Map.Style()
+  local style = Map.StyleOn(cam.continent)
   local used, zonesDrawn = 0, 0
   -- the physical map: every zone's art under the ground tiles; the baked styles (ADR 0027, the
   -- Blizzard one of ADR 0036) draw no painting here. No zone rectangles in any style (owner, retail
   -- 29.10.2026: "remove them"; they were the paintings' frames, not the zones' borders)
   local ours = style ~= "physical"
+  -- Map_Art's overview cells are opaque (their sea is the continent's painting): a zone's
+  -- painting under them is never seen, and past their edge it showed as a stray stripe (Feralas,
+  -- 1,175 yd west of Kalimdor's cells; "Kalimdor has an old parchment
+  -- stripe on the left side"). With cells only the continent's painting draws under them.
+  local Overview = ns.Overview
+  local cells = not ours and Overview and Overview.Enabled() and Overview.Count(cam.continent) > 0
   for _, z in ipairs(Imagery.Zones(cam.continent)) do
-    if (z.depth == 0 or Imagery.IsZone(z)) and intersects(cam, z) then
+    if (z.depth == 0 or (not cells and Imagery.IsZone(z))) and intersects(cam, z) then
       zonesDrawn = zonesDrawn + 1
       local sub = Imagery.Sublevel(z, cam)
       if not ours then

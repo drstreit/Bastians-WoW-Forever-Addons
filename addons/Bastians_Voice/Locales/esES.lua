@@ -123,6 +123,11 @@ local strings = {
   ["Read by the game's voice (no Spoken line)"] = "Leído por la voz del juego (sin línea de Spoken)",
   ["The game's voice that reads"] = "La voz del juego que lee",
   ["A woman's voice (auto)"] = "Una voz de mujer (automática)",
+  ["Locked in place. The lock on the ring unlocks it."] = "Posición bloqueada. El candado del anillo la desbloquea.",
+  ["Locked in place"] = "Posición bloqueada",
+  ["Click to move the Orbiter freely."] = "Haz clic para mover el Orbiter libremente.",
+  ["Moves freely"] = "Se mueve libremente",
+  ["Drag the Orbiter where you want it. Click to lock it in place."] = "Arrastra el Orbiter adonde quieras. Haz clic para bloquear su posición.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

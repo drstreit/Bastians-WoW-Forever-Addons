@@ -128,14 +128,17 @@ local function draggable(region, win)
       return -- locked in place
     end
     if win.dock then
-      win:Undock() -- dragging a docked window away undocks it
+      win:Undock(true) -- dragging a docked window away undocks it, where it stands
     end
-    win.frame:SetClampedToScreen(false)
+    -- The move starts from where the window is seen, anchored there, and stays on the screen
+    -- ("when I click in the top bar to move it, it jumps out of the top
+    -- border of the screen and my mouse is in the middle"). The clamp used to be lifted for the
+    -- move: a window whose anchor lay beyond the screen edge, shown clamped, then jumped to it.
+    win:AnchorAtSight()
     win.frame:StartMoving()
   end)
   region:SetScript("OnDragStop", function()
     win.frame:StopMovingOrSizing()
-    win.frame:SetClampedToScreen(true)
     win.dodged = nil -- moved by hand: this is its place now, nothing to restore
     win:SavePlace()
   end)
@@ -154,7 +157,7 @@ function B.UI.Window(name, opts)
 
   local size = db.size or { opts.width or DEFAULTS.width, opts.height or DEFAULTS.height }
   frame:SetSize(size[1], size[2])
-  frame:SetFrameStrata(Window.STRATA)
+  frame:SetFrameStrata(opts.strata or Window.STRATA)
   frame:SetToplevel(not opts.onTop) -- a window on top never climbs over the tooltips and menus
   frame:SetClampedToScreen(true)
   frame:SetMovable(true)
@@ -471,11 +474,25 @@ function Window:IsDocked()
   return self.dock ~= nil
 end
 
--- Back to the windowed place; followers of this window are released too.
-function Window:Undock()
+-- Pins the window at the place it is seen: one TOPLEFT point on UIParent, so a move or a size
+-- starts from there whatever its anchors were (a partner, the centre, a clamped place).
+function Window:AnchorAtSight()
+  local f = self.frame
+  local left, top = f:GetLeft(), f:GetTop()
+  if left and top then
+    f:ClearAllPoints()
+    f:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
+  end
+end
+
+-- Back to the windowed place; followers of this window are released too. `inPlace` (the Dock
+-- button, a drag): the window stays where it stands at its docked size, fitted onto the screen
+-- (undocking from the button "scales large and strangely from top to
+-- bottom": it jumped to an old place and size, or to the screen's centre at the default size).
+function Window:Undock(inPlace)
   for follower in pairs(self.followers or {}) do
     if follower.dock and follower.dock.with == self then
-      follower:Undock()
+      follower:Undock(inPlace)
     end
   end
   local d = self.dock
@@ -487,7 +504,13 @@ function Window:Undock()
   if d.with.followers then
     d.with.followers[self] = nil
   end
-  self:RestorePlace()
+  if inPlace then
+    self:AnchorAtSight()
+    self:SavePlace()
+    self:FitScreen()
+  else
+    self:RestorePlace()
+  end
   if not self.db.size then
     self.frame:SetSize(self.opts.width or DEFAULTS.width, self.opts.height or DEFAULTS.height)
   end
@@ -498,10 +521,13 @@ end
 
 -- The Dock button of the pair (the map and the Browser): docks the right window to the left one,
 -- opening what is missing through its module; a second press undocks. Returns the new state.
+-- A pair still docked but with one window closed by hand docks again with both shown (owner,
+-- Forever 07.11.2026: "I close it by hand, the next Dock does nothing - it still thinks it's open").
 function B.UI.ToggleDock()
   local rightWin = B.UI.Windows[B.UI.DOCK.right]
-  if rightWin and rightWin.dock then
-    rightWin:Undock()
+  local leftWin = B.UI.Windows[B.UI.DOCK.left]
+  if rightWin and rightWin.dock and rightWin:IsShown() and leftWin and leftWin:IsShown() then
+    rightWin:Undock(true)
     return false
   end
   for _, name in ipairs({ B.UI.DOCK.left, B.UI.DOCK.right }) do
@@ -519,7 +545,7 @@ function B.UI.ToggleDock()
       end
     end
   end
-  local leftWin = B.UI.Windows[B.UI.DOCK.left]
+  leftWin = B.UI.Windows[B.UI.DOCK.left]
   rightWin = B.UI.Windows[B.UI.DOCK.right]
   if not (leftWin and rightWin) then
     return false
@@ -639,6 +665,7 @@ end
 -- Above other addons' windows, which sit on DIALOG or below (some covered the
 -- map), and above the world map when it is drawn full screen; tooltips and menus stay above us.
 Window.STRATA = "FULLSCREEN_DIALOG"
+B.UI.WINDOW_STRATA = Window.STRATA -- for the few windows the factory does not build
 -- `opts.onTop` ("the route window should be a high layer on top of all
 -- others"): the strata of the tooltips and menus, at its lowest level and never raised, so they
 -- still come over it (the menus raise themselves; the kit's tooltip too, S.TipEnter), while every
@@ -651,7 +678,7 @@ function Window:PlaceStrata()
     self.frame:SetFrameLevel(1)
     return
   end
-  self.frame:SetFrameStrata(Window.STRATA)
+  self.frame:SetFrameStrata(self.opts.strata or Window.STRATA)
   self.frame:Raise()
 end
 
@@ -830,8 +857,14 @@ function Window:SetTitle(text)
     self.chrome:SetTitle(text or "")
   end
 end
+-- Opens the window, and brings one already open to the front ("every
+-- window that is newly opened should always be on top of all others").
 function Window:Show()
-  self.frame:Show()
+  if self.frame:IsShown() then
+    self:PlaceStrata()
+  else
+    self.frame:Show()
+  end
 end
 function Window:Hide()
   self.frame:Hide()

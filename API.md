@@ -52,7 +52,7 @@ arrives after `PLAYER_LOGIN`: until then, and whenever an app is missing, the an
 |---|---|---|
 | `Apps()` | `{ { name, title, version, enabled } }`: the suite's installed apps, sorted by `name`. `name` is the stable English name (`"Quests"`, `"Gold"`, `"Route"`, ...), `title` the shown one, `version` the addon's TOC version | Core |
 | `IsEnabled(name)` | `true` while the app `name` runs, else `false` | Core |
-| `Price(itemID)` | `{ median, minBuyout, quantity, salesPerDay, median7d, median30d, low30d, high30d, age, source, stale, label }` or `nil`. Prices in copper. `age`: seconds since the data was taken. `source`: `"scan"` (the player's own auction house scan) or `"market"` (the market data shipped with Bastian's Data). `stale`: `true` when an old own scan is all there is. `label`: the market's name | Bastian's Gold |
+| `Price(itemID)` | `{ median, minBuyout, quantity, salesPerDay, median7d, median30d, low30d, high30d, age, source, stale, label }` or `nil`. Prices in copper. `age`: seconds since the data was taken. `source`: `"scan"` (the player's own auction house scan), `"addon"` (AHledger's, Auctionator's or TradeSkillMaster's price for this market, when the player has one of them) or `"market"` (the market data shipped with Bastian's Data, which may come from a neighbouring market). `stale`: `true` when an old own scan is all there is. `label`: the name of the market or addon that answered | Bastian's Gold |
 | `Quest(questID)` | `{ done, inLog, ready }` (booleans; `ready`: in the log and can be turned in) or `nil` until Bastian's Quests has read the quest log | Bastian's Quests |
 | `QuestLog()` | `{ count, ready }`: the quests in the log and how many can be turned in; or `nil` | Bastian's Quests |
 | `Route()` | `{ goal, continent, wx, wy, seconds, step, steps }` of the active route: the goal's name and world position, the time left, the current step and the number of steps; or `nil` without a route | Bastian's Route |
@@ -158,6 +158,7 @@ A test in the suite's repository fails when a new app forgets one.
 | Voice (the Orbiter) | Bastian's Orbiter | `/bv` | `Speak`; `BASTIANS_VOICE_CHANGED` |
 | Chat | Bastian's Chat | `/bchat` | `BASTIANS_CHAT_UNREAD` |
 | Gestures | Bastian's Gestures | `/bgest` | `Open("Gestures")` |
+| Courtesy | Bastian's Courtesy | `/bcourtesy` | `Open("Courtesy")` |
 | Campfire (Forever) | Bastian's Campfire | `/bcamp` | `Camp`; `BASTIANS_CAMP_SHARED`, `BASTIANS_CAMP_WARMED`, `BASTIANS_CAMP_FADING`; the `camp` message |
 | Data | none (no window) | none | `TravelTime`; `BASTIANS_GRAPH_TIMES` |
 

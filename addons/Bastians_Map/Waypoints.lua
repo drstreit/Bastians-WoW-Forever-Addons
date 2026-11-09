@@ -224,6 +224,19 @@ function Waypoints.Register(self)
   })
   B:RegisterAction(self, {
     id = "map.show",
+    main = {
+      "npc",
+      "object",
+      "node",
+      "quest",
+      "chain", -- where the chain is now (its `locations`)
+      "dungeon",
+      "spot",
+      "area",
+      "entrance",
+      "flightpath",
+      "transport",
+    }, -- a button of the sheet (ADR 0054)
     label = L["Show on map"],
     short = L["Map"], -- the band's button
     icon = B.UI.IconTexture("zone"),
@@ -269,9 +282,13 @@ function Waypoints.Register(self)
           return
         end
         Map.Open()
-        Map.FitWorld(continent, pts, math.max(Map.Camera().level, Waypoints.SHOW_LEVEL))
+        local went = Map.FitWorld(continent, pts, math.max(Map.Camera().level, Waypoints.SHOW_LEVEL))
         setShown(ref, continent, pts)
-        Waypoints.Set(continent, wx, wy, nameOf(ref), map, x, y)
+        if went then
+          Waypoints.Set(continent, went.wx, went.wy, nameOf(ref))
+        else
+          Waypoints.Set(continent, wx, wy, nameOf(ref), map, x, y)
+        end
         focus()
         return
       end
@@ -302,9 +319,13 @@ function Waypoints.Register(self)
           points[#points + 1] = { wx = px, wy = py }
         end
       end
-      Map.FitWorld(continent, points, level)
+      local went = Map.FitWorld(continent, points, level)
       setShown(ref, continent, points)
-      Waypoints.Set(continent, wx, wy, B:Entity(ref):Name(), map, x, y)
+      if went then -- the waypoint where the view went, not on the far group
+        Waypoints.Set(continent, went.wx, went.wy, B:Entity(ref):Name())
+      else
+        Waypoints.Set(continent, wx, wy, B:Entity(ref):Name(), map, x, y)
+      end
       focus()
     end,
   })
@@ -312,12 +333,18 @@ function Waypoints.Register(self)
   -- 22.10.2026: zone pages had no way to the map), the view fitted to its corners
   B:RegisterAction(self, {
     id = "map.zone",
+    main = true, -- a button of the sheet (ADR 0054)
     label = L["Show on map"],
     short = L["Map"],
     icon = B.UI.IconTexture("zone"),
     types = { "zone" },
     order = 10,
-    when = function(ref)
+    when = function(ref, ctx)
+      if ctx and ctx.point then
+        -- a point on the ground: map.show flies to that very point, one "Show on map" (owner,
+        -- Forever 07.11.2026: the ground's menu said it twice)
+        return false
+      end
       local map = tonumber(string.match(ref, "^zone:(%d+)$"))
       return map ~= nil and B.Coords.ToWorld(map, 0.5, 0.5) ~= nil
     end,
@@ -328,6 +355,7 @@ function Waypoints.Register(self)
   })
   B:RegisterAction(self, {
     id = "chat.way",
+    main = { "object", "node" }, -- a button of the sheet (ADR 0054)
     label = L["Copy /way"],
     icon = B.UI.IconTexture("other"),
     types = "*",

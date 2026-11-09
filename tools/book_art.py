@@ -29,8 +29,10 @@ ADDON = "Bastians_Data_Strategies"
 # approved by , not drawn from a page's scene by AHSync
 FRONT = CONTENT / "art" / "front"
 FRONT_IDS = frozenset(
-    {"title", "news", "search", "bookmarks"}
-)  # search replaced index (30.10.2026)
+    {"title", "news", "search", "bookmarks", "world"}
+)  # search replaced index (30.10.2026); world: the story map (ADR 0057)
+# pictures that ship whole and larger: the world's are coordinates, so nothing is cut off them
+WHOLE = {"world": (2048, 1024)}
 ART_DIR = Path("Generated") / "Art"
 SOURCES = (".jpg", ".png")
 GAME_SIZE = (512, 256)
@@ -167,9 +169,12 @@ def blp_dxt1(image) -> bytes:
 
 
 def game_texture(path: Path) -> bytes:
-    """The game's texture: 512 x 256 BLP2, DXT1 with mipmaps."""
+    """The game's texture: 512 x 256 BLP2 (WHOLE: its own size, uncut), DXT1 with mipmaps."""
     from PIL import Image
 
+    if path.stem in WHOLE:
+        image = Image.open(path).convert("RGB")
+        return blp_dxt1(image.resize(WHOLE[path.stem], Image.Resampling.LANCZOS))
     return blp_dxt1(cut(path).resize(GAME_SIZE, Image.Resampling.LANCZOS))
 
 

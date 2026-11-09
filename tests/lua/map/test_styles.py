@@ -83,6 +83,42 @@ def test_a_style_whose_addon_is_gone_falls_back_to_the_physical_map(wow: WowRunt
     assert wow.errors == []
 
 
+def test_a_continent_the_style_has_no_cells_for_shows_the_physical_map(wow: WowRuntime):
+    boot(wow, tiles=True)
+    register(wow)  # cells on continent 0 only, as the styles lacked Zephras Isle until 07.11.2026
+    wow.execute(f"{MAP_}.SetStyle('pencil')")
+    assert wow.eval(f"{MAP_}.StyleOn(0)") == "pencil"
+    assert wow.eval(f"{MAP_}.StyleOn(1)") == "physical"
+    assert wow.eval(f"{MAP_}.Style()") == "pencil"  # the player's choice is not touched
+    assert wow.eval(f"{ST}.On('game', 1)") == "game"  # the minimap's own style is no baked one
+    wow.execute(f"{MAP_}.Fly(1, 1000, 1000, 1)")
+    assert wow.eval(f"{ST}.far.stats.shown") == 0
+    assert wow.eval(f"{OV}.stats.shown") > 0  # the overview cells draw again
+    wow.execute(f"{MAP_}.Fly(0, -9460, 60, 1)")
+    assert wow.eval(f"{ST}.far.stats.shown") > 0  # back on a continent it covers
+    assert wow.eval(f"{OV}.stats.shown") == 0
+    assert wow.errors == []
+
+
+def test_zephras_isles_cells_draw_on_the_island(wow: WowRuntime):
+    """ "Zephras island has only the physical map". The styles carry the
+    island's cells since then (its near cells 6..8 x 5..7, far cells 3..4 x 2..3, as emitted)."""
+    boot(wow, tiles=True)
+    near = {2991: [(cx, cy) for cx in (6, 7, 8) for cy in (5, 6, 7)]}
+    far = {2991: [(3, 2), (3, 3), (4, 2), (4, 3)]}
+    wow.execute(style_lua("pencil", wow.client, "test", near, far))
+    wow.execute("Bastians.Deliver()")
+    wow.execute(f"{MAP_}.SetStyle('pencil')")
+    assert wow.eval(f"{MAP_}.StyleOn(2991)") == "pencil"
+    wow.execute(f"{MAP_}.Fly(2991, 3200, 1300, 1)")  # the island's middle, in world yards
+    far_files = {t.GetTexture(t) for t in wow.eval(f"{ST}.far.live").values()}
+    assert far_files and all("\\Far\\2991_" in f for f in far_files)
+    wow.execute(f"{MAP_}.Fly(2991, 3200, 1300, 4)")
+    near_files = {t.GetTexture(t) for t in wow.eval(f"{ST}.near.live").values()}
+    assert near_files and all("\\Near\\2991_" in f for f in near_files)
+    assert wow.errors == []
+
+
 def test_a_new_style_repaints_the_cells_in_place_without_a_zoom(wow: WowRuntime):
     """(R27.7): a new style showed only after a zoom, and zooming out and
     in could show two styles. Cells are kept by position: a kept cell now takes the new file."""

@@ -5,7 +5,7 @@ the Quests list with the All quests view's Status and Type filters, which then c
 import re
 
 from harness import WowRuntime
-from pages import chip, chips, menu, pick, pills
+from pages import chip, chips, menu, pick, pills, scope
 
 CORE, DATA, QUESTS, BROWSER = (
     "Bastians_Core",
@@ -52,7 +52,7 @@ def type_filter(wow: WowRuntime, text: str) -> None:
 def test_the_monsters_have_their_own_list(wow: WowRuntime):
     boot(wow)
     open_list(wow, "mob")
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Mobs"
+    assert wow.eval(f"{MOD}.win.title:GetText()") == "Monsters"
     pick(wow, TREE, "where", "All")
     rows = flat(wow)
     assert "Hogger  11" in rows and "Goldtooth  8" in rows
@@ -60,7 +60,7 @@ def test_the_monsters_have_their_own_list(wow: WowRuntime):
     assert not any(r.startswith("Marshal Dughan") for r in rows)
     first = wow.eval(f"{TREE}.flat[1]")
     assert first.ref.startswith("npc:")  # the rows open the NPC's page
-    assert pills(wow, TREE)[:2] == ["Where: All", "Rank: All"]
+    assert scope(wow) == "Everywhere" and "Rank: All" in pills(wow, TREE)
     open_list(wow, "npc")
     pick(wow, TREE, "where", "All")
     assert not any(r.startswith("Hogger") for r in flat(wow))
@@ -76,7 +76,7 @@ def test_the_filter_box_narrows_the_rows_as_you_type(wow: WowRuntime):
     pick(wow, TREE, "where", "All")
     type_filter(wow, "far")
     assert flat(wow) == ["Innkeeper Farley  6"]
-    assert strip(wow.eval(f"{MOD}.summary:GetText()")).startswith("1 of 1 shown")
+    assert strip(wow.eval(f"{MOD}.summary:GetText()")) == ""  # the foot counts the page (ADR 0058)
     assert chips(wow)[0] == ("All", 1, True)  # the counts follow the text
     type_filter(wow, "")
     assert len(flat(wow)) == 6

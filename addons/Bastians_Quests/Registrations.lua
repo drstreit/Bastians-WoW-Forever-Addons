@@ -10,8 +10,10 @@ local Reg = {}
 ns.Registrations = Reg
 
 local OBJECTIVE_RADIUS = 60 -- world yards, drawn as a soft area around an objective spot
+local HAND_IN_SIZE = 26 -- a done quest's "?" stands out from the map's 16 px pins (ADR 0053)
 local COLOR = {
   available = S.C.gold,
+  low = S.C.diffGrey, -- only low-level quests here: the game shows no mark (ADR 0051)
   soon = S.C.dim,
   blocked = S.C.muted,
   complete = S.C.gold,
@@ -33,13 +35,17 @@ end
 -- Layers
 -- ---------------------------------------------------------------------------------------------
 
--- giver ref -> "available" | "soon" | "blocked" | false, cached until the quests change
+-- giver ref -> "available" | "low" | "soon" | "blocked" | false, cached until the quests change
 local giverStatus = {}
 local giverQuests = {} -- giver ref -> { qid, ... } of the quests behind its status, for the pin
 
 function Reg.ResetCaches()
   giverStatus = {}
   giverQuests = {}
+end
+
+local function inBags(itemID)
+  return B.Compat.GetItemCount(itemID, true)
 end
 
 local function statusOfGiver(ref)
@@ -51,17 +57,27 @@ local function statusOfGiver(ref)
   local ids = d and d:Index("quest.byGiver", ref)
   local s = State.ForLogic()
   local best = false
-  local byStatus = { available = {}, soon = {}, blocked = {} }
+  local byStatus = { available = {}, low = {}, soon = {}, blocked = {} }
   for _, qid in ipairs(ids or {}) do
     local st = Logic.status(qid, s)
+    if st == "available" and Logic.AlreadyTaken(Logic.quest(qid), ref, inBags) then
+      st = "taken" -- the book is in the bags: its place offers nothing, the NPC's pin stays
+    end
     if st == "available" then
-      best = "available"
-      table.insert(byStatus.available, qid)
+      if Logic.isTrivial(Logic.quest(qid), s) then
+        table.insert(byStatus.low, qid)
+        if best ~= "available" then
+          best = "low"
+        end
+      else
+        best = "available"
+        table.insert(byStatus.available, qid)
+      end
     elseif st == "level" then
       local q = Logic.quest(qid)
       if (q.minLevel or 0) - s.level <= Logic.SOON then
         table.insert(byStatus.soon, qid)
-        if best ~= "available" then
+        if best ~= "available" and best ~= "low" then
           best = "soon"
         end
       end
@@ -70,6 +86,11 @@ local function statusOfGiver(ref)
       if not best then
         best = "blocked"
       end
+    end
+  end
+  if best == "available" then
+    for _, qid in ipairs(byStatus.low) do
+      table.insert(byStatus.available, qid) -- the giver's yellow pin names them too
     end
   end
   giverStatus[ref] = best
@@ -229,17 +250,41 @@ local function giverPins(view, wanted, priority)
   return pins
 end
 
+-- The quest the map shows (ADR 0053): the focused one, else the open log quest with the nearest
+-- spot on the player's map; nil without one.
+function Reg.FocusQuest()
+  local typ, id = B.Entity.Parse(B:Focused() or "")
+  if typ == "quest" and State.log[id] then
+    return id
+  end
+  local map, px, py = ns.Window.PlayerPlace()
+  local best, nearest
+  for _, qid in ipairs(State.order) do
+    local e = State.log[qid]
+    if not e.isComplete then
+      local place = ns.Views.PlaceOf(e, Logic.quest(qid), map, px, py)
+      local here = place.map == map and place.target == "objective"
+      if here and (nearest == nil or place.d < nearest) then
+        best, nearest = qid, place.d
+      end
+    end
+  end
+  return best
+end
+
+-- Hand-ins: every done quest's, large; an open quest's only while it has the map.
 local function turnInPins(view)
   local pins, seen = {}, {}
+  local focus = Reg.FocusQuest()
   for _, qid in ipairs(State.order) do
     local e = State.log[qid]
     local q = Logic.quest(qid)
-    for _, ref in ipairs(q and q.ends or {}) do
+    for _, ref in ipairs((e.isComplete or qid == focus) and q and q.ends or {}) do
       local pin = seen[ref]
       if pin then
         pin.quests[#pin.quests + 1] = qid
         if e.isComplete and not pin.complete then
-          pin.complete, pin.color, pin.priority = true, COLOR.complete, 70
+          pin.complete, pin.color, pin.priority, pin.size = true, nil, 70, HAND_IN_SIZE
         end
       else
         local wx, wy = inView(ref, view)
@@ -249,7 +294,8 @@ local function turnInPins(view)
             wx = wx,
             wy = wy,
             icon = B.UI.IconTexture("questActive"),
-            color = e.isComplete and COLOR.complete or COLOR.incomplete,
+            color = not e.isComplete and COLOR.incomplete or nil,
+            size = e.isComplete and HAND_IN_SIZE or nil,
             label = B:Entity(ref):Name(),
             priority = e.isComplete and 70 or 55,
             cluster = true,
@@ -268,9 +314,31 @@ local function turnInPins(view)
   return pins
 end
 
+-- What a spot asks for, in the client's words with the count: "Hippogryph Youth slain 0/8".
+local function objectiveWords(o)
+  local text = R.objectiveLabel(o)
+  if o.required and o.required > 0 then
+    return string.format("%s %d/%d", text, o.fulfilled or 0, o.required)
+  end
+  return text
+end
+
+-- The hover card of a spot: what to do here first, then the quest it is for.
+local function spotCard(pin)
+  local card = Reg.SignCard(pin) or { lines = {} }
+  local lines = { { text = card.title or pin.quest, color = "dim" } }
+  for i = 2, #pin.open do
+    table.insert(lines, i - 1, { text = objectiveWords(pin.open[i]), color = "good" })
+  end
+  for _, line in ipairs(card.lines) do
+    lines[#lines + 1] = line
+  end
+  return { title = objectiveWords(pin.open[1]), titleColor = "good", lines = lines }
+end
+
 local function objectivePins(view)
   local pins = {}
-  local function add(qid, e, map, x, y, kind)
+  local function add(qid, e, map, x, y, kind, open)
     local continent, wx, wy = B.Coords.ToWorld(map, x, y)
     if
       continent == view.continent
@@ -284,22 +352,28 @@ local function objectivePins(view)
         wx = wx,
         wy = wy,
         icon = B.UI.IconTexture(SPOT_ICON[kind] or "questActive"),
-        label = e.title,
+        label = open and objectiveWords(open[1]) or e.title, -- what to do here, when known
         priority = 65,
         cluster = false,
         radius = OBJECTIVE_RADIUS,
+        quests = open and { qid } or nil,
+        quest = e.title,
+        open = open,
+        card = open and spotCard or nil,
       }
     end
   end
-  local withoutSpots = {} -- log quests the pack has no spots for (retail, D2)
+  local withoutSpots = {} -- log quests the pack has no spots for (retail, Forever's own, D2)
+  local focus = Reg.FocusQuest() -- one quest has the map (ADR 0053)
   for _, qid in ipairs(State.order) do
     local e = State.log[qid]
     local q = Logic.quest(qid)
-    if not e.isComplete then
-      if q and q.spots then
-        for map, list in pairs(q.spots) do
+    if not e.isComplete and qid == focus then
+      local spots = q and q.spots and Logic.OpenSpots(e, q)
+      if spots and next(spots) then
+        for map, list in pairs(spots) do
           for _, s in ipairs(list) do
-            add(qid, e, map, s[1], s[2], s[3])
+            add(qid, e, map, s[1], s[2], s[3], s.open)
           end
         end
       else
@@ -333,7 +407,7 @@ local function registerLayers(mod)
     defaultOn = true,
     minLevel = 2,
     query = function(view)
-      return giverPins(view, { available = true }, 60)
+      return giverPins(view, { available = true, low = true }, 60)
     end,
   })
   B:RegisterMapLayer(mod, {
@@ -413,12 +487,32 @@ local function nextKind(id)
 end
 
 -- The places of a kind for the quest, the client's step filling in for missing targets.
+-- The places without the objective spots already done. Only a log
+-- quest in progress has any; a spot nobody can tell stays (Logic.OpenSpots).
+local function withoutFinished(id, points)
+  local entry, q = State.log[id], Logic.quest(id)
+  if not (entry and q and q.spots) or entry.isComplete or entry.readyForTurnIn then
+    return points
+  end
+  local open, out = Logic.OpenSpots(entry, q), {}
+  for _, p in ipairs(points) do
+    local keep = p.kind ~= "objective"
+    for _, s in ipairs(not keep and open[p.map] or {}) do
+      keep = keep or (s[1] == p.x and s[2] == p.y)
+    end
+    if keep then
+      out[#out + 1] = p
+    end
+  end
+  return out
+end
+
 local function questPlaces(ref, kind)
   local id = questID(ref)
   if not id then
     return {}
   end
-  local out = placesOfKind(B:Entity(ref):AllLocations(), kind)
+  local out = placesOfKind(withoutFinished(id, B:Entity(ref):AllLocations()), kind)
   if #out == 0 and kind == "objective" and State.log[id] then
     local step = clientStep(id)
     if step then
@@ -437,6 +531,7 @@ local function registerPlaces(mod)
       if not id then
         return points
       end
+      points = withoutFinished(id, points)
       local wanted = placesOfKind(points, nextKind(id))
       local entry = State.log[id]
       if #wanted == 0 and entry and not (entry.isComplete or entry.readyForTurnIn) then
@@ -530,6 +625,7 @@ local function registerActions(mod)
   })
   B:RegisterAction(mod, {
     id = "quests.track",
+    main = true, -- a button of the sheet (ADR 0054)
     label = L["Track: show it on the objective tracker"],
     short = L["Track"],
     icon = B.UI.IconTexture("questActive"),
@@ -547,6 +643,7 @@ local function registerActions(mod)
   })
   B:RegisterAction(mod, {
     id = "quests.untrack",
+    main = true, -- a button of the sheet (ADR 0054)
     label = L["Tracked: click to untrack"],
     short = L["Untrack"],
     icon = B.UI.IconTexture("questActive"),
@@ -596,6 +693,7 @@ end
 -- Returns the words, their colour and a sort rank (what the player can act on first).
 local SHORT_STATUS = {
   available = { "Available", "yellow", 1 },
+  low = { "Available, low level", "grey", 2 },
   log = { "In your log", "white", 3 },
   complete = { "Ready to turn in", "green", 0 },
   done = { "Done", "grey", 6 },
@@ -605,7 +703,16 @@ local SHORT_STATUS = {
   rep = { "Needs reputation", "grey", 5 },
   superseded = { "Replaced by another quest", "grey", 7 },
   never = { "Not for this character", "grey", 7 },
+  inactive = { "Not offered now", "grey", 8 },
 }
+
+-- Why the game does not offer the quest now, in a few words.
+local function inactiveWords(q)
+  if q and q.holiday then
+    return string.format(L["Only during %s"], L[q.holiday])
+  end
+  return L["Not offered now"]
+end
 
 local function shortStatus(id, s)
   local st = Logic.status(id, s)
@@ -613,11 +720,14 @@ local function shortStatus(id, s)
   if e and e.isComplete then
     st = "complete"
   end
-  local def = SHORT_STATUS[st] or SHORT_STATUS.never
+  local q = Logic.quest(id)
+  local key = (st == "available" and q and Logic.isTrivial(q, s)) and "low" or st
+  local def = SHORT_STATUS[key] or SHORT_STATUS.never
   local text = L[def[1]]
   if st == "level" then
-    local q = Logic.quest(id)
     text = string.format(text, q and q.minLevel or 0)
+  elseif st == "inactive" then
+    text = inactiveWords(q)
   elseif st == "log" and e then
     local progress = R.progressText(e)
     if progress ~= "" then
@@ -633,11 +743,13 @@ Reg.ShortStatus = shortStatus
 local CATEGORY = {
   [0] = "Ready to turn in",
   [1] = "Available",
+  [2] = "Available",
   [3] = "In your log",
   [4] = "Later",
   [5] = "Later",
   [6] = "Done",
   [7] = "Not for this character",
+  [8] = "Not offered now",
 }
 
 -- A Play button on a quest row when Spoken has a line for it (Bastian's Voice registers voice.play
@@ -655,11 +767,10 @@ local function voiceButton(ref)
   }
 end
 
--- Quest rows of an index entry, sorted by what the player can act on first. `grouped` puts them
--- under category rows (the page); flat rows carry the status words (tooltips, the old shape).
-local function questRows(indexName, key, grouped)
-  local d = data()
-  local ids = d and d:Index(indexName, key)
+-- Quest rows of a list of quest ids, sorted by what the player can act on first. `grouped` puts
+-- them under category rows (the page); flat rows carry the status words (tooltips, the old
+-- shape). `key` names the header rows. nil for no ids.
+local function questRowsFor(ids, grouped, key)
   if not ids or #ids == 0 then
     return nil
   end
@@ -669,7 +780,8 @@ local function questRows(indexName, key, grouped)
     local q = Logic.quest(id)
     local words, color, rank, st = shortStatus(id, s)
     local name = q and q.name or (L["Quest"] .. " " .. id)
-    local keepWords = not grouped or rank >= 3 -- under a header only the log progress and "needs" stay
+    -- under a header only "low level", the log progress and "needs" stay
+    local keepWords = not grouped or rank >= 2
     rows[#rows + 1] = {
       text = keepWords and (name .. "  " .. color .. words .. "|r") or name,
       ref = "quest:" .. id,
@@ -697,7 +809,7 @@ local function questRows(indexName, key, grouped)
     local title = L[CATEGORY[row.rank] or CATEGORY[7]]
     if not header or header.text ~= title then
       header = {
-        id = indexName .. ":" .. tostring(key) .. ":" .. title,
+        id = tostring(key) .. ":" .. title,
         text = title,
         kind = "section",
         children = {},
@@ -707,6 +819,15 @@ local function questRows(indexName, key, grouped)
     header.children[#header.children + 1] = row
   end
   return out
+end
+
+Reg.QuestRowsFor = questRowsFor -- the class quests view builds its rows here (Window.lua)
+
+-- Quest rows of an index entry (the pages' sections).
+local function questRows(indexName, key, grouped)
+  local d = data()
+  local ids = d and d:Index(indexName, key)
+  return questRowsFor(ids, grouped, indexName .. ":" .. tostring(key))
 end
 
 local function statusText(id)
@@ -724,7 +845,9 @@ local function statusText(id)
   elseif st == "done" then
     text = L["Done"]
   elseif st == "available" then
-    text = L["Available"]
+    text = (q and Logic.isTrivial(q, s)) and L["Available, low level"] or L["Available"]
+  elseif st == "inactive" then
+    text = inactiveWords(q)
   elseif st == "level" then
     text = L["Needs level"] .. " " .. tostring(q and q.minLevel or "?")
   elseif st == "prereq" then
@@ -746,22 +869,6 @@ local function statusText(id)
     text = text .. "  " .. R.COLOR.grey .. L["tracked"] .. "|r"
   end
   return { { text = R.statusIcon(st) .. text, status = st } }
-end
-
-local function chainRows(id)
-  local s = State.ForLogic()
-  local ch = Logic.chain(id, s)
-  if not ch then
-    return nil
-  end
-  -- the progress chain: numbered steps with their state, "you are
-  -- here" on the step to act on (before: a flat list under "Continue the chain with")
-  local steps = {}
-  for _, qid in ipairs(ch.quests) do
-    steps[#steps + 1] = { kind = "quest", id = qid }
-  end
-  local rows = R.progress(steps, s, nil, { map = Logic.startMap(Logic.quest(id)), key = "chain:" .. id })
-  return rows
 end
 
 -- The attunement of a dungeon (data.md "Dungeons", DG2b): the list whose `instance` is the
@@ -891,17 +998,30 @@ local function needsRows(id)
   return #rows > 0 and rows or nil
 end
 
+-- The quest's task in its own words: the text pack's, else the client's for a log quest.
+local function taskText(id)
+  local d = data()
+  local t = d and d:PackLoaded("text") and d:Get("questText", id) or nil
+  if t and t.objectives and t.objectives ~= "" then
+    return t.objectives
+  end
+  local _, objectives = B.Compat.GetQuestText(id)
+  return objectives
+end
+
+-- What to do (ADR 0052): the task, then the live objectives of a log quest or the data's.
 local function objectiveRows(id)
+  local rows = {}
+  rows[1] = R.taskRow(id, taskText(id))
   local e = State.log[id]
   if e and #(e.objectives or {}) > 0 then
-    return R.objectives(e)
+    for _, row in ipairs(R.objectives(e)) do
+      rows[#rows + 1] = row
+    end
+    return rows
   end
   local q = Logic.quest(id)
-  if not (q and q.objectives) then
-    return nil
-  end
-  local rows = {}
-  for i, o in ipairs(q.objectives) do
+  for i, o in ipairs(q and q.objectives or {}) do
     local kind, ref, source = o[1], o[2], o[4]
     local name = ref and B:Entity(ref):Name() or nil
     local text = R.COLOR.grey .. L[kind] .. ":|r " .. (name or ref or "?")
@@ -913,7 +1033,7 @@ local function objectiveRows(id)
     end
     rows[#rows + 1] = { id = "obj:" .. id .. ":" .. i, text = text, ref = ref }
   end
-  return rows
+  return #rows > 0 and rows or nil
 end
 
 local function itemRow(entry, label)
@@ -946,14 +1066,15 @@ local function rewardRows(id)
   if not q then
     return nil
   end
-  local rw = q.rewards or {}
+  local rw = Logic.rewards(id) or {}
   local rows = {}
   if rw.money and rw.money > 0 then
     rows[#rows + 1] = { text = L["Money"], value = rw.money, valueKind = "money" }
   end
   if rw.xp and rw.xp > 0 then
     rows[#rows + 1] = {
-      text = L["Experience"] .. "  " .. R.COLOR.grey .. L["about, less for a lower quest"] .. "|r",
+      text = rw.src == "client" and L["Experience"]
+        or (L["Experience"] .. "  " .. R.COLOR.grey .. L["about, less for a lower quest"] .. "|r"),
       value = rw.xp,
       valueKind = "number",
     }
@@ -983,12 +1104,24 @@ local function rewardRows(id)
   if #rows == 0 then
     rows[1] = {
       kind = "para",
-      text = R.COLOR.grey
-        .. L["No reward known: no money, items, reputation or experience in our sources."]
-        .. "|r",
+      text = R.COLOR.grey .. L["The giver tells you the rewards when you speak to them."] .. "|r",
     }
   end
   return rows
+end
+
+-- "Quest chain 'X' 2/5": a quest's step on its chain's main line, as the strip of its sheet
+-- counts it (ADR 0055); a side quest names the chain alone. Nil outside a chain.
+local function chainWords(qid, state)
+  local place = Logic.chainPlace(qid, state)
+  if not place or place.why then
+    return nil
+  end
+  local name = Logic.chainName(place.root, state) or "?"
+  if place.step then
+    return string.format(L["Quest chain '%s' %d/%d"], name, place.step, place.steps)
+  end
+  return string.format(L["Quest chain '%s'"], name)
 end
 
 -- The rows under a quest's tooltip (owner, Forever launch night 05.11.2026: the Orbiter's quest
@@ -1000,11 +1133,9 @@ local function rewardTipRows(id)
     return nil
   end
   local rows = {}
-  local ch = Logic.chain(id, State.ForLogic())
-  if ch and ch.pos[id] then
-    rows[1] = {
-      text = string.format(L["Quest chain '%s' %d/%d"], ch.name or "?", ch.pos[id], #ch.quests),
-    }
+  local chain = chainWords(id, State.ForLogic())
+  if chain then
+    rows[1] = { text = chain }
   end
   for _, row in ipairs(rewardRows(id) or {}) do
     if row.valueKind ~= "number" then
@@ -1019,8 +1150,7 @@ Reg.CARD_QUESTS = 3 -- quests a sign's card names; the rest as "... and n more"
 -- A quest's rewards as card lines: the money, the reputation, then every item (the choices
 -- marked); no experience.
 local function rewardLines(qid)
-  local q = Logic.quest(qid)
-  local rw = q and q.rewards or {}
+  local rw = Logic.rewards(qid) or {}
   local lines = {}
   if rw.money and rw.money > 0 then
     lines[#lines + 1] = { text = B.UI.Money(rw.money), color = "gold" }
@@ -1058,6 +1188,9 @@ function Reg.SignCard(pin)
   local s = State.ForLogic()
   local single = #qids == 1
   local lines = {}
+  if pin.status == "low" then
+    lines[1] = { text = L["Low level"], color = "dim" }
+  end
   for i, qid in ipairs(qids) do
     if i > Reg.CARD_QUESTS then
       lines[#lines + 1] =
@@ -1067,12 +1200,9 @@ function Reg.SignCard(pin)
     if not single then
       lines[#lines + 1] = { text = R.questName(qid), color = "good", size = 13 }
     end
-    local ch = Logic.chain(qid, s)
-    if ch and ch.pos[qid] then
-      lines[#lines + 1] = {
-        text = string.format(L["Quest chain '%s' %d/%d"], ch.name or "?", ch.pos[qid], #ch.quests),
-        color = "dim",
-      }
+    local chain = chainWords(qid, s)
+    if chain then
+      lines[#lines + 1] = { text = chain, color = "dim" }
     end
     for _, l in ipairs(rewardLines(qid)) do
       lines[#lines + 1] = l
@@ -1099,8 +1229,8 @@ local function statName(key)
 end
 
 local function choiceRows(id)
-  local q = Logic.quest(id)
-  local choices = q and q.rewards and q.rewards.choices or nil
+  local rw = Logic.rewards(id)
+  local choices = rw and rw.choices or nil
   if not choices or #choices < 2 then
     return nil
   end
@@ -1163,22 +1293,13 @@ local function textRows(id)
     end
   end
   if t then
-    add(t.details)
-    if t.objectives and t.objectives ~= "" then
-      rows[#rows + 1] = {
-        kind = "para",
-        text = R.COLOR.white .. t.objectives .. "|r",
-      }
-    end
+    add(t.details) -- the story only: the task stands in What to do (ADR 0052)
     add(t.offer)
   else
     -- not in the pack (retail has no quest texts, data.md): the client's own text of a log quest,
     -- else a note; on Forever the Text pack carries it and Spoken reads it aloud
     local details, objectives = B.Compat.GetQuestText(id)
     add(details)
-    if objectives and objectives ~= "" then
-      rows[#rows + 1] = { kind = "para", text = R.COLOR.white .. objectives .. "|r" }
-    end
     if #rows == 0 and not loaded then
       rows[1] = {
         text = R.COLOR.grey .. L["Quest texts are not loaded. Click to load them."] .. "|r",
@@ -1186,7 +1307,7 @@ local function textRows(id)
           d:LoadPack("text")
         end,
       }
-    elseif #rows == 0 then
+    elseif #rows == 0 and #R.paragraphs(objectives) == 0 then
       rows[1] = {
         kind = "para",
         text = R.COLOR.grey
@@ -1272,6 +1393,7 @@ local function registerSections(mod)
   local INVALIDATE = { "BASTIANS_QUESTS_CHANGED", "BASTIANS_TRACKED_CHANGED" }
   B:RegisterDetailSection(mod, {
     id = "quests.target",
+    chapter = "quests", -- on the sheet (ADR 0054)
     title = L["Target of"],
     types = { "npc" },
     order = 15,
@@ -1290,6 +1412,7 @@ local function registerSections(mod)
   })
   B:RegisterDetailSection(mod, {
     id = "quests.starts",
+    chapter = { npc = "quests", object = "quests", item = "use" }, -- on the sheet (ADR 0054)
     title = L["Starts quests"],
     types = { "npc", "object", "item" },
     order = 20,
@@ -1306,6 +1429,7 @@ local function registerSections(mod)
   })
   B:RegisterDetailSection(mod, {
     id = "quests.ends",
+    chapter = "quests", -- on the sheet (ADR 0054)
     title = L["Ends quests"],
     types = { "npc", "object" },
     order = 21,
@@ -1318,6 +1442,7 @@ local function registerSections(mod)
   -- the status headers, so the page says which to pick up before the run
   B:RegisterDetailSection(mod, {
     id = "quests.dungeon",
+    chapter = "quests", -- on the sheet (ADR 0054)
     title = L["Dungeon quests"],
     types = { "dungeon" },
     order = 25,
@@ -1336,6 +1461,7 @@ local function registerSections(mod)
   })
   B:RegisterDetailSection(mod, {
     id = "quests.attunement",
+    chapter = "attunement", -- on the sheet (ADR 0054)
     title = L["Attunement"],
     types = { "dungeon" },
     order = 23,
@@ -1346,6 +1472,7 @@ local function registerSections(mod)
   })
   B:RegisterDetailSection(mod, {
     id = "quests.needed",
+    chapter = "use", -- on the sheet (ADR 0054)
     title = L["Needed for quests"],
     types = { "item" },
     order = 22,
@@ -1368,16 +1495,31 @@ local function registerSections(mod)
     types = { "quest" },
     order = 5,
     card = true, -- its first row is the card's status line (ADR 0013 B)
+    noStats = true, -- the band says level and distance, the blocks the rest (ADR 0052)
     invalidateOn = INVALIDATE,
     build = function(ref)
       return statusText(questID(ref))
     end,
     tooltip = { max = 1 },
   })
-  -- the quest dossier (C2, ADR 0014): Given by, Hand in, Rewards and Objectives as one-cell
-  -- blocks, Chain and Quest text across the row; needs, after and unlocks as links
+  -- the quest dossier (C2, ADR 0014; ADR 0052): What to do first, across the row; Given by, Hand
+  -- in and Rewards as one-cell blocks, Quest text across the row; needs, after and
+  -- unlocks as links
+  B:RegisterDetailSection(mod, {
+    id = "quests.objectives",
+    chapter = "todo", -- on the sheet (ADR 0054)
+    title = L["What to do"],
+    types = { "quest" },
+    order = 5.5,
+    block = { wide = true, limit = 8 },
+    invalidateOn = { "BASTIANS_QUESTS_CHANGED", "BASTIANS_TRACKED_CHANGED", "BASTIANS_DATA_LOADED" },
+    build = function(ref)
+      return objectiveRows(questID(ref))
+    end,
+  })
   B:RegisterDetailSection(mod, {
     id = "quests.givers",
+    chapter = "people", -- on the sheet (ADR 0054)
     title = L["Given by"],
     types = { "quest" },
     order = 6,
@@ -1389,6 +1531,7 @@ local function registerSections(mod)
   })
   B:RegisterDetailSection(mod, {
     id = "quests.enders",
+    chapter = "people", -- on the sheet (ADR 0054)
     title = L["Hand in"],
     types = { "quest" },
     order = 7,
@@ -1400,11 +1543,12 @@ local function registerSections(mod)
   })
   B:RegisterDetailSection(mod, {
     id = "quests.rewards",
+    chapter = "rewards", -- on the sheet (ADR 0054)
     title = L["Rewards"],
     types = { "quest" },
     order = 8,
     block = { columns = 1, limit = 8, table = true }, -- a small table (ADR 0018 D)
-    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_QUESTS_CHANGED" }, -- the chain position
+    invalidateOn = { "BASTIANS_PRICES_UPDATED", "BASTIANS_QUESTS_CHANGED", "BASTIANS_REWARD_INFO_CHANGED" },
     build = function(ref)
       return rewardRows(questID(ref))
     end,
@@ -1417,6 +1561,7 @@ local function registerSections(mod)
   })
   B:RegisterDetailSection(mod, {
     id = "quests.choice",
+    chapter = "rewards", -- on the sheet (ADR 0054)
     title = L["Which reward"],
     types = { "quest" },
     order = 8.5, -- right under Rewards, before Objectives
@@ -1427,29 +1572,8 @@ local function registerSections(mod)
     end,
   })
   B:RegisterDetailSection(mod, {
-    id = "quests.objectives",
-    title = L["Objectives"],
-    types = { "quest" },
-    order = 9,
-    block = { columns = 1, limit = 8 },
-    invalidateOn = INVALIDATE,
-    build = function(ref)
-      return objectiveRows(questID(ref))
-    end,
-  })
-  B:RegisterDetailSection(mod, {
-    id = "quests.chain",
-    title = L["Chain"],
-    types = { "quest" },
-    order = 30,
-    block = { wide = true, limit = 8 },
-    invalidateOn = INVALIDATE,
-    build = function(ref)
-      return chainRows(questID(ref))
-    end,
-  })
-  B:RegisterDetailSection(mod, {
     id = "quests.text",
+    chapter = "text", -- on the sheet (ADR 0054)
     title = L["Quest text"],
     types = { "quest" },
     order = 40,
@@ -1553,7 +1677,10 @@ end
 local V = ns.Views
 local TODO_SHOWN = 5 -- the ranking's top rows on the page; the rest fold under "More"
 local zoneGen = 0
-local zoneCache = {} -- map -> { gen, byKey, counts, here }
+-- colour set -> map -> { gen, byKey, counts, here }. The rows carry colour codes and colours, so a
+-- page on paper and the dark panes each keep their own (a zone's quests
+-- stood in the theme's yellow, teal and grey on parchment; the first host to ask had built them).
+local zoneCache = setmetatable({}, { __mode = "k" })
 
 function Reg.InvalidateZone()
   zoneGen = zoneGen + 1
@@ -1607,6 +1734,7 @@ local function questIn(qid, inside)
   end
   return false
 end
+Reg.ZoneMap, Reg.AreaTest, Reg.QuestIn = zoneMap, areaTest, questIn -- Chains.lua: "Chains here"
 local function inArea(rows, inside)
   local out = {}
   for _, row in ipairs(rows) do
@@ -1635,7 +1763,13 @@ end
 Reg.InArea = inArea
 
 local function zoneData(map)
-  local c = zoneCache[map]
+  local tone = B.UI.Style.H -- the colour set in force
+  local byMap = zoneCache[tone]
+  if not byMap then
+    byMap = {}
+    zoneCache[tone] = byMap
+  end
+  local c = byMap[map]
   if c and c.gen == zoneGen then
     return c
   end
@@ -1666,17 +1800,18 @@ local function zoneData(map)
       end
     end
   end
-  zoneCache[map] = c
+  byMap[map] = c
   return c
 end
 
 local ZONE_SECTIONS = {
   { "turnin", "Hand in", 3 },
   { "active", "In progress", 4 },
-  { "available", "To take", 5 },
-  { "soon", "Later", 6 },
-  { "onward", "Onward", 7 },
-  { "blocked", "Prerequisite elsewhere", 8 },
+  -- folded on the sheet until clicked (ADR 0054): what cannot be acted on now
+  { "available", "To take", 5, true },
+  { "soon", "Later", 6, true },
+  { "onward", "Onward", 7, true },
+  { "blocked", "Prerequisite elsewhere", 8, true },
   { "done", "Done", 9, true },
 }
 local ZONE_INVALIDATE = {
@@ -1686,6 +1821,8 @@ local ZONE_INVALIDATE = {
   "BASTIANS_DATA_LOADED",
   "BASTIANS_QUESTS_VIEWS",
 }
+
+Reg.ZONE_INVALIDATE = ZONE_INVALIDATE
 
 -- A title with the row count, for the zone page's blocks (the Here blocks leave the count to the
 -- dossier, which prints it for them).
@@ -1730,6 +1867,7 @@ end
 local function registerZoneSections(mod)
   B:RegisterDetailSection(mod, {
     id = "quests.zone.todo",
+    chapter = "quests", -- on the sheet (ADR 0054)
     title = countTitle("To do here"),
     types = { "zone", "area" },
     order = 2,
@@ -1768,6 +1906,7 @@ local function registerZoneSections(mod)
     local key, title, order, folded = s[1], s[2], s[3], s[4]
     B:RegisterDetailSection(mod, {
       id = "quests.zone." .. key,
+      chapter = "quests", -- on the sheet (ADR 0054)
       title = countTitle(title),
       types = { "zone", "area" },
       order = order,
@@ -1802,6 +1941,7 @@ local function registerZoneSections(mod)
   end
   B:RegisterDetailSection(mod, {
     id = "quests.zone.neighbours",
+    chapter = "roads", -- on the sheet (ADR 0054)
     title = L["Neighbours"],
     types = { "zone" },
     order = 13,
@@ -1858,7 +1998,7 @@ local function hereLogRows(ref)
   local W = ns.Window
   local px, py = W.PlayerOn(map)
   local opts = W.LogFilters() -- the tracker's filters apply here too
-  opts.questItem = W.QuestItemOf
+  opts.questItem, opts.onOpen = W.QuestItemOf, ns.Sheet.Toggle
   local roots = V.active(map, px, py, opts)
   local rows = {}
   for _, root in ipairs(roots) do
@@ -1916,6 +2056,38 @@ local function registerHereSections(mod)
     here = { order = 1.5, limit = 0, only = true },
     invalidateOn = ZONE_INVALIDATE,
     build = hereHiddenRows,
+  })
+  -- the stat tiles of Here (ADR 0058, PH4): what to do here, what is ready to hand in
+  B:RegisterStat(mod, {
+    id = "quests.stat.todo",
+    rail = "here",
+    order = 10,
+    title = L["To do here"],
+    invalidateOn = ZONE_INVALIDATE,
+    build = function()
+      local map = B.Coords.PlayerMap()
+      if not map then
+        return nil -- no zone known: unknown, not 0
+      end
+      local here = zoneData(map).here
+      return { value = here and #here or 0 }
+    end,
+  })
+  B:RegisterStat(mod, {
+    id = "quests.stat.handin",
+    rail = "here",
+    order = 20,
+    title = L["Hand in"],
+    invalidateOn = { "BASTIANS_QUESTS_CHANGED" },
+    build = function()
+      local n = 0
+      for _, id in ipairs(State.order) do
+        if State.IsReady(id) then
+          n = n + 1
+        end
+      end
+      return { value = n, nav = { kind = "view", id = "quests.log" } }
+    end,
   })
   B:RegisterDetailSection(mod, {
     id = "quests.here.todo",
@@ -1980,9 +2152,10 @@ local function layersChanged(mod)
 end
 
 -- The Browser's "Quest chains" list ("an easier way to find quest
--- chains, a list of its own"): one row per chain this character can take, named after its first
--- quest, the steps in grey, faceted by the first quest's level band; a row opens the first quest,
--- whose page shows the chain.
+-- chains, a list of its own"): one row per chain this character can take, faceted by its first
+-- step's level band. Since ADR 0055 (PA5.2) a row is the chain itself (`chain:<root>`, Chains.lua):
+-- its tile says the steps, the zones, the levels and how far the character is; ~~a row opens the
+-- first quest, whose page shows the chain~~.
 local function levelBand(level)
   if not level then
     return "no level"
@@ -1991,37 +2164,119 @@ local function levelBand(level)
   return lo .. "-" .. (lo + 9)
 end
 
+-- How a chain's progress reads, as a group's heading and a filter's choice (quests.md "The list").
+local PROGRESS_WORDS = {
+  on = "On your way",
+  start = "Can start now",
+  later = "Later",
+  finished = "Finished",
+}
+local CHAIN_INVALIDATE = { "BASTIANS_QUESTS_CHANGED", "BASTIANS_DATA_LOADED" }
+
 local function registerLists(mod)
+  -- the names that more than one chain carries: such a row says where its way starts (C1).
+  -- Counted when the list asks for its ids, so a build reads one count
+  local shared = {}
   B:RegisterList(mod, {
     type = "chain",
-    label = "Quest chains",
+    label = "Chains", -- the model's word (ADR 0056); "Quest chains" until 06.11.2026
     glyph = "chain", -- not the quest's "!"
     facet = "level",
     chips = true, -- several level bands at once
-    ids = Logic.chainRoots,
+    groupBy = "quests.chain.progress", -- opens grouped by how far the character is (ADR 0055)
+    ids = function()
+      local roots = Logic.chainRoots()
+      local state, count = State.ForLogic(), {}
+      for _, root in ipairs(roots) do
+        local name = Logic.chainName(root, state)
+        if name then
+          count[name] = (count[name] or 0) + 1
+        end
+      end
+      shared = count
+      return roots
+    end,
     record = function(root)
-      local c = Logic.chain(root, State.ForLogic())
+      local c = ns.Chains.Sheet(root)
       if not c then
         return nil
       end
-      local first = Logic.quest(c.quests[1])
+      local first = Logic.quest(c.main[1])
+      local name = ns.Chains.Name(c)
       return {
-        name = c.name or (first and first.name),
+        name = name,
         level = first and first.level or nil,
-        zone = first and first.zone or nil,
-        steps = #c.quests,
-        first = c.quests[1],
+        zone = c.zones[1], -- where the way starts: the list's Where and its zone groups
+        steps = #c.main,
+        first = c.main[1],
+        state = c.state,
+        apart = (shared[name] or 0) > 1 and c.zones[1] and R.zoneName(c.zones[1]) or nil,
       }
     end,
     value = function(r)
       return levelBand(r.level)
     end,
     suffix = function(r)
-      return string.format(L["%d steps"], r.steps)
+      return r.apart
     end,
-    ref = function(_, r)
-      return "quest:" .. r.first
+    ref = function(root)
+      return "chain:" .. root
     end,
+  })
+  local function chainOf(ref)
+    local typ, id = B.Entity.Parse(ref)
+    return typ == "chain" and tonumber(id) or nil
+  end
+  -- the list's own dimensions (quests.md "The list"): how far the character is (also the
+  -- default groups), what kind of chain, pairs apart from the longer ones
+  B:RegisterFilter(mod, {
+    id = "quests.chain.progress",
+    kind = "facet",
+    types = { "chain" },
+    label = L["Progress"],
+    chips = true,
+    group = true,
+    value = function(_, r)
+      return r and r.state or nil
+    end,
+    labels = function(key)
+      return PROGRESS_WORDS[key] and L[PROGRESS_WORDS[key]] or L[key]
+    end,
+    order = function(key)
+      return Logic.PROGRESS_ORDER[key] or 9
+    end,
+    invalidateOn = CHAIN_INVALIDATE,
+  })
+  B:RegisterFilter(mod, {
+    id = "quests.chain.kind",
+    kind = "facet",
+    types = { "chain" },
+    label = L["Kind"],
+    chips = true,
+    value = function(ref)
+      local root = chainOf(ref)
+      return root and Logic.chainKinds(root, State.ForLogic()) or nil
+    end,
+    labels = function(key)
+      return key == "Other" and L["Ordinary"] or L[key]
+    end,
+    invalidateOn = { "BASTIANS_DATA_LOADED" },
+  })
+  B:RegisterFilter(mod, {
+    id = "quests.chain.length",
+    kind = "facet",
+    types = { "chain" },
+    label = L["Steps"],
+    value = function(_, r)
+      return r and (r.steps <= 2 and "pair" or "longer") or nil
+    end,
+    labels = function(key)
+      return key == "pair" and L["Pairs"] or L["Three steps or more"]
+    end,
+    order = function(key)
+      return key == "pair" and 2 or 1
+    end,
+    invalidateOn = { "BASTIANS_DATA_LOADED" },
   })
   -- The Quests list's Status and Type ("All quests does not load ...
   -- whats the difference to the normal quest list"): the All quests view's two filters on the
@@ -2130,8 +2385,8 @@ function Reg.QuestActivity(ref)
   local hard = q.level and state.level and q.level - state.level >= 3
   local minutes =
     Rec.workMinutes(q, entry, ns.Window.PlayerPlace(), ctx, ctx.objectiveTime, hard and 1.5 or 1)
-  local gives = { { kind = "xp", amount = Rec.xp(q.level, state.level) } }
-  local rw = q.rewards or {}
+  local gives = { { kind = "xp", amount = (Rec.questXP(qid, q, state.level)) } }
+  local rw = Logic.rewards(qid) or {}
   if rw.money and rw.money > 0 then
     gives[#gives + 1] = { kind = "copper", amount = rw.money }
   end
@@ -2148,6 +2403,67 @@ function Reg.QuestActivity(ref)
     status = entry and "log" or Logic.status(qid, state),
     src = "estimate",
   }
+end
+
+-- What a quest's tile says to this character (ADR 0056; the facet "tile", core-contracts §4):
+-- its state as the picture, the giver under the name with the quest's first mark (Dungeon,
+-- Repeatable, a festival), its place in its chain as a mark. Data adds the level as the badge.
+function Reg.QuestTile(ref)
+  local qid = questID(ref)
+  local q = qid and Logic.quest(qid)
+  if not q then
+    return nil
+  end
+  local s = State.ForLogic()
+  local status = Logic.status(qid, s)
+  if status == "log" and s.isComplete(qid) then
+    status = "complete"
+  end
+  local giver = q.starts and q.starts[1] and B:Entity(q.starts[1]):Name() or nil
+  local mark = Logic.marks(q)[1]
+  mark = mark and L[mark] or nil
+  local place = Logic.chainPlace(qid, s)
+  return {
+    icon = R.statusTexture(status),
+    line = giver and mark and (giver .. ", " .. mark) or giver or mark,
+    mark = place and place.step and { text = place.step .. "/" .. place.steps } or nil,
+  }
+end
+
+-- A giver's tile: how many quests it has for the character now, as a mark. Counted here, not from
+-- the layers' cache: that one is reset a moment after the quests change.
+function Reg.GiverTile(ref)
+  local d = data()
+  local ids = d and d:Index("quest.byGiver", ref)
+  if type(ids) ~= "table" then
+    return nil
+  end
+  local s = State.ForLogic()
+  local n = 0
+  for _, qid in ipairs(ids) do
+    if Logic.status(qid, s) == "available" then
+      n = n + 1
+    end
+  end
+  return n > 0 and { mark = { text = "!" .. n, token = "svcQuest" } } or nil
+end
+
+local function registerTiles(mod)
+  local on = { "BASTIANS_QUESTS_CHANGED", "BASTIANS_DATA_LOADED" }
+  B:RegisterFacet(mod, {
+    facet = "tile",
+    types = { "quest" },
+    priority = 150,
+    invalidateOn = on,
+    rule = Reg.QuestTile,
+  })
+  B:RegisterFacet(mod, {
+    facet = "tile",
+    types = { "npc", "object" },
+    priority = 150,
+    invalidateOn = on,
+    rule = Reg.GiverTile,
+  })
 end
 
 local function registerActivity(mod)
@@ -2173,8 +2489,13 @@ function Reg.Register(mod)
   registerLists(mod) -- the Browser's Quest chains list
   ns.Worth.Register(mod) -- the worth of a quest (C3)
   registerActivity(mod) -- the quest as an activity for Explore (R26.11)
+  registerTiles(mod) -- what a quest's and a giver's tile say (ADR 0056)
   Reg.ResetCaches()
   Reg.InvalidateZone()
+  mod:On("BASTIANS_ENTITY_FOCUSED", function(me) -- the focused quest takes the map
+    me:Fire("BASTIANS_LAYER_CHANGED", "quests.objectives")
+    me:Fire("BASTIANS_LAYER_CHANGED", "quests.turnin")
+  end)
   mod:RegisterEvent("QUEST_WATCH_LIST_CHANGED", function(me)
     Reg.SyncTracked(me)
   end)

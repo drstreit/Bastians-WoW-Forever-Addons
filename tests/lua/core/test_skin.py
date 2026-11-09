@@ -101,6 +101,7 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
         "windowAlpha",
         "gameButtons",
         "ornaments",
+        "sheetParchment",
         "rowPortraits",
         "placeCuts",
         "diorama",
@@ -152,12 +153,16 @@ def test_section_titles_keep_their_case_over_an_ornament(app: WowRuntime):
     host(app)
     app.execute(TABLES)
     app.execute("dossier:SetSubject('npc:448')")
-    bf = block(app, "LOOT")
-    assert bf.line.IsShown(bf.line) is True and bf.orn.IsShown(bf.orn) is False
+    # a section alone in its chapter: the chapter's heading names it and carries the rule
+    # (ADR 0054); the block's own title, in capitals, does not show
+    bf, head = block(app, "LOOT"), app.eval("dossier.chapterPool[1]")
+    assert bf.title.IsShown(bf.title) is False and bf.line.IsShown(bf.line) is False
+    assert head.title.GetText(head.title) == "Loot"
+    assert head.line.IsShown(head.line) is True and head.orn.IsShown(head.orn) is False
     set_option(app, "ornaments", "true")
     app.execute("dossier:Refresh()")
-    bf = block(app, "Loot")
-    assert bf is not None and bf.orn.IsShown(bf.orn) is True and bf.line.IsShown(bf.line) is False
+    assert block(app, "Loot") is not None  # a block title keeps its case over an ornament
+    assert head.orn.IsShown(head.orn) is True and head.line.IsShown(head.line) is False
     assert app.errors == []
 
 
@@ -239,22 +244,36 @@ def test_loot_is_rows_with_the_picture_and_the_name(app: WowRuntime):
     assert app.errors == []
 
 
-def test_places_show_as_cuts_of_the_map(app: WowRuntime):
+def test_the_places_of_one_thing_show_as_a_mini_map_per_zone(app: WowRuntime):
+    """ADR 0056: "one mini map per zone with every place on it"."""
     host(app)
     app.execute(TABLES)
     app.execute("dossier:SetSubject('npc:448')")
     where = block(app, "WHERE")
-    assert where.mode == "places"
+    assert where.mode == "maps"
     shown = cells(where)
+    # no zone record in this world: the row's own words
     assert [c.caption.GetText(c.caption) for c in shown] == [
         "Elwynn Forest  27, 20",
         "Nowhere  10, 10",
     ]
     elwynn, nowhere = shown
-    assert elwynn.pin.IsShown(elwynn.pin) is True
-    assert any(t.IsShown(t) for t in elwynn.art.values())  # the painting's tiles
-    assert nowhere.pin.IsShown(nowhere.pin) is False  # a map without art: the caption only
-    assert where.GetHeight(where) > 80  # a cut is taller than a row
+    dots = [d for d in elwynn.dots.values() if d.IsShown(d)]
+    assert len(dots) == 1 and elwynn.pin.IsShown(elwynn.pin) is False
+    assert any(t.IsShown(t) for t in elwynn.art.values())  # no style: the painting's tiles
+    assert not any(d.IsShown(d) for d in nowhere.dots.values())  # no art: the caption only
+    assert where.GetHeight(where) > 160  # a mini map is taller than a row
+    # a dot sits by its map fraction
+    w, h = elwynn.cut.GetWidth(elwynn.cut), elwynn.cut.GetHeight(elwynn.cut)
+    _, _, _, x, y = dots[0].GetPoint(dots[0], 1)
+    assert (round(x / w, 2), round(-y / h, 2)) == (0.27, 0.2)
+    # a second place in the zone: one map, the count under it
+    grouped = app.eval(
+        "Bastians.UI.Scenery.PlaceMaps({ { place = { map = 1, x = 0, y = 0 } },"
+        " { place = { map = 2, x = 0, y = 0 } }, { place = { map = 1, x = 1, y = 1 } } })"
+    )
+    assert [(e.map, len(list(e.rows.values()))) for e in grouped.values()] == [(1, 2), (2, 1)]
+    # the skin's switch off: rows again
     set_option(app, "placeCuts", "false")
     app.execute("dossier:Refresh()")
     where = block(app, "WHERE")
@@ -262,7 +281,48 @@ def test_places_show_as_cuts_of_the_map(app: WowRuntime):
     assert app.errors == []
 
 
+def test_the_places_of_several_things_stay_cuts_of_the_map(app: WowRuntime):
+    """A zone's areas: each has a page of its own, so each keeps a cut."""
+    host(app)
+    app.execute(TABLES)
+    app.execute(
+        """
+        BST_ROWS = { rows = {
+          { text = "One", ref = "area:1", place = { map = 1429, x = 0.3, y = 0.3 } },
+          { text = "Two", ref = "area:2", place = { map = 1429, x = 0.6, y = 0.6 } } } }
+        """
+    )
+    assert app.eval("Bastians.UI.Scenery.BlockMode(BST_ROWS)") == "places"
+    app.execute("BST_ROWS.rows[2].ref = 'area:1'")
+    assert app.eval("Bastians.UI.Scenery.BlockMode(BST_ROWS)") == "maps"
+    app.execute("BST_ROWS.rows[1].ref, BST_ROWS.rows[2].ref = nil, nil")
+    assert app.eval("Bastians.UI.Scenery.BlockMode(BST_ROWS)") == "places"
+    assert app.errors == []
+
+
+def test_a_click_finds_the_nearest_place(app: WowRuntime):
+    host(app)
+    nearest = "Bastians.UI.Scenery.NearestPlace"
+    rows = "{ { n = 1, place = { x = 0.1, y = 0.1 } }, { n = 2, place = { x = 0.8, y = 0.7 } } }"
+    assert app.eval(f"{nearest}({rows}, 0.7, 0.6).n") == 2
+    assert app.eval(f"{nearest}({rows}, 0.2, 0.3).n") == 1
+    assert app.eval(f"{nearest}({rows}, nil, nil).n") == 1  # the mouse unknown: the first
+    assert app.errors == []
+
+
 def test_npc_rows_show_the_creatures_face(core: WowRuntime):
+    # a model gets its creature only once it has its place (the quest
+    # sheet's people tiles showed no picture; a model set with no place stays empty)
+    core.execute(
+        """
+        placedAtSet = {}
+        local show = Bastians.Compat.ShowCreature
+        Bastians.Compat.ShowCreature = function(m, id)
+          placedAtSet[#placedAtSet + 1] = m:GetNumPoints() > 0 and m:IsShown()
+          return show(m, id)
+        end
+        """
+    )
     core.execute(
         """
         host = CreateFrame("Frame", nil, UIParent)
@@ -274,6 +334,7 @@ def test_npc_rows_show_the_creatures_face(core: WowRuntime):
     )
     face = core.eval("tree.faces.byNpc[7]")
     assert face is not None and face.creature == 7 and face.portraitZoom == 1
+    assert list(core.eval("placedAtSet").values()) == [True]
     assert face.IsShown(face) is True
     assert core.eval("tree.pool[1].icon:IsShown()") is False  # the face in place of the glyph
     assert core.eval("tree.pool[2].icon:IsShown()") is True  # an item keeps its icon

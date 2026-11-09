@@ -233,6 +233,173 @@ static class NavmeshView
         return drew;
     }
 
+    /// <summary>Where one can walk, as a raster for the city plans (map.md "City plans"): a byte per pixel, bits
+    /// 1 ground, 2 road, 4 indoor, 8 shallow water, 16 deep water, 32 passage. Every floor over a pixel counts. Only
+    /// ground joined to a large region (a roof nobody reaches is no way). A passage is an indoor part of the mesh
+    /// that meets the outdoors at places more than `span` yards apart: a tunnel or gate, not a shop.</summary>
+    public static void Walk(string meshPath, string outPath, string originArg, string sizeArg, double ppy, string? seedArg, double span = 25)
+    {
+        var inv = System.Globalization.CultureInfo.InvariantCulture;
+        var o = originArg.Split(',').Select(x => double.Parse(x, inv)).ToArray();
+        var s = sizeArg.Split(',').Select(x => int.Parse(x, inv)).ToArray();
+        double minX = o[0], minZ = o[1];
+        int w = s[0], h = s[1];
+        var f = NavmeshFile.Open(meshPath);
+        var mesh = f.NewMesh();
+        int ax0 = (int)Math.Floor(minX / Frame.Tile) - 1, ax1 = (int)Math.Floor((minX + w / ppy) / Frame.Tile) + 1;
+        int az0 = (int)Math.Floor(minZ / Frame.Tile) - 1, az1 = (int)Math.Floor((minZ + h / ppy) / Frame.Tile) + 1;
+        for (var ay = az0; ay <= az1; ay++)
+        for (var ax = ax0; ax <= ax1; ax++)
+            if (f.Index.ContainsKey((ax, ay)))
+                foreach (var d in f.Read(ax, ay)) mesh.AddTile(d, 0, 0, out _);
+        var tileBase = new int[mesh.GetMaxTiles()];
+        var n = 0;
+        for (var i = 0; i < mesh.GetMaxTiles(); i++)
+        {
+            var t = mesh.GetTile(i);
+            if (t?.data == null) continue;
+            tileBase[i] = n;
+            n += t.data.header.polyCount;
+        }
+        int Gid(long r) => tileBase[DtDetour.DecodePolyIdTile(r)] + DtDetour.DecodePolyIdPoly(r);
+        var area = new byte[n];
+        var centers = new RcVec3f[n];
+        var size = new double[n];
+        var parent = new int[n];
+        var indoorParent = new int[n];
+        for (var i = 0; i < n; i++) { parent[i] = i; indoorParent[i] = i; }
+        int Find(int[] p, int x) { while (p[x] != x) { p[x] = p[p[x]]; x = p[x]; } return x; }
+        void Each(Action<DtMeshTile, int, DtPoly, int> fn)
+        {
+            for (var i = 0; i < mesh.GetMaxTiles(); i++)
+            {
+                var t = mesh.GetTile(i);
+                if (t?.data == null) continue;
+                for (var ip = 0; ip < t.data.header.polyCount; ip++) fn(t, ip, t.data.polys[ip], tileBase[i] + ip);
+            }
+        }
+        Each((t, ip, p, g) =>
+        {
+            area[g] = (byte)p.GetArea();
+            centers[g] = mesh.GetPolyCenter(DtDetour.EncodePolyId(t.salt, t.index, ip));
+            double a = 0;
+            for (var k = 0; k < p.vertCount; k++)
+            {
+                int i0 = p.verts[k] * 3, i1 = p.verts[(k + 1) % p.vertCount] * 3;
+                a += t.data.verts[i0] * t.data.verts[i1 + 2] - t.data.verts[i1] * t.data.verts[i0 + 2];
+            }
+            size[g] = Math.Abs(a / 2);
+        });
+        void Union(int[] p, int a, int b) { int ra = Find(p, a), rb = Find(p, b); if (ra != rb) p[Math.Max(ra, rb)] = Math.Min(ra, rb); }
+        Each((t, ip, p, g) =>
+        {
+            if (area[g] == Navmesh.AreaBlocked) return;
+            for (var j = p.firstLink; j != DtDetour.DT_NULL_LINK; j = t.links[j].next)
+            {
+                var o2 = Gid(t.links[j].refs);
+                if (area[o2] == Navmesh.AreaBlocked) continue;
+                Union(parent, g, o2);
+                if (area[g] == Navmesh.AreaIndoor && area[o2] == Navmesh.AreaIndoor) Union(indoorParent, g, o2);
+            }
+        });
+        var regionSize = new Dictionary<int, double>();
+        for (var i = 0; i < n; i++)
+        {
+            var r = Find(parent, i);
+            regionSize[r] = regionSize.GetValueOrDefault(r) + size[i];
+        }
+        // the corners of the places where an indoor part meets the outdoors
+        var box = new Dictionary<int, (float x0, float z0, float x1, float z1)>();
+        Each((t, ip, p, g) =>
+        {
+            if (area[g] != Navmesh.AreaIndoor) return;
+            for (var j = p.firstLink; j != DtDetour.DT_NULL_LINK; j = t.links[j].next)
+            {
+                var o2 = Gid(t.links[j].refs);
+                if (area[o2] == Navmesh.AreaIndoor || area[o2] == Navmesh.AreaBlocked) continue;
+                var c = centers[o2];
+                var r = Find(indoorParent, g);
+                box[r] = box.TryGetValue(r, out var b)
+                    ? (Math.Min(b.x0, c.X), Math.Min(b.z0, c.Z), Math.Max(b.x1, c.X), Math.Max(b.z1, c.Z))
+                    : (c.X, c.Z, c.X, c.Z);
+            }
+        });
+        // with a seed (recast x,y,z on a street), only what can be walked to from it: a city lies over
+        // terrain nobody reaches (Stormwind's streets stand 40 yards above a hidden ground sheet)
+        var seedRegion = -1;
+        if (seedArg != null)
+        {
+            var sv = seedArg.Split(',').Select(x => float.Parse(x, inv)).ToArray();
+            var q = new DtNavMeshQuery(mesh);
+            q.FindNearestPoly(new RcVec3f(sv[0], sv[1], sv[2]), new RcVec3f(5, 5, 5), new DtQueryDefaultFilter(), out var sr, out _, out _);
+            if (sr == 0) throw new ArgumentException("no mesh at the seed");
+            seedRegion = Find(parent, Gid(sr));
+        }
+        var raster = new byte[w * h];
+        var zHigh = new float[w * h];
+        var zLow = new float[w * h];
+        Array.Fill(zHigh, float.NaN);
+        Array.Fill(zLow, float.NaN);
+        int passages = 0;
+        var counted = new HashSet<int>();
+        Each((t, ip, p, g) =>
+        {
+            if (area[g] == Navmesh.AreaBlocked || regionSize[Find(parent, g)] < 2000) return;
+            if (seedRegion >= 0 && Find(parent, g) != seedRegion) return;
+            byte bits = area[g] switch
+            {
+                Navmesh.AreaGround => 1,
+                Navmesh.AreaRoad => 2,
+                Navmesh.AreaIndoor => 4,
+                Navmesh.AreaShallow => 8,
+                Navmesh.AreaDeep => 16,
+                _ => 0,
+            };
+            if (area[g] == Navmesh.AreaIndoor && box.TryGetValue(Find(indoorParent, g), out var b)
+                && Math.Max(b.x1 - b.x0, b.z1 - b.z0) > span)
+            {
+                bits |= 32;
+                if (counted.Add(Find(indoorParent, g))) passages++;
+            }
+            var dm = t.data.detailMeshes[ip];
+            for (var ti = 0; ti < dm.triCount; ti++)
+            {
+                var tb = (dm.triBase + ti) * 4;
+                var v = new (double x, double z, double y)[3];
+                for (var k = 0; k < 3; k++)
+                {
+                    var idx = t.data.detailTris[tb + k];
+                    v[k] = idx < p.vertCount
+                        ? (t.data.verts[p.verts[idx] * 3], t.data.verts[p.verts[idx] * 3 + 2], t.data.verts[p.verts[idx] * 3 + 1])
+                        : (t.data.detailVerts[(dm.vertBase + idx - p.vertCount) * 3], t.data.detailVerts[(dm.vertBase + idx - p.vertCount) * 3 + 2], t.data.detailVerts[(dm.vertBase + idx - p.vertCount) * 3 + 1]);
+                    v[k] = ((v[k].x - minX) * ppy, (v[k].z - minZ) * ppy, v[k].y);
+                }
+                double det = (v[1].z - v[2].z) * (v[0].x - v[2].x) + (v[2].x - v[1].x) * (v[0].z - v[2].z);
+                if (Math.Abs(det) < 1e-12) continue;
+                int px0 = Math.Max(0, (int)Math.Floor(v.Min(q => q.x))), px1 = Math.Min(w - 1, (int)Math.Ceiling(v.Max(q => q.x)));
+                int pz0 = Math.Max(0, (int)Math.Floor(v.Min(q => q.z))), pz1 = Math.Min(h - 1, (int)Math.Ceiling(v.Max(q => q.z)));
+                for (var pz = pz0; pz <= pz1; pz++)
+                for (var px = px0; px <= px1; px++)
+                {
+                    double cx = px + 0.5, cz = pz + 0.5;
+                    var l1 = ((v[1].z - v[2].z) * (cx - v[2].x) + (v[2].x - v[1].x) * (cz - v[2].z)) / det;
+                    var l2 = ((v[2].z - v[0].z) * (cx - v[2].x) + (v[0].x - v[2].x) * (cz - v[2].z)) / det;
+                    if (l1 < -1e-6 || l2 < -1e-6 || 1 - l1 - l2 < -1e-6) continue;
+                    raster[pz * w + px] |= bits;
+                    var y = (float)(l1 * v[0].y + l2 * v[1].y + (1 - l1 - l2) * v[2].y);
+                    var at = pz * w + px;
+                    if (float.IsNaN(zHigh[at]) || y > zHigh[at]) zHigh[at] = y;
+                    if (float.IsNaN(zLow[at]) || y < zLow[at]) zLow[at] = y;
+                }
+            }
+        });
+        File.WriteAllBytes(outPath, raster);
+        void Floats(string path, float[] a) { var b = new byte[a.Length * 4]; Buffer.BlockCopy(a, 0, b, 0, b.Length); File.WriteAllBytes(path, b); }
+        Floats(outPath + ".high", zHigh);
+        Floats(outPath + ".low", zLow);
+        Console.WriteLine($"navmesh-walk: {w} x {h}, {n} polys, {passages} passages -> {outPath}");
+    }
+
     /// <summary>A walk from one world point to another over the mesh (blocked liquid excluded): whether the goal
     /// is reached, the corridor's polygons by area and the length of the straight path.</summary>
     public static void Path(string meshPath, string fromArg, string toArg, bool corners)

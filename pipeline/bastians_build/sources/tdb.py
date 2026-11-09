@@ -26,7 +26,11 @@ from bastians_build.sources.cmangos import LootRow, read_lines
 CONTINENT_MAPS = (0, 1)
 OPEN_WORLD = 0  # creature_template_difficulty.DifficultyID of the open world
 
-# npcflag bits -> service flags (data.md npc record); the low bits match CMaNGOS'
+# npcflag bits -> service flags (data.md npc record): the retail family's bits. ~~the low bits
+# match CMaNGOS'~~ They do not (05.11.2026): CMaNGOS classic-db carries the Classic 1.12 bits
+# (``cmangos.NPC_FLAGS``; 4096 is an auctioneer there and a repairer here). Measured the same day
+# on TDB 1210.26091 by the sub-titles per bit: 8192 = 616 flight masters, 65536 = 392 "Innkeeper"
+# of 432, 131072 = 121 "Banker" of 129, 2097152 = 72 auctioneers, 4194304 = 255 "Stable Master".
 NPC_FLAGS = {
     2: "questgiver",
     16: "trainer",

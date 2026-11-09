@@ -36,7 +36,7 @@ end
 -- client's next step on the character's map.
 local function doPlaces(id, q, map)
   local out = {}
-  for spotMap, list in pairs(q and q.spots or {}) do
+  for spotMap, list in pairs(ns.Logic.OpenSpots(State.log[id], q)) do
     for _, s in ipairs(list) do
       out[#out + 1] = world(spotMap, s[1], s[2])
     end

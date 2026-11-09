@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 local strings = {
+  -- /bgest try (gestures.md "The voice", 08.11.2026)
   -- the owner's follow-ups (retail 01.11.2026, late)
   ["(a macro)"] = "(una macro)",
   ["A macro of the account"] = "Una macro de la cuenta",
@@ -52,29 +53,19 @@ local strings = {
   ["Show or hide the cloak"] = "Mostrar u ocultar la capa",
   ["A random favourite mount"] = "Una montura favorita al azar",
   -- plan-second-wave.md S7 (01.11.2026)
-  ["%s challenges you to a duel"] = "%s te reta a un duelo",
-  ["%s wants to trade"] = "%s quiere comerciar",
-  ["%s invites you to a group"] = "%s te invita a un grupo",
   ["Answer?"] = "¿Responder?",
   ["Bow"] = "Reverencia",
   ["Wave"] = "Saludar",
-  ["Decline politely"] = "Rechazar con cortesía",
-  ["Thank you, but not today, %t."] = "Gracias, pero hoy no, %t.",
   ["The polite decline of a duel, a trade or an invite (press Enter; %t is who asked)"] = "El rechazo cortés de un duelo, un comercio o una invitación (Intro; %t es quien preguntó)", -- luacheck: ignore 631
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark heard"] = "Marcar como escuchado",
   ["Toggle the tracker"] = "Mostrar u ocultar el rastreador",
-  ["%s buffed you"] = "%s te ha mejorado",
-  ["%s cast %s on you"] = "%s te ha lanzado %s",
-  ["%s greets you"] = "%s te saluda",
-  ["%s resurrected you"] = "%s te ha resucitado",
   ["(a ring)"] = "(un anillo)",
   ["A line for slot %d"] = "Una línea para la ranura %d",
   ["A ring of its own"] = "Un anillo propio",
   ["A short title for the wedge"] = "Un título corto para la porción",
   ["Actions"] = "Acciones",
   ["Add a thank-you line (press Enter; %t is who to thank)"] = "Añadir una línea de agradecimiento (pulsa Intro; %t es a quien agradecer)",
-  ["Also in dungeons and battlegrounds"] = "También en mazmorras y campos de batalla",
   ["Ask"] = "Preguntar",
   ["Ask (a bubble)"] = "Preguntar (una burbuja)",
   ["Automatic"] = "Automático",
@@ -89,7 +80,6 @@ local strings = {
   ["Clear the screen"] = "Despejar la pantalla",
   ["Click: set this slot"] = "Clic: asignar esta ranura",
   ["Click: the options. Right click: edit the rings."] = "Clic: las opciones. Clic derecho: editar los anillos.",
-  ["Courtesy"] = "Cortesía",
   ["Courtesy: %s"] = "Cortesía: %s",
   ["Default rings"] = "Anillos predeterminados",
   ["Edit the ring"] = "Editar el anillo",
@@ -105,13 +95,9 @@ local strings = {
   ["Long road"] = "Largo camino",
   ["Looks around"] = "Mira alrededor",
   ["Lore here"] = "Historia de aquí",
-  ["May the road be kind to you, %t."] = "Que el camino te sea propicio, %t.",
-  ["Much obliged, %t."] = "Muy agradecido, %t.",
   ["My thanks, friend."] = "Mi agradecimiento, amigo.",
   ["Needs Bastian's %s"] = "Necesita Bastian's %s",
-  ["Not now"] = "Ahora no",
   ["Note here"] = "Nota aquí",
-  ["Off"] = "Desactivado",
   ["Ring"] = "Anillo",
   ["Ring %d: %s"] = "Anillo %d: %s",
   ["Route home"] = "Ruta a casa",
@@ -124,7 +110,6 @@ local strings = {
   ["Spoken as"] = "Dicho como",
   ["Thank"] = "Agradecer",
   ["Thank them?"] = "¿Darles las gracias?",
-  ["Thank you, %t!"] = "¡Gracias, %t!",
   ["Thanks, friend"] = "Gracias, amigo",
   ["The common tongue"] = "La lengua común",
   ["The key opens and closes the ring (else: hold it, release on a wedge)"] = "La tecla abre y cierra el anillo (si no: mantenla y suéltala sobre una porción)",
@@ -143,7 +128,6 @@ local strings = {
   ["say"] = "decir",
   ["yell"] = "gritar",
   -- Bastian's Campfire (plan-second-wave.md S5, 02.11.2026)
-  ["%s's camp warmed you"] = "El campamento de %s te dio calor",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

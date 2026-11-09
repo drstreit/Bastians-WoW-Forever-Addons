@@ -44,6 +44,11 @@ def fake_build(extra: dict[str, list[str]] | None = None):
                 shutil.copyfile(lua, target / lua.name)
                 with (target / lua.name).open("a", encoding="utf-8") as fh:
                     fh.writelines(f"-- {line}\n" for line in (extra or {}).get(pack.name, []))
+        nav = packs / "Bastians_Data_Nav" / "Generated"
+        nav.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(
+            FIXTURE_ADDONS / "Bastians_Data_Nav" / "Generated" / "Nav.lua", nav / "Nav.lua"
+        )
         transforms = packs / "Bastians_Data" / "Generated"
         transforms.mkdir(parents=True, exist_ok=True)
         (transforms / "MapTransforms.lua").write_text(
@@ -62,6 +67,29 @@ def inputs(tmp_path: Path) -> build_client.BuildInputs:
     export.mkdir(exist_ok=True)
     (export / "LATEST").write_text("20261025T0600Z\n", encoding="utf-8")
     return build_client.BuildInputs(client="forever", addons=tmp_path, prefix="beta", export=export)
+
+
+def test_an_edition_without_the_walk_network_is_refused(tmp_path):
+    """2.0.0 and every release before shipped without Bastians_Data_Nav (06.11.2026)."""
+    packs = tmp_path / "packs"
+    fake_build()(inputs(tmp_path), packs)
+    data_update.check_nav(packs)
+    nav = packs / data_update.NAV
+    nav.write_text(
+        "-- GENERATED\n-- pack nav: no walk network in this forever build\n", encoding="utf-8"
+    )
+    with pytest.raises(data_update.DataUpdateError, match="stub"):
+        data_update.check_nav(packs)
+    nav.unlink()
+    with pytest.raises(data_update.DataUpdateError, match="wrote no"):
+        data_update.check_nav(packs)
+
+
+def test_the_build_runs_the_nav_step_too(tmp_path, monkeypatch):
+    ran = []
+    monkeypatch.setattr(data_update, "stream", lambda cmd, cwd: ran.append(cmd[3]) or 0)
+    data_update.run_build(inputs(tmp_path), tmp_path / "packs")
+    assert ran == ["data", "nav"]
 
 
 def test_the_suite_brings_its_data_and_the_data_its_packs():
@@ -424,3 +452,111 @@ def test_what_curseforge_said_is_kept_with_the_edition(tmp_path: Path):
     }
     data_update.mark_status(ledger, 9, "live")
     assert data_update.read_ledger(ledger)["editions"][0]["live"] is True
+
+
+REPORT = """# Build report
+
+Client: forever. Build: 70790. Sources: ForeverDB.
+
+## Packs
+
+| Pack | Addon | Size | Budget | Records | Indexes |
+|---|---|---|---|---|---|
+| world | Bastians_Data_World | 8.3 KB | 12288 KB | %s | area.byZone 1 |
+| quests | Bastians_Data_Quests | 4.0 KB | 6144 KB | quest 4851 | quest.byGiver 3 |
+
+## Notes
+
+- market forever/rp/alliance/eu: reads the 0 prices of forever/normal/alliance/eu as 'EU normal'
+
+## Ground truth
+
+| Place | Expected | Found | Off |
+|---|---|---|---|
+| Stormwind 1 2 3 | a | b | 5 |
+"""
+
+
+def build_with_report(records: str):
+    # the report is no pack: the market pack carries the words too, so each run is a new edition
+    base = fake_build({"Bastians_Data_Market": [records]})
+
+    def build(inputs: build_client.BuildInputs, packs: Path) -> None:
+        base(inputs, packs)
+        (packs / "report.md").write_text(REPORT % records, encoding="utf-8", newline="\n")
+
+    return build
+
+
+def test_an_edition_whose_rows_fell_by_a_tenth_is_held(tmp_path: Path, capsys):
+    """Catalog review B2 (07.11.2026): the build report's counts ride with the edition; the next
+    edition is held when a pack type's rows fell by more than a tenth since the last sent one,
+    unless --allow-drift; a type under fifty rows and a gain are only lines."""
+    assert data_update.drift(
+        {"world": {"npc": 100, "zone": 10}}, {"world": {"npc": 89, "zone": 2}}
+    ) == (
+        ["world npc 100 -> 89"],
+        ["world npc 100 -> 89", "world zone 10 -> 2"],
+    )
+    assert data_update.drift({"world": {"npc": 100}}, {}) == (
+        ["world npc 100 -> 0"],
+        ["world npc 100 -> 0"],
+    )
+    assert data_update.drift(None, {"world": {"npc": 1}}) == ([], [])
+    ledger = tmp_path / "editions.json"
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    common = {
+        "ledger_path": ledger,
+        "book_toml": book_toml,
+        "today": "2026-11-07",
+        "book_states": tmp_path / "states",
+        "boot": False,
+    }
+    out = tmp_path / "out"
+    first, _ = data_update.update(
+        inputs(tmp_path), out, build=build_with_report("npc 10000, zone 71, area 809"), **common
+    )
+    assert first["records"] == {
+        "world": {"npc": 10000, "zone": 71, "area": 809},
+        "quests": {"quest": 4851},
+    }  # the ground-truth table is no pack
+    data_update.mark_sent(ledger, first, 1)
+    # the NPCs fell by a fifth: held, with the line that says so
+    with pytest.raises(
+        data_update.DataUpdateError,
+        match=r"rows fell by more than a tenth.*world npc 10000 -> 8000",
+    ):
+        data_update.update(
+            inputs(tmp_path), out, build=build_with_report("npc 8000, zone 71, area 809"), **common
+        )
+    # a small fall, a gain and a new type pass, each a line
+    capsys.readouterr()
+    second, _ = data_update.update(
+        inputs(tmp_path),
+        out,
+        build=build_with_report("npc 9500, zone 71, area 900, node 634"),
+        **common,
+    )
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.startswith("drift:")]
+    assert lines == ["drift: world area 809 -> 900", "drift: world npc 10000 -> 9500"]
+    assert second["records"]["world"]["node"] == 634
+    # the fall that is right ships with --allow-drift
+    third, _ = data_update.update(
+        inputs(tmp_path),
+        out,
+        build=build_with_report("npc 8000, zone 71, area 809"),
+        allow_drift=True,
+        **common,
+    )
+    assert third["records"]["world"]["npc"] == 8000
+    # a build without a report says so and is not checked (the fake build leaves the last
+    # report where a real one rewrites it: take it away)
+    capsys.readouterr()
+
+    def build_without_report(inputs_, packs: Path) -> None:
+        fake_build({"Bastians_Data_Market": ["x"]})(inputs_, packs)
+        (packs / "report.md").unlink(missing_ok=True)
+
+    data_update.update(inputs(tmp_path), out, build=build_without_report, **common)
+    assert "drift: no build report" in capsys.readouterr().out

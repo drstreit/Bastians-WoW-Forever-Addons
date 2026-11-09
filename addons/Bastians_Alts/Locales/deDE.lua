@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("deDE", {
+  ["%s is forgotten. Logging in with that character records it again."] = "%s ist vergessen. Beim nächsten Einloggen mit diesem Charakter wird er wieder erfasst.",
+  ["Forget %s? Use the action again within 5 seconds."] = "%s vergessen? Aktion innerhalb von 5 Sekunden erneut ausführen.",
+  ["Forget this character"] = "Diesen Charakter vergessen",
   ["Alts"] = "Twinks",
   ["Characters"] = "Charaktere",
   ["Your characters"] = "Deine Charaktere",
@@ -12,6 +15,32 @@ ns.L:Register("deDE", {
   ["You have it"] = "Du hast es",
   ["you"] = "dir",
   ["Known by: %s"] = "Bekannt bei: %s",
+  -- Runs.lua, dungeon runs and lockouts (catalog review A2.5, 07.11.2026)
+  ["Your runs"] = "Deine Läufe",
+  ["%s: one run"] = "%s: ein Lauf",
+  ["%s: %d runs"] = "%s: %d Läufe",
+  ["last %s"] = "zuletzt %s",
+  ["locked, resets in %s"] = "gesperrt, zurückgesetzt in %s",
+  ["No run recorded yet."] = "Noch kein Lauf aufgezeichnet.",
+  ["Dungeon runs"] = "Instanzläufe",
+  -- Train.lua, the trainer view (catalog review A5.7, 07.11.2026)
+  ["Trainer"] = "Lehrer",
+  ["what your class trainers teach you next"] = "was deine Klassenlehrer dir als Nächstes beibringen",
+  ["Learn now"] = "Jetzt lernen",
+  ["Later"] = "Später",
+  ["at %s, %s"] = "bei %s, %s",
+  ["at %s"] = "bei %s",
+  ["You know every spell for your level."] = "Du kennst jeden Zauber für deine Stufe.",
+  ["Nothing to learn now; %d at later levels"] = "Jetzt nichts zu lernen; %d auf späteren Stufen",
+  ["%d spells to learn now for %s; %d at later levels"] = "%d Zauber jetzt zu lernen für %s; %d auf späteren Stufen",
+  ["; %d unknown whether known"] = "; bei %d unbekannt, ob bekannt",
+  ["The trainer view needs Bastian's Data."] = "Die Lehrer-Ansicht braucht Bastian's Data.",
+  -- the gold goals (catalog review A5.5, 07.11.2026)
+  ["Next training"] = "Nächste Ausbildung",
+  ["Training at level %d"] = "Ausbildung auf Stufe %d",
+  ["Riding at level %d"] = "Reiten auf Stufe %d",
+  ["A mount at level %d"] = "Ein Reittier auf Stufe %d",
+  ["Spell"] = "Zauber",
   ["Owned"] = "Besitz",
   ["You"] = "Du",
   ["Nobody"] = "Niemand",
@@ -79,4 +108,7 @@ ns.L:Register("deDE", {
   ["Item"] = "Gegenstand",
 
   -- Window.lua (02.11.2026)
+  -- Alts.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Gold on all"] = "Gold auf allen",
+  ["Highest level"] = "Höchste Stufe",
 })

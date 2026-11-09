@@ -195,6 +195,19 @@ local strings = {
   ["%s is no longer blocked."] = "%s ya no está bloqueado.",
   ["Blocked: %s"] = "Bloqueados: %s",
   ["Nobody is blocked."] = "No hay nadie bloqueado.",
+  ["The flame: what the camp gives, the time until warm"] = "La llama: lo que da el campamento, el tiempo hasta entrar en calor",
+  ["A minimap button to light a fire when you carry a kit"] = "Un botón del minimapa para encender un fuego cuando llevas un kit",
+  ["Left click: sit"] = "Clic izquierdo: sentarse",
+  ["Right click: share the fire"] = "Clic derecho: compartir el fuego",
+  ["Shift-click: hide until something changes"] = "Mayús-clic: ocultar hasta que algo cambie",
+  ["Drag: move"] = "Arrastrar: mover",
+  ["Click: use it. Right click: the next one."] = "Clic: usarlo. Clic derecho: el siguiente.",
+  ["Click: light a fire. Right click: the next kit. Drag: move."] = "Clic: encender un fuego. Clic derecho: siguiente kit. Arrastrar: mover.",
+  ["Does not stack with your %s."] = "No se acumula con tu %s.",
+  ["Sit again for a minute afterwards to get its buff."] = "Después, siéntate otro minuto para obtener su efecto.",
+  ["Violet dust for the fire"] = "Polvo violeta para el fuego",
+  ["Colours the fire violet."] = "Tiñe el fuego de violeta.",
+  ["Ready in %s."] = "Listo en %s.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

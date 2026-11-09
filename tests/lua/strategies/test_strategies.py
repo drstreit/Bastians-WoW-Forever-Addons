@@ -34,6 +34,7 @@ def boot(wow: WowRuntime, *addons: str, level: int | None = None) -> WowRuntime:
 def strip(text) -> str:
     text = re.sub(r"\|T[^|]*\|t ?", "", str(text or ""))
     text = re.sub(r"\|c[0-9a-fA-F]{8}", "", text)
+    text = re.sub(r"\|H[^|]*\|h", "", text).replace("|h", "")  # a name's link (07.11.2026)
     return text.replace("|r", "")
 
 
@@ -65,7 +66,7 @@ def click_row(wow: WowRuntime, side: str, startswith: str) -> None:
     )
 
 
-def test_the_logic_farm_flip_pairs_index_and_seals(core: WowRuntime):
+def test_the_logic_farm_flip_pairs_and_index(core: WowRuntime):
     core.load_addon(STRAT)
     farm = core.eval(
         f"{BOOK}.Farm({{ 1, 2 }}, function(id) return ({{ [1] = {{ {{ 10, 50 }}, {{ 11, 4 }} }}, "
@@ -110,10 +111,6 @@ def test_the_logic_farm_flip_pairs_index_and_seals(core: WowRuntime):
         f"{BOOK}.Pairs({{ {{ 1, 2, 1 }}, {{ 3, 4, 2 }} }}, function(i) return ({{ 13, 10, 150, 400 }})[i] end)"
     )
     assert round(pairs[1].gain, 2) == -0.23 and round(pairs[2].gain, 2) == 0.33
-    page = "{ levelMin = 21, zones = { 1413 } }"
-    assert core.eval(f"{BOOK}.IsOpen({page}, 18, {{}})") is False
-    assert core.eval(f"{BOOK}.IsOpen({page}, 19, {{}})") is True  # two levels early
-    assert core.eval(f"{BOOK}.IsOpen({page}, 5, {{ [1413] = true }})") is True  # been there
     assert core.eval(f"{BOOK}.Moment('https://www.youtube.com/watch?v=x&t=95s')") == "1:35"
     assert (
         core.eval(
@@ -125,11 +122,11 @@ def test_the_logic_farm_flip_pairs_index_and_seals(core: WowRuntime):
 
 def test_the_title_page_shows_whats_new_and_marks_it_read(wow: WowRuntime):
     boot(wow)
-    wow.slash("/bbook")
+    wow.slash("/bbook title")
     assert wow.eval("BastiansStrategiesFrame:IsShown()") is True
     assert wow.eval(f"{WIN}.Current().kind") == "title"
     left, right = texts(wow, "left"), texts(wow, "right")
-    assert "Bastian's Gold Rumours" in left
+    assert "Bastian's Gold Adventures" in left
     assert right[0] == "WHAT'S NEW"
     assert "new  2026-10-23  New page: Hogger's Camp." in right  # a link to the page
     assert "new  2026-10-20  The book opens." in right
@@ -138,32 +135,6 @@ def test_the_title_page_shows_whats_new_and_marks_it_read(wow: WowRuntime):
     assert wow.eval(f"{MOD}.db.global.seenToday['New page: Hogger\\'s Camp.']") is True
     click_row(wow, "right", "New page")
     assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
-    assert wow.errors == []
-
-
-def test_an_entry_the_build_wrote_about_the_mill_opens_that_mill(wow: WowRuntime):
-    boot(wow)
-    # the build's entries (book_news.py) link a page or a chapter's mill; one that names a gone
-    # chapter stays plain text
-    wow.execute(
-        f"local W = {WIN}; local news = W.News; W.News = function() local t = news(); "
-        "table.insert(t, 1, { date = '2026-10-24', text = 'Farming: 2 new rumours in the mill.', "
-        "mill = 'farming' }); table.insert(t, 2, { date = '2026-10-24', text = 'Gone: a rumour.', "
-        "mill = 'gone' }); return t end"
-    )
-    wow.slash("/bbook news")
-    assert "new  2026-10-24  Gone: a rumour." in texts(wow, "right")
-    click_row(wow, "right", "Farming: 2 new")
-    assert (wow.eval(f"{WIN}.Current().kind"), wow.eval(f"{WIN}.Current().id")) == (
-        "mill",
-        "farming",
-    )
-    wow.execute(f"{WIN}.Show({{ kind = 'title' }})")
-    try:
-        click_row(wow, "right", "Gone:")
-        raise AssertionError("a plain entry has no row")
-    except Exception as exc:  # lupa raises its own error class
-        assert "no such row" in str(exc)
     assert wow.errors == []
 
 
@@ -213,26 +184,19 @@ def test_the_books_lines_reach_the_suite_and_open_the_book(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_contents_lists_the_chapters_and_seals_pages_by_level_and_zone(wow: WowRuntime):
-    wow.execute("Mock.playerMap = 1436")  # Westfall: Elwynn not set foot in yet
+def test_contents_lists_every_page_and_every_page_is_open_from_the_start(wow: WowRuntime):
+    """ADR 0057: no seals. A level 3 who has never been to Elwynn reads its page."""
+    wow.execute("Mock.playerMap = 1436")
     boot(wow, level=3)
     wow.slash("/bbook contents")
     left = texts(wow, "left")
     assert left[0] == "CONTENTS" and "Farming and easy kills" in left
     hogger = next(t for t in left if t.startswith("Hogger's Camp"))
-    assert hogger.endswith("sealed")
+    assert "sealed" not in hogger
     assert "The back shelf: 1 older pages; search the book to find them" in left
     wow.slash("/bbook hogger-camp")
-    assert any(
-        t.startswith("This page is sealed. It opens at level 7") and "Elwynn Forest" in t
-        for t in both(wow)
-    )
-    # entering Elwynn unseals it (SB3)
-    wow.execute("Mock.playerMap = 1429")
-    wow.fire("ZONE_CHANGED_NEW_AREA")
-    wow.advance(0.5)
-    assert wow.eval(f"{MOD}.db.char.entered[1429]") is True
-    assert not any(t.startswith("This page is sealed") for t in both(wow))
+    assert not any("sealed" in t for t in both(wow))
+    assert "Hogger's Camp" in both(wow)
     assert wow.errors == []
 
 
@@ -262,9 +226,9 @@ def test_a_page_with_its_plate_live_box_rumours_places_and_note(wow: WowRuntime)
     # the live box: a kill's loot at the market's prices
     assert "WHAT IT PAYS ON YOUR MARKET" in shown
     assert any(t.endswith("per 100 kills.") for t in shown)
-    # the rumours: the stamp, AHSync's own sentence, the reason, the source's line and link
-    assert "[Checked] Hogger's camp in Elwynn drops a lot of Linen Cloth." in shown
-    assert "[Half right] The Fargodeep Mine kobolds drop Linen Cloth too." in shown
+    # the rumours: AHSync's own sentence, no verdict, the reason, the source's line and link
+    assert "Hogger's camp in Elwynn drops a lot of Linen Cloth." in shown
+    assert "The Fargodeep Mine kobolds drop Linen Cloth too." in shown
     assert "Only the kobolds near the entrance." in shown
     click_row(wow, "right", "Fixture Channel")
     assert wow.eval("Mock.chatInput") == "https://www.youtube.com/watch?v=fixture1&t=85s"
@@ -293,8 +257,8 @@ def test_bookmarks_the_last_page_and_notes_survive_a_reload(wow: WowRuntime):
     fresh = wow.reload()
     fresh.run_frames(10)
     fresh.advance(0.5)
-    fresh.slash("/bbook")  # opens where the character left it
-    assert fresh.eval(f"{WIN}.Current().id") == "hogger-camp"
+    fresh.slash("/bbook")  # opens on the map; the last place is still kept
+    assert fresh.eval(f"{WIN}.Current().kind") == "atlas"
     assert fresh.eval(f"{MOD}.db.global.notes['hogger-camp']") == "note"
     fresh.slash("/bbook bookmarks")
     left = texts(fresh, "left")
@@ -370,12 +334,13 @@ def test_turning_pages_follows_the_reading_order(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_the_rumour_mill_follows_its_chapter_and_credits_the_travellers(wow: WowRuntime):
+def test_the_rumour_mill_is_a_plain_list_after_its_chapter(wow: WowRuntime):
+    """ADR 0057: one line per rumour with its channel and video, no verdict, the owner's words."""
     boot(wow)
     order = [(e.kind, e.id) for e in wow.eval(f"{WIN}.Order()").values()]
     assert order.index(("mill", "farming")) == order.index(("page", "hogger-camp")) + 1
     wow.slash("/bbook contents")
-    assert "Rumour mill: 1 rumours I have not tried yet" in texts(wow, "left")
+    assert "Rumour mill: 1 rumours" in texts(wow, "left")
     click_row(wow, "left", "Rumour mill:")
     assert (wow.eval(f"{WIN}.Current().kind"), wow.eval(f"{WIN}.Current().id")) == (
         "mill",
@@ -383,15 +348,12 @@ def test_the_rumour_mill_follows_its_chapter_and_credits_the_travellers(wow: Wow
     )
     shown = both(wow)
     assert "THE RUMOUR MILL" in shown and "Farming and easy kills" in shown
+    assert "This is what they're saying on the road. Make of it what you will." in shown
     # the claim told by two channels and on no page (tests/fixtures/export-mini, claim 13)
-    assert "[Heard, not checked] Hogger drops the Blood Saber about once in 30 kills." in shown
-    assert "Elwynn Forest  /  told by 2 channels" in shown
+    assert "Hogger drops the Blood Saber about once in 30 kills." in shown
     assert "Fixture Channel, 2026-10-13, at 0:40  copy the link" in shown
-    assert "Other Channel, 2026-10-14, at 3:20  copy the link" in shown
-    wow.execute(f"{WIN}.folio.back:Click()")
-    assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
-    wow.slash("/bbook mill")
-    assert wow.eval(f"{WIN}.Current().kind") == "mill"
+    assert not any(t.startswith("Other Channel") for t in shown)  # one line per rumour
+    assert not any("[" in t for t in shown)  # no stamps
     wow.slash("/bbook mill crafting")  # a chapter without rumours says so
     assert "Nothing in the mill for this chapter today." in both(wow)
     assert wow.errors == []
@@ -518,6 +480,59 @@ def test_a_plate_lies_on_the_zones_painting_and_offers_route_there(wow: WowRunti
     assert wow.errors == []
 
 
+def test_a_plate_and_a_story_mark_show_their_place_on_the_world_map(wow: WowRuntime):
+    """ "all maps need to be able to open in world map - it's hard to see
+    what region we mean here". The plate's "Show on map" and a right click on a story's mark open
+    the map on the place through Map's action; without Map the plate has no such button."""
+    boot(wow, CORE, DATA, STRAT)
+    wow.execute(
+        f"""plate = {MOD}.Plate.New(UIParent)
+        spec = {{ kind = "spot", farm = {{ {{ 0.4, 0.5 }} }}, avoid = {{}},
+          box = {{ 0.2, 0.05, 0.4, 0.25 }}, place = {{ 1429, 0.3, 0.15 }}, label = "the camp" }}
+        plate:Draw(spec, 340)"""
+    )
+    assert wow.eval("plate.show:IsShown()") is False  # no Map: no button
+    wow.execute(
+        """shown = nil
+        Bastians:RegisterAction(Bastians:GetModule('Strategies'), { id = "map.show",
+          label = "Show on map", types = "*",
+          when = function(ref, ctx) return ctx ~= nil and ctx.point ~= nil end,
+          run = function(ref, ctx) shown = { ref, ctx.point[1], ctx.point[4] } end })
+        plate:Draw(spec, 340)"""
+    )
+    assert wow.eval("plate.show:IsShown()") is True
+    wow.execute("plate.show:GetScript('OnClick')(plate.show)")
+    assert list(wow.eval("shown").values()) == ["zone:1429", 0, "the camp"]
+    # a story's mark: a right click shows its plate's place, a left click opens the story
+    wow.execute(
+        f"""shown = nil
+        ok = {WIN}.ShowStoryOnMap({{ id = "x", page = {{ name = "A story",
+          plate = {{ place = {{ 1429, 0.5, 0.5 }} }} }} }})"""
+    )
+    assert wow.eval("ok") is True and wow.eval("shown[3]") == "A story"
+    assert wow.eval(f"{WIN}.ShowStoryOnMap({{ id = 'y', page = {{ name = 'B' }} }})") is False
+    assert wow.errors == []
+
+
+def test_the_names_in_a_pages_text_are_links(wow: WowRuntime):
+    """ "the text has green items - I would expect that these are links -
+    but they are only text". A name is a link: the mouse shows the thing, a click opens it."""
+    boot(wow, CORE, DATA, STRAT, BROWSER)
+    text = wow.eval(f"{WIN}.Expand('Sell {{item:2589}} in town')")
+    assert "|Hbastians:item:2589|h" in text and strip(text) == "Sell Linen Cloth in town"
+    assert wow.eval(f"{WIN}.LinkRef('bastians:item:2589')") == "item:2589"
+    assert wow.eval(f"{WIN}.LinkRef('item:2589')") is None  # another addon's link
+    wow.slash("/bbook title")
+    content = f"{WIN}.left.content"
+    assert wow.eval(f"{content}.hyperlinksEnabled") is True
+    wow.execute(f"{content}:GetScript('OnHyperlinkEnter')({content}, 'bastians:item:2589')")
+    assert wow.eval("GameTooltip:IsShown()") is True
+    wow.execute(f"{content}:GetScript('OnHyperlinkLeave')({content})")
+    wow.execute(f"{content}:GetScript('OnHyperlinkClick')({content}, 'bastians:npc:240')")
+    assert wow.eval("Bastians:GetModule('Browser').Browser.PageRef()") == "npc:240"
+    assert wow.errors == []
+
+
 def test_the_book_window_grows_as_far_as_the_reader_drags_it(wow: WowRuntime):
     """ "the width has a maximum - let it scale freely"; the grip sits
     above the page buttons that covered it."""
@@ -554,16 +569,105 @@ def test_the_books_own_pages_open_with_their_pictures(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_a_larger_window_scales_the_whole_spread(wow: WowRuntime):
-    """the grip "enlarges the window, no scaling possible": the spread
-    scales with the window from its base size up, never below one."""
+def test_a_larger_window_gives_room_not_scale_and_three_sizes(wow: WowRuntime):
+    """ "the font scaling of the book is too large, should follow a
+    global setting" and "max 3 font sizes". ~~The spread scaled with the window (30.10.2026).~~ A
+    larger window gives the pages room at scale one; the bar never scales; every size the book
+    asks for is a title, the text or the small words."""
     boot(wow)
-    wow.slash("/bbook")
+    wow.slash("/bbook title")
     assert wow.eval(f"{WIN}.win.content:GetScale()") == 1
     wow.execute(f"{WIN}.win.frame:SetSize(1880, 1280); {WIN}.win.opts.onResize(nil, false)")
-    assert wow.eval(f"{WIN}.win.content:GetScale()") == 2
-    wow.execute(f"{WIN}.win.frame:SetSize(1880, 640); {WIN}.win.opts.onResize(nil, false)")
-    assert wow.eval(f"{WIN}.win.content:GetScale()") == 1  # the smaller side decides
-    wow.execute(f"{WIN}.win.frame:SetSize(700, 500); {WIN}.win.opts.onResize(nil, false)")
-    assert wow.eval(f"{WIN}.win.content:GetScale()") == 1  # never below one
+    assert wow.eval(f"{WIN}.win.content:GetScale()") == 1
+    assert wow.eval(f"{WIN}.bar:GetParent() == {WIN}.win.frame") is True  # not in the content
+    assert wow.eval(f"{WIN}.bar:GetScale()") in (1, None)
+    size = "Bastians:GetModule('Strategies').Book.Size"
+    assert [wow.eval(f"{size}({n})") for n in (10, 11, 12, 13, 14, 18, 24)] == [
+        11,
+        11,
+        13,
+        13,
+        18,
+        18,
+        18,
+    ]
+    assert wow.errors == []
+
+
+def test_gold_stories_are_a_list_and_a_storys_page_leads_into_the_book(wow: WowRuntime):
+    """ "Gold Stories ... with zone, maybe category"; a story's page has
+    its picture and a prominent way into the book."""
+    boot(wow, CORE, DATA, STRAT, "Bastians_Browser")
+    browser = "Bastians:GetModule('Browser')"
+    wow.execute(f"{browser}.Browser.List('page')")
+    wow.run_frames(20)
+    rows = list(wow.eval(f"{browser}.tree.flat").values())
+    stories = [r for r in rows if r.ref]
+    assert stories and all(r.ref.startswith("page:") for r in stories)
+    assert any(r.group for r in rows)  # grouped by chapter
+    ref = stories[0].ref
+    wow.execute(f"{browser}.Browser.Open('{ref}')")
+    wow.run_frames(5)
+    wow.execute(f"{browser}.dossier.scroll:SetSize(800, 600); {browser}.dossier:Refresh()")
+    wow.run_frames(3)
+    assert wow.eval(f"{browser}.dossier.sheet ~= nil") is True
+    height = wow.eval(
+        f"{MOD}.Strategies.DrawStory('{ref}', {{ frame = {browser}.dossier.content, width = 700 }})"
+    )
+    assert height > 100  # the title, the button and the plate
+    assert wow.eval(f"{MOD}.Strategies.DrawStory('page:no-such', {{ frame = UIParent }})") == 0
+    assert wow.errors == []
+
+
+def test_a_spot_finds_its_story_by_its_items_else_by_its_zone(wow: WowRuntime):
+    boot(wow)
+    strategies = f"{MOD}.Strategies"
+    d = "Bastians:GetService('data')"
+    pages = list(wow.eval(f"{d}:Each('page')").values())
+    page = wow.eval(f"{d}:Get('page', '{pages[0]}')")
+    item = next((r for r in page.refs.values() if str(r).startswith("item:")), None)
+    assert item, "the fixture's first page names an item"
+    wow.execute(
+        f"""
+        local real = {d}
+        local get = real.Get
+        real.Get = function(self, typ, id)
+          if typ == "spot" and id == 7 then return {{ id = 7, map = 1, items = {{ {{ {item.split(":")[1]}, 3 }} }} }} end
+          if typ == "spot" and id == 8 then return {{ id = 8, map = 4242, items = {{ {{ 999999, 3 }} }} }} end
+          return get(self, typ, id)
+        end
+        """
+    )
+    found = list(wow.eval(f"{strategies}.SpotPages('spot:7')").values())
+    assert pages[0] in found
+    assert len(wow.eval(f"{strategies}.SpotPages('spot:8')")) == 0  # no story: no link
+    assert len(wow.eval(f"{strategies}.SpotPages('npc:1')")) == 0
+    assert wow.errors == []
+
+
+def test_gold_stories_are_tiles_with_the_picture_and_the_lead(wow: WowRuntime):
+    """(R7): "it needs the same mobile approach - tiles on left with
+    symbol (bastian picture and short text) - then pane with detail on right. Make again tabs
+    there for the chapters." A story's tile carries its picture and its opening's first words;
+    the chapters are chips over the list."""
+    boot(wow, CORE, DATA, STRAT, BROWSER)
+    d = "Bastians:GetService('data')"
+    ids = list(wow.eval(f"{d}:Each('page')").values())
+    pid = ids[0]
+    # the fixture's pages bring no pictures: this one gets its flag, as a built pack's do
+    wow.execute(
+        f"local get = {d}.Get; {d}.Get = function(self, typ, id) local r = get(self, typ, id)"
+        f" if typ == 'page' and id == '{pid}' and r then r.art = true end return r end"
+    )
+    facts = wow.eval(f"Bastians:Entity('page:{pid}'):Facet('tile')")
+    assert facts.picture.path.endswith("Generated\\Art\\" + pid)
+    assert (facts.picture.coords.left, facts.picture.coords.right) == (0.125, 0.875)
+    assert facts.line and len(facts.line) <= 73 and "|" not in facts.line
+    wow.execute("Bastians:GetModule('Browser').Browser.List('page')")
+    wow.run_frames(20)
+    dims = wow.eval(
+        "Bastians:GetModule('Browser').Browser.Dims((function() for _, d in"
+        " ipairs(Bastians:GetLists()) do if d.type == 'page' then return d end end end)())"
+    )
+    assert any(dim.chips for dim in dims.values())
     assert wow.errors == []

@@ -82,6 +82,29 @@ def card(wow: WowRuntime, inp: str):
     return wow.eval(f"{M}.Card({inp})")
 
 
+def test_the_card_can_be_dragged_and_keeps_its_place(wow: WowRuntime):
+    """ "the camp fire window should be movable"."""
+    boot(wow)
+    wow.execute(
+        f"{CARD}.Refresh = {CARD}.Refresh; {W}.Card = function() return {{ show = true, state = 'near', could = {{}}, have = {{}} }} end"
+    )
+    wow.execute(f"{CARD}.Refresh()")
+    frame = wow.eval("BastiansCampfireCard")
+    assert frame.IsMovable(frame) is True
+    assert frame.GetFrameStrata(frame) == "FULLSCREEN_DIALOG"  # newly opened: over the windows
+    assert frame.raisedAt is not None
+    assert frame.GetScript(frame, "OnDragStart") is not None
+    wow.execute(
+        """local f = BastiansCampfireCard
+        f:ClearAllPoints()
+        f:SetPoint('BOTTOMLEFT', UIParent, 'BOTTOMLEFT', 120, 80)
+        f:GetScript('OnDragStop')(f)"""
+    )
+    saved = wow.eval(f"{MOD}.db.profile.cardPos")
+    assert list(saved.values()) == ["BOTTOMLEFT", "BOTTOMLEFT", 120, 80]
+    assert wow.errors == []
+
+
 def test_the_card_goes_near_warming_warm_fading_and_lingers_a_minute(wow: WowRuntime):
     boot(wow)
     c = card(wow, "{ now = 100, nearby = true, buffs = {}, carried = {} }")
@@ -110,8 +133,8 @@ def test_could_add_offers_only_what_the_camp_lacks_one_per_benefit(wow: WowRunti
     )
     could = list(wow.eval(f"{M}.Could({carried}, {{ 'mana' }})").values())
     assert [f.name for f in could] == [
-        "First Aid Kit"
-    ]  # Toxin Study: the same benefit; the kit: no feature
+        "Toxin Study"
+    ]  # of one benefit the best carried; the kit: no feature
     missing = list(wow.eval(f"{M}.Missing({{ 'stamina' }})").values())
     assert "stamina" not in missing and "tent" not in missing and "mana" in missing
 
@@ -203,25 +226,25 @@ def test_the_card_follows_the_auras_and_the_warmth_speaks_once(wow: WowRuntime):
     assert wow.eval(f"{CARD}.IsShown()") is False
     auras(wow, f"{{ {{ name = 'Campfire Nearby', spellId = {NEARBY} }} }}")
     assert wow.eval(f"{CARD}.IsShown()") is True
-    heading = wow.eval(f"{CARD}.Frame().heading:GetText()")
+    heading = wow.eval(f"{CARD}.Frame().headingText")
     assert heading == "A fire nearby"
     wow.execute("Mock.bags[279968] = 1")  # a First Aid Kit in the bags
     wow.fire("BAG_UPDATE_DELAYED")
     wow.advance(1)
     wow.run_frames(3)
-    assert "You could add: First Aid Kit." in wow.eval(f"{CARD}.Frame().text:GetText()")
+    assert "You could add: First Aid Kit." in wow.eval(f"{CARD}.Frame().sentence")
     now = wow.eval("GetTime()")
     auras(
         wow,
         f"{{ {{ spellId = {NEARBY} }}, {{ spellId = {RESTING}, expirationTime = {now + 42} }} }}",
     )
-    assert "0:42 until you are warm." in wow.eval(f"{CARD}.Frame().text:GetText()")
+    assert "0:42 until you are warm." in wow.eval(f"{CARD}.Frame().sentence")
     auras(
         wow,
         f"{{ {{ spellId = {NEARBY} }}, {{ spellId = {STAMINA}, expirationTime = {now + 3600} }},"
         f" {{ spellId = {MANA}, expirationTime = {now + 3500} }} }}",
     )
-    assert wow.eval(f"{CARD}.Frame().heading:GetText()") == "You are warm"
+    assert wow.eval(f"{CARD}.Frame().headingText") == "You are warm"
     assert list(wow.eval("Told").values()) == ["You are warm."]
     assert list(wow.eval("Warmed").values()) == ["nil"]
     auras(
@@ -235,18 +258,22 @@ def test_the_card_follows_the_auras_and_the_warmth_speaks_once(wow: WowRuntime):
     assert errors(wow) == []
 
 
-def test_a_strangers_camp_asks_to_thank_the_host_in_gestures(wow: WowRuntime):
-    boot(wow)
+def test_a_strangers_camp_asks_to_thank_the_host_in_courtesy(wow: WowRuntime):
+    boot(wow, CORE, DATA, GESTURES, "Bastians_Courtesy", CAMP)
+    wow.execute(
+        "UnitSex = function() return 3 end; GetGameTime = function() return 9, 0 end;"
+        " C_Weather = { GetCurrentWeather = function() return { type = 0, intensity = 0 } end }"
+    )
     wow.execute("Mock.guids = { party1 = 'Player-1-1' } ; Mock.unitNames = { party1 = 'Tobb' }")
     auras(
         wow,
         f"{{ {{ spellId = {STAMINA}, expirationTime = GetTime() + 3600, sourceUnit = 'party1' }} }}",
     )
-    pending = wow.eval("Bastians:GetModule('Gestures').Courtesy.Pending()")
+    pending = wow.eval("Bastians:GetModule('Courtesy').Courtesy.Pending()")
     assert pending.kind == "camp" and pending.who == "Tobb"
     assert (
         wow.eval(
-            "Bastians:GetModule('Gestures').Courtesy.Words(Bastians:GetModule('Gestures').Courtesy.Pending())"
+            "Bastians:GetModule('Courtesy').Courtesy.Words(Bastians:GetModule('Courtesy').Courtesy.Pending())"
         )
         == "Tobb's camp warmed you"
     )
@@ -415,3 +442,243 @@ def test_the_presets_set_the_campfire_sides(wow: WowRuntime):
     p = wow.eval(f"{MOD}.db.profile")
     assert (p.card, p.ring, p.beacon, p.planner) == (True, False, True, True)
     assert wow.eval(f"{MOD}:IsEnabled()") is True
+
+
+# ---- the flame -------------------------------
+
+OFFER = f"{MOD}.Offer"
+FIRST_AID, TOXIN_STUDY, LODESTONE = 279968, 279940, 279960
+BASIC_KIT, EXPERT_KIT, VIOLET_TOY, VIOLET_AURA = 279981, 279974, 289439, 1328375
+
+
+def near(wow: WowRuntime, *more: str) -> None:
+    extra = "".join(f", {m}" for m in more)
+    auras(wow, f"{{ {{ spellId = {NEARBY} }}{extra} }}")
+
+
+def carry(wow: WowRuntime, *items: int) -> None:
+    for item in items:
+        wow.execute(f"Mock.bags[{item}] = 1")
+    wow.fire("BAG_UPDATE_DELAYED")
+    wow.advance(1)
+    wow.run_frames(3)
+
+
+def attr(wow: WowRuntime, button: str, name: str):
+    return wow.eval(f"{button}:GetAttribute('{name}')")
+
+
+def test_the_flame_is_no_box_and_its_clicks_sit_share_and_hide(wow: WowRuntime):
+    boot(wow)
+    near(wow)
+    f = f"{CARD}.Frame()"
+    assert wow.eval(f"{f}:GetWidth()") == wow.eval(f"{CARD}.SIZE")
+    assert wow.eval(f"{f}.close") is None  # the box's buttons are gone
+    assert wow.eval(f"{f}.flame:GetTexture()").endswith("flame")
+    assert wow.eval(f"{f}.headingText") == "A fire nearby"
+    assert wow.eval(f"{f}.time:GetText()") == ""  # no time known: nothing written
+    wow.execute(
+        "Emoted = {} ; Bastians.Compat.Emote = function(t) Emoted[#Emoted + 1] = t return true end"
+    )
+    wow.execute(f"Shared = 0 ; {BEACON}.Share = function() Shared = Shared + 1 return true end")
+    assert wow.eval(f"{CARD}.Click('LeftButton')") == "sit"
+    assert list(wow.eval("Emoted").values()) == ["SIT"]
+    assert wow.eval(f"{CARD}.Click('RightButton')") == "share"
+    assert wow.eval("Shared") == 1
+    wow.execute(f"{MOD}.db.profile.beacon = false")
+    assert wow.eval(f"{CARD}.Click('RightButton')") is None  # the beacon is off: nothing is sent
+    wow.execute("IsShiftKeyDown = function() return true end")
+    assert wow.eval(f"{CARD}.Click('LeftButton')") == "hide"
+    assert wow.eval(f"{CARD}.IsShown()") is False
+    assert errors(wow) == []
+
+
+def test_the_release_of_a_drag_is_no_click(wow: WowRuntime):
+    boot(wow)
+    near(wow)
+    wow.execute(
+        "Emoted = 0 ; Bastians.Compat.Emote = function() Emoted = Emoted + 1 return true end"
+    )
+    wow.execute(
+        f"""local f = {CARD}.Frame()
+        f:GetScript('OnMouseDown')(f)
+        f:GetScript('OnDragStart')(f)
+        f:GetScript('OnDragStop')(f)
+        f:GetScript('OnClick')(f, 'LeftButton')"""
+    )
+    assert wow.eval("Emoted") == 0
+    wow.execute(
+        f"""local f = {CARD}.Frame()
+        f:GetScript('OnMouseDown')(f)
+        f:GetScript('OnClick')(f, 'LeftButton')"""
+    )
+    assert wow.eval("Emoted") == 1  # the next plain click counts again
+    assert errors(wow) == []
+
+
+def test_the_flame_shows_the_state_and_the_time(wow: WowRuntime):
+    boot(wow)
+    m = M
+    assert wow.eval(f"(select(1, {m}.Flame('warm', 0)))") > wow.eval(
+        f"(select(1, {m}.Flame('near', 0)))"
+    )
+    for state in ("near", "warming", "warm", "fading", "away"):
+        for t in (0, 0.7, 3.1, 11.9):
+            size = wow.eval(f"(select(1, {m}.Flame('{state}', {t})))")
+            outer = wow.eval(f"(select(2, {m}.Flame('{state}', {t})))")
+            heart = wow.eval(f"(select(3, {m}.Flame('{state}', {t})))")
+            assert 0 < size <= 1.1 and 0 < outer <= 1 and 0 < heart <= 1
+    assert wow.eval(f"{m}.Fill('warming', 30)") == 0.5
+    assert wow.eval(f"{m}.Fill('warming', nil)") == 1  # a time nobody knows does not fill it
+    assert wow.eval(f"{m}.Fill('warm', 30)") == 1
+    now = wow.eval("GetTime()")
+    near(wow, f"{{ spellId = {RESTING}, expirationTime = {now + 42} }}")
+    assert wow.eval(f"{CARD}.Frame().time:GetText()") == "0:42"
+    assert wow.eval(f"{CARD}.Frame().sweep:IsShown()") is False
+    near(wow, f"{{ spellId = {STAMINA}, expirationTime = {now + 1800} }}")
+    assert wow.eval(f"{CARD}.Frame().time:GetText()") == "30:00"
+    assert wow.eval(f"{CARD}.Frame().sweep:IsShown()") is True
+    assert wow.eval(f"{CARD}.Frame().sweep.cooldown.duration") == 3600
+    assert errors(wow) == []
+
+
+def test_what_is_offered_is_the_best_of_what_the_character_can_place(wow: WowRuntime):
+    boot(wow)
+    items = f"{{ {MOD}.Camp.BY_ITEM[{FIRST_AID}], {MOD}.Camp.BY_ITEM[{TOXIN_STUDY}] }}"
+    could = lambda ctx: [  # noqa: E731
+        v.name for v in wow.eval(f"{M}.Could({items}, {{}}, {ctx})").values()
+    ]
+    assert could("nil") == ["Toxin Study"]  # the highest rank of one benefit
+    assert could("{ professions = { [129] = 50 } }") == ["First Aid Kit"]  # the rank he has
+    assert could("{ professions = { [185] = 300 } }") == []  # not his profession
+    assert could("{ professions = {} }") == ["Toxin Study"]  # no answer is unknown, not "none"
+    assert could(f"{{ cooling = {{ [{TOXIN_STUDY}] = true }} }}") == ["First Aid Kit"]
+    assert could("{ placedHere = true }") == []
+    kits = f"{{ {MOD}.Camp.BY_ITEM[{BASIC_KIT}], {MOD}.Camp.BY_ITEM[{EXPERT_KIT}], {MOD}.Camp.BY_ITEM[{FIRST_AID}] }}"
+    assert [v.name for v in wow.eval(f"{M}.Kits({kits})").values()] == [
+        "Expert Campfire Kit",
+        "Basic Campfire Kit",
+    ]
+    assert (
+        next(iter(wow.eval(f"{M}.Kits({kits}, {{ [185] = 150 }})").values())).name
+        == "Basic Campfire Kit"
+    )
+    assert errors(wow) == []
+
+
+def test_the_foot_icon_places_what_the_camp_lacks_and_goes_away(wow: WowRuntime):
+    boot(wow)
+    near(wow)
+    assert wow.eval(f"{OFFER}.Foot()") is None or wow.eval(f"{OFFER}.Foot():IsShown()") is False
+    carry(wow, FIRST_AID, LODESTONE)
+    foot = f"{OFFER}.Foot()"
+    assert wow.eval(f"{foot}:IsShown()") is True
+    assert attr(wow, foot, "type1") == "item"
+    assert attr(wow, foot, "item") == f"item:{FIRST_AID}"
+    wow.execute(f"local b = {foot} ; b:GetScript('PostClick')(b, 'RightButton')")
+    assert attr(wow, foot, "item") == f"item:{LODESTONE}"
+    wow.fire("UNIT_SPELLCAST_SUCCEEDED", "player", "cast", 1307254)  # the Lodestone is placed
+    wow.advance(1)
+    wow.run_frames(3)
+    assert wow.eval(f"{foot}:IsShown()") is False  # one per player and camp
+    auras(wow, "{}")
+    near(wow)
+    assert wow.eval(f"{foot}:IsShown()") is True  # away and back: another camp
+    assert errors(wow) == []
+
+
+def test_the_foot_icon_is_not_touched_in_combat(wow: WowRuntime):
+    boot(wow)
+    near(wow)
+    carry(wow, FIRST_AID)
+    foot = f"{OFFER}.Foot()"
+    wow.fire("PLAYER_REGEN_DISABLED")
+    assert wow.eval(f"{foot}:IsShown()") is False
+    wow.execute("Mock.combat = true")
+    carry(wow, LODESTONE)  # a mock's secure frame raises when it is touched now
+    assert wow.eval(f"{foot}:IsShown()") is False
+    assert wow.eval(f"{CARD}.IsShown()") is True  # the flame itself stays
+    wow.execute("Mock.combat = false")
+    wow.fire("PLAYER_REGEN_ENABLED")
+    assert wow.eval(f"{foot}:IsShown()") is True
+    assert errors(wow) == []
+
+
+def test_the_violet_dust_follows_the_features_while_it_can_be_thrown(wow: WowRuntime):
+    boot(wow)
+    near(wow)
+    foot = f"{OFFER}.Foot()"
+    wow.execute(f"Mock.toys[{VIOLET_TOY}] = true")
+    wow.execute(f"{CARD}.Refresh()")
+    assert attr(wow, foot, "type1") == "toy"
+    assert attr(wow, foot, "toy") == VIOLET_TOY
+    assert attr(wow, foot, "item") is None
+    carry(wow, FIRST_AID)
+    assert attr(wow, foot, "item") == f"item:{FIRST_AID}"  # the feature first
+    wow.execute(f"local b = {foot} ; b:GetScript('PostClick')(b, 'RightButton')")
+    assert attr(wow, foot, "toy") == VIOLET_TOY
+    wow.execute(f"Mock.bags[{FIRST_AID}] = 0")
+    carry(wow)
+    near(wow, f"{{ spellId = {VIOLET_AURA} }}")
+    assert wow.eval(f"{foot}:IsShown()") is False  # the flames are violet already
+    near(wow)
+    assert wow.eval(f"{foot}:IsShown()") is True
+    wow.execute(f"Mock.toyUsable[{VIOLET_TOY}] = false ; {CARD}.Refresh()")
+    assert wow.eval(f"{foot}:IsShown()") is False  # the event is over
+    wow.advance(5)  # a cooldown that started at the clock's zero reads as none
+    wow.execute(
+        f"Mock.toyUsable[{VIOLET_TOY}] = nil ; Mock.itemCooldowns[{VIOLET_TOY}] = {{ start = GetTime(), duration = 1800 }}"
+    )
+    wow.execute(f"{CARD}.Refresh()")
+    assert wow.eval(f"{foot}:IsShown()") is False  # thrown lately
+    assert errors(wow) == []
+
+
+def test_the_minimap_button_lights_the_best_kit_away_from_a_fire(wow: WowRuntime):
+    boot(wow)
+    light = f"{OFFER}.Light()"
+    assert wow.eval(light) is None
+    carry(wow, BASIC_KIT, EXPERT_KIT)
+    assert wow.eval(f"{light}:IsShown()") is True
+    assert attr(wow, light, "item") == f"item:{EXPERT_KIT}"
+    wow.execute(f"local b = {light} ; b:GetScript('PostClick')(b, 'RightButton')")
+    assert attr(wow, light, "item") == f"item:{BASIC_KIT}"
+    near(wow)
+    assert wow.eval(f"{light}:IsShown()") is False  # a fire is here already
+    auras(wow, "{}")
+    assert wow.eval(f"{light}:IsShown()") is True
+    wow.advance(5)  # a cooldown that started at the clock's zero reads as none
+    wow.execute(
+        f"Mock.itemCooldowns[{BASIC_KIT}] = {{ start = GetTime(), duration = 600 }} ; {OFFER}.Refresh()"
+    )
+    assert wow.eval(f"{light}:GetAlpha()") < 1  # it says it is cooling down
+    wow.advance(601)
+    wow.run_frames(3)
+    assert wow.eval(f"{light}:GetAlpha()") == 1
+    wow.execute(f"{MOD}.db.profile.lightButton = false ; {OFFER}.Refresh()")
+    assert wow.eval(f"{light}:IsShown()") is False
+    assert errors(wow) == []
+
+
+def test_a_kit_is_never_the_foot_icon_and_no_kit_no_minimap_button(wow: WowRuntime):
+    boot(wow)
+    carry(wow, FIRST_AID)
+    assert wow.eval(f"{OFFER}.Light()") is None  # a camp item alone lights nothing
+    near(wow)
+    carry(wow, BASIC_KIT)
+    assert attr(wow, f"{OFFER}.Foot()", "item") == f"item:{FIRST_AID}"
+    assert errors(wow) == []
+
+
+def test_while_auras_are_hidden_the_last_reading_stands(wow: WowRuntime):
+    """BugGrabber, Forever 08.11.2026: "Auras cannot be accessed when secret while tainted"."""
+    boot(wow)
+    near(wow)
+    wow.execute("Mock.aurasSecret = true")  # the mock raises as the client does when they are read
+    wow.fire("UNIT_AURA", "player", {})
+    wow.run_frames(2)
+    assert wow.eval(f"{W}.State().nearby") is True  # unknown is not "no fire"
+    wow.execute("Mock.aurasSecret = false ; Mock.auras = {}")
+    wow.fire("PLAYER_REGEN_ENABLED")
+    assert wow.eval(f"{W}.State().nearby") is False  # read again after the fight
+    assert errors(wow) == []

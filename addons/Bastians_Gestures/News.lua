@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.1.0:1",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The gesture ring stays open until you press its key again.",
+  },
+  {
     id = "1.4.0:1",
     date = "2026-11-04",
     version = "1.4.0",

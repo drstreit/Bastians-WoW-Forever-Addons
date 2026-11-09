@@ -156,12 +156,12 @@ def test_layer_toggles_the_setting_instances_and_disable(wow: WowRuntime):
     wow.advance(0.2)
     assert "npc:54" in shown(wow)
     # the layer turned off on the map is off on the minimap too
+    # at once, with nothing else happening ("minimap layers are not
+    # working", every layer off and the same pins)
     wow.execute(f"{PINS}.SetLayerOn('test.near', false)")
-    wow.fire("ZONE_CHANGED_NEW_AREA")
     wow.advance(0.2)
     assert "npc:54" not in shown(wow)
     wow.execute(f"{PINS}.SetLayerOn('test.near', true)")
-    wow.execute("Bastians:Fire('BASTIANS_LAYER_CHANGED', 'test.near')")
     wow.advance(0.2)
     assert "npc:54" in shown(wow)
     # the setting off: everything gone, the frame hidden (no OnUpdate on a hidden frame)

@@ -36,9 +36,10 @@ function Sections.AgeText(seconds)
   return string.format(L["%d d ago"], math.floor(seconds / 86400))
 end
 
--- "scan, 3 min ago" | "US beta, 2 d ago" | "scan, 3 d ago, stale"
+-- "scan, 3 min ago" | "EU normal, 2 d ago" | "Auctionator, 1 d ago" | "scan, 3 d ago, stale"
 function Sections.SourceText(p)
-  local parts = { p.source == "market" and (p.label or L["market"]) or L["scan"] }
+  local named = p.source == "market" or p.source == "addon"
+  local parts = { named and (p.label or L["market"]) or L["scan"] }
   local age = Sections.AgeText(p.age)
   if age then
     parts[#parts + 1] = age
@@ -65,6 +66,107 @@ end
 
 -- The item "Price" rows: AH median, lowest buyout, sales per day, vendor sell price. A line is only
 -- there when its value is known; without any AH price the first row says so.
+-- What to buy a thing for: a reagent a vendor sells at the vendor's price when that is the lower,
+-- else the auction house's median; nil when neither is known.
+local function costOf(itemID)
+  local d = B:GetService("data")
+  local service = prices()
+  local p = service and service:Price(itemID) or nil
+  local median = p and p.median or nil
+  local item = d and d:Get("item", itemID)
+  local sellers = d and d:Index("npc.bySoldItem", itemID)
+  local vendor = item and item.buy and item.buy > 0 and sellers and #sellers > 0 and item.buy or nil
+  if median and vendor then
+    return math.min(median, vendor)
+  end
+  return median or vendor
+end
+Sections.CostOf = costOf
+
+local function medianOf(itemID)
+  local service = prices()
+  local p = service and service:Price(itemID) or nil
+  return p and p.median or nil
+end
+Sections.MedianOf = medianOf
+
+-- What disenchanting the item brings after the cut: value, missing materials (Craft for gold);
+-- nil when the item has no disenchant list.
+function Sections.DisenchantValue(itemID)
+  local d = B:GetService("data")
+  local item = d and d:Get("item", itemID)
+  local list = item and item.disenchant and d:Get("disenchant", item.disenchant)
+  if not (list and list.loot) then
+    return nil
+  end
+  return ns.Pricing.Disenchant(list.loot, medianOf)
+end
+
+-- "Disenchanting brings": the materials' value after the cut, with what is unknown said.
+local function disenchantRow(itemID)
+  local d = B:GetService("data")
+  local item = d and d:Get("item", itemID)
+  local list = item and item.disenchant and d:Get("disenchant", item.disenchant)
+  if not (list and type(list.loot) == "table" and #list.loot > 0) then
+    return nil
+  end
+  local value, missing = ns.Pricing.Disenchant(list.loot, medianOf)
+  if value <= 0 then
+    return nil
+  end
+  local words = missing > 0 and L["Disenchanting brings at least"] or L["Disenchanting brings"]
+  return { text = words, value = value, valueKind = "money" }
+end
+
+-- A recipe's margin: the reagents at the cheaper of vendor and AH, the product after the cut.
+local function craftRows(ref)
+  local _, recipeID = B.Entity.Parse(ref)
+  local d = B:GetService("data")
+  local recipe = d and d:Get("recipe", recipeID)
+  if not (recipe and recipe.reagents) then
+    return nil
+  end
+  local c = ns.Pricing.Craft(recipe, function(itemID)
+    return itemID == recipe.item and medianOf(itemID) or costOf(itemID)
+  end)
+  local rows = {}
+  local words = c.missing > 0 and L["Reagents cost at least"] or L["Reagents cost"]
+  rows[#rows + 1] = { text = words, value = c.cost, valueKind = "money" }
+  if c.missing > 0 then
+    rows[#rows + 1] = { text = string.format(L["%d reagents without a price"], c.missing), color = S.C.dim }
+  end
+  if c.net then
+    rows[#rows + 1] = { text = L["The product brings, after the cut"], value = c.net, valueKind = "money" }
+  else
+    rows[#rows + 1] = { text = L["The product's price is unknown"], color = S.C.dim }
+  end
+  if c.profit then
+    rows[#rows + 1] = { text = L["Profit per craft"], value = c.profit, valueKind = "money" }
+  end
+  return rows
+end
+
+local POSITION_WORDS = {
+  buy = "Low in its 30-day range: a time to buy.",
+  hold = "In the middle of its 30-day range.",
+  sell = "High in its 30-day range: a time to sell.",
+}
+
+-- An item's tile (ADR 0056): the mark "Bargain" while the lowest listing is far under the 30-day
+-- median (catalog review A5.3); nothing otherwise, so Data's line stays. Dropped on every price update.
+local function itemTile(ref)
+  local _, itemID = B.Entity.Parse(ref)
+  if type(itemID) ~= "number" then
+    return nil
+  end
+  local service = prices()
+  local p = service and service:Price(itemID) or nil
+  if ns.Pricing.Bargain(p) then
+    return { mark = { text = L["Bargain"], token = "good" } }
+  end
+  return nil
+end
+
 local function priceRows(ref)
   local _, itemID = B.Entity.Parse(ref)
   if type(itemID) ~= "number" then
@@ -96,6 +198,16 @@ local function priceRows(ref)
       }
     end
     rows[#rows + 1] = ns.History.Row(itemID) -- the sparkline of the own scans (#19), nil below two days
+    local position = ns.Pricing.Position(p)
+    if position then
+      rows[#rows + 1] = { text = L[POSITION_WORDS[position.signal]] }
+    end
+    if ns.Pricing.Dumped(p) then
+      rows[#rows + 1] = { text = L["The lowest listing is far under the median: wait, do not follow it."] }
+    end
+    if ns.Pricing.Bargain(p) then
+      rows[#rows + 1] = { text = L["The lowest listing is far under the 30-day median: a bargain to buy."] }
+    end
   else
     local why = service and L["no scan, no market data"] or L["Gold is disabled"]
     rows[#rows + 1] = { text = L["AH price"] .. ": " .. L["unknown"] .. " (" .. why .. ")", color = S.C.dim }
@@ -103,6 +215,13 @@ local function priceRows(ref)
   local sell = Sections.SellPrice(itemID)
   if sell then
     rows[#rows + 1] = { text = L["Vendor sells for"], value = sell, valueKind = "money" }
+  end
+  local disenchant = disenchantRow(itemID)
+  if disenchant then
+    rows[#rows + 1] = disenchant
+  end
+  for _, row in ipairs(ns.Ledger.Rows(B:Entity(ref):Name())) do
+    rows[#rows + 1] = row
   end
   return rows
 end
@@ -190,6 +309,7 @@ function Sections.Register(mod)
   end
   B:RegisterDetailSection(mod, {
     id = "gold.price",
+    chapter = "worth", -- on the sheet (ADR 0054)
     title = L["Price"],
     types = { "item" },
     order = 25,
@@ -199,8 +319,26 @@ function Sections.Register(mod)
     build = priceRows,
     tooltip = { max = 3, build = priceTooltipRows }, -- median, lowest buyout, the vendor line (R9)
   })
+  B:RegisterFacet(mod, {
+    facet = "tile",
+    types = { "item" },
+    priority = 120, -- over Data's line (100); it answers the mark only
+    invalidateOn = { "BASTIANS_PRICES_UPDATED" },
+    rule = itemTile,
+  })
+  B:RegisterDetailSection(mod, {
+    id = "gold.craft",
+    chapter = "worth", -- on the sheet (ADR 0054)
+    title = L["Craft margin"],
+    types = { "recipe" },
+    order = 26,
+    cache = false,
+    invalidateOn = { "BASTIANS_PRICES_UPDATED" },
+    build = craftRows,
+  })
   B:RegisterDetailSection(mod, {
     id = "gold.sells",
+    chapter = "sells", -- on the sheet (ADR 0054)
     title = L["Sells (seen)"],
     types = { "npc" },
     order = 31,

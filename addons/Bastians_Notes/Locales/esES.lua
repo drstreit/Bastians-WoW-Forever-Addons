@@ -91,6 +91,10 @@ local strings = {
   ["Near here:"] = "Cerca de aquí:",
   ["No notes near here."] = "No hay notas cerca de aquí.",
   ["and %d more"] = "y %d más",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "Sobre",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "Aún no hay notas. Añadir nota en una página escribe la primera.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

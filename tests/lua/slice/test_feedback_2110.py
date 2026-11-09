@@ -2,7 +2,7 @@
 dropdowns stayed open, the map's right click lost "Route here", the hub could not open a window."""
 
 from harness import WowRuntime
-from pages import pills
+from pages import near_by_default, pills, scope
 
 CORE, DATA, QUESTS, BROWSER, MAP, ROUTE = (
     "Bastians_Core",
@@ -28,11 +28,13 @@ def test_facet_values_become_sortable_strings(wow: WowRuntime):
 
 def test_npc_list_builds_with_chips_from_the_fixture_packs(wow: WowRuntime):
     wow.start(CORE, DATA, QUESTS, BROWSER)
+    near_by_default(wow)  # the narrowing itself is what this test is about
     wow.run_frames(10)
     wow.execute(f"{BR}.Browser.List('npc')")
     wow.run_frames(30)
     chips = pills(wow, f"{BR}.tree")
-    assert chips and chips[0] == "Where: Here"
+    # where the list looks is the scope chip in the search box since ADR 0056 (PA1.2)
+    assert "Level: All" in chips and scope(wow) == "in Elwynn Forest"
     rows = [r.text for r in wow.eval(f"{BR}.tree.flat").values()]
     assert rows and "Building the list" not in rows[0]
     assert wow.errors == []

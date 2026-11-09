@@ -96,7 +96,7 @@ end
 function Mail.Fill()
   local group = Mail.Current()
   local asker = group and global().characters[group.asker]
-  if not (asker and B.Compat.MailPrepare(asker.name, L["Bastian's Alts: your request"])) then
+  if not (asker and B.Compat.MailPrepare(asker.full or asker.name, L["Bastian's Alts: your request"])) then
     return 0
   end
   local want = {}

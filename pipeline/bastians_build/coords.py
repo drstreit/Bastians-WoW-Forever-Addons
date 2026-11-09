@@ -15,6 +15,13 @@ from bastians_build.sources.probe import Transform
 # instance ids; verified against probe P4 landmarks before launch)
 CMANGOS_CONTINENT = {0: 0, 1: 1}
 PARENT_RATIO = 8  # a containing map this many times larger than the smallest is a parent map
+# The capitals of a client (uiMapIDs). A world point inside a capital's map belongs to the city,
+# whatever the zone around it says: the
+# central rule put 410 Classic spawns of Stormwind onto Elwynn's map, the three bankers among them.
+CAPITALS = {"forever": frozenset({1453, 1454, 1455, 1456, 1457, 1458})}
+# The rim of a capital's map, as a fraction of it, that stays with the central rule: two Durotar
+# spawns lie on the rim of Orgrimmar's rectangle (measured 05.11.2026, at 0.0 and 0.027)
+CITY_RIM = 0.03
 
 
 @dataclass(frozen=True)
@@ -92,6 +99,37 @@ def best_map(
     return ui_map_id, x, y
 
 
+def city_map(
+    transforms: dict[int, Transform],
+    cities: frozenset[int] | tuple[int, ...],
+    continent: int,
+    wx: float,
+    wy: float,
+) -> tuple[int, float, float] | None:
+    """The capital whose map holds the point clear of its rim: (uiMapID, x, y) or None.
+
+    A capital's rectangle lies inside its zone's, and the central rule of `best_map` then often
+    prefers the zone. Measured 05.11.2026 on the 546 Forever-measured placements in or near a
+    capital: the central rule alone is right for 511, with this rule first for 536 (26 Stormwind
+    placements gained, one Elwynn herbalist inside Stormwind's rectangle lost).
+    """
+    hits = []
+    for ui_map_id in sorted(cities):
+        t = transforms.get(ui_map_id)
+        if t is None or t.continent != continent:
+            continue
+        pos = world_to_map(t, wx, wy)
+        if pos is None:
+            continue
+        x, y = pos
+        if CITY_RIM <= x <= 1 - CITY_RIM and CITY_RIM <= y <= 1 - CITY_RIM:
+            hits.append((_area(t), ui_map_id, x, y))
+    if not hits:
+        return None
+    _, ui_map_id, x, y = min(hits)
+    return ui_map_id, x, y
+
+
 def named_map(
     transforms: dict[int, Transform],
     names: dict[int, str],
@@ -141,12 +179,15 @@ def place_world_point(
     src: str,
     wz: float | None = None,
     r: float | None = None,
+    cities: frozenset[int] | tuple[int, ...] = (),
 ) -> Spawn | None:
-    """A CMaNGOS world position -> the zone map containing it (with the height), or None."""
+    """A CMaNGOS world position -> the zone map containing it (with the height), or None. With
+    `cities` a capital that holds the point wins over the zone around it (`city_map`)."""
     continent = CMANGOS_CONTINENT.get(cmangos_map)
     if continent is None:
         return None
-    hit = best_map(transforms, continent, wx, wy)
+    hit = city_map(transforms, cities, continent, wx, wy) if cities else None
+    hit = hit or best_map(transforms, continent, wx, wy)
     if hit is None:
         return None
     ui_map_id, x, y = hit

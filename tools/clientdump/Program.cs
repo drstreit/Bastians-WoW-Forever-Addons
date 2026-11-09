@@ -20,6 +20,7 @@ if (args.Length == 0 || args[0] is "-h" or "--help")
         clientdump terrain --install <client folder> --map <name or id> --wdt-fdid <id> --out <folder> [--roads <fdid list>] [--tile x,y]
         clientdump navmesh --install <client folder> --map <name or id> --wdt-fdid <id> --out <folder> [--roads <fdid list>] [--tiles x0,y0,x1,y1] [--blocked <words>] [--threads n] [--listfile <csv>] [--read-only]
         clientdump mapdata --install <client folder> --map <name or id> --wdt-fdid <id> --out <folder> [--tiles x0,y0,x1,y1] [--pixels 256] [--threads n]
+        clientdump wmo-rooms --install <client folder> --map <name or id> --wdt-fdid <id> --tiles x0,y0,x1,y1 --out <folder>
         clientdump blp --in <folder of .rgba cells> [--threads n]
         clientdump navmesh-png --mesh <file.navmesh> --out <file.png> (--tiles x0,y0,x1,y1 | --at wx,wy,radius) [--z zmin,zmax] [--ppy n]
         clientdump navmesh-check --mesh <file.navmesh> --taxi <TaxiNodes.json>
@@ -30,7 +31,7 @@ if (args.Length == 0 || args[0] is "-h" or "--help")
     return 0;
 }
 
-if (args[0] is "navgraph" or "navmesh-png" or "navmesh-check" or "navmesh-path" or "navnet" or "blp"
+if (args[0] is "navgraph" or "navmesh-walk" or "navmesh-png" or "navmesh-check" or "navmesh-path" or "navnet" or "blp"
     || (args[0] == "db2" && Opt(args, "db2-file") != null)) // work on files, open no client
 {
     try
@@ -49,6 +50,16 @@ if (args[0] is "navgraph" or "navmesh-png" or "navmesh-check" or "navmesh-path" 
         {
             BlpCells.Run(Opt(args, "in") ?? throw new ArgumentException("--in is required"),
                 int.Parse(Opt(args, "threads") ?? Environment.ProcessorCount.ToString()));
+            return 0;
+        }
+        if (args[0] == "navmesh-walk")
+        {
+            NavmeshView.Walk(Opt(args, "mesh") ?? throw new ArgumentException("--mesh is required"),
+                Opt(args, "out") ?? throw new ArgumentException("--out is required"),
+                Opt(args, "origin") ?? throw new ArgumentException("--origin is required"),
+                Opt(args, "size") ?? throw new ArgumentException("--size is required"),
+                double.Parse(Opt(args, "ppy") ?? "1", System.Globalization.CultureInfo.InvariantCulture),
+                Opt(args, "seed"));
             return 0;
         }
         if (args[0] == "navmesh-png")
@@ -155,22 +166,37 @@ try
                 int.Parse(Opt(args, "pixels") ?? "256"),
                 int.Parse(Opt(args, "threads") ?? Environment.ProcessorCount.ToString()));
             break;
+        case "wmo-rooms":
+            WmoRooms.Run(client, defs,
+                Opt(args, "map") ?? throw new ArgumentException("--map is required"),
+                Opt(args, "out") ?? throw new ArgumentException("--out is required"),
+                Opt(args, "wdt-fdid"), Opt(args, "listfile"),
+                Opt(args, "tiles") ?? throw new ArgumentException("--tiles is required"));
+            break;
         case "textures":
             // BLP textures by FileDataID as PNG, one per line of --list (ADR 0036: the zone paintings)
             var texOut = Opt(args, "out") ?? throw new ArgumentException("--out is required");
             Directory.CreateDirectory(texOut);
-            var texCount = 0;
+            int texCount = 0, texMissing = 0;
             foreach (var line in File.ReadAllLines(Opt(args, "list") ?? throw new ArgumentException("--list is required")))
             {
                 if (!uint.TryParse(line.Trim(), out var fdid)) continue;
                 var png = Path.Combine(texOut, fdid + ".png");
                 if (File.Exists(png)) continue;
-                using var blpStream = new MemoryStream(client.ReadFdid(fdid));
-                var bgra = new BLPSharp.BLPFile(blpStream).GetPixels(0, out var tw, out var th);
-                Png.Write(png, bgra, tw, th);
-                texCount++;
+                try
+                {
+                    using var blpStream = new MemoryStream(client.ReadFdid(fdid));
+                    var bgra = new BLPSharp.BLPFile(blpStream).GetPixels(0, out var tw, out var th);
+                    Png.Write(png, bgra, tw, th);
+                    texCount++;
+                }
+                catch (Exception e) when (e is FileNotFoundException or InvalidDataException or IOException)
+                {
+                    Console.Error.WriteLine($"textures: {fdid}: {e.Message}");
+                    texMissing++;
+                }
             }
-            Console.WriteLine($"textures: {texCount} written -> {texOut}");
+            Console.WriteLine($"textures: {texCount} written, {texMissing} not in this client -> {texOut}");
             break;
         case "raw":
             // one client file by FileDataID, as stored (a font for a build-time preview)

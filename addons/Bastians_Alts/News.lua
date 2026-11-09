@@ -5,6 +5,30 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.1.0:1",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = 'A "Trainer" view lists the spells your class trainers teach you now, with cost and the nearest trainer.',
+  },
+  {
+    id = "2.1.0:2",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "Your character's page names the gold to save for: the next training, riding and a mount.",
+  },
+  {
+    id = "2.1.0:3",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "A dungeon's page lists your characters' runs and lockouts.",
+  },
+  {
+    id = "2.1.0:4",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "Alts can forget a character you deleted, and its filter now finds class, race, place and every item held.",
+  },
+  {
     id = "1.2.0:12",
     date = "2026-10-31",
     version = "1.2.0",

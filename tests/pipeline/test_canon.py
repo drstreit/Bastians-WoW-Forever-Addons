@@ -10,13 +10,16 @@ from bastians_build.canon import (
     Sources,
     build_world,
     clean_name,
+    derive_dungeon_quests,
     fix_loot_objectives,
     level_band,
     localized_name,
+    merge_creatures,
     object_kind,
     zone_statistics,
 )
 from bastians_build.config import load_config
+from bastians_build.derive import build_index
 from bastians_build.load import SourcePaths, load_sources
 from bastians_build.model import World
 from bastians_build.sources import clientdump, cmangos, foreverdb, probe, questiedb
@@ -152,6 +155,40 @@ def test_forever_db_vendor_gets_forever_coordinates_as_fractions():
     assert "vendor" in corina["flags"]
 
 
+def test_classic_npc_flags_are_read_with_the_classic_table():
+    """Stormwind's three auctioneers carried `repair` and its two stable masters `flightmaster`,
+    and no NPC was an innkeeper, a banker or a flight master (Forever, 05.11.2026): CMaNGOS'
+    NpcFlags are the Classic 1.12 bits (4096 auctioneer, 8192 stable master, 16384 repair,
+    8 flight master, 4 vendor) and were read with the retail family's table. The rows carry the
+    values of ClassicDB z2815."""
+    rows = [
+        {"Entry": 8670, "Name": "Auctioneer Chilton", "MinLevel": 50, "NpcFlags": 4096},
+        {"Entry": 9977, "Name": "Sylista", "SubName": "Stable Master", "NpcFlags": 8193},
+        {"Entry": 352, "Name": "Dungar Longdrink", "SubName": "Gryphon Master", "NpcFlags": 11},
+        {"Entry": 6740, "Name": "Innkeeper Allison", "SubName": "Innkeeper", "NpcFlags": 135},
+        {"Entry": 2455, "Name": "Olivia Burnside", "SubName": "Banker", "NpcFlags": 257},
+        {"Entry": 1, "Name": "Gossip only", "NpcFlags": 1},
+        {"Entry": 2, "Name": "No column"},
+    ]
+    world = World(client="forever", build="test")
+    merge_creatures(world, Sources(client="forever", cm_creatures=rows))
+    flags = {i: world.get("npc", i)["flags"] for i in (8670, 9977, 352, 6740, 2455, 1, 2)}
+    assert flags == {
+        8670: ["auctioneer"],
+        9977: ["stablemaster"],
+        352: ["questgiver", "flightmaster"],
+        6740: ["questgiver", "vendor", "innkeeper"],
+        2455: ["banker"],
+        1: None,  # no service: unknown stays None, never an empty list
+        2: None,
+    }
+    # the real-format fixture: Corina Steele's 16388 is vendor + repair (it was neither: the
+    # ForeverDB title alone made her a vendor); the mage trainer's 19 is quest giver + trainer
+    world = build_world(fixture_sources())
+    assert world.get("npc", 54)["flags"] == ["vendor", "repair"]
+    assert world.get("npc", 198)["flags"][:2] == ["questgiver", "trainer"]
+
+
 def test_quest_176_takes_forever_names_and_classic_rewards():
     world = build_world(fixture_sources())
     q = world.get("quest", 176)
@@ -185,6 +222,21 @@ def test_items_recipes_and_nodes():
     assert all(s[3] in ("classic", "fdb") for s in peacebloom["spawns"])
 
 
+def test_the_game_objects_of_herbs_and_veins_are_an_index():
+    """The client names a dot in its language and the text packs translate objects, not nodes:
+    Tracked.lua goes through this index. Veins no gather kind lists come by their name."""
+    world = build_world(fixture_sources())
+    world.add("object", 73941, {"name": "Ooze Covered Gold Vein"})
+    world.add("object", 2653, {"name": "Lesser Bloodstone Deposit"})
+    world.add("object", 31, {"name": "Old Lion Statue"})
+    index = build_index(world, "node.objects")
+    assert index[1618] == "herb" and index[3724] == "herb"  # Peacebloom's two objects
+    assert index[73941] == "mine" and index[2653] == "mine"
+    assert 31 not in index
+    assert 2956 not in index  # a skinnable creature is an NPC, no object
+    assert list(index) == sorted(index)
+
+
 def test_object_kinds_are_names_not_type_numbers():
     """ADR 0016: the Objects list showed chips "3", "5", "8" on the Forever beta (23.10.2026), the
     raw gameobject_template.type; data.md specifies names. Unknown stays None, an unlisted number
@@ -213,6 +265,10 @@ def test_without_transforms_classic_spawns_are_dropped_with_a_reason():
 def test_zones_come_from_the_probe_dump():
     world = build_world(fixture_sources())
     assert world.get("zone", 1429)["name"] == "Elwynn Forest"
+    # ForeverDB's Classic fishing skill reaches the zone (catalog review A3.6, 07.11.2026); a zone
+    # the world does not know (1411 in the fixture) makes no record
+    assert world.get("zone", 1429)["fishing"] == 25
+    assert world.get("zone", 1411) is None
     assert (
         world.get("zone", 1429)["parent"] == 1415 if "parent" in world.get("zone", 1429) else True
     )
@@ -362,7 +418,9 @@ def test_dungeons_join_the_world_with_their_bosses_loot_and_quests():
     assert all(row[0] != 2169 for row in boss["loot"]) and boss["lootSrc"] == "forever"
     assert all(row[0] != 5187 for row in world.get("npc", 639).get("loot") or [])
     # the dungeon quests know their dungeon; an unknown quest id is no error
-    assert world.get("quest", 6)["dungeon"] == 36
+    assert (
+        world.get("quest", 6)["dungeon"] == 36 and world.get("quest", 6)["dungeonSrc"] == "forever"
+    )
     # a zone name we do not know is a note, not a failure; the raid keeps its kind and size
     assert world.get("dungeon", 34).get("zone") is None
     assert any("Nowhere Known" in note for note in world.notes)
@@ -491,3 +549,52 @@ def test_a_boss_several_floors_could_show_stays_off_the_maps_with_a_note():
     d = world.get("dungeon", 36)
     assert d.get("bossSpots") is None and d.get("door") is None
     assert any("bosses [1, 3] have no floor" in n for n in world.notes)
+
+
+def test_a_quest_finds_its_dungeon_where_its_targets_spawn():
+    """data.md "Dungeons", catalog review A2.1 (07.11.2026): a quest ForeverDB did not confirm is a
+    dungeon quest when its kill target or every dropper of its item lives in one instance only;
+    an outside dropper or a second instance makes no answer; ForeverDB's word stays."""
+    from bastians_build.sources.cmangos import LootRow, SpawnRow
+
+    world = World(client="forever")
+    world.add("dungeon", 36, {"name": "The Deadmines"})
+    world.add("dungeon", 33, {"name": "Shadowfang Keep"})
+    world.add("quest", 1, {"objectives": [["kill", "npc:643", 1]]})  # Sneed, inside only
+    world.add("quest", 2, {"requiredItems": [[5000, 1]]})  # an item only Deadmines creatures drop
+    world.add("quest", 3, {"requiredItems": [[5001, 1]]})  # an item a world creature drops too
+    world.add("quest", 4, {"objectives": [["kill", "npc:643", 1], ["kill", "npc:3887", 1]]})
+    world.add("quest", 5, {"objectives": [["kill", "npc:448", 1]]})  # Hogger, outside
+    world.add(
+        "quest", 6, {"objectives": [["kill", "npc:643", 1]], "dungeon": 33, "dungeonSrc": "forever"}
+    )
+    world.add("quest", 7, {"objectives": [["kill", "npc:643", 1], ["talk", "npc:448", 1]]})
+    s = Sources(client="forever", build="test")
+
+    def spawn(entry, map_id):
+        return SpawnRow("creature", entry, entry, map_id, 0.0, 0.0, None)
+
+    s.cm_spawns = [spawn(643, 36), spawn(644, 36), spawn(3887, 33), spawn(448, 0), spawn(1000, 0)]
+    s.cm_loot = [
+        LootRow("reference", 50000, 5000, 10.0, False, 1, 1, 1, None),  # a shared list with 5000
+        LootRow("creature", 644, None, 100.0, False, 0, 1, 1, 50000),  # Rhahk'Zor rolls the list
+        LootRow("creature", 643, 5001, 20.0, False, 0, 1, 1, None),
+        LootRow("creature", 1000, 5001, 1.0, False, 0, 1, 1, None),  # a world creature too
+    ]
+    assert derive_dungeon_quests(world, s) == 3
+    assert (world.get("quest", 1)["dungeon"], world.get("quest", 1)["dungeonSrc"]) == (
+        36,
+        "classic",
+    )
+    assert world.get("quest", 2)["dungeon"] == 36  # through the shared loot list
+    assert world.get("quest", 3).get("dungeon") is None  # a dropper outside: not a dungeon item
+    assert world.get("quest", 4).get("dungeon") is None  # two instances: no answer
+    assert world.get("quest", 5).get("dungeon") is None
+    assert (world.get("quest", 6)["dungeon"], world.get("quest", 6)["dungeonSrc"]) == (
+        33,
+        "forever",
+    )
+    assert world.get("quest", 7)["dungeon"] == 36  # an outside target beside it is allowed
+    assert any("3 dungeon quests derived" in n and "1 quests touch two" in n for n in world.notes)
+    # nothing to derive without spawns or dungeons
+    assert derive_dungeon_quests(World(client="forever"), s) == 0

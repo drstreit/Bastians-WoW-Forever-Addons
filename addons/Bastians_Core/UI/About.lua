@@ -40,10 +40,15 @@ About.SOURCES = {
     "zone table and spawns; NPC names, quest titles and objectives in other languages (Forever)",
   },
   {
+    "Questie",
+    "GPLv3, as far as its team can grant it",
+    "which quests are not in the game or wait for a world event (Forever)",
+  },
+  {
     "ForeverDB",
     "GPL-3.0, credit: Data from ForeverDB.net (https://foreverdb.net)",
     "vendors, trainers, gather nodes, the skill a recipe is taught at, the dungeons and raids with "
-      .. "their bosses, loot and quests (Forever)",
+      .. "their bosses, loot and quests, where quests start and end as players saw it (Forever)",
   },
   {
     "CMaNGOS classic-db",
@@ -65,6 +70,11 @@ About.SOURCES = {
       .. "(Forever)",
   },
   { "AHledger", "Prices from AHledger", "market prices through the AHSync export" },
+  {
+    "Blizzard Game Data API",
+    "Data from Blizzard Entertainment; Blizzard does not endorse this addon",
+    "auction prices of the Forever markets through the AHSync export",
+  },
   { "Spoken", "MIT", "the voice of Bastian's Voice: quests, zones, bosses and books read aloud" },
   -- the suite's own fonts (ADR 0038, Bastians_Core/Fonts, each with its licence text beside it)
   { "Inter (Rasmus Andersson)", "SIL Open Font License 1.1", "a text font to choose in the settings" },

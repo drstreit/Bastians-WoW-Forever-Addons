@@ -171,7 +171,7 @@ def test_a_german_client_sees_german_load_time_labels_and_runtime_texts(wow: Wow
     # one English word, two German ones: the NPC rank is "Rar", the item quality "Selten"
     assert list(wow.eval(f"{{ {d}:Kind('npc', 'rare') }}").values()) == ["Rar", "Rare##rank"]
     wow.execute("Bastians.UI.Hub.Open('Browser')")
-    assert "Den Zielverfolger des Spiels im schmalen Modus ausblenden" in labels(wow)
+    assert "Dem Ziel folgen: Ein anvisierter NPC oder ein Objekt wird zum Thema" in labels(wow)
     assert wow.errors == []
 
 

@@ -14,6 +14,71 @@ local Logic = {}
 ns.Logic = Logic
 
 Logic.SOON = 3 -- levels ahead that still count as "soon"
+
+-- A spot's kind and the client's objective type it counts among (Everything Quests' numbering:
+-- bit i of a spot is the i-th objective of its kind).
+local SPOT_KIND_TYPE = { slay = "monster", object = "object", loot = "item" }
+
+-- The log objectives a spot { x, y, kind, mask } serves, or nil when that is not known: no mask,
+-- a kind without a numbering, or a bit past the objectives the client lists. An "area" spot is
+-- the client's own quest area: its bit counts all objectives. Pure.
+function Logic.SpotObjectives(objectives, spot)
+  local mask = spot[4]
+  if type(objectives) ~= "table" or type(mask) ~= "number" or mask <= 0 then
+    return nil
+  end
+  local pool = objectives
+  if spot[3] ~= "area" then
+    local wanted = SPOT_KIND_TYPE[spot[3]]
+    if not wanted then
+      return nil
+    end
+    pool = {}
+    for _, o in ipairs(objectives) do
+      if o.kind == wanted then
+        pool[#pool + 1] = o
+      end
+    end
+  end
+  local served, i = {}, 1
+  while mask > 0 do
+    if mask % 2 == 1 then
+      if not pool[i] then
+        return nil
+      end
+      served[#served + 1] = pool[i]
+    end
+    mask, i = math.floor(mask / 2), i + 1
+  end
+  return served
+end
+
+-- A log quest's spots still worth going to (two of three targets done,
+-- the map still drew all three): { [map] = { { x, y, kind, mask, open = { objectives } } } }. A
+-- spot whose objectives are all finished is left out; one nobody can tell stays, without `open`
+-- (unknown is not done). Empty when none is left. Pure.
+function Logic.OpenSpots(entry, q)
+  local out = {}
+  for map, list in pairs(q and q.spots or {}) do
+    for _, s in ipairs(list) do
+      local served = Logic.SpotObjectives(entry and entry.objectives, s)
+      local open
+      if served then
+        open = {}
+        for _, o in ipairs(served) do
+          if not o.finished then
+            open[#open + 1] = o
+          end
+        end
+      end
+      if not open or #open > 0 then
+        out[map] = out[map] or {}
+        table.insert(out[map], { s[1], s[2], s[3], s[4], open = open })
+      end
+    end
+  end
+  return out
+end
 -- A chain component larger than this shows the line through the quest instead of every member:
 -- retail storylines join hundreds of quests through their prerequisites (K'aresh: 219 in one
 -- component, 1,346 in the largest; ), Classic chains stay small.
@@ -29,11 +94,18 @@ end
 
 local byStart, byTurnIn, followers
 local compOf, members, chainFrom, chainCache
+local shapes -- a chain's shape per root, race and class (chainShape)
 local indexSource -- "pack" (the shipped quest graph) or "decoded" (built from every record)
 
+-- Counts the data's changes: a view that keeps what it built from every quest knows when to build
+-- again (the class quests).
+Logic.generation = 0
+
 function Logic.Reset()
+  Logic.generation = Logic.generation + 1
   byStart, byTurnIn, followers = nil, nil, nil
   compOf, members, chainFrom, chainCache = nil, nil, nil, nil
+  shapes = nil
   indexSource = nil
 end
 
@@ -47,6 +119,61 @@ local function quest(id)
   return data and data:Get("quest", id) or nil
 end
 Logic.quest = quest
+
+-- Whether the thing lying at `ref` is already in the player's hands, so the place has nothing to
+-- offer: `ref` is an object, the quest also starts at an
+-- NPC (the pin there stays, nothing is lost), and `countOf(itemID)` finds an item of its objectives.
+-- A quest that starts only at the object keeps its pin: the item may be a common one. Pure.
+function Logic.AlreadyTaken(q, ref, countOf)
+  if not (q and type(ref) == "string" and string.find(ref, "^object:")) then
+    return false
+  end
+  local atNpc = false
+  for _, start in ipairs(q.starts or {}) do
+    atNpc = atNpc or string.find(start, "^npc:") ~= nil
+  end
+  if not atNpc then
+    return false
+  end
+  for _, objective in ipairs(q.objectives or {}) do
+    local id = type(objective[2]) == "string" and tonumber(string.match(objective[2], "^item:(%d+)"))
+    if id and countOf(id) > 0 then
+      return true
+    end
+  end
+  return false
+end
+
+-- What a quest earns (ADR 0053): the pack's record with what the client said laid over it. The
+-- client's words win for what it answers; reputation and spells stay the pack's. Nil when nothing
+-- is known, which is not "no reward". `learned` is Rewards.lua's saved table.
+local learned, merged = {}, {}
+
+function Logic.SetLearnedRewards(store)
+  learned, merged = store or {}, {}
+end
+
+function Logic.rewards(id)
+  local said = learned[id]
+  local q = quest(id)
+  if not said then
+    return q and q.rewards or nil
+  end
+  local out = merged[id]
+  if out then
+    return out
+  end
+  out = {}
+  for key, value in pairs(q and q.rewards or {}) do
+    out[key] = value
+  end
+  for key, value in pairs(said) do
+    out[key] = value
+  end
+  out.src = "client"
+  merged[id] = out
+  return out
+end
 
 -- All quest ids known to the data (the quests pack must be loaded).
 local function allQuestIDs()
@@ -163,6 +290,16 @@ local function hasBit(mask, bitIndex)
 end
 Logic.hasBit = hasBit
 
+local function hasFlag(q, flag)
+  for _, f in ipairs(q.flags or {}) do
+    if f == flag then
+      return true
+    end
+  end
+  return false
+end
+Logic.hasFlag = hasFlag
+
 -- Can this character ever take the quest (race, class)?
 function Logic.canEverTake(q, state)
   local races, classes = q.races, q.classes
@@ -184,9 +321,26 @@ local function anyOf(list, test)
   return false
 end
 
+-- Whether the data says the game does not offer the quest now (ADR 0051): Questie's lists, or a
+-- world event that does not run. `state.holidayOn` absent: the event counts as running.
+function Logic.gatedByData(q, state)
+  if hasFlag(q, "absent") or hasFlag(q, "dormant") then
+    return true
+  end
+  return q.holiday ~= nil and state.holidayOn ~= nil and not state.holidayOn(q.holiday)
+end
+
+-- Below the level where the client calls a quest trivial: the
+-- client's range decides, without it nothing is low level.
+function Logic.isTrivial(q, state)
+  local range, level = state.trivialRange, q.level
+  return range ~= nil and level ~= nil and level > 0 and state.level - level > range
+end
+
 -- Status of one quest for the character, with the reason:
--- never, done, log, superseded, prereq (second value: missing quests the character can take),
--- skill, rep, level, available.
+-- never, done, log, superseded, inactive (the game does not offer it now: the data says so or the
+-- giver did not list it), prereq (second value: missing quests the character can take), skill,
+-- rep, level, available.
 function Logic.status(qid, state)
   local q = quest(qid)
   if not q or not Logic.canEverTake(q, state) then
@@ -203,6 +357,10 @@ function Logic.status(qid, state)
   end
   if anyOf(q.excl, taken) or (q.chain and taken(q.chain)) then
     return "superseded"
+  end
+  local offered = state.offered ~= nil and state.offered(qid)
+  if not offered and Logic.gatedByData(q, state) then
+    return "inactive"
   end
   local missing = {}
   local function takeable(o)
@@ -244,6 +402,9 @@ function Logic.status(qid, state)
   end
   if state.level < (q.minLevel or 0) then
     return "level"
+  end
+  if state.notOffered and state.notOffered(qid) then
+    return "inactive"
   end
   return "available"
 end
@@ -515,18 +676,364 @@ function Logic.chain(qid, state)
 end
 
 -- ---------------------------------------------------------------------------------------------
--- Marks and categories
+-- The chain as a subject (ADR 0055, quests.md "Chains, first class"): one main line through the
+-- quests the character can take, every other quest hanging from it. Pure, as the rest.
 -- ---------------------------------------------------------------------------------------------
 
-local function hasFlag(q, flag)
-  for _, f in ipairs(q.flags or {}) do
-    if f == flag then
-      return true
+-- Why a character can never take a quest: "race" or "class"; nil when it can.
+function Logic.whyNot(q, state)
+  local races, classes = q.races, q.classes
+  if races and races > 0 and not hasBit(races, state.raceID - 1) then
+    return "race"
+  end
+  if classes and classes > 0 and not hasBit(classes, state.classID - 1) then
+    return "class"
+  end
+  return nil
+end
+
+-- A chain's shape for a race and class: what does not move with the character's progress.
+-- { id, main = { qid }, index = { [qid] = i }, side = { { id, after } }, others = { { id, after,
+-- why } } }, or nil when fewer than two of its quests are open to the character.
+local function chainShape(root, state)
+  chainIndex()
+  local all = members[root]
+  if not all then
+    return nil
+  end
+  shapes = shapes or {}
+  local key = root .. ":" .. tostring(state.raceID) .. ":" .. tostring(state.classID)
+  local shape = shapes[key]
+  if shape ~= nil then
+    return shape or nil
+  end
+  local open, inSet, closed = {}, {}, {}
+  for _, m in ipairs(all) do
+    local q = quest(m)
+    if q then
+      if Logic.canEverTake(q, state) then
+        open[#open + 1] = m
+        inSet[m] = true
+      else
+        closed[#closed + 1] = m
+      end
     end
   end
-  return false
+  if #open < 2 then
+    shapes[key] = false
+    return nil
+  end
+  table.sort(open)
+  table.sort(closed)
+  local depth, busy = {}, {}
+  for _, m in ipairs(open) do
+    depthIn(inSet, depth, busy, m)
+  end
+  -- the main line: from the deepest quest (ties: the smaller id) back along the deepest
+  -- predecessor each step (ties: the smaller id)
+  local last
+  for _, m in ipairs(open) do
+    if not last or depth[m] > depth[last] then
+      last = m
+    end
+  end
+  local main, stepOf = {}, {}
+  local cur = last
+  while cur do
+    table.insert(main, 1, cur)
+    stepOf[cur] = true
+    local best
+    for _, p in ipairs(preds(cur)) do
+      if
+        inSet[p]
+        and not stepOf[p]
+        and depth[p] < depth[cur] -- a cycle in the data must not hang the client
+        and (not best or depth[p] > depth[best] or (depth[p] == depth[best] and p < best))
+      then
+        best = p
+      end
+    end
+    cur = best
+  end
+  for i, m in ipairs(main) do
+    stepOf[m] = i
+  end
+  -- where another quest hangs: the deepest main step among what must be done before it, through
+  -- quests off the line too; 0 for another way into the chain
+  local function after(m)
+    local best, seen, stack = 0, { [m] = true }, { m }
+    while #stack > 0 do
+      local x = table.remove(stack)
+      for _, p in ipairs(preds(x)) do
+        if not seen[p] then
+          seen[p] = true
+          if stepOf[p] then
+            if stepOf[p] > best then
+              best = stepOf[p]
+            end
+          elseif quest(p) then
+            stack[#stack + 1] = p
+          end
+        end
+      end
+    end
+    return best
+  end
+  local function hanging(list, why)
+    local out = {}
+    for _, m in ipairs(list) do
+      if not stepOf[m] then
+        out[#out + 1] = { id = m, after = after(m), why = why and Logic.whyNot(quest(m), state) or nil }
+      end
+    end
+    table.sort(out, function(a, b)
+      if a.after ~= b.after then
+        return a.after < b.after
+      end
+      return a.id < b.id
+    end)
+    return out
+  end
+  shape = { id = root, main = main, index = stepOf, side = hanging(open), others = hanging(closed, true) }
+  -- every quest's place in the chain (Logic.chainPlace)
+  local place = {}
+  for i, m in ipairs(main) do
+    place[m] = { root = root, step = i, steps = #main }
+  end
+  for _, s in ipairs(shape.side) do
+    place[s.id] = { root = root, after = s.after, steps = #main }
+  end
+  for _, o in ipairs(shape.others) do
+    place[o.id] = { root = root, after = o.after, steps = #main, why = o.why }
+  end
+  shape.place = place
+  shapes[key] = shape
+  return shape
 end
-Logic.hasFlag = hasFlag
+
+-- The name most steps share; with no shared name (every name once) the first main step's. nil
+-- when the pack names none of them (the client's names are the caller's to ask).
+local function shapeName(shape)
+  local count, best = {}, nil
+  local function note(id)
+    local q = quest(id)
+    local name = q and q.name
+    if name then
+      count[name] = (count[name] or 0) + 1
+      if count[name] >= 2 and (not best or count[name] > count[best]) then
+        best = name
+      end
+    end
+  end
+  for _, id in ipairs(shape.main) do
+    note(id)
+  end
+  for _, s in ipairs(shape.side) do
+    note(s.id)
+  end
+  if best then
+    return best
+  end
+  local first = quest(shape.main[1])
+  return first and first.name or nil
+end
+
+function Logic.chainName(root, state)
+  local shape = chainShape(root, state)
+  return shape and shapeName(shape) or nil
+end
+
+-- The root of the chain a quest belongs to, or nil (a quest alone).
+function Logic.chainRoot(qid)
+  chainIndex()
+  local root = compOf[qid]
+  return root and members[root] and #members[root] >= 2 and root or nil
+end
+
+-- The root of a quest's chain when the chain is a subject for this character (two of its quests
+-- or more are open to the race and class), else nil. The shape is kept, so this is cheap.
+function Logic.chainFor(qid, state)
+  local root = Logic.chainRoot(qid)
+  return root and chainShape(root, state) and root or nil
+end
+
+-- A quest's place in its chain for a character, or nil (a quest alone, a chain that is no
+-- subject for the character): { root, steps (the main line's length), step (its number on the
+-- main line) } for a main step; { root, steps, after (the main step it hangs under, 0 for another
+-- way in), why ("race" | "class" for a quest the character cannot take) } off the line. The
+-- table is the shape's: read it, do not change it.
+function Logic.chainPlace(qid, state)
+  local root = Logic.chainRoot(qid)
+  local shape = root and chainShape(root, state)
+  return shape and shape.place[qid] or nil
+end
+
+-- The chain for a character (quests.md "The model"): the shape with where the character is.
+-- { id, name, main, index, side, others, done, now, state ("on" | "start" | "later" |
+-- "finished"), zones, lo, hi, ahead = { xp, money, rep = { { faction, value } } } }; nil when
+-- fewer than two of its quests are open to the character's race and class.
+function Logic.chainSheet(root, state)
+  local shape = chainShape(root, state)
+  if not shape then
+    return nil
+  end
+  local main = shape.main
+  local done, inLog, canTake = 0, nil, nil
+  local zones, seenZone = {}, {}
+  local lo, hi
+  local ahead, byFaction = { xp = 0, money = 0, rep = {} }, {}
+  for i, id in ipairs(main) do
+    local q = quest(id)
+    local status = Logic.status(id, state)
+    if status == "done" then
+      done = done + 1
+    else
+      if status == "log" then
+        inLog = inLog or i
+      elseif status == "available" then
+        canTake = canTake or i
+      end
+      local rw = Logic.rewards(id)
+      if rw then
+        ahead.xp = ahead.xp + (rw.xp or 0)
+        ahead.money = ahead.money + (rw.money or 0)
+        for _, rep in ipairs(rw.rep or {}) do
+          byFaction[rep[1]] = (byFaction[rep[1]] or 0) + (rep[2] or 0)
+        end
+      end
+    end
+    local zone = startMap(q)
+    if zone and not seenZone[zone] then
+      seenZone[zone] = true
+      zones[#zones + 1] = zone
+    end
+    if q.level and q.level > 0 then
+      lo = (not lo or q.level < lo) and q.level or lo
+      hi = (not hi or q.level > hi) and q.level or hi
+    end
+  end
+  for faction, value in pairs(byFaction) do
+    ahead.rep[#ahead.rep + 1] = { faction, value }
+  end
+  table.sort(ahead.rep, function(a, b)
+    return a[1] < b[1]
+  end)
+  local progress
+  if done == #main then
+    progress = "finished"
+  elseif done > 0 or inLog then
+    progress = "on"
+  else
+    local first = quest(main[1])
+    local status = Logic.status(main[1], state)
+    local soon = status == "level" and ((first.minLevel or 0) - state.level) <= Logic.SOON
+    progress = (status == "available" or soon) and "start" or "later"
+  end
+  return {
+    id = shape.id,
+    name = shapeName(shape),
+    main = main,
+    index = shape.index,
+    side = shape.side,
+    others = shape.others,
+    done = done,
+    now = progress ~= "finished" and (inLog or canTake) or nil,
+    state = progress,
+    zones = zones,
+    lo = lo,
+    hi = hi,
+    ahead = ahead,
+  }
+end
+
+-- What kind of chain it is, from its main steps: "Class", "Profession", "Raid", "Dungeon",
+-- "Festival", each once, in that order; empty for a chain of none of them. Kept with the shape.
+function Logic.chainKinds(root, state)
+  local shape = chainShape(root, state)
+  if not shape then
+    return nil
+  end
+  if not shape.kinds then
+    local has = {}
+    for _, id in ipairs(shape.main) do
+      local q = quest(id)
+      if (q.classes and q.classes > 0) or hasFlag(q, "class") then
+        has.Class = true
+      end
+      if q.skill or hasFlag(q, "profession") then
+        has.Profession = true
+      end
+      if q.qtype == 62 then
+        has.Raid = true
+      elseif q.qtype == 81 or hasFlag(q, "instance") then
+        has.Dungeon = true
+      end
+      if q.holiday then
+        has.Festival = true
+      end
+    end
+    local kinds = {}
+    for _, key in ipairs({ "Class", "Profession", "Raid", "Dungeon", "Festival" }) do
+      if has[key] then
+        kinds[#kinds + 1] = key
+      end
+    end
+    shape.kinds = kinds
+  end
+  return shape.kinds
+end
+
+local PROGRESS_ORDER = { on = 1, start = 2, later = 3, finished = 4 }
+Logic.PROGRESS_ORDER = PROGRESS_ORDER
+
+-- The chains that have a main step or a side quest among `qids` (a zone's quests, an area's),
+-- for a character: { { chain = Logic.chainSheet's answer, steps = { the numbers of its main
+-- steps there, ascending }, side = how many of its side quests are there } }. Ordered by how
+-- far the character is (on the way, can start, later, finished), then by the lowest level, then
+-- by the root. A quest the character cannot take counts for nothing.
+function Logic.chainsAmong(qids, state)
+  local byRoot, out = {}, {}
+  for _, qid in ipairs(qids or {}) do
+    local place = Logic.chainPlace(qid, state)
+    if place and not place.why then
+      local entry = byRoot[place.root]
+      if not entry then
+        local c = Logic.chainSheet(place.root, state)
+        entry = c and { chain = c, steps = {}, side = 0 } or false
+        byRoot[place.root] = entry
+        if entry then
+          out[#out + 1] = entry
+        end
+      end
+      if entry then
+        if place.step then
+          entry.steps[#entry.steps + 1] = place.step
+        else
+          entry.side = entry.side + 1
+        end
+      end
+    end
+  end
+  for _, entry in ipairs(out) do
+    table.sort(entry.steps)
+  end
+  table.sort(out, function(a, b)
+    local pa, pb = PROGRESS_ORDER[a.chain.state], PROGRESS_ORDER[b.chain.state]
+    if pa ~= pb then
+      return pa < pb
+    end
+    local la, lb = a.chain.lo or 999, b.chain.lo or 999
+    if la ~= lb then
+      return la < lb
+    end
+    return a.chain.id < b.chain.id
+  end)
+  return out
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Marks and categories
+-- ---------------------------------------------------------------------------------------------
 
 function Logic.isGroup(q)
   local t = q.qtype
@@ -560,10 +1067,15 @@ function Logic.marks(q)
   return out
 end
 
+-- A class quest: the data restricts it to classes (quests.md "Class quests").
+function Logic.isClassQuest(q)
+  return ((q.classes and q.classes > 0) or hasFlag(q, "class")) and true or false
+end
+
 -- Where an available quest goes in the tree: class, profession, chain or single.
 function Logic.category(qid, state)
   local q = quest(qid)
-  if (q.classes and q.classes > 0) or hasFlag(q, "class") then
+  if Logic.isClassQuest(q) then
     return "class"
   end
   if q.skill or hasFlag(q, "profession") then

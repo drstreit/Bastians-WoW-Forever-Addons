@@ -123,4 +123,9 @@ ns.L:Register("zhCN", {
   ["Read by the game's voice (no Spoken line)"] = "由游戏语音朗读（没有 Spoken 台词）",
   ["The game's voice that reads"] = "朗读所用的游戏语音",
   ["A woman's voice (auto)"] = "女声（自动）",
+  ["Locked in place. The lock on the ring unlocks it."] = "位置已锁定。点击环上的锁即可解锁。",
+  ["Locked in place"] = "位置已锁定",
+  ["Click to move the Orbiter freely."] = "点击后可自由移动环行器。",
+  ["Moves freely"] = "可自由移动",
+  ["Drag the Orbiter where you want it. Click to lock it in place."] = "将环行器拖到想要的位置。点击可锁定位置。",
 })

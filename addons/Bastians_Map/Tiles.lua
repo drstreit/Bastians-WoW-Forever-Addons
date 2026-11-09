@@ -410,7 +410,7 @@ function Tiles.Render(cam)
   end
   if
     not Tiles.Enabled()
-    or Map.Style() ~= "physical"
+    or Map.StyleOn(cam.continent) ~= "physical"
     or cam.level < Tiles.MIN_LEVEL
     or Tiles.Needed(cam) > Tiles.MAX_TEXTURES
   then

@@ -91,4 +91,8 @@ ns.L:Register("zhTW", {
   ["Near here:"] = "附近：",
   ["No notes near here."] = "附近沒有筆記。",
   ["and %d more"] = "還有 %d 個",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "對象",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "還沒有筆記。在頁面上點選新增筆記寫下第一則。",
 })

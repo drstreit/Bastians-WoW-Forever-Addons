@@ -5,6 +5,54 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.0.0:1",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "Auctioneers, stable masters, innkeepers, bankers, flight masters and battlemasters are marked as what they are, and several hundred more vendors and repairers are found.",
+  },
+  {
+    id = "2.0.0:2",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "Stormwind's bankers, guards, mailboxes and other people and objects inside the city are listed and shown in Stormwind City, no longer in Elwynn Forest.",
+  },
+  {
+    id = "2.0.0:3",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "Test and placeholder records of the game's data (unused NPCs, invisible triggers, deprecated and test items, the weapons monsters hold) no longer show in lists, zone pages and the search.",
+  },
+  {
+    id = "2.0.0:4",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "The zones Forever added now have their people, objects, quest hand-ins, objectives and objective texts, and the airships to Zephras Isle are on the routes.",
+  },
+  {
+    id = "2.0.0:5",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "Forever's vendors show their stock, quests show the XP players measured and the rewards seen in Forever, and more Classic creatures have a place on the map.",
+  },
+  {
+    id = "2.0.0:6",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "Routes now lead to the doors of the City of Dalaran, the Excavation Site in the Wetlands, the Ruins of Lordaeron and the Hall of Thanes.",
+  },
+  {
+    id = "2.0.0:7",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "Auction prices left over from the beta are now labelled as such.",
+  },
+  {
+    id = "2.0.0:8",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "Routes to Zephras Isle use Dalaran's skyboat, the skycutter at Skywatcher Plateau and, for the Alliance, the portal in Stormwind's Wizard's Sanctum.",
+  },
+  {
     id = "1.5.0:1",
     date = "2026-11-04",
     version = "1.5.0",

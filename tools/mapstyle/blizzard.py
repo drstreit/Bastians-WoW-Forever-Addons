@@ -4,10 +4,11 @@ environment), placed by their UiMapAssignment frames and cut along the real zone
 
 - `Atlas` reads the client's map tables (clientdump db2 dumps) and assembles a painting with every
   explored-area overlay drawn in (`painting`).
-- `far_image` paints a whole continent at FAR_PIXELS per ADT tile from the cleaned paintings (cities
-  as their zones draw them), the open sea in the paintings' own sea tone with the continent
-  painting's mottling, and the land no painting covers quilted from the paintings' own mountains
-  around it; `blizzard_clean.py --far` blends the quilt's edge (LaMa) and upscales the image.
+- `far_image` paints a whole continent at FAR_PIXELS per ADT tile from the cleaned paintings (the
+  capitals as the near cells draw them, their city plans), the open sea in the paintings' own sea
+  tone with the continent painting's mottling, and the land no painting covers quilted from the
+  paintings' own mountains around it; `blizzard_clean.py --far` blends the quilt's edge (LaMa)
+  and upscales the image.
 - `near_cell` paints one near cell at NEAR_PIXELS per tile from the cleaned paintings with the city
   plans; where no painting reaches it takes the upscaled far image, so cells meet without a seam.
 - `labels` turns the readings (data/mapstyle/blizzard/<ui>.json) into place names in world yards,
@@ -31,7 +32,7 @@ from PIL import Image
 
 from .cells import FAR_SPAN, NEAR_SPAN, tiles_of, write_rgba
 from .draw import blur, grow, noise, shrink
-from .scene import ORIGIN, TILE_YARDS, read_tile
+from .scene import ORIGIN, TILE_YARDS, empty_holes, read_tile
 
 NEAR_PIXELS = 256
 FAR_PIXELS = 64
@@ -41,7 +42,7 @@ SEA_EDGE = 160  # on the sea the painting dissolves over a wider band into ours
 COAST = 14  # pixels at FAR_PIXELS (about 120 yards): how far out a painting keeps its own sea
 MOTTLE = 0.5  # how much of the continent painting's sea variation shows
 FEATHER = 3.0  # zone border softening, in pixels at FAR_PIXELS
-CITY_PRIORITY = 0.02  # far: a city plan only where its zone's painting does not reach
+CITY_PRIORITY = 0.02  # far, under the plans: a plan only where its zone's painting does not reach
 ZONE = 3  # UiMap type of a zone (and of a capital's map)
 CITY = (1453, 1454, 1455, 1456, 1457, 1458)  # the capitals' maps
 CITY_ZONE = {1453: 1429, 1455: 1426, 1458: 1420, 1454: 1411, 1456: 1412, 1457: 1438}
@@ -221,7 +222,7 @@ def continent_rect(folder: Path, n: int, margin: int = 1) -> Rect:
 
 def ground(folder: Path, rect: Rect, atlas: Atlas) -> tuple[np.ndarray, np.ndarray]:
     """(owner, sea) at the rect's pixels: the zone UiMap each pixel belongs to (0 = none), and
-    whether it is water or outside every tile (open sea)."""
+    whether it is water, an empty hole or outside every tile (open sea)."""
     have = set(tiles_of(folder))
     cols, rows = rect.x1 - rect.x0 + 1, rect.y1 - rect.y0 + 1
     owner_chunks = np.zeros((rows * CHUNKS, cols * CHUNKS), "i4")
@@ -236,7 +237,8 @@ def ground(folder: Path, rect: Rect, atlas: Atlas) -> tuple[np.ndarray, np.ndarr
             owner_chunks[r * CHUNKS : (r + 1) * CHUNKS, c * CHUNKS : (c + 1) * CHUNKS] = zone(
                 t.area
             )
-            wet = t.liquid > 0
+            # water, and the empty holes around a floating island (Zephras Isle): open sea
+            wet = (t.liquid > 0) | empty_holes(t.ground, t.building, t.object, t.liquid, t.n)
             if t.n != rect.n:
                 wet = (
                     np.asarray(
@@ -514,7 +516,15 @@ def far_rect(atlas: Atlas, folder: Path, continent: int) -> Rect:
         if r["Type"] == 2 and atlas.map_of.get(ui) == continent and ui in SEA_ART
     ]
     if not painted:
-        return base
+        # no continent painting (Zephras Isle): whole far cells, so the sea's mottling fills each
+        # one and does not stop in a rectangle against the flat tone
+        return Rect(
+            base.x0 // FAR_SPAN * FAR_SPAN,
+            base.y0 // FAR_SPAN * FAR_SPAN,
+            (base.x1 // FAR_SPAN + 1) * FAR_SPAN - 1,
+            (base.y1 // FAR_SPAN + 1) * FAR_SPAN - 1,
+            FAR_PIXELS,
+        )
     minx, miny, maxx, maxy, *_ = atlas.frames[painted[0]]
     tx0, tx1 = int((ORIGIN - maxy) // TILE_YARDS), int((ORIGIN - miny) // TILE_YARDS)
     ty0, ty1 = int((ORIGIN - maxx) // TILE_YARDS), int((ORIGIN - minx) // TILE_YARDS)
@@ -547,15 +557,31 @@ def continent_sea(atlas: Atlas, continent: int, textures: Path, rect: Rect):
     return np.clip((d - 40) / 200, 0, 1), colour
 
 
+def city_plans(
+    atlas: Atlas, rect: Rect, owner: np.ndarray, sea: np.ndarray, get_painting, out: np.ndarray
+) -> np.ndarray:
+    """`out` with the capitals as the near cells draw them: zoomed out and in show one city
+    . Laid over the finished
+     image, so the sea's tone and the quilt never take from a plan."""
+    cities = np.isin(owner, CITY)
+    if not cities.any():
+        return out
+    plan, have = paint(atlas, rect, owner, sea, get_painting, True)
+    reach = blur(grow(cities, 3 * FEATHER).astype("f4"), FEATHER)
+    w = (have * reach)[..., None]
+    return out * (1 - w) + plan * w
+
+
 def far_image(
     atlas: Atlas, folder: Path, continent: int, textures: Path, clean: Path, work: Path
 ) -> Path:
-    """The whole continent at FAR_PIXELS per tile from the cleaned paintings (cities as their
-    zones draw them), the open sea painted, the land no painting covers left for LaMa: writes
+    """The whole continent at FAR_PIXELS per tile from the cleaned paintings (the capitals as the
+    near cells draw them), the open sea painted, the land no painting covers left for LaMa: writes
     far_image.png, far_gaps.png (white = to fill) and far_image.json (rect, sea tone)."""
     rect = far_rect(atlas, folder, continent)
     owner, sea = ground(folder, rect, atlas)
-    img, have = paint(atlas, rect, owner, sea, _painting_source(atlas, textures, clean), False)
+    get_painting = _painting_source(atlas, textures, clean)
+    img, have = paint(atlas, rect, owner, sea, get_painting, False)
     painted_sea = sea & (have > 0.9)
     # the paintings' open water, not the parchment their sea fades into: the bluish pixels
     painted_sea &= img[..., 2] > img[..., 0]
@@ -577,6 +603,7 @@ def far_image(
     if land_gap.any():
         source = land & (have > 0.95)
         out = quilt(out, land_gap, source)
+    out = city_plans(atlas, rect, owner, sea, get_painting, out)
     work.mkdir(parents=True, exist_ok=True)
     Image.fromarray((np.clip(out, 0, 1) * 255).astype("u1")).save(work / "far_image.png")
     # LaMa only blends the quilt's edge with the paintings
@@ -745,6 +772,54 @@ def build(
         for job in jobs:
             near_cell(job)
     return {"near": cells, "far": far_written}
+
+
+# --- the world picture (ADR 0057) -----------------------------------------------------------------
+
+# Both continents on one picture, the ocean left and right of them kept free for the book's boards.
+# Per continent the tiles shown (x0, y0, x1, y1) and where they start on the picture. Book.WORLD in
+# addons/Bastians_Strategies/Book.lua holds the same numbers: a test keeps them together.
+WORLD = {
+    "width": 2048,
+    "height": 1024,
+    "ppt": 21,  # picture pixels per ADT tile
+    "continents": {
+        1: {"tiles": (12, 8, 50, 56), "at": (340, 8)},
+        0: {"tiles": (23, 18, 49, 62), "at": (1162, 50)},
+    },
+}
+WORLD_FADE = 40  # picture pixels over which a continent's rectangle fades into the sea
+
+
+def world_image(blizzard: Path, out: Path) -> Path:
+    """The story map's picture from the filled far images (`<blizzard>/work_<continent>/`): the
+    continents on the sea's tone, each rectangle faded out so no edge shows. Deterministic."""
+    w, h, ppt = WORLD["width"], WORLD["height"], WORLD["ppt"]
+    pieces, tones = [], []
+    for continent, spot in WORLD["continents"].items():
+        work = blizzard / f"work_{continent}"
+        meta = json.loads((work / "far_image.json").read_text(encoding="utf-8"))
+        rx, ry, _, _, n = meta["rect"]
+        x0, y0, x1, y1 = spot["tiles"]
+        img = Image.open(work / "far_filled.png").convert("RGB")
+        box = ((x0 - rx) * n, (y0 - ry) * n, (x1 - rx) * n, (y1 - ry) * n)
+        size = ((x1 - x0) * ppt, (y1 - y0) * ppt)
+        piece = img.crop(box).resize(size, Image.Resampling.LANCZOS)
+        pieces.append((np.asarray(piece, dtype="f4") / 255, spot["at"]))
+        tones.append(np.asarray(meta["sea_tone"], "f4"))
+    canvas = np.empty((h, w, 3), "f4")
+    canvas[:] = np.mean(tones, axis=0)
+    for piece, (left, top) in pieces:
+        ph, pw = piece.shape[:2]
+        fade_y = np.clip(np.minimum(np.arange(ph), ph - 1 - np.arange(ph)) / WORLD_FADE, 0, 1)
+        fade_x = np.clip(np.minimum(np.arange(pw), pw - 1 - np.arange(pw)) / WORLD_FADE, 0, 1)
+        alpha = (fade_y[:, None] * fade_x[None, :])[..., None]
+        part = canvas[top : top + ph, left : left + pw]
+        part[:] = part * (1 - alpha) + piece * alpha
+    out.parent.mkdir(parents=True, exist_ok=True)
+    picture = Image.fromarray((np.clip(canvas, 0, 1) * 255 + 0.5).astype("u1"))
+    picture.save(out, quality=92, subsampling=0)
+    return out
 
 
 # --- labels ------------------------------------------------------------------------------------

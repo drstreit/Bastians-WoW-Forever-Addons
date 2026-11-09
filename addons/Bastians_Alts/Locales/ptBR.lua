@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("ptBR", {
+  ["%s is forgotten. Logging in with that character records it again."] = "%s foi esquecido. Entrar com esse personagem o registra novamente.",
+  ["Forget %s? Use the action again within 5 seconds."] = "Esquecer %s? Repita a ação em até 5 segundos.",
+  ["Forget this character"] = "Esquecer este personagem",
   ["Alts"] = "Personagens",
   ["Characters"] = "Personagens",
   ["Your characters"] = "Seus personagens",
@@ -12,6 +15,32 @@ ns.L:Register("ptBR", {
   ["You have it"] = "Você tem",
   ["you"] = "você",
   ["Known by: %s"] = "Conhecido por: %s",
+  -- Runs.lua, dungeon runs and lockouts (catalog review A2.5, 07.11.2026)
+  ["Your runs"] = "Suas incursões",
+  ["%s: one run"] = "%s: uma incursão",
+  ["%s: %d runs"] = "%s: %d incursões",
+  ["last %s"] = "última %s",
+  ["locked, resets in %s"] = "bloqueado, reinicia em %s",
+  ["No run recorded yet."] = "Nenhuma incursão registrada ainda.",
+  ["Dungeon runs"] = "Incursões em masmorras",
+  -- Train.lua, the trainer view (catalog review A5.7, 07.11.2026)
+  ["Trainer"] = "Treinador",
+  ["what your class trainers teach you next"] = "o que seus treinadores de classe ensinam a seguir",
+  ["Learn now"] = "Aprender agora",
+  ["Later"] = "Mais tarde",
+  ["at %s, %s"] = "com %s, %s",
+  ["at %s"] = "com %s",
+  ["You know every spell for your level."] = "Você conhece todos os feitiços do seu nível.",
+  ["Nothing to learn now; %d at later levels"] = "Nada para aprender agora; %d em níveis posteriores",
+  ["%d spells to learn now for %s; %d at later levels"] = "%d feitiços para aprender agora por %s; %d em níveis posteriores",
+  ["; %d unknown whether known"] = "; %d sem saber se são conhecidos",
+  ["The trainer view needs Bastian's Data."] = "A visão de treinadores precisa do Bastian's Data.",
+  -- the gold goals (catalog review A5.5, 07.11.2026)
+  ["Next training"] = "Próximo treinamento",
+  ["Training at level %d"] = "Treinamento no nível %d",
+  ["Riding at level %d"] = "Montaria no nível %d",
+  ["A mount at level %d"] = "Uma montaria no nível %d",
+  ["Spell"] = "Feitiço",
   ["Owned"] = "Em posse",
   ["You"] = "Você",
   ["Nobody"] = "Ninguém",
@@ -78,4 +107,7 @@ ns.L:Register("ptBR", {
   ["Click a line: its page. Right click: its entity menu."] = "Clique numa linha: a página dela. Clique direito: o menu da entidade.",
   ["Click: your characters' window. Right click: its settings."] = "Clique: a janela dos seus personagens. Clique direito: suas configurações.",
   ["Item"] = "Item",
+  -- Alts.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Gold on all"] = "Ouro em todos",
+  ["Highest level"] = "Nível mais alto",
 })

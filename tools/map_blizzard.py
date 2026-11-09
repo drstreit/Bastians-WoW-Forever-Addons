@@ -4,7 +4,9 @@
   paintings  Blizzard's paintings, fully explored, as PNG (the input of blizzard_clean.py)
   cells      a continent's far and near cells from the cleaned paintings (then `clientdump blp`
              and `map_style.py --emit forever --style blizzard`)
-  labels     both continents' names with their AreaTable match -> <out>/blizzard/labels.json
+  world      the story map's picture from the filled far images (ADR 0057), --out as `cells`
+  labels     the continents' and Zephras Isle's names with their AreaTable match
+             -> <out>/blizzard/labels.json
 
 Usage: python tools/map_blizzard.py <step> --dumps .local/out --prefix f70685
            [--textures .local/out/worldmap_f70685] [--clean D:/bastians-ml/out]
@@ -23,14 +25,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 
-from mapstyle.blizzard import Atlas, build, labels  # noqa: E402
+from mapstyle.blizzard import Atlas, build, labels, world_image  # noqa: E402
 
 READINGS = ROOT / "data" / "mapstyle" / "blizzard"
+# mapdata folders -> Map.db2 ids: the continents and Zephras Isle
+CONTINENTS = {"Azeroth": 0, "Kalimdor": 1, "2991": 2991}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("step", choices=("textures", "paintings", "cells", "labels"))
+    ap.add_argument("step", choices=("textures", "paintings", "cells", "labels", "world"))
     ap.add_argument("--dumps", type=Path, default=ROOT / ".local" / "out")
     ap.add_argument("--prefix", default="f70685")
     ap.add_argument("--textures", type=Path, default=ROOT / ".local" / "out" / "worldmap_f70685")
@@ -42,6 +46,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--force", action="store_true", help="redraw near cells already drawn")
     args = ap.parse_args(argv)
+    if args.step == "world":
+        # the story map's picture (ADR 0057): --out is the folder holding work_0 and work_1
+        out = ROOT / "content" / "strategies" / "art" / "front" / "world.jpg"
+        print(world_image(args.out / "blizzard", out))
+        return 0
     atlas = Atlas.load(args.dumps, args.prefix)
     if args.step == "textures":
         out = args.out or ROOT / ".local" / "out" / f"worldmap_{args.prefix}.txt"
@@ -52,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         out = args.out or ROOT / ".local" / "out" / f"paintings_{args.prefix}"
         out.mkdir(parents=True, exist_ok=True)
         n = 0
-        for continent in (0, 1):
+        for continent in CONTINENTS.values():
             for ui in atlas.zones(continent):
                 atlas.painting(ui, args.textures).save(out / f"{ui}.png")
                 n += 1
@@ -62,11 +71,13 @@ def main(argv: list[str] | None = None) -> int:
         print("error: --data must be the continent's mapdata folder", file=sys.stderr)
         return 2
     if args.step == "labels":
-        # --data is the mapdata root (its Azeroth and Kalimdor folders); writes labels.json beside
-        # the cells for map_style.py --emit
+        # --data is the mapdata root (its Azeroth, Kalimdor and 2991 folders); writes labels.json
+        # beside the cells for map_style.py --emit
         out = (args.out or ROOT / "build" / "mapstyle" / "forever") / "blizzard" / "labels.json"
         found = {}
-        for continent, name in ((0, "Azeroth"), (1, "Kalimdor")):
+        for name, continent in CONTINENTS.items():
+            if not (args.data / name).is_dir():
+                continue
             found[continent] = labels(atlas, READINGS, args.data / name, continent)
             unmatched = [
                 e["text"] for e in found[continent] if not e["area"] and e["kind"] != "sea"

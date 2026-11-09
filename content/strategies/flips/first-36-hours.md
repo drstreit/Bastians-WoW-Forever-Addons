@@ -9,12 +9,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 57659018228156
-stamp = "half"
 why = "On the four beta markets we read, the month's lowest price for both sat at or under what a vendor pays. When that was and how long it lasted, the data does not say."
 
 [[rumours]]
 claim = 37478663194320
-stamp = "half"
 why = "The month's highs on the beta reached ten times the vendor price on some markets. The median of the last week was three to five times it for Wool and five to six times for Medium Leather."
 
 [plate]

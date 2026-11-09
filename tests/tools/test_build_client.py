@@ -107,3 +107,35 @@ def test_dry_run_prints_the_commands(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "> data --client retail --addons" in out and "note: no tile lists" in out
     assert build_client.main(["--client", "retail", "--config", str(tmp_path / "x.toml")]) == 2
+
+
+def test_a_forever_build_passes_the_books_pictures_and_last_state(tmp_path, monkeypatch, capsys):
+    """after a build_client run the book showed no picture of Bastian
+    and only generic marks on its story map; the pages lost their picture flag because only
+    tools/data_update.py passed --art and --book-previous. A Forever build passes both now."""
+    import data_update
+
+    art = tmp_path / "art"
+    art.mkdir()
+    (art / "some-page.jpg").write_bytes(b"x")
+    states = tmp_path / "states"
+    states.mkdir()
+    (states / "s1.json").write_text("{}", encoding="utf-8")
+    ledger = tmp_path / "ledger.json"
+    ledger.write_text(
+        '{"editions": [{"date": "2026-11-06", "n": 1, "sha256": "a", "sent": true,'
+        ' "book_state": "s1.json"}]}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(data_update, "LEDGER", ledger)
+    monkeypatch.setattr(data_update, "BOOK_STATES", states)
+    monkeypatch.setattr(data_update, "LOCAL_ART", art)
+    config = make_config(tmp_path)
+    inputs = build_client.read_inputs("forever", config)
+    extra, folder = build_client.book_args(inputs)
+    assert extra == ["--book-previous", str(states / "s1.json"), "--art", str(art)]
+    assert folder == art
+    monkeypatch.setattr(build_client, "DUMPS", tmp_path / "out")
+    assert build_client.main(["--client", "forever", "--dry-run", "--config", str(config)]) == 0
+    out = capsys.readouterr().out
+    assert f"--art {art}" in out and "--book-previous" in out

@@ -19,6 +19,7 @@ name = "Elwynn Forest"
 parent = 1415
 continent = 0
 mapType = 3
+fishing = 25 # the Classic fishing skill the zone asks for (A3.6)
 
 [[zone]]
 id = 1415
@@ -370,12 +371,35 @@ flags = "questgiver"
 spawns = [[1436, 0.56, 0.47, "eq"]]
 src = "forever"
 
+# a rare creature (helpers.md "Warnings", the rare alert of catalog review A3.3)
+[[npc]]
+id = 1260
+name = "Leprithus"
+level = 18
+zone = 1429
+flags = "rare"
+spawns = [[1429, 0.15, 0.90, "classic", 40.0]] # outside Crystal Lake
+src = "classic"
+
 [[quest]]
 id = 1000
 name = "Horde Only Errand"
 level = 9
 minLevel = 8
 races = 178
+starts = ["npc:234"]
+ends = ["npc:234"]
+zone = 1436
+src = "forever"
+
+# a class quest (quests.md "Class quests", catalog review A3.1): mages only (bit 7 = 128); the
+# mock's character is a mage (Mock.classID 8)
+[[quest]]
+id = 2000
+name = "A Mage's Errand"
+level = 10
+minLevel = 8
+classes = 128
 starts = ["npc:234"]
 ends = ["npc:234"]
 zone = 1436

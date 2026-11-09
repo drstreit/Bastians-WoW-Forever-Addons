@@ -46,6 +46,8 @@ class MarketConfig:
 
     labels: dict[str, str] = field(default_factory=dict)
     fill: list[MarketFill] = field(default_factory=list)
+    max_age_days: int | None = None  # rows this much older than the market's newest are old
+    old_label: str = "old"  # the label of such a row
     ship: tuple[str, ...] = ()  # the markets the pack carries (empty: all) and their fills' sources
 
     def label(self, market: str) -> str:
@@ -134,6 +136,8 @@ def load_config(path: Path | None = None) -> BuildConfig:
         labels=dict(raw_market.get("labels", {})),
         fill=fills,
         ship=tuple(str(m) for m in raw_market.get("ship", [])),
+        max_age_days=raw_market.get("max_age_days"),
+        old_label=str(raw_market.get("old_label", "old")),
     )
     raw_art = raw.get("mapart", {})
     span, pixels = int(raw_art.get("span", 8)), int(raw_art.get("pixels", 64))

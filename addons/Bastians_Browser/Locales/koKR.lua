@@ -63,10 +63,6 @@ ns.L:Register("koKR", {
   ["Your bookmarks and the pages you opened last."] = "내 책갈피와 최근에 연 페이지.",
   ["The pages you kept with Bookmark on a page."] = "페이지의 책갈피 버튼으로 저장한 페이지.",
   ["Drag to widen the Here column"] = "드래그하여 '여기' 열 넓히기",
-  ["Slim"] = "간소",
-  ["Slim or wide"] = "간소 또는 넓게",
-  ["Slim keeps only the Here column (your zone, your quests here) and hides the game's quest tracker; Wide shows the page beside it."] = "간소 모드는 '여기' 열(현재 지역, 여기의 퀘스트)만 유지하고 게임의 퀘스트 추적창을 숨깁니다. 넓게 모드는 옆에 페이지를 표시합니다.",
-  ["Wide"] = "넓게",
   ["Dock"] = "도킹",
   ["Dock to the map"] = "지도에 도킹",
   ["The window sits beside the map at its height and moves with it. Click again to undock."] = "창이 지도 옆에 같은 높이로 붙어 함께 움직입니다. 다시 클릭하면 도킹이 해제됩니다.",
@@ -74,19 +70,17 @@ ns.L:Register("koKR", {
   -- settings, tooltip hint
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "줄에 퀘스트와 아이템의 가치(보상, 가격) 표시",
   ["Follow the target: an NPC or object you target becomes the subject"] = "대상 따라가기: 대상으로 지정한 NPC나 월드 오브젝트가 주제가 됩니다",
-  ["Hide the game's objective tracker in slim mode"] = "간소 모드에서 게임의 목표 추적창 숨기기",
   ["Preview a row in the page pane"] = "페이지 창에 행 미리보기",
   ["While Shift is held"] = "Shift를 누른 동안",
   ["On every hover"] = "마우스를 올릴 때마다",
   ["Never"] = "안 함",
   ["Open in Browser"] = "브라우저에서 열기",
-  ["Right click: open in the Browser"] = "오른쪽 클릭: 브라우저에서 열기",
+  ["%s: open in the Browser"] = "%s: 브라우저에서 열기",
+  ["Open what is under the mouse in the Browser"] = "마우스 아래 대상을 브라우저에서 열기",
 
   -- list types (Browser.LISTS and registered lists)
-  ["NPCs"] = "NPC",
   ["Items"] = "아이템",
   ["Objects"] = "월드 오브젝트",
-  ["Nodes"] = "채집 지점",
   ["Zones"] = "지역",
   ["Recipes"] = "제조법",
   ["Quests"] = "퀘스트",
@@ -94,7 +88,6 @@ ns.L:Register("koKR", {
   ["Dungeon"] = "던전",
   ["Raid"] = "공격대",
   ["Farm spots"] = "사냥터",
-  ["Quest chains"] = "연계 퀘스트",
 
   -- dimension titles and their values
   ["Service"] = "서비스",
@@ -208,9 +201,6 @@ ns.L:Register("koKR", {
   ["First Aid"] = "응급치료",
 
   -- spot statuses
-  ["Verified"] = "확인됨",
-  ["Unverified"] = "미확인",
-  ["Refuted"] = "반증됨",
 
   -- sort labels registered by the apps (the Browser translates them once more)
   ["Loot per kill"] = "처치당 전리품",
@@ -241,18 +231,62 @@ ns.L:Register("koKR", {
   ["Here, your quests, the lists, bookmarks and recent pages."] = "여기, 내 퀘스트, 목록, 책갈피, 최근 페이지.",
   ["Search: a name, or a type first (npc wel)"] = "검색: 이름 또는 유형 먼저 (npc wel)",
   ["Drag to widen the list or the page"] = "드래그하여 목록이나 페이지 넓히기",
-  ["Slim keeps only your quests (the tracker) in a narrow window and hides the game's quest tracker; Wide brings the lists and the page back."] = "간소 모드는 좁은 창에 내 퀘스트(추적창)만 남기고 게임의 퀘스트 추적창을 숨깁니다. 넓게 모드는 목록과 페이지를 다시 표시합니다.",
   ["Copy Wowhead link"] = "Wowhead 링크 복사",
   ["Wowhead"] = "Wowhead",
   ["The link is in the chat input: copy it with Ctrl+C."] = "링크가 대화 입력창에 있습니다. Ctrl+C로 복사하세요.",
   ["Slide the list in"] = "목록 펼치기",
   ["Slide the list out"] = "목록 접기",
   -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
-  ["Mobs"] = "몬스터",
   ["Filter"] = "필터",
+  ["Filter this page"] = "이 페이지 필터",
   -- the search syntax (ADR 0045)
   ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
   -- the broker displays' feed (ADR 0043, 31.10.2026)
   ["Click: the Browser. Right click: the bookmarks."] = "클릭: 브라우저. 오른쪽 클릭: 책갈피.",
   ["Everything the suite knows: quests, NPCs, items, places."] = "모음이 아는 모든 것: 퀘스트, NPC, 아이템, 장소.",
+  ["in %s"] = "%s에서",
+  ["Everywhere"] = "모든 곳",
+  ["%d more elsewhere. Click to look everywhere."] = "다른 곳에 %d개 더 있습니다. 클릭하면 모든 곳에서 찾습니다.",
+  ["%d in the other lists. Click to look in all."] = "다른 목록에 %d개 있습니다. 클릭하면 모두에서 찾습니다.",
+  ["The search failed. See /bastians log."] = "검색에 실패했습니다. /bastians log를 확인하세요.",
+  ["Where the search looks: in your zone, on your continent, or everywhere."] = "검색 범위: 현재 지역, 현재 대륙 또는 모든 곳.",
+  ["Look everywhere"] = "모든 곳에서 찾기",
+  -- Browser.lua: a list grouped by one of its dimensions (PA5.4)
+  ["Zone"] = "지역",
+  ["The rows under a heading: what they are grouped by."] = "제목 아래의 행: 무엇으로 묶을지 정합니다.",
+  -- Browser.lua: the lists by the model's words (ADR 0056, PA2.3)
+  ["People"] = "주민",
+  ["Monsters"] = "몬스터",
+  ["Gathering"] = "채집",
+  ["Chains"] = "연계 퀘스트",
+  -- Browser.lua:
+  ["All Notes"] = "모든 메모",
+  ["Gold Stories"] = "골드 이야기",
+  ["Chapter"] = "장",
+  ["Map style of the mini maps"] = "미니 지도의 지도 스타일",
+  ["As on the large map"] = "큰 지도와 같게",
+  ["The client's painting"] = "게임의 그림",
+  -- Browser.lua: the rail, the tabs and More (ADR 0058, 07.11.2026)
+  ["%d-%d of %d"] = "%d-%d / %d",
+  ["Previous page"] = "이전 페이지",
+  ["Next page"] = "다음 페이지",
+  ["Opens the search box over the title; a second click brings the title back."] = "제목 위에 검색창을 엽니다. 다시 클릭하면 제목이 돌아옵니다.",
+  ["World"] = "세계",
+  ["Characters"] = "캐릭터",
+  ["Gold"] = "골드",
+  ["More"] = "더 보기",
+  ["%s needs %s"] = "%s에는 %s이(가) 필요합니다",
+  ["Settings"] = "설정",
+  ["Help"] = "도움말",
+  ["What's new"] = "새 소식",
+  ["About"] = "정보",
+  ["Every app, the looks, the keys."] = "모든 앱, 외형, 단축키.",
+  ["The story, the commands, the keys."] = "이야기, 명령어, 단축키.",
+  ["The last releases."] = "최근 릴리스.",
+  ["The sources and their licences."] = "출처와 라이선스.",
+  ["Everything else: the other apps' views, your bookmarks, the settings."] = "그 밖의 모든 것: 다른 앱의 보기, 북마크, 설정.",
+  -- Browser.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Lands for you"] = "당신을 위한 지역",
+  ["at your level"] = "당신의 레벨에",
+  ["unknown"] = "알 수 없음",
 })

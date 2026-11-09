@@ -59,23 +59,6 @@ function Compat.SendChat(text, channel, language, target)
   return true
 end
 
--- Declines a request politely (plan-second-wave.md S7): the game's own call for the kind
--- (`CancelDuel`, `CloseTrade`, `DeclineGroup`; retail family, assumed on Forever) and its popup
--- hidden. -> whether the client offered the call.
-local DECLINE = { duel = "CancelDuel", trade = "CloseTrade", invite = "DeclineGroup" }
-local POPUP = { duel = "DUEL_REQUESTED", invite = "PARTY_INVITE" }
-function Compat.Decline(kind)
-  local fn = DECLINE[kind] and fnOf(DECLINE[kind]) or nil
-  if fn then
-    fn()
-  end
-  local hide = POPUP[kind] and fnOf("StaticPopup_Hide") or nil
-  if hide then
-    hide(POPUP[kind])
-  end
-  return fn ~= nil
-end
-
 -- The unit token's player name, or nil when the client gives none (the unit left reach).
 function Compat.UnitPlayerName(unit)
   local name = fnOf("UnitName")
@@ -84,25 +67,6 @@ function Compat.UnitPlayerName(unit)
   end
   local n = name(unit)
   return type(n) == "string" and n ~= "" and n or nil
-end
-
--- Whether the unit is the player or in the player's group (no courtesy to those).
-function Compat.IsMineOrGroup(unit)
-  if not unit then
-    return false
-  end
-  local isUnit = fnOf("UnitIsUnit")
-  if isUnit and isUnit(unit, "player") then
-    return true
-  end
-  local party, raid = fnOf("UnitInParty"), fnOf("UnitInRaid")
-  if party and party(unit) then
-    return true
-  end
-  if raid and raid(unit) then
-    return true
-  end
-  return false
 end
 
 -- A global function's answer, or nil when the client has no such function.

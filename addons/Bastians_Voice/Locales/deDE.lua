@@ -130,4 +130,9 @@ ns.L:Register("deDE", {
   ["Read by the game's voice (no Spoken line)"] = "Von der Stimme des Spiels gelesen (keine Spoken-Zeile)",
   ["The game's voice that reads"] = "Die Stimme des Spiels, die liest",
   ["A woman's voice (auto)"] = "Eine Frauenstimme (automatisch)",
+  ["Locked in place. The lock on the ring unlocks it."] = "Position gesperrt. Das Schloss am Ring entsperrt sie.",
+  ["Locked in place"] = "Position gesperrt",
+  ["Click to move the Orbiter freely."] = "Klicken, um den Orbiter frei zu verschieben.",
+  ["Moves freely"] = "Frei verschiebbar",
+  ["Drag the Orbiter where you want it. Click to lock it in place."] = "Den Orbiter an die gewünschte Stelle ziehen. Klicken, um die Position zu sperren.",
 })

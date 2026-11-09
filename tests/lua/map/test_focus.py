@@ -148,9 +148,22 @@ def test_dock_puts_the_browser_beside_the_map(wow: WowRuntime):
     assert (
         wow.eval("Bastians:GetModule('Browser').db.profile.window.dock.with") == "BastiansMapFrame"
     )
-    # the Browser's button undocks; the map's full screen undocks too
+    # closed by hand while docked: the next Dock docks again with both shown (owner, Forever
+    # 07.11.2026: "the next dock does nothing - it still thinks it's open")
+    wow.execute("BastiansBrowserFrame:Hide()")
+    wow.execute(f"{MAP_}.toolbar.dock:Click()")
+    assert wow.eval("Bastians.UI.IsDocked()") is True
+    assert wow.eval("BastiansBrowserFrame:IsShown()") is True
+    # the Browser's button undocks where the window stands, at its docked size (owner: it
+    # "scales large and strangely from top to bottom")
+    seen = wow.eval("{ BastiansBrowserFrame:GetLeft(), BastiansBrowserFrame:GetTop() }")
+    width = wow.eval("BastiansBrowserFrame:GetWidth()")
     wow.execute(f"{BR}.toolbar.dock:Click()")
     assert wow.eval("Bastians.UI.IsDocked()") is False
+    point = wow.eval("{ BastiansBrowserFrame:GetPoint(1) }")
+    assert (point[1], point[2].GetName(point[2]), point[3]) == ("TOPLEFT", "UIParent", "BOTTOMLEFT")
+    assert (point[4], point[5]) == (seen[1], seen[2])
+    assert wow.eval("BastiansBrowserFrame:GetWidth()") == width
     wow.execute(f"{BR}.toolbar.dock:Click()")
     assert wow.eval("Bastians.UI.IsDocked()") is True
     wow.execute(f"{MAP_}.toolbar.full:Click()")

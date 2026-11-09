@@ -6,7 +6,6 @@ The build compares this export's book with the state of the last sent edition (`
 written by an earlier build with `--book-state` and kept by tools/data_update.py):
 
 - new travellers on a page: channels of the strategies the page tells that the last edition lacked;
-- a rumour on a page with a new stamp (true, half true, lies);
 - new rumours in a chapter's mill.
 
 A second edition on the same day adds to that day's lines ("2 new travellers" becomes 3), so a
@@ -29,16 +28,15 @@ STATE_SCHEMA = 1
 DAILY_CAP = 8  # generated entries per edition; the rest folds into one line
 KEEP_DAYS = 30  # generated entries older than this leave the pack
 KEEP_MAX = 40
-STAMP_WORDS = {"true": "proved true", "half": "proved half true", "lies": "proved to be lies"}
 ADDS_UP = ("travellers", "mill", "more")  # kinds whose counts add up over a day's editions
-KIND_ORDER = {"stamp": 0, "travellers": 1, "mill": 2}
+KIND_ORDER = {"travellers": 1, "mill": 2}
 
 
 class BookNewsError(ValueError):
     pass
 
 
-def text(kind: str, n: int, name: str = "", stamp: str = "") -> str:
+def text(kind: str, n: int, name: str = "") -> str:
     if kind == "travellers":
         return f'A new traveller on "{name}".' if n == 1 else f'{n} new travellers on "{name}".'
     if kind == "mill":
@@ -47,14 +45,12 @@ def text(kind: str, n: int, name: str = "", stamp: str = "") -> str:
             if n == 1
             else f"{name}: {n} new rumours in the mill."
         )
-    if kind == "stamp":
-        return f'A rumour on "{name}" {STAMP_WORDS[stamp]}.'
     return f"And {n} more changes in the book."
 
 
 def book_state(world: World, found: Mapping[str, list[Strategy]]) -> dict:
     """What the next build compares with: per page its travellers (the channels of every strategy
-    it tells and of its own rumours) and its rumours' stamps, per chapter the mill's claim ids."""
+    it tells and of its own rumours), per chapter the mill's claim ids."""
     pages = world.records.get("page", {})
     rumours = world.records.get("rumour", {})
     channels: dict[str, set[str]] = {
@@ -66,13 +62,11 @@ def book_state(world: World, found: Mapping[str, list[Strategy]]) -> dict:
                 channels[s.page] |= s.channels
     out_pages: dict[str, dict] = {}
     for pid in sorted(channels):
-        stamps: dict[str, str] = {}
-        for cid, stamp, _why in pages[pid].get("rumours") or []:
-            stamps[str(cid)] = stamp
+        for cid, _, _why in pages[pid].get("rumours") or []:
             for source in (rumours.get(cid) or {}).get("sources") or []:
                 if source and source[0]:
                     channels[pid].add(str(source[0]))
-        out_pages[pid] = {"channels": sorted(channels[pid]), "stamps": dict(sorted(stamps.items()))}
+        out_pages[pid] = {"channels": sorted(channels[pid])}
     mill: dict[str, list[int]] = {}
     for cid, m in world.records.get("mill", {}).items():
         mill.setdefault(str(m["chapter"]), []).append(int(cid))
@@ -85,13 +79,12 @@ def book_state(world: World, found: Mapping[str, list[Strategy]]) -> dict:
 
 
 def entry(date: str, kind: str, n: int, name: str = "", **link: str) -> dict:
-    stamp = link.pop("stamp", "")
-    return {"date": date, "kind": kind, "n": n, "text": text(kind, n, name, stamp), **link}
+    return {"date": date, "kind": kind, "n": n, "text": text(kind, n, name), **link}
 
 
 def changes(previous: Mapping, current: Mapping, world: World, date: str) -> list[dict]:
-    """One edition's entries, at most DAILY_CAP: stamps first, then travellers (most first), then
-    the mill, the rest folded into one line without a link."""
+    """One edition's entries, at most DAILY_CAP: travellers (most first), then the mill, the
+    rest folded into one line without a link."""
     pages = world.records.get("page", {})
     chapters = world.records.get("chapter", {})
     found: list[dict] = []
@@ -103,11 +96,6 @@ def changes(previous: Mapping, current: Mapping, world: World, date: str) -> lis
         new = set(now["channels"]) - set(before.get("channels", []))
         if new:
             found.append(entry(date, "travellers", len(new), title, page=pid))
-        old_stamps = before.get("stamps", {})
-        for cid, stamp in now["stamps"].items():
-            old = old_stamps.get(cid)
-            if old is not None and old != stamp and stamp in STAMP_WORDS:
-                found.append(entry(date, "stamp", 1, title, page=pid, stamp=stamp))
     for ch, ids in current["mill"].items():
         if ch not in chapters:
             continue
@@ -159,7 +147,9 @@ def add_generated_news(
             raise BookNewsError(f"book state schema {previous.get('schema')}, not {STATE_SCHEMA}")
         new = changes(previous, state, world, date)
         oldest = (dt.date.fromisoformat(date) - dt.timedelta(days=KEEP_DAYS)).isoformat()
-        kept = [e for e in merge(list(previous.get("news", [])), new, world) if e["date"] >= oldest]
+        # an older state still holds the stamps' lines: they go with the verdicts (06.11.2026)
+        older = [e for e in previous.get("news", []) if e.get("kind") != "stamp"]
+        kept = [e for e in merge(older, new, world) if e["date"] >= oldest]
         # a link to a page or chapter that is gone leaves the entry as plain text
         for e in kept:
             if e.get("page") and e["page"] not in world.records.get("page", {}):

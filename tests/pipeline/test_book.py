@@ -60,10 +60,11 @@ def test_pages_chapters_rumours_news_and_the_tombstone():
     assert page["blocks"][-1] == ["verdict", "Fine for a beginner."]
     # the entities named in the text, in order; price and vendor tokens are no entities
     assert page["refs"] == ["item:2589", "npc:448"]
-    # the rumours: the export's status as the stamp unless the page sets its own
+    # the rumours: no verdict; the second slot held the stamp, and `why`
+    # stays third because Suite and Data files reach players apart
     assert page["rumours"] == [
-        [11, "true", None],
-        [12, "half", "Only the kobolds near the entrance."],
+        [11, False, None],
+        [12, False, "Only the kobolds near the entrance."],
     ]
     rumour = world.get("rumour", 11)
     assert rumour["claim"] == "Hogger's camp in Elwynn drops a lot of Linen Cloth."
@@ -143,7 +144,6 @@ def test_the_toc_lists_active_pages_by_chapter_in_order():
         (lambda t: t.replace("claim = 12", "claim = 777"), "claim 777 is not in the export"),
         (lambda t: t.replace('title = "Hogger\'s Camp"\n', ""), "missing `title`"),
         (lambda t: t.replace("{live}\n", ""), "[live] and the {live} line go together"),
-        (lambda t: t.replace('stamp = "half"', 'stamp = "maybe"'), "stamp must be one of"),
         (lambda t: t.replace("zones = [1429]", "zones = [4242]"), "zone 4242"),
         (
             lambda t: t.replace(

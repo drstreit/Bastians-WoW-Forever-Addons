@@ -51,7 +51,74 @@ def page_refs(wow: WowRuntime, dossier: str) -> list:
     return [e for e in page_entries(wow, dossier) if not isinstance(e, dict) and e.ref]
 
 
+def hosted_sheet(wow: WowRuntime, dossier: str) -> dict | None:
+    """What a hosted sheet draws at the top of a page (ADR 0056, one quest sheet: a quest's page
+    is Quests' own drawing), or None on a page with the kit's head: its words top down, its
+    buttons in reading order, the creatures of its figures, the words to click of its strip."""
+    wow.execute(
+        f"""
+        PageSheet = nil
+        local d = {dossier}
+        local quests = d.sheet and Bastians:GetModule('Quests')
+        local c = quests and quests.Sheet and quests.Sheet.Canvas(d.content)
+        if c and c.frame:IsShown() then
+          local words, buttons, figures = {{}}, {{}}, {{}}
+          for i = 1, c.used.text do
+            local fs = c.texts[i]
+            local _, _, _, _, y = fs:GetPoint(1)
+            words[#words + 1] = {{ y or 0, fs:GetText() }}
+          end
+          table.sort(words, function(a, b) return a[1] > b[1] end)
+          for _, b in pairs(c.buttons) do
+            if b:IsShown() then
+              local _, _, _, x, y = b:GetPoint(1)
+              buttons[#buttons + 1] = {{ y or 0, x or 0, b.label:GetText() }}
+            end
+          end
+          table.sort(buttons, function(a, b)
+            if a[1] ~= b[1] then return a[1] > b[1] end
+            return a[2] < b[2]
+          end)
+          for i = 1, c.used.figure do figures[i] = c.figures[i].creature end
+          local links = {{}}
+          for _, b in pairs(c.links) do
+            if b:IsShown() then
+              local _, _, _, x, y = b:GetPoint(1)
+              links[#links + 1] = {{ y or 0, x or 0, b.text:GetText() }}
+            end
+          end
+          table.sort(links, function(a, b)
+            if a[1] ~= b[1] then return a[1] > b[1] end
+            return a[2] < b[2]
+          end)
+          PageSheet = {{ words = words, buttons = buttons, figures = figures, links = links }}
+        end
+        """
+    )
+    sheet = wow.eval("PageSheet")
+    if sheet is None:
+        return None
+    return {
+        "words": [strip(w[2]) for w in sheet.words.values()],
+        "buttons": [strip(b[3]) for b in sheet.buttons.values()],
+        "figures": list(sheet.figures.values()),
+        "links": [strip(x[3]) for x in sheet.links.values()],
+    }
+
+
 def band(wow: WowRuntime, dossier: str) -> dict:
+    sheet = hosted_sheet(wow, dossier)
+    if sheet:
+        # the head of a hosted sheet: its title, and under it the line of zone and level
+        words = sheet["words"]
+        return {
+            "shown": True,
+            "name": words[0],
+            "badge": wow.eval(f"{dossier}.data.card.typeLabel"),
+            "summary": words[1] if len(words) > 1 else "",
+            "status": None,
+            "height": 0,
+        }
     b = wow.eval(f"{dossier}.band")
     return {
         "shown": b.IsShown(b),
@@ -63,7 +130,24 @@ def band(wow: WowRuntime, dossier: str) -> dict:
     }
 
 
+def click_sheet_button(wow: WowRuntime, dossier: str, label: str) -> None:
+    """Clicks the button of a hosted sheet that reads `label`."""
+    wow.execute(
+        f"""
+        local d = {dossier}
+        local c = Bastians:GetModule('Quests').Sheet.Canvas(d.content)
+        for _, b in pairs(c.buttons) do
+          if b:IsShown() and b.label:GetText() == {label!r} then b:Click() return end
+        end
+        error('no button {label} on the hosted sheet')
+        """
+    )
+
+
 def band_buttons(wow: WowRuntime, dossier: str) -> list[str]:
+    sheet = hosted_sheet(wow, dossier)
+    if sheet:
+        return sheet["buttons"]
     return [
         strip(x.label.GetText(x.label))
         for x in wow.eval(f"{dossier}.buttons").values()
@@ -142,9 +226,23 @@ def pills(wow: WowRuntime, tree: str) -> list[str]:
     return [str(s) for s in wow.eval(f"{tree}.filterBar:Labels()").values()]
 
 
+def _pill(tree: str, dim: str) -> str:
+    """A Lua expression for a dimension's pill. The Browser's "where" is no pill of the bar since
+    ADR 0056 (PA1.2): it is the scope chip inside the search box, which clicks and clears alike."""
+    return (
+        f"({tree}.filterBar:Pill('{dim}') "
+        f"or ('{dim}' == 'where' and {tree} == {BROWSER}.tree and {BROWSER}.scope) or nil)"
+    )
+
+
+def scope(wow: WowRuntime) -> str | None:
+    """The words of the Browser's scope chip ("in Elwynn Forest"), None while it is hidden."""
+    return wow.eval(f"({BROWSER}.Browser.Scope())")
+
+
 def menu(wow: WowRuntime, tree: str, dim: str) -> list[str]:
     """Opens the dropdown of a pill (by dimension id) and returns its entries: "label  count"."""
-    wow.execute(f"{tree}.filterBar:Pill('{dim}'):Click()")
+    wow.execute(f"{_pill(tree, dim)}:Click()")
     frame = wow.eval("Bastians.UI.FilterMenuFrame()")
     out = []
     for item in frame["items"].values():  # lupa: `items` is a method name, index it
@@ -157,7 +255,7 @@ def menu(wow: WowRuntime, tree: str, dim: str) -> list[str]:
 
 def pick(wow: WowRuntime, tree: str, dim: str, label: str) -> None:
     """Opens a pill's dropdown and clicks the entry whose label is `label`."""
-    wow.execute(f"{tree}.filterBar:Pill('{dim}'):Click()")
+    wow.execute(f"{_pill(tree, dim)}:Click()")
     wow.execute(
         "for _, b in ipairs(Bastians.UI.FilterMenuFrame().items) do "
         f"if b:IsShown() and b.label:GetText() == {label!r} then b:Click() return end end "
@@ -167,7 +265,7 @@ def pick(wow: WowRuntime, tree: str, dim: str, label: str) -> None:
 
 def clear(wow: WowRuntime, tree: str, dim: str) -> None:
     """Clicks the pill's "x"."""
-    wow.execute(f"{tree}.filterBar:Pill('{dim}').clear:Click()")
+    wow.execute(f"{_pill(tree, dim)}.clear:Click()")
 
 
 # ---- the Browser's navigation pane (ADR 0018) ---------------------------------------------------
@@ -195,25 +293,74 @@ def chip(wow: WowRuntime, label: str, tree: str = "Bastians:GetModule('Browser')
 
 
 def nav_rows(wow: WowRuntime) -> list[tuple[str, str]]:
-    """The navigation's visible rows as (id, text), group headers included."""
-    return [(str(r.id), strip(r.text)) for r in wow.eval(f"{BROWSER}.navTree.flat").values()]
+    """Every tab of every rail section, in rail order, as (id, text): what the category bar
+    listed until ADR 0058 (a tab says its search count after two spaces, as the bar did)."""
+    wow.execute(
+        f"NavRows = {{}} for _, s in ipairs({BROWSER}.Browser.Sections()) do "
+        "for _, c in ipairs(s.tabs) do "
+        "NavRows[#NavRows + 1] = { c.id, c.count and (c.text .. '  ' .. c.count) or c.text } end end"
+    )
+    return [(str(r[1]), strip(r[2])) for r in wow.eval("NavRows").values()]
 
 
 def nav_lists(wow: WowRuntime) -> list[str]:
-    """The list entries of the navigation, in order."""
+    """The list tabs of the rail's sections, in order."""
     return [text for rid, text in nav_rows(wow) if rid.startswith("nav:list:")]
 
 
 def nav_active(wow: WowRuntime) -> str | None:
-    """The id of the accented navigation row."""
-    return wow.eval(f"{BROWSER}.navTree.selectedID")
+    """The id of the lit tab (the lit rail entry's section holds it)."""
+    return wow.eval(f"{BROWSER}.tabs.active")
+
+
+def rail_rows(wow: WowRuntime) -> list[tuple[str, str, bool, str | None]]:
+    """The rail's seven entries as (id, label, lit, needs)."""
+    wow.execute(
+        f"RailRows = {{}} for _, b in ipairs({BROWSER}.rail.buttons) do "
+        "if b:IsShown() and b.section then RailRows[#RailRows + 1] = "
+        "{ b.section.id, b.section.label, b.spec.primary == true, b.section.needs or false } end end"
+    )
+    return [
+        (str(r[1]), str(r[2]), bool(r[3]), (str(r[4]) if r[4] else None))
+        for r in wow.eval("RailRows").values()
+    ]
+
+
+def tab_rows(wow: WowRuntime) -> list[tuple[str, str, bool]]:
+    """The shown section's tabs as (id, label, lit); empty for a section of one list."""
+    wow.execute(
+        f"TabRows = {{}} for _, b in ipairs({BROWSER}.tabs.buttons) do "
+        "if b:IsShown() and b.cat then TabRows[#TabRows + 1] = { b.cat.id, b.spec.label, b.spec.primary == true } end end"
+    )
+    return [(str(r[1]), strip(r[2]), bool(r[3])) for r in wow.eval("TabRows").values()]
 
 
 def nav_click(wow: WowRuntime, row_id: str, button: str = "LeftButton") -> None:
-    """Clicks the navigation row `row_id` as the tree does."""
+    """Opens the tab `row_id` from whatever section holds it (a click on its rail entry, then on
+    the tab), as a player would; `button` is kept for the old calls."""
+    assert button == "LeftButton"
+    wow.execute(f"assert({BROWSER}.Browser.NavClick({row_id!r}), 'no tab {row_id}')")
+
+
+def rail_click(wow: WowRuntime, section: str) -> None:
+    """Clicks a rail entry."""
     wow.execute(
-        f"local t = {BROWSER}.navTree "
-        f"for _, r in ipairs(t.flat) do if r.id == {row_id!r} then "
-        f"t:Select(r) t.opts.onClick(r, {button!r}, t) return end end "
-        f"error('no navigation row {row_id}')"
+        f"for _, b in ipairs({BROWSER}.rail.buttons) do if b:IsShown() and b.section and b.section.id == {section!r} then "
+        "b:Click('LeftButton') return end end "
+        f"error('no rail entry {section}')"
+    )
+
+
+def near_by_default(wow: WowRuntime) -> None:
+    """Lists opened on the player's zone until 06.11.2026 (they open on everything now): for a test
+    of the narrowing itself, the old default, so it starts narrowed."""
+    wow.execute(
+        f"""
+        {BROWSER}.Browser.DefaultNear = function(counts)
+          local near = counts and counts.near
+          if near and near.here > 0 then return "here" end
+          if near and near.continent > 0 then return "continent" end
+          return nil
+        end
+        """
     )

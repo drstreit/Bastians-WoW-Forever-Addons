@@ -10,17 +10,14 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 124284359619000
-stamp = "half"
 why = "The alchemy holds: Blackmouth Oil takes two of the fish and a Free Action Potion two oils. Our data has no school spawns for Westfall, so the coast itself is unchecked."
 
 [[rumours]]
 claim = 51759449391501
-stamp = "true"
 why = "Soolie Berryfizz in Ironforge, Ulthir in Darnassus and Kor'geld in Orgrimmar sell it for 18 silver, a few at a time, and it needs Alchemy 150."
 
 [[rumours]]
 claim = 101291182181864
-stamp = "half"
 why = "Kriggon Talsone sells the recipe for 4 silver and it needs Cooking 50. The cooked fish fetches about what the raw one does, so the gain is the skill."
 
 [[rumours]]

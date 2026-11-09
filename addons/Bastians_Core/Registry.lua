@@ -101,6 +101,23 @@ function B:HasEntityType(entityType)
   return providers[entityType] ~= nil
 end
 
+-- The reading order of a type's sheet (ADR 0054): the `chapters` of the first provider that has
+-- them, { { id, title }, ... }; a function there is asked with the entity's id (a monster reads in
+-- another order than a vendor). nil for a type without chapters.
+function B:GetChapters(entityType, id)
+  for _, p in ipairs(providers[entityType] or {}) do
+    local chapters = p.chapters
+    if type(chapters) == "function" then
+      local ok, list = safecall(p.owner, label(chapters, "entity " .. entityType .. " chapters"), id)
+      chapters = ok and list or nil
+    end
+    if type(chapters) == "table" then
+      return chapters
+    end
+  end
+  return nil
+end
+
 -- Bumps the cache generation so every facade asks its providers again (§4).
 function B:InvalidateEntities(entityType)
   generation = generation + 1
@@ -151,6 +168,10 @@ function Entity:Name()
 end
 function Entity:Icon()
   return ask(self, "icon")
+end
+-- The sheet's lead sentence (ADR 0054), from the provider that has one; nil: the host builds it.
+function Entity:Lead()
+  return ask(self, "lead")
 end
 function Entity:Summary()
   return ask(self, "summary")
@@ -315,6 +336,9 @@ end
 local facetDefs = {} -- facet -> array of defs, highest priority first
 local facetGeneration = {} -- facet -> generation, bumped by registrations and invalidateOn messages
 local facetInvalidators = {} -- message -> { [facet] = true }, subscribed once per message
+-- Facets put together from every rule of the type, field by field, the higher priority first
+-- (ADR 0056: a tile's facts come from the app that knows each); the others take the first answer.
+local ASSEMBLED = { tile = true }
 
 local function bumpFacet(facet)
   facetGeneration[facet] = (facetGeneration[facet] or 0) + 1
@@ -324,7 +348,8 @@ end
 --   rule = function(ref) -> table | nil, invalidateOn = { messages },
 --   list = function(ctx) -> { refs } (optional, R26.11: the things worth asking about now) })
 -- The first rule (by priority) with a table answer wins; nil means the entity has no such facet.
--- Answers are cached per entity generation and per facet generation.
+-- The facet "tile" is assembled instead: every rule of the type answers, a field of a higher rule
+-- stays. Answers are cached per entity generation and per facet generation.
 function B:RegisterFacet(owner, def)
   require_(def, "facet", "RegisterFacet")
   require_(def, "types", "RegisterFacet")
@@ -406,27 +431,47 @@ function B:InvalidateFacet(facet)
 end
 
 -- The facet's table or nil; cached until the entity or the facet generation moves.
+-- An answer may carry colour codes (the worth's text with its coins), so it is kept per colour
+-- set in force: the theme's, and the palette of a page on paper (the
+-- first host to ask had fixed the colours for every other).
 function Entity:Facet(facet)
   if self.facetEntityGen ~= generation then
-    self.facetValues, self.facetGens = {}, {}
+    self.facetTones = {}
     self.facetEntityGen = generation
   end
+  local tone = B.UI and B.UI.Style and B.UI.Style.H or self
+  local slot = self.facetTones[tone]
+  if not slot then
+    slot = { values = {}, gens = {} }
+    self.facetTones[tone] = slot
+  end
   local gen = facetGeneration[facet] or 0
-  if self.facetGens[facet] == gen then
-    return self.facetValues[facet] or nil
+  if slot.gens[facet] == gen then
+    return slot.values[facet] or nil
   end
   local result
+  local assembled = ASSEMBLED[facet]
   for _, def in ipairs(facetDefs[facet] or {}) do
     if hasType(def, self.type) then
       local ok, answer = safecall(def.owner, label(def.rule, facet), self.ref)
       if ok and type(answer) == "table" then
-        result = answer
-        break
+        if not assembled then
+          result = answer
+          break
+        end
+        -- every rule adds what the rules above it left open (Quests the state of a quest and
+        -- its chain, Data its level)
+        result = result or {}
+        for key, value in pairs(answer) do
+          if result[key] == nil then
+            result[key] = value
+          end
+        end
       end
     end
   end
-  self.facetValues[facet] = result or false
-  self.facetGens[facet] = gen
+  slot.values[facet] = result or false
+  slot.gens[facet] = gen
   return result
 end
 
@@ -455,12 +500,48 @@ function Entity:Worth()
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- Sheets (§7, ADR 0056: one quest sheet): an app that draws the page of a type itself, the same
+-- wherever a host shows such a page
+-- ---------------------------------------------------------------------------------------------
+
+local sheets = {} -- entity type -> def
+
+-- Bastians:RegisterSheet(owner, { types = { "quest" },
+--   draw = function(ref, host) -> height (host = { frame, width, ctx, buttons, refresh }),
+--   hide = function(host) (optional: the host shows something else),
+--   covers = { section ids the drawing says itself: the host leaves them out },
+--   inside = true (optional: the thing can still be stepped into, ADR 0056; a chain) })
+-- One sheet per type: the last registration stands.
+function B:RegisterSheet(owner, def)
+  require_(def, "types", "RegisterSheet")
+  require_(def, "draw", "RegisterSheet")
+  def.owner = owner
+  for _, entityType in ipairs(def.types) do
+    sheets[entityType] = def
+    changed("sheet", entityType, true)
+  end
+  track(owner, function()
+    for _, entityType in ipairs(def.types) do
+      if sheets[entityType] == def then
+        sheets[entityType] = nil
+        changed("sheet", entityType, false)
+      end
+    end
+  end)
+end
+
+-- The sheet registered for a type, or nil.
+function B:GetSheet(entityType)
+  return sheets[entityType]
+end
+
+-- ---------------------------------------------------------------------------------------------
 -- Graph extensions (§4, ADR 0026): another addon's node types, edge types, facet rules, cost
 -- profiles and annotations under one namespace. Data's graph reads them through GraphExtensions().
 -- ---------------------------------------------------------------------------------------------
 
 local extensions = {} -- ns -> def
-local OUR_FACETS = { poi = true, activity = true, worth = true }
+local OUR_FACETS = { poi = true, activity = true, worth = true, tile = true }
 
 -- Bastians:RegisterGraphExtension(owner, { ns, version, types = { [name] = { name, icon, summary,
 --   places, locations, fields, priority } }, edges = { [name] = { from, to, props } },
@@ -894,6 +975,62 @@ function B:GetViews()
   return out
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- Stat tiles (ADR 0058, 07.11.2026): an app registers a figure for a rail entry of the Atlas; the
+-- host draws up to four as tiles on Here and on a section's first tab. def = { id, rail, title,
+-- order, build = function() -> { value, note, ref | nav, tip } or nil, invalidateOn }. A figure
+-- nobody knows is nil: the tile says unknown, never 0; a build that answers nil draws no tile.
+-- ---------------------------------------------------------------------------------------------
+
+local stats = {} -- id -> def
+
+function B:RegisterStat(owner, def)
+  require_(def, "id", "RegisterStat")
+  require_(def, "rail", "RegisterStat")
+  require_(def, "title", "RegisterStat")
+  require_(def, "build", "RegisterStat")
+  def.owner = owner
+  def.order = def.order or 50
+  stats[def.id] = def
+  changed("stat", def.id, true)
+  track(owner, function()
+    if stats[def.id] == def then
+      stats[def.id] = nil
+      changed("stat", def.id, false)
+    end
+  end)
+end
+
+function B:UnregisterStat(id)
+  if stats[id] == nil then
+    return false
+  end
+  stats[id] = nil
+  changed("stat", id, false)
+  return true
+end
+
+-- The stats of a rail entry (every one for nil), by order then id.
+function B:GetStats(rail)
+  local out = {}
+  for _, def in pairs(stats) do
+    if rail == nil or def.rail == rail then
+      out[#out + 1] = def
+    end
+  end
+  table.sort(out, byOrder)
+  return out
+end
+
+-- The tile's figures through the owner's error guard: the build's table, or nil (no tile).
+function B:BuildStat(def)
+  local ok, got = safecall(def.owner, label(def.build, "stat " .. tostring(def.id)))
+  if ok and type(got) == "table" then
+    return got
+  end
+  return nil
+end
+
 -- Renders a view into a host with the owner's error guard; false when the view is missing or failed.
 function B:RenderView(id, host)
   local def = views[id]
@@ -952,13 +1089,22 @@ end
 -- ---------------------------------------------------------------------------------------------
 
 local sections = {} -- id -> def
-local sectionCache = {} -- id -> { [ref] = rows | false, order = { refs } }
+-- id -> { [tone] = { [ref] = rows | false, order = { refs } } }: rows carry colour codes (S.H), so
+-- they are kept per colour set, the theme's and the palette of a page on paper (ADR 0054)
+local sectionCache = {}
 B.SECTION_CACHE_MAX = 64 -- refs kept per section (R10): a session visits hundreds of pages
 local tooltipCache = {} -- ref -> rows
 local invalidators = {} -- message -> set of section ids (subscribed once per message)
 
 local function dropSection(id)
   sectionCache[id] = nil
+  for ref in pairs(tooltipCache) do
+    tooltipCache[ref] = nil
+  end
+end
+
+-- Forgets the tooltip rows: what they say has changed (the Browser's key was bound).
+function B:ForgetTooltipRows()
   for ref in pairs(tooltipCache) do
     tooltipCache[ref] = nil
   end
@@ -1010,10 +1156,16 @@ local function rowsFor(def, ref)
     local ok, built = safecall(def.owner, label(def.build, "section " .. def.id), ref)
     return ok and type(built) == "table" and #built > 0 and built or nil
   end
-  local cache = sectionCache[def.id]
+  local tones = sectionCache[def.id]
+  if not tones then
+    tones = {}
+    sectionCache[def.id] = tones
+  end
+  local tone = B.UI and B.UI.Style and B.UI.Style.H or tones -- the colour set in force
+  local cache = tones[tone]
   if not cache then
     cache = { order = {} } -- order: the refs in the order they came, for the cap
-    sectionCache[def.id] = cache
+    tones[tone] = cache
   end
   local rows = cache[ref]
   if rows == nil then
@@ -1120,13 +1272,16 @@ end)
 ns.on("BASTIANS_DATA_LOADED", function()
   dropForType(nil)
 end)
+ns.on("BASTIANS_THEME_CHANGED", function() -- the codes in the cached rows are the old theme's
+  dropForType(nil)
+end)
 
 -- ---------------------------------------------------------------------------------------------
 -- Search providers (§7a): one Job per search, progressive callbacks, cross-provider ranking
 -- ---------------------------------------------------------------------------------------------
 
 local searchProviders = {} -- id -> def
-local currentSearch
+B.SEARCH_PATIENCE = 10 -- seconds a provider may take; it is given up after them
 
 function B:RegisterSearchProvider(owner, def)
   require_(def, "id", "RegisterSearchProvider")
@@ -1302,11 +1457,9 @@ end
 -- with :Cancel(). `types` keeps only results of those entity types; `type:npc` words in the query
 -- do the same. Providers get the query lower-cased and compiled (ADR 0045):
 -- search(text, limit, yield, q), q a Bastians.Query.
+-- A search belongs to its caller, who cancels it; another caller's search leaves it alone (owner,
+-- Forever 06.11.2026: "Searching ..." for good). `opts.onError()` hears of a callback that failed.
 function B:Search(query, opts, callback)
-  if currentSearch then
-    currentSearch:Cancel()
-    currentSearch = nil
-  end
   opts = opts or {}
   local typed, kinds
   query, typed, kinds = typeFields(string.gsub(tostring(query or ""), "^%s*(.-)%s*$", "%1"), true)
@@ -1337,30 +1490,65 @@ function B:Search(query, opts, callback)
   end)
   local limit = opts.limit or 50
   local collected = {}
+  -- the caller hears of the results through the error guard, and a provider runs in a coroutine
+  -- of its own: one that fails costs its own results, never the search (owner, Forever
+  -- 06.11.2026: an error left every search on "Searching..." for good, the job died unfinished)
+  local function tell(done)
+    local shown = keepKinds(keepType(rank(collected), opts.types), kinds)
+    if not ns.safecall(ns.coreOwner, callback, shown, done) and opts.onError then
+      ns.safecall(ns.coreOwner, opts.onError)
+    end
+  end
+  local function failed(def, why)
+    ns.noteError(def.owner or ns.coreOwner, ("search %s: %s"):format(tostring(def.id), tostring(why)))
+    return {}
+  end
+  local function run(def, yield)
+    local co = coroutine.create(def.search)
+    local started = GetTime()
+    local ok, results = coroutine.resume(co, query, limit, coroutine.yield, q)
+    while ok and coroutine.status(co) ~= "dead" do
+      if GetTime() - started > B.SEARCH_PATIENCE then
+        return failed(def, "gave up, it did not end")
+      end
+      yield()
+      ok, results = coroutine.resume(co)
+    end
+    if not ok then
+      return failed(def, results)
+    end
+    if results ~= nil and type(results) ~= "table" then
+      return failed(def, "answered no list")
+    end
+    local out = {}
+    for _, r in ipairs(results or {}) do
+      if type(r) == "table" then
+        out[#out + 1] = r
+      end
+    end
+    return out
+  end
+  local function finished()
+    if not handle.cancelled then
+      tell(true)
+    end
+  end
   handle.job = B.Jobs:Run(ns.coreOwner, "search", function(yield)
     for _, def in ipairs(ordered) do
-      local results = def.search(query, limit, yield, q) or {}
-      for _, r in ipairs(results) do
+      for _, r in ipairs(run(def, yield)) do
         r.provider = def.id
         r.rank = (r.score or 0) * (1 + def.priority / 1000)
         collected[#collected + 1] = r
       end
       if not handle.cancelled then
-        callback(keepKinds(keepType(rank(collected), opts.types), kinds), false)
+        tell(false)
       end
       yield()
     end
   end, {
-    onDone = function()
-      if not handle.cancelled then
-        callback(keepKinds(keepType(rank(collected), opts.types), kinds), true)
-      end
-      if currentSearch == handle then
-        currentSearch = nil
-      end
-    end,
+    onDone = finished,
+    onFail = finished, -- a job that died has still ended: the caller is told what came
   })
-  currentSearch = handle
   return handle
 end
 
@@ -1375,16 +1563,20 @@ B.SERVICES = {
   travel = true,
   progress = true,
   views = true,
+  questSheet = true, -- the quest sheet: the Orbiter shows it on hover (Quests, ADR 0053)
   graph = true,
   route = true,
   notes = true,
   facts = true,
   library = true,
   knowledge = true, -- who knows a spell or recipe (Alts, 01.11.2026)
+  requests = true, -- what the other characters asked this one for, by item (Alts, ADR 0058 PH6, 07.11.2026)
+  neversell = true, -- the player's never-sell list (Helpers, ADR 0058 PH6, 07.11.2026)
   voice = true, -- speaks the suite's own words (the Orbiter, plan-launch-review R5.3, 01.11.2026)
   camps = true, -- the player's fire, camp buffs and shared fires (Bastian's Campfire, 02.11.2026)
   income = true, -- gold per day, AH apart from loot (Gold's Income.lua, 04.11.2026)
   waypoint = true, -- the player's own waypoint on Bastian's Map (#14, 04.11.2026)
+  mapPicture = true, -- the chosen map style's cells for a picture (the Map, ADR 0056, PA6)
   account = true, -- the account's gold over its characters (Alts, #14, 04.11.2026)
 }
 local services = {} -- name -> array of { owner, impl, priority }
@@ -1428,4 +1620,24 @@ end
 
 function B:GetService(name)
   return active[name]
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Courtesy lines: a player's own, from the file they write (core-contracts 13, ADR 0063). Core only
+-- keeps the list; Bastian's Courtesy checks the lines.
+-- ---------------------------------------------------------------------------------------------
+
+local courtesyLines = {}
+
+function B:AddCourtesyLines(lines)
+  if type(lines) ~= "table" then
+    error("AddCourtesyLines: a table of lines is required", 2)
+  end
+  for _, line in ipairs(lines) do
+    courtesyLines[#courtesyLines + 1] = line
+  end
+end
+
+function B:GetCourtesyLines()
+  return courtesyLines
 end

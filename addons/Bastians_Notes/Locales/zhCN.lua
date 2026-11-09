@@ -91,4 +91,8 @@ ns.L:Register("zhCN", {
   ["Near here:"] = "附近:",
   ["No notes near here."] = "附近没有笔记。",
   ["and %d more"] = "还有 %d 个",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "对象",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "还没有笔记。在页面上点击添加笔记写下第一条。",
 })

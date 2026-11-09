@@ -13,7 +13,6 @@ claim = 69024715530008
 
 [[rumours]]
 claim = 146684844818836
-stamp = "true"
 why = "The loot tables agree: Wool in one kill out of four, Linen in one out of eight, Silk in one out of twenty."
 
 [[rumours]]

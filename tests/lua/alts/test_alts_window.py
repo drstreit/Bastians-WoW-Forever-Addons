@@ -1,6 +1,7 @@
 """The Alts window (alts.md "The window", "make this one window - the
 alts are on the top, then a search, then one large window"): the characters as pills, a search
-over everything they hold, the views as tabs, one wide list."""
+over everything they hold, the views as tabs, one wide list. Since
+(R5) it is the window of a player without the Browser; with it `/balts` opens Characters there."""
 
 from harness import WowRuntime
 from test_alts import ALTS, CORE, DATA, ME, G, boot, strip, with_alts
@@ -22,7 +23,7 @@ def pills(wow: WowRuntime) -> list[tuple[str, bool]]:
 
 
 def test_the_window_shows_the_characters_on_top_and_the_chosen_ones_view(wow: WowRuntime):
-    boot(wow)
+    boot(wow, CORE, DATA, ALTS)  # the window is Alts' own without the Browser (R5)
     with_alts(wow)
     wow.slash("/balts")
     wow.run_frames(3)
@@ -69,7 +70,7 @@ def test_the_window_shows_the_characters_on_top_and_the_chosen_ones_view(wow: Wo
 
 
 def test_the_search_lists_what_every_character_holds(wow: WowRuntime):
-    boot(wow)
+    boot(wow, CORE, DATA, ALTS)  # the window is Alts' own without the Browser (R5)
     with_alts(wow)
     wow.slash("/balts")
     wow.run_frames(3)
@@ -99,7 +100,7 @@ def test_the_search_lists_what_every_character_holds(wow: WowRuntime):
 
 
 def test_a_second_realm_gets_its_name_before_its_characters(wow: WowRuntime):
-    boot(wow)
+    boot(wow, CORE, DATA, ALTS)  # the window is Alts' own without the Browser (R5)
     with_alts(wow)
     wow.execute(
         f"{G}.characters['Farling-Other Realm'] = {{ name = 'Farling', realm = 'Other Realm', level = 5 }}"
@@ -138,7 +139,7 @@ def test_the_grip_sizes_a_never_moved_window_from_its_top_left(wow: WowRuntime):
     the window jumps to a large size, then can be scaled": the window sat at the screen's centre
     (its profile kept no place); the grip anchors it at its top left before sizing, and the
     profile keeps the place."""
-    boot(wow)
+    boot(wow, CORE, DATA, ALTS)  # the window is Alts' own without the Browser (R5)
     wow.slash("/balts")
     wow.run_frames(3)
     assert wow.eval("(BastiansAltsFrame:GetPoint(1))") == "CENTER"
@@ -146,4 +147,21 @@ def test_the_grip_sizes_a_never_moved_window_from_its_top_left(wow: WowRuntime):
     assert wow.eval("(BastiansAltsFrame:GetPoint(1))") == "TOPLEFT"
     wow.execute(f"local g = {W}.win.grip; g:GetScript('OnMouseUp')(g, 'LeftButton')")
     assert wow.eval("Bastians:GetModule('Alts').db.profile.window.size") is not None
+    assert wow.errors == []
+
+
+def test_balts_opens_the_character_in_the_browsers_characters(wow: WowRuntime):
+    """(R5): "that window needs rework in our mobile design - left side
+    the character pictures, name, class & level, right side the details in tabs ... you have that
+    already in the Browser's Characters - so this window does not make sense"."""
+    boot(wow, CORE, DATA, "Bastians_Browser", ALTS)
+    with_alts(wow)
+    wow.slash("/balts")
+    wow.run_frames(10)
+    br = "Bastians:GetModule('Browser').Browser"
+    assert wow.eval("BastiansAltsFrame == nil or not BastiansAltsFrame:IsShown()") is True
+    assert wow.eval("BastiansBrowserFrame:IsShown()") is True
+    assert wow.eval(f"{br}.PageRef()") == f"character:{ME}"
+    entry = wow.eval(f"{br}.ListEntry()")
+    assert (entry.kind, entry.type) == ("list", "character")
     assert wow.errors == []

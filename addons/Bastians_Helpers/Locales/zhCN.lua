@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("zhCN", {
+  ["Level"] = "等级",
   ["Helpers"] = "助手",
   ["Merchant"] = "商人",
   ["Mail"] = "邮件",
@@ -24,6 +25,10 @@ ns.L:Register("zhCN", {
   ["Item level"] = "物品等级",
   ["Warn when your gear is almost broken"] = "装备快损坏时警告",
   ["Warn when your bags are almost full"] = "背包快满时警告",
+  -- the rare alert (catalog review A3.3, 07.11.2026)
+  ["Warn when a rare creature is targeted or under the mouse"] = "选中或鼠标指向稀有生物时提醒",
+  ["Rare: %s"] = "稀有：%s",
+  ["Map"] = "地图",
   ["Hold to pause the helpers"] = "按住以暂停助手",
   ["Shift"] = "Shift",
   ["Ctrl"] = "Ctrl",

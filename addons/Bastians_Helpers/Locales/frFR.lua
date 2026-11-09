@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("frFR", {
+  ["Level"] = "Niveau",
   ["Helpers"] = "Assistants",
   ["Merchant"] = "Marchand",
   ["Mail"] = "Courrier",
@@ -24,6 +25,10 @@ ns.L:Register("frFR", {
   ["Item level"] = "Niveau d'objet",
   ["Warn when your gear is almost broken"] = "Alerter quand votre équipement est presque cassé",
   ["Warn when your bags are almost full"] = "Alerter quand vos sacs sont presque pleins",
+  -- the rare alert (catalog review A3.3, 07.11.2026)
+  ["Warn when a rare creature is targeted or under the mouse"] = "Avertir quand une créature rare est ciblée ou sous la souris",
+  ["Rare: %s"] = "Rare : %s",
+  ["Map"] = "Carte",
   ["Hold to pause the helpers"] = "Maintenir pour suspendre les assistants",
   ["Shift"] = "Maj",
   ["Ctrl"] = "Ctrl",

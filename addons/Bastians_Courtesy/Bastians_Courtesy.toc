@@ -1,0 +1,49 @@
+## Interface: 16001, 120105
+## Title: Bastian's Courtesy
+## IconTexture: Interface\AddOns\Bastians_Courtesy\Icon
+## Notes: When someone is kind to you, four fitting answers on a ring, one click away.
+## Notes-koKR: 누군가 호의를 베풀면, 상황에 맞는 네 가지 답이 링에 나타나 한 번의 클릭으로 답합니다.
+## Notes-zhCN: 当有人善待你时，环上出现四个合适的回答，一键即可。
+## Notes-zhTW: 當有人善待你時，環上出現四個合適的回答，一鍵即可。
+## Notes-deDE: Wenn jemand freundlich zu dir ist: vier passende Antworten auf einem Ring, einen Klick entfernt.
+## Notes-frFR: Quand quelqu'un est aimable avec vous, quatre réponses adaptées sur un anneau, à un clic.
+## Notes-esES: Cuando alguien es amable contigo, cuatro respuestas adecuadas en un anillo, a un clic.
+## Notes-esMX: Cuando alguien es amable contigo, cuatro respuestas adecuadas en un anillo, a un clic.
+## Notes-ruRU: Когда к вам добры: четыре подходящих ответа на круге, в один клик.
+## Notes-ptBR: Quando alguém é gentil com você, quatro respostas adequadas em um anel, a um clique.
+## Category: Bastian's Suite
+## Category-koKR: Bastian's 애드온 모음
+## Category-zhCN: Bastian's 插件合集
+## Category-zhTW: Bastian's 插件合集
+## Category-deDE: Bastian's Suite
+## Category-frFR: Suite de Bastian
+## Category-esES: Suite de Bastian
+## Category-esMX: Suite de Bastian
+## Category-ruRU: Набор Bastian's
+## Category-ptBR: Suite do Bastian
+## Author: Bastian
+## Version: 2.1.0
+## X-License: GPL-3.0
+## Dependencies: Bastians_Core
+## OptionalDeps: Bastians_Gestures, Bastians_Campfire, Bastians_MyLines
+## SavedVariables: BastiansCourtesyDB
+
+Locales\deDE.lua
+Locales\frFR.lua
+Locales\esES.lua
+Locales\koKR.lua
+Locales\zhCN.lua
+Locales\zhTW.lua
+Locales\ruRU.lua
+Locales\ptBR.lua
+News.lua
+Compat.lua
+Model.lua
+Lines.lua
+Voice.lua
+Mine.lua
+Facts.lua
+Medallion.lua
+Courtesy.lua
+Try.lua
+Main.lua

@@ -121,4 +121,9 @@ ns.L:Register("ruRU", {
   ["Read by the game's voice (no Spoken line)"] = "Читает голос игры (нет реплики Spoken)",
   ["The game's voice that reads"] = "Голос игры для чтения",
   ["A woman's voice (auto)"] = "Женский голос (авто)",
+  ["Locked in place. The lock on the ring unlocks it."] = "Положение закреплено. Замок на кольце снимает закрепление.",
+  ["Locked in place"] = "Положение закреплено",
+  ["Click to move the Orbiter freely."] = "Щёлкните, чтобы свободно перемещать Orbiter.",
+  ["Moves freely"] = "Свободно перемещается",
+  ["Drag the Orbiter where you want it. Click to lock it in place."] = "Перетащите Orbiter куда нужно. Щёлкните, чтобы закрепить положение.",
 })

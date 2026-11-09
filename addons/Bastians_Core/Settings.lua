@@ -84,7 +84,7 @@ end
 -- and Spoken ship for the Classic flavours and 16001 only, TomTom for both). `slug` is its
 -- CurseForge project (tools/curseforge.toml relates to it).
 -- TomTom is not one since 29.10.2026 (owner: "we drop tomtom as we have it ourselves": Route's
--- arrow, the map's own waypoint); a player who has it still gets its arrow and waypoints.
+-- arrow, the map's own waypoint); the suite calls nothing of it (route.md).
 B.COMPANIONS = {
   {
     addon = "QuestieDB",
@@ -171,6 +171,7 @@ B.SUITE_ADDONS = {
   "Bastians_Voice",
   "Bastians_Chat",
   "Bastians_Gestures",
+  "Bastians_Courtesy",
   "Bastians_Campfire",
 }
 
@@ -237,6 +238,7 @@ B.APPS = {
       L["Lists by type with filters: where, level, rank, services"],
       L["The way there and its time on every row; the portrait and the dungeon's floors"],
     },
+    keys = { "BASTIANS_BROWSER_HOVERED" },
     links = {
       Map = L["Show on map"],
       Route = L["Route there"],
@@ -292,7 +294,7 @@ B.APPS = {
     clients = { forever = true },
     about = L["Bastian's book of gold rumours: strategies from the travellers, checked against live prices, read in game."], -- luacheck: ignore 631 (a locale key stays one literal)
     does = {
-      L["Bastian's Gold Rumours: a book of gold strategies, told in game"],
+      L["Bastian's Gold Adventures: a book of gold strategies, told in game"],
       L["Live prices on every page from your scans"],
       L["The place of every farm on the map, and a route there"],
       L["Sealed pages open as you level and travel; bookmarks and notes"],
@@ -399,17 +401,28 @@ B.APPS = {
     slash = "/bgest",
     icon = "app_gestures",
     keys = { "BASTIANS_GESTURES_RING", "BASTIANS_GESTURES_NEXT" }, -- its Bindings.xml (R5.1)
-    about = L["Bastian's Gestures: a ring of emotes, your own lines and the suite's actions on one key; a ready thank-you when someone buffs you."], -- luacheck: ignore 631 (a locale key stays one literal)
+    about = L["Bastian's Gestures: a ring of emotes, your own lines and the suite's actions on one key."], -- luacheck: ignore 631 (a locale key stays one literal)
     does = {
       L["A ring of the game's emotes on one key"],
       L["Your own lines with placeholders: the target's name, race, class, the zone; in your character's languages"], -- luacheck: ignore 631 (a locale key stays one literal)
       L["The suite's actions on a third ring: play the lore here, clear the screen, a note here"],
-      L["A ready thank-you when someone buffs or resurrects you, or emotes at you"],
     },
     links = {
       Voice = L["Play the lore here"],
       Notes = L["A note here"],
       Map = L["Send my spot"],
+    },
+  },
+  {
+    addon = "Bastians_Courtesy",
+    module = "Courtesy",
+    slash = "/bcourtesy",
+    icon = "app_courtesy",
+    about = L["Bastian's Courtesy: when someone is kind to you, four fitting answers on a ring, one click away."], -- luacheck: ignore 631 (a locale key stays one literal)
+    does = {
+      L["A ready thank-you when someone buffs or resurrects you, or emotes at you"],
+      L["Hand-written lines in six moods, fitted to the person, the hour and the weather"],
+      L["Your own lines in a file of your own (Bastians_MyLines)"],
     },
   },
   {
@@ -724,6 +737,7 @@ Settings_.LOOK_KEYS = {
   "windowAlpha",
   "gameButtons",
   "ornaments",
+  "sheetParchment",
   "rowPortraits",
   "placeCuts",
   "diorama",
@@ -747,6 +761,7 @@ local function modern(theme)
     windowAlpha = 100,
     gameButtons = false,
     ornaments = false,
+    sheetParchment = true,
     rowPortraits = true,
     placeCuts = true,
     diorama = true,
@@ -944,6 +959,7 @@ ns.core = B:NewModule("Core", {
       preset = "modern-dark",
       gameButtons = false,
       ornaments = false,
+      sheetParchment = true,
       skinFrames = true, -- the game's frames are the standard
       rowPortraits = true,
       placeCuts = true,
@@ -1192,6 +1208,13 @@ ns.core = B:NewModule("Core", {
       key = "ornaments",
       desc = L["The gold rule under section titles, as the game's quest frame draws it."],
       label = L["Ornaments under section titles"],
+      set = S.ApplySkin,
+    },
+    {
+      type = "toggle",
+      key = "sheetParchment",
+      desc = L["Draws a page on parchment like the quest sheet. Off: the look's colours."],
+      label = L["Pages on parchment"],
       set = S.ApplySkin,
     },
     {
@@ -1495,6 +1518,19 @@ local function describe(w, desc)
   return w
 end
 
+-- An option draws on a card of its own (ADR 0058, PH7): the plate behind the widget, its
+-- description under it, the control at the right. `desc` may be nil (a card of one line).
+local function carded(w, desc)
+  if w then
+    w.card = desc or ""
+    local toRight = rawget(w, "SetControlRight") -- the checkbox's own; a frame knows no such method
+    if toRight then
+      toRight(w)
+    end
+  end
+  return w
+end
+
 local function widgetFor(canvas, option, mod)
   local kind = option.type
   if kind == "header" then
@@ -1504,7 +1540,7 @@ local function widgetFor(canvas, option, mod)
       setValue(mod, option, on)
     end)
     w:SetChecked(getValue(mod, option) and true or false)
-    return describe(w, option.desc)
+    return carded(describe(w, option.desc), option.desc)
   elseif kind == "range" then
     local w = Wd.Slider(
       canvas,
@@ -1517,7 +1553,7 @@ local function widgetFor(canvas, option, mod)
       end
     )
     w:SetValue(tonumber(getValue(mod, option)) or option.min or 0, true)
-    return describe(w, option.desc)
+    return carded(describe(w, option.desc), option.desc)
   elseif kind == "select" or kind == "font" then
     local values = option.values or FONTS
     if type(values) == "function" then
@@ -1527,7 +1563,7 @@ local function widgetFor(canvas, option, mod)
       setValue(mod, option, key)
     end)
     w:SetValue(getValue(mod, option))
-    return describe(w, option.desc)
+    return carded(describe(w, option.desc), option.desc)
   elseif kind == "execute" then
     -- a column of equal buttons: the width stays the hub's; `icon` names the pictogram (ADR 0046)
     local w = S.action(canvas, { icon = option.icon, label = option.label, boxed = true, width = 160 })
@@ -1547,14 +1583,14 @@ local function widgetFor(canvas, option, mod)
     local w = Wd.Edit(canvas, option.label, function(text)
       setValue(mod, option, text)
     end)
-    return describe(w, option.desc)
+    return carded(describe(w, option.desc), option.desc)
   elseif kind == "color" then
     local w = Wd.Color(canvas, option.label, function()
       return getValue(mod, option)
     end, function(value)
       setValue(mod, option, value)
     end, option.theme)
-    return describe(w, option.desc)
+    return carded(describe(w, option.desc), option.desc)
   end
   return Wd.Note(canvas, ("unknown option type %s"):format(tostring(kind)), S.C.warn)
 end
@@ -1583,6 +1619,7 @@ local function minimapRow(canvas, mod)
     B.UI.Launcher.SetAppButton(mod.name, on)
   end)
   mm:SetChecked(not B.UI.Launcher.AppSettings(mod.name).hide)
+  carded(mm)
   return mm
 end
 
@@ -1752,7 +1789,7 @@ local function moduleRows(canvas, mod, depth)
       end
     )
     switch:SetChecked(mod:IsSwitchOn())
-    widgets[#widgets + 1] = switch
+    widgets[#widgets + 1] = carded(switch)
     if mod.disabledByErrors then
       widgets[#widgets + 1] =
         Wd.Note(canvas, L["Disabled for this session after repeated errors. See /bastians log."], S.C.warn)
@@ -2186,6 +2223,26 @@ end
 
 -- Bastians.UI.Settings.Render(canvas, mod[, page]): (re)draws the module's page, or one of its own
 -- pages, into canvas.
+local CARD_PAD = 6 -- around a widget on its card (ADR 0058, PH7)
+local DESC_H = 14 -- the description line under the widget
+
+-- A card's plate and description, pooled on the canvas.
+local function cardFrame(canvas, n)
+  canvas.cardPool = canvas.cardPool or {}
+  local card = canvas.cardPool[n]
+  if not card then
+    card = CreateFrame("Frame", nil, canvas)
+    card:SetFrameLevel(canvas:GetFrameLevel() or 0) -- under the widgets, which are a level up
+    card.plate = S.roundFill(card, S.C.card, "radiusSmall")
+    card.edge = S.roundEdges(card, S.C.cardEdge, "radiusSmall")
+    card.desc = S.text(card, 10, S.C.dim)
+    card.desc:SetJustifyH("LEFT")
+    card.desc:SetWordWrap(false)
+    canvas.cardPool[n] = card
+  end
+  return card
+end
+
 local function layout(canvas, widgets)
   canvas.widgets = widgets
   local width = (canvas:GetWidth() or 0) - 24
@@ -2193,13 +2250,43 @@ local function layout(canvas, widgets)
     width = 400
   end
   local y = 10
+  local cards = 0
   for _, w in ipairs(widgets) do
+    local card = w.card ~= nil
+    if card then
+      y = y + CARD_PAD
+    end
     w:ClearAllPoints()
     w:SetPoint("TOPLEFT", canvas, "TOPLEFT", 12, -y)
     w:SetWidth(width)
     w:Show()
-    y = y + (w:GetHeight() or 22) + GAP
+    local h = w:GetHeight() or 22
+    if card then
+      -- the option on a card: the plate behind it, its description under it (ADR 0058, PH7)
+      cards = cards + 1
+      local c = cardFrame(canvas, cards)
+      local desc = w.card ~= "" and w.card or nil
+      local descH = desc and DESC_H or 0
+      c:ClearAllPoints()
+      c:SetPoint("TOPLEFT", canvas, "TOPLEFT", 6, -(y - CARD_PAD))
+      c:SetSize(width + 12, h + descH + 2 * CARD_PAD)
+      c.desc:ClearAllPoints()
+      c.desc:SetPoint("TOPLEFT", c, "TOPLEFT", CARD_PAD, -(CARD_PAD + h + 1))
+      c.desc:SetPoint("RIGHT", c, "RIGHT", -CARD_PAD, 0)
+      c.desc:SetText(desc or "")
+      c.desc:SetShown(desc ~= nil)
+      c.plate:Show()
+      c.edge:Show()
+      c:Show()
+      y = y + h + descH + CARD_PAD + GAP
+    else
+      y = y + h + GAP
+    end
   end
+  for i = cards + 1, #(canvas.cardPool or {}) do
+    canvas.cardPool[i]:Hide()
+  end
+  canvas.cardCount = cards
   canvas.contentHeight = y
   if canvas.onRendered then
     canvas.onRendered(y)

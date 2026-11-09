@@ -1,8 +1,9 @@
 # The walk network (ADR 0025, route.md "Walk network"): what tools/nav_build.py passes to
 # `clientdump navgraph`, and how it picks road textures and the liquids that block.
 
-# Map.db2 ids of the continents that get a network (25.10.2026: Eastern Kingdoms first)
-continents = [0]
+# Map.db2 ids of the continents that get a network (25.10.2026: Eastern Kingdoms first; 06.11.2026:
+# Kalimdor, which was always passed by hand, and Zephras Isle, owner: "we desperately need to add this")
+continents = [0, 1, 2991]
 
 [graph]
 max_slope = 55.0      # degrees, the steepest of a cell's four triangles. Retail 25.10.2026: 50 split Duskwood
@@ -31,3 +32,22 @@ patterns = ["cobble", "road", "path", "street", "brick", "paver", "paving", "fla
 # LiquidType.db2 names: blocked outright, and the sea (wading only)
 blocked = ["magma", "lava", "slime", "fel", "tar pit"]
 ocean = ["ocean"]
+
+# Ground the network leaves out: open ground (not indoors, not water) with its centre in the box. World
+# yards, north +wx, west +wy. Forever's Stormwind stands on a model about 40 yards above a flat sheet of
+# terrain; the mesh can walk that sheet (it joins the real world only by the harbour ramp), and a place
+# without a height joined it. Two boxes, so the harbour
+# ramp (wx above -8600, wy above 950) stays. Cellars are indoors and stay.
+[[hidden.forever]]
+name = "stormwind-sheet-east"
+continent = 0
+wx = [-9160.0, -8280.0]
+wy = [250.0, 950.0]
+z = [40.0, 88.0]
+
+[[hidden.forever]]
+name = "stormwind-sheet-west"
+continent = 0
+wx = [-9160.0, -8600.0]
+wy = [950.0, 1200.0]
+z = [40.0, 88.0]

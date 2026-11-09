@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.1.0:1",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "Targeting or mousing over a rare creature shows its name with a Map button.",
+  },
+  {
+    id = "2.1.0:2",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "Send to writes a character's name with its surname, so the mail reaches them on Forever.",
+  },
+  {
     id = "1.4.0:1",
     date = "2026-11-04",
     version = "1.4.0",

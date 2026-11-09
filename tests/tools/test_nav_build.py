@@ -66,3 +66,36 @@ def test_liquids_by_name_and_continents_from_the_map_dump(tmp_path, monkeypatch)
     assert nav_build.continent_maps("retail", "x") == {0: ("Azeroth", 775971)}
     with pytest.raises(nav_build.NavBuildError, match="missing"):
         nav_build.continent_maps("retail", "none")
+
+
+def test_only_a_client_with_hidden_ground_gets_a_config(tmp_path):
+    """Forever's sheet of terrain under Stormwind (route.md "The join"): the boxes reach clientdump
+    navnet in its own field names; a client without any builds as before."""
+    box = {
+        "name": "sheet",
+        "continent": 0,
+        "wx": [-10.0, 10.0],
+        "wy": [0.0, 5.0],
+        "z": [40.0, 88.0],
+    }
+    target = tmp_path / "config.json"
+    assert nav_build.navnet_config({"hidden": {"forever": [box]}}, "retail", target) == []
+    assert not target.exists()
+    args = nav_build.navnet_config({"hidden": {"forever": [box]}}, "forever", target)
+    assert args == ["--config", str(target)]
+    written = json.loads(target.read_text(encoding="utf-8"))
+    assert written == {"hidden": [{k: box[k] for k in ("continent", "wx", "wy", "z")}]}
+
+
+def test_the_stormwind_boxes_leave_the_harbour_ramp():
+    """The ramp from the harbour up to the streets runs through wx -8578 to -8474, wy 986 to 1077,
+    heights 37 to 79: the only link between the two, it must stay."""
+    conf = nav_build.tomllib.loads((nav_build.CONFIG / "nav.toml").read_text(encoding="utf-8"))
+    for wx, wy, z in ((-8578, 1077, 37), (-8501, 1004, 61), (-8474, 986, 79)):
+        for box in conf["hidden"]["forever"]:
+            inside = (
+                box["wx"][0] <= wx <= box["wx"][1]
+                and box["wy"][0] <= wy <= box["wy"][1]
+                and box["z"][0] <= z <= box["z"][1]
+            )
+            assert not inside, (wx, wy, z, box["name"])

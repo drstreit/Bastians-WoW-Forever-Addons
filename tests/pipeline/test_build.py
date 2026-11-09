@@ -21,7 +21,7 @@ GOLDEN = ROOT / "tests" / "fixtures" / "addons" / "Bastians_Data_World" / "Gener
 def test_fixture_reader_builds_the_world():
     world = read_fixture(FIXTURE, "forever")
     assert world.build == "fixture" and world.sources == ["hand-written fixture world-mini"]
-    assert world.count("npc") == 10 and world.count("quest") == 5 and world.count("zone") == 5
+    assert world.count("npc") == 11 and world.count("quest") == 6 and world.count("zone") == 5
     assert world.get("npc", 448)["name"] == "Hogger"
     assert world.get("npc", 327).get("flags") is None  # unknown stays None
     with pytest.raises(FixtureError, match="is for forever"):
@@ -72,13 +72,13 @@ def test_pack_content_follows_the_schema():
         "entrance": 1,
         "flightpath": 5,
         "node": 0,
-        "npc": 10,  # the fixture bosses Rhahk'Zor and VanCleef count (data.md "Dungeons")
+        "npc": 11,  # the fixture bosses Rhahk'Zor and VanCleef count (data.md "Dungeons")
         "object": 1,
         "teleport": 3,
         "transport": 2,
         "zone": 5,
     }
-    assert by_name["quests"].counts == {"attunement": 2, "quest": 5}
+    assert by_name["quests"].counts == {"attunement": 2, "quest": 6}
     assert by_name["world"].index_counts["npc.byZone"] == 2
     assert by_name["quests"].index_counts["quest.byGiver"] == 3
     from bastians_build.pack import pack_table
@@ -97,7 +97,7 @@ def test_pack_content_follows_the_schema():
     )
     assert hogger["spawns"] == [[1429, 0.27, 0.86, "eq"], [1429, 0.3, 0.8, "questie"]]
     assert hogger["subname"] is None  # positional nil for an unknown field
-    assert world["index"]["npc.byZone"][1429] == [54, 198, 240, 295, 327, 448, 8719]
+    assert world["index"]["npc.byZone"][1429] == [54, 198, 240, 295, 327, 448, 1260, 8719]
     quests = pack_table(result.world, config.packs["quests"])
     assert quests["index"]["quest.byGiver"]["npc:240"] == [62, 76]
 
@@ -121,7 +121,7 @@ def test_report_lists_sizes_budgets_and_dropped_rows(tmp_path):
     build(world, load_config(), tmp_path)
     text = (tmp_path / "report.md").read_text(encoding="utf-8")
     assert "| world | Bastians_Data_World |" in text and "12288 KB" in text
-    assert "npc 10" in text and "quest.byGiver 3" in text
+    assert "npc 11" in text and "quest.byGiver 3" in text
     assert "- no spawn fits a Forever map: 1 rows: npc 999" in text
     assert "20" not in text.split("Client")[0]  # no date in the header
 

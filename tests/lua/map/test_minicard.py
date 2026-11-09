@@ -160,8 +160,6 @@ def test_a_quest_signs_card_names_the_quest_its_chain_and_every_reward(wow: WowR
         local Logic = Bastians:GetModule('Quests').Logic
         Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 } },
           items = { { 2589, 2 } }, choices = { { 1185, 1 } } }
-        Logic.chain = function(qid) return { name = 'The Fargodeep Mine', pos = { [qid] = 2 },
-          quests = { 1, qid, 3 } } end
         Bastians:InvalidateEntities("quest")
         """
     )
@@ -171,7 +169,8 @@ def test_a_quest_signs_card_names_the_quest_its_chain_and_every_reward(wow: WowR
         "Bastians:GetModule('Quests').Rows.questName(62)"
     )
     lines = [(strip(line.text), line.color) for line in one.lines.values()]
-    assert lines[0] == ("Quest chain 'The Fargodeep Mine' 2/3", "dim")
+    # its step on the chain's main line, as the strip of its sheet counts it (ADR 0055)
+    assert lines[0] == ("Quest chain 'The Fargodeep Mine' 1/3", "dim")
     assert lines[1][1] == "gold"  # the money first
     assert lines[2] == ("+150 Faction 72", "text")
     assert "x2" in lines[3][0] and lines[4][0].startswith("Choice:")

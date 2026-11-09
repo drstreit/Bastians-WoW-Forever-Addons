@@ -56,8 +56,12 @@ API.INTERNAL = {
   data = "the packs' loader: the calls above answer from it",
   travel = "Route's own travel model; TravelTime is the public face",
   views = "the Browser's view registry: windows of the suite",
+  questSheet = "a window of the suite, opened on hover by the Orbiter",
+  mapPicture = "the Map's style cells for the suite's own mini maps",
   facts = "the Library's facts injector: private until the Library ships",
   library = "the Library: private until it ships",
+  requests = "Alts' asks between the account's characters: Gold's Bags read them (ADR 0058 PH6)",
+  neversell = "Helpers' never-sell list: Gold's Bags read it (ADR 0058 PH6)",
 }
 
 local function scalar(v)

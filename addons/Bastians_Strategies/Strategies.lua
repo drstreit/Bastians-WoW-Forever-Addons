@@ -54,29 +54,25 @@ end
 
 local function rumourPins(view)
   local pins = {}
-  local level = B.Compat.GetPlayerFacts and B.Compat.GetPlayerFacts().level or nil
-  local entered = ns.mod.db.char.entered
   for _, p in ipairs(Strategies.Placed()) do
-    if Book.IsOpen(p, level, entered) then -- a sealed page keeps its place to itself (SB3)
-      local continent, wx, wy = B.Coords.ToWorld(p.map, p.x, p.y)
-      if
-        continent
-        and continent == view.continent
-        and wx >= view.x1
-        and wx <= view.x2
-        and wy >= view.y1
-        and wy <= view.y2
-      then
-        pins[#pins + 1] = {
-          ref = "page:" .. p.id,
-          wx = wx,
-          wy = wy,
-          icon = B.UI.IconTexture("ledger"),
-          label = p.name,
-          priority = 45,
-          cluster = true,
-        }
-      end
+    local continent, wx, wy = B.Coords.ToWorld(p.map, p.x, p.y)
+    if
+      continent
+      and continent == view.continent
+      and wx >= view.x1
+      and wx <= view.x2
+      and wy >= view.y1
+      and wy <= view.y2
+    then
+      pins[#pins + 1] = {
+        ref = "page:" .. p.id,
+        wx = wx,
+        wy = wy,
+        icon = B.UI.IconTexture("ledger"),
+        label = p.name,
+        priority = 45,
+        cluster = true,
+      }
     end
   end
   return pins
@@ -102,6 +98,143 @@ local function pagesRows(ref)
     }
   end
   return rows
+end
+
+-- The stories of a farm spot: the
+-- pages that name an item of the spot, else the farming pages of its zone. The data has no link
+-- between the two. -> page ids, sorted.
+function Strategies.SpotPages(ref)
+  local typ, id = B.Entity.Parse(ref)
+  local d = data()
+  local s = typ == "spot" and d and d:Get("spot", id) or nil
+  if not s then
+    return {}
+  end
+  local out, seen = {}, {}
+  local pages = Window.Pages()
+  for _, it in ipairs(s.items or {}) do
+    for _, pid in ipairs(Book.PagesOf(pages, "item:" .. tostring(it[1]))) do
+      if not seen[pid] then
+        seen[pid] = true
+        out[#out + 1] = pid
+      end
+    end
+  end
+  if #out == 0 then
+    for pid, p in pairs(pages) do
+      for _, z in ipairs(p.zones or {}) do
+        if tonumber(z) == s.map and p.chapter == "farming" and p.shelf ~= "retired" then
+          out[#out + 1] = pid
+          break
+        end
+      end
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+local function spotRows(ref)
+  local ids = Strategies.SpotPages(ref)
+  if #ids == 0 then
+    return nil
+  end
+  local rows = {}
+  for i, id in ipairs(ids) do
+    local p = page(id)
+    -- a row opens the story's page here: its picture and the way into the book
+    rows[i] = { text = p and p.name or id, ref = "page:" .. id, icon = B.UI.IconTexture("ledger") }
+  end
+  return rows
+end
+
+-- A story's page in a host (ADR 0056: Bastians:RegisterSheet): the title, the meta line, the way
+-- into the book as the first and largest button, the page's picture (its plate).
+local SHEET_PAD, SHEET_PLATE_MAX = 16, 560
+local sheets = {} -- host frame -> its parts
+
+local function storySheet(host)
+  local sheet = sheets[host.frame]
+  if sheet then
+    return sheet
+  end
+  local frame = CreateFrame("Frame", nil, host.frame)
+  frame:SetPoint("TOPLEFT", host.frame, "TOPLEFT", 0, 0)
+  sheet = { frame = frame, buttons = {} }
+  sheet.title = B.UI.Style.text(frame, 20, B.UI.Style.C.accent)
+  sheet.title:SetPoint("TOPLEFT", frame, "TOPLEFT", SHEET_PAD, -SHEET_PAD)
+  sheet.title:SetJustifyH("LEFT")
+  sheet.meta = B.UI.Style.text(frame, 12, B.UI.Style.C.dim)
+  sheet.meta:SetJustifyH("LEFT")
+  sheet.read = B.UI.Style.action(frame, { icon = "ledger", label = L["Open in the book"], primary = true })
+  sheet.plate = ns.Plate.New(frame)
+  sheets[host.frame] = sheet
+  return sheet
+end
+
+function Strategies.DrawStory(ref, host)
+  local id = pageID(ref)
+  local p = id and page(id)
+  if not (p and host and host.frame) then
+    return 0
+  end
+  local S = B.UI.Style
+  local sheet = storySheet(host)
+  local width = host.width or 400
+  local inner = width - 2 * SHEET_PAD
+  S.ink(sheet.title, S.C.accent)
+  S.ink(sheet.meta, S.C.dim)
+  sheet.title:SetWidth(inner)
+  sheet.title:SetText(p.name or id)
+  sheet.meta:SetWidth(inner)
+  sheet.meta:ClearAllPoints()
+  sheet.meta:SetPoint("TOPLEFT", sheet.title, "BOTTOMLEFT", 0, -4)
+  sheet.meta:SetText(table.concat(p.meta or {}, " - "))
+  local y = SHEET_PAD + (sheet.title:GetStringHeight() or 20) + 4 + (sheet.meta:GetStringHeight() or 12) + 10
+  sheet.read:ClearAllPoints()
+  sheet.read:SetPoint("TOPLEFT", sheet.frame, "TOPLEFT", SHEET_PAD, -y)
+  sheet.read:SetScript("OnClick", function()
+    Window.Show({ kind = "page", id = id })
+  end)
+  local x = SHEET_PAD + (sheet.read:GetWidth() or 120) + 6
+  for i, spec in ipairs(host.buttons or {}) do
+    local b = sheet.buttons[i]
+    if not b then
+      b = S.action(sheet.frame, { label = "", boxed = true, row = true })
+      sheet.buttons[i] = b
+    end
+    b.spec.label = spec.label
+    b.tip = spec.tip
+    if b.SetLabel then
+      b:SetLabel(spec.label)
+    end
+    if b.Fit then
+      b:Fit()
+    end
+    b:SetScript("OnClick", function(self)
+      spec.run(self)
+    end)
+    b:ClearAllPoints()
+    b:SetPoint("TOPLEFT", sheet.frame, "TOPLEFT", x, -(y + 2))
+    b:Show()
+    x = x + (b:GetWidth() or 60) + 6
+  end
+  for i = #(host.buttons or {}) + 1, #sheet.buttons do
+    sheet.buttons[i]:Hide()
+  end
+  y = y + (sheet.read:GetHeight() or 26) + 12
+  if p.plate then
+    local h = sheet.plate:Draw(p.plate, math.min(inner, SHEET_PLATE_MAX), {})
+    sheet.plate.frame:ClearAllPoints()
+    sheet.plate.frame:SetPoint("TOPLEFT", sheet.frame, "TOPLEFT", SHEET_PAD, -y)
+    sheet.plate.frame:Show()
+    y = y + h + 8
+  else
+    sheet.plate.frame:Hide()
+  end
+  sheet.frame:SetSize(width, y)
+  sheet.frame:Show()
+  return y
 end
 
 -- The page's own block on its Browser page (a pin's click lands there): what it is about.
@@ -144,18 +277,6 @@ function Strategies.Note()
   )
 end
 
--- The zones the character has set foot in (SB3: entering a page's zone unseals it).
-local function enter(map)
-  if map then
-    local entered = ns.mod.db.char.entered
-    if not entered[map] then
-      entered[map] = true
-      B:Fire("BASTIANS_LAYER_CHANGED", "strategies.rumours")
-      Window.Schedule()
-    end
-  end
-end
-
 local mod = B:NewModule("Strategies", {
   addon = ADDON,
   open = function()
@@ -187,7 +308,7 @@ local mod = B:NewModule("Strategies", {
   data = { "book", "world", "items" }, -- the pages; the loot tables and items for the live boxes
   defaults = {
     profile = { window = {} },
-    char = { bookmarks = {}, entered = {} }, -- bookmarks by page id, the zones set foot in
+    char = { bookmarks = {} }, -- bookmarks by page id
     global = { notes = {} }, -- the reader's notes by page id, for every character
   },
   options = {
@@ -235,6 +356,7 @@ local mod = B:NewModule("Strategies", {
     })
     B:RegisterAction(self, {
       id = "strategies.open",
+      main = true, -- a button of the sheet (ADR 0054)
       label = L["Open in the book"],
       short = L["Read"],
       icon = B.UI.IconTexture("ledger"),
@@ -244,6 +366,110 @@ local mod = B:NewModule("Strategies", {
         local id = pageID(ref)
         return id and Window.Show({ kind = "page", id = id }) or false
       end,
+    })
+    B:RegisterAction(self, {
+      id = "strategies.spot",
+      main = true, -- a spot's first button: its story
+      label = L["Open in the book"],
+      short = L["Read"],
+      icon = B.UI.IconTexture("ledger"),
+      types = { "spot" },
+      order = 5,
+      when = function(ref)
+        return Strategies.SpotPages(ref)[1] ~= nil
+      end,
+      run = function(ref)
+        local id = Strategies.SpotPages(ref)[1]
+        return id and Window.Show({ kind = "page", id = id }) or false
+      end,
+    })
+    B:RegisterSheet(self, {
+      types = { "page" },
+      draw = Strategies.DrawStory,
+      hide = function(host)
+        local sheet = sheets[host.frame]
+        if sheet then
+          sheet.frame:Hide()
+        end
+      end,
+    })
+    -- the Browser's list of the stories ("Gold Stories ... with zone,
+    -- maybe category"): the category is the book's chapter
+    B:RegisterList(self, {
+      type = "page",
+      label = "Gold Stories",
+      glyph = "ledger",
+      facet = "chapter",
+      groupBy = "chapter",
+      -- the chapters as a row to pick from
+      chips = true,
+      ids = function()
+        local d = data()
+        return d and d:Each("page") or {}
+      end,
+      record = function(id)
+        local p = page(id)
+        if not p or p.shelf == "retired" then
+          return nil
+        end
+        local d = data()
+        local c = p.chapter and d and d:Get("chapter", p.chapter)
+        local map = p.zones and tonumber(p.zones[1]) or nil
+        local z = map and d and d:Get("zone", map) or nil
+        return {
+          name = p.name,
+          level = p.levelMin,
+          zone = map,
+          zoneName = z and z.name or nil,
+          chapterName = c and c.name or nil,
+        }
+      end,
+      value = function(r)
+        return r.chapterName
+      end,
+    })
+    -- a story's tile (, R7: "tiles on left with symbol (bastian picture
+    -- and short text)"): its picture cut to the tile's slot, the opening's first words as its line
+    B:RegisterFacet(self, {
+      facet = "tile",
+      types = { "page" },
+      priority = 60,
+      invalidateOn = { "BASTIANS_DATA_LOADED" },
+      rule = function(ref)
+        local _, id = B.Entity.Parse(ref)
+        local p = id and page(id)
+        if not p then
+          return nil
+        end
+        local facts = {}
+        if p.art then
+          -- the 2:1 picture in a 3:2 slot: an eighth off each side
+          facts.picture = { path = ns.Window.ART .. tostring(id), coords = { left = 0.125, right = 0.875 } }
+        end
+        facts.line = ns.Book.Lead(p, 70)
+        return next(facts) ~= nil and facts or nil
+      end,
+    })
+    B:RegisterFilter(self, {
+      id = "strategies.zone",
+      kind = "facet",
+      types = { "page" },
+      label = L["Zone"],
+      value = function(_, r)
+        return r and r.zoneName or nil
+      end,
+      order = function(key)
+        return key
+      end,
+    })
+    B:RegisterDetailSection(self, {
+      id = "strategies.spot",
+      chapter = "book",
+      title = L["In Bastian's book"],
+      types = { "spot" },
+      order = 5,
+      block = { limit = 5 },
+      build = spotRows,
     })
     B:RegisterDetailSection(self, {
       id = "strategies.page",
@@ -255,6 +481,7 @@ local mod = B:NewModule("Strategies", {
     })
     B:RegisterDetailSection(self, {
       id = "strategies.pages",
+      chapter = "book", -- on the sheet (ADR 0054)
       title = L["In Bastian's book"],
       types = { "npc", "item", "object", "zone" },
       order = 70,
@@ -263,7 +490,7 @@ local mod = B:NewModule("Strategies", {
     })
     B:RegisterSearchProvider(self, {
       id = "strategies.pages",
-      label = L["Bastian's Gold Rumours"],
+      label = L["Bastian's Gold Adventures"],
       priority = 60,
       search = function(query, limit, yield, q)
         local d = data()
@@ -281,7 +508,7 @@ local mod = B:NewModule("Strategies", {
     B:RegisterMapLayer(self, {
       id = "strategies.rumours",
       icon = "ledger", -- the layer bar shows its icon (R27.8)
-      label = L["Rumours (Bastian's book)"],
+      label = L["Gold stories (Bastian's book)"],
       defaultOn = true,
       minLevel = 1,
       query = rumourPins,
@@ -291,16 +518,8 @@ local mod = B:NewModule("Strategies", {
       B:Fire("BASTIANS_LAYER_CHANGED", "strategies.rumours")
       Window.Schedule()
     end)
-    self:On("BASTIANS_PLAYER_MOVED_ZONE", function(_, _, map)
-      enter(map)
-    end)
-    self:RegisterEvent("PLAYER_LEVEL_UP", function()
-      B:Fire("BASTIANS_LAYER_CHANGED", "strategies.rumours")
-      Window.Schedule()
-    end)
     self:On("BASTIANS_PRICES_UPDATED", Window.Schedule)
     self:On("BASTIANS_THEME_CHANGED", Window.Schedule)
-    enter(B.Coords.PlayerMap())
     ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
   OnDisable = function()
@@ -324,6 +543,8 @@ SlashCmdList.BASTIANSSTRATEGIES = function(msg)
     Window.Toggle()
   elseif cmd == "contents" or cmd == "bookmarks" or cmd == "title" then
     Window.Show({ kind = cmd })
+  elseif cmd == "map" then
+    Window.Show({ kind = "atlas" }) -- the story map (ADR 0057)
   elseif cmd == "search" or cmd == "index" then
     Window.Show({ kind = "search", id = "" }) -- the search page took the index's place (30.10.2026)
   elseif cmd == "news" then

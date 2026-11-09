@@ -9,7 +9,6 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 258448776851143
-stamp = "half"
 why = "The recipe needs Fishing 140, as said. The buff and its hour are not in our data."
 
 [[rumours]]

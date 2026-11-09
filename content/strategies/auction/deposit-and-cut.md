@@ -15,7 +15,6 @@ claim = 113621013321601
 
 [[rumours]]
 claim = 271789902381933
-stamp = "half"
 why = "The cut is taken from the sale price, so 5 % on top falls a little short. Getting 10 gold back takes 10g 53s."
 
 [[rumours]]

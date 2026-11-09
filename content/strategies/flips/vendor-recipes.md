@@ -10,27 +10,22 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 149832547929438
-stamp = "true"
 why = "The vendor tables give Kalldan Felmoon two of each Deviate Scale pattern, restocked every three hours."
 
 [[rumours]]
 claim = 279129607598808
-stamp = "half"
 why = "The vendor tables give Saenorion and Joseph Moore one pattern each, back after an hour. That it turns up only by chance we could not check."
 
 [[rumours]]
 claim = 75227446579400
-stamp = "true"
 why = "The vendor asks 15s in our item data."
 
 [[rumours]]
 claim = 51759449391501
-stamp = "true"
 why = "18s and Alchemy 150, as in our data. Each vendor holds one and restocks it after an hour."
 
 [[rumours]]
 claim = 172821550841069
-stamp = "true"
 why = "The pattern costs 18s and the gloves need level 22, as in our data. The herbalism bonus we did not check."
 
 [plate]

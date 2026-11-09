@@ -58,8 +58,8 @@ def test_the_pure_worth_lines(core: WowRuntime):
         noLoot = W.mob({{}}, priceOf)
         node = W.node(2589, priceOf)
         nodeNone = W.node(999, priceOf)
-        spot = W.spot(123456, 0, "verified")
-        spotNone = W.spot(nil, 2, nil)
+        spot = W.spot(123456, 0)
+        spotNone = W.spot(nil, 2)
         """
     )
     assert strip(core.eval("item.text")) == "AH 12s 30c (3 min ago) - vendor 5c"
@@ -82,12 +82,8 @@ def test_the_pure_worth_lines(core: WowRuntime):
     assert core.eval("noLoot") is None
     assert strip(core.eval("node.text")) == "AH 38c" and core.eval("node.copper") == 38
     assert strip(core.eval("nodeNone.text")) == "price unknown"
-    assert (
-        strip(core.eval("spot.text")) == "12.3g/h, verified" and core.eval("spot.copper") == 123456
-    )
-    assert (
-        strip(core.eval("spotNone.text")) == "gold/h unknown, (2 items without price), unverified"
-    )
+    assert strip(core.eval("spot.text")) == "12.3g/h" and core.eval("spot.copper") == 123456
+    assert strip(core.eval("spotNone.text")) == "gold/h unknown"  # short: never cut (07.11.2026)
     assert core.errors == []
 
 
@@ -104,7 +100,7 @@ def test_the_provider_reads_the_market_pack_and_the_own_scan(wow: WowRuntime):
     else:
         assert mob == "~18c per kill (1 items without price)"
     assert worth(wow, "npc:240") is None  # no loot: no worth line for a quest giver
-    assert worth(wow, "spot:1")[0].endswith("verified") or "unverified" in worth(wow, "spot:1")[0]
+    assert "/h" in worth(wow, "spot:1")[0] and "verified" not in worth(wow, "spot:1")[0]
     assert worth(wow, "item:424242")[0] == "price unknown"
     # an own scan replaces the market median and drops the cached worth through the message
     scan(wow, [listing(0, 2589, 1, 50)])

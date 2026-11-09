@@ -223,6 +223,27 @@ def commands(inputs: BuildInputs, out: Path, *, skip_mapart: bool = False) -> li
     return cmds
 
 
+def book_args(inputs: BuildInputs) -> tuple[list[str], Path | None]:
+    """The book's inputs the daily edition passes (tools/data_update.py): the pictures' folder
+    (`--art`, the export's art/ else the owner's approved set) and the last sent edition's book
+    state (`--book-previous`, What's new). Without them a page carries no picture flag, and the
+    book shows no picture of Bastian and only generic marks on its story map (owner, Forever
+    07.11.2026, after a build_client run). -> (the extra arguments, the art folder)."""
+    import data_update  # lazily: data_update imports this module
+
+    extra: list[str] = []
+    sent = data_update.last_sent(data_update.read_ledger(data_update.LEDGER))
+    previous = (
+        data_update.BOOK_STATES / sent["book_state"] if sent and sent.get("book_state") else None
+    )
+    if previous is not None and previous.is_file():
+        extra += ["--book-previous", str(previous)]
+    art = data_update.art_folder(inputs.export)
+    if art is not None:
+        extra += ["--art", str(art)]
+    return extra, art
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--client", required=True, choices=CLIENTS)
@@ -241,6 +262,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.tdb:
         inputs = dataclasses.replace(inputs, tdb=args.tdb)
+    art = None
+    if args.client == "forever":
+        book, art = book_args(inputs)
+        inputs = dataclasses.replace(inputs, extra=[*inputs.extra, *book])
     cmds = commands(inputs, args.out, skip_mapart=args.skip_mapart)
     if not any(cmd[3] == "mapart" for cmd in cmds) and not args.skip_mapart:
         print(
@@ -255,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
         if run.returncode:
             print(f"error: {cmd[3]} exited with {run.returncode}", file=sys.stderr)
             return run.returncode
+    if args.client == "forever" and not args.dry_run:
+        import book_art
+
+        pictures = book_art.install(art, args.out, front=book_art.FRONT)
+        print(f"book art: {len(pictures)} pictures")
     return 0
 
 

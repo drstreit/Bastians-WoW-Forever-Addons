@@ -13,7 +13,10 @@ jobs:
         with:
           python-version: "3.14"
       - name: Install dev dependencies
-        run: python -m pip install -e ".[dev]"
+        # AHSync's (ahsync/, ADR 0060) only where it is: the public snapshot has no ahsync/
+        run: |
+          python -m pip install -e ".[dev]"
+          if [ -f ahsync/requirements.txt ]; then python -m pip install -r ahsync/requirements.txt; fi
       - name: ruff check
         run: ruff check .
       - name: ruff format --check

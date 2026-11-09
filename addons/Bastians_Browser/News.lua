@@ -5,6 +5,42 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.1.0:1",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The Atlas has a rail of seven sections with tabs instead of a bar of nineteen buttons.",
+  },
+  {
+    id = "2.1.0:2",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The Atlas's search stands in the title bar, always at hand.",
+  },
+  {
+    id = "2.1.0:3",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "In a narrow Browser window a click on a view's row now shows the page it opens.",
+  },
+  {
+    id = "2.1.0:4",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "The Browser's search always looks in every list; the list's own filter narrows the list.",
+  },
+  {
+    id = "2.1.0:5",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "A new key in Key Bindings opens whatever is under your mouse in the Browser.",
+  },
+  {
+    id = "2.0.0:1",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "The Browser's lists open on everything instead of jumping to your zone, and most have a Zone filter.",
+  },
+  {
     id = "1.2.0:1",
     date = "2026-10-31",
     version = "1.2.0",

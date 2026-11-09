@@ -68,14 +68,14 @@ def test_plain_text_is_ascii_for_the_game_fonts():
     assert plain(None) is None
 
 
-def test_the_best_claim_is_verified_then_the_most_sources_inside_the_cap():
+def test_the_best_claim_has_the_most_sources_inside_the_cap():
     s = strategy(
         "farming",
         claim(1, "Lots of cloth here.", channels=3),
-        claim(2, "Silk drops at level 60.", channels=5, status="verified"),
-        claim(3, "Silk drops in one kill of 20.", channels=1, status="verified"),
+        claim(2, "Silk drops at level 60.", channels=5),
+        claim(3, "Silk drops in one kill of 20.", channels=1),
     )
-    assert best_claim(s)["claim_id"] == 3  # 2 is beyond the cap
+    assert best_claim(s)["claim_id"] == 1  # 2 is beyond the cap
     assert best_claim(strategy("farming", claim(4, "Only at level 60."))) is None
 
 
@@ -128,10 +128,10 @@ def test_only_rumours_told_in_the_last_20_days_reach_the_mill():
         ]
     }
     add_mill(world, found)
-    assert mill_index(world) == {"farming": [41, 42]}
+    assert mill_index(world) == {"farming": [42, 41]}  # the most repeated, then the newest
     world = book_world()
     add_mill(world, found, days=30)
-    assert mill_index(world) == {"farming": [40, 41, 42]}
+    assert mill_index(world) == {"farming": [42, 41, 40]}
     assert last_told({"last_seen": 1.5e9, "sources": []}) == 1.5e9  # the export's own stamp
 
 

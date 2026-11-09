@@ -35,6 +35,7 @@ end
 -- a tooltip of its own (the Orbiter's quest marks, 05.11.2026) calls it under its title lines.
 -- Returns the rows.
 function B.UI.TipRows(tooltip, ref, limit)
+  tooltip.bastiansRef = ref
   local rows = B:GetTooltipRows(ref)
   limit = limit or maxLines()
   for i = 1, math.min(#rows, limit) do
@@ -76,8 +77,14 @@ local function render(tooltip, info)
   if not ref or tooltip.bastiansRef == ref then
     return
   end
-  tooltip.bastiansRef = ref
   B.UI.TipRows(tooltip, ref)
+end
+
+-- The entity the game's tooltip shows right now, nil without one: what is under the mouse, a nameplate,
+-- an NPC, an object or an item (browser.md "The key").
+function B.UI.HoveredRef()
+  local tooltip = rawget(_G, "GameTooltip")
+  return tooltip and tooltip:IsShown() and tooltip.bastiansRef or nil
 end
 
 local frame = CreateFrame("Frame")

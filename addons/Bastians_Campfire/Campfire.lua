@@ -9,7 +9,12 @@ ns.Campfire = Campfire
 
 local OPTIONS = {
   { type = "header", label = L["At the fire"] },
-  { type = "toggle", key = "card", label = L["The fire card: what the camp gives, the time until warm"] },
+  { type = "toggle", key = "card", label = L["The flame: what the camp gives, the time until warm"] },
+  {
+    type = "toggle",
+    key = "lightButton",
+    label = L["A minimap button to light a fire when you carry a kit"],
+  },
   {
     type = "toggle",
     key = "words",
@@ -104,7 +109,7 @@ end
 local function apply()
   ns.Public.Apply()
   ns.CampRing.Apply()
-  ns.Card.Refresh()
+  ns.Card.Refresh() -- the buttons follow
 end
 
 local mod = B:NewModule("Campfire", {
@@ -120,6 +125,7 @@ local mod = B:NewModule("Campfire", {
   defaults = {
     profile = {
       card = true,
+      lightButton = true,
       words = true,
       ring = true,
       beacon = true,
@@ -137,6 +143,7 @@ local mod = B:NewModule("Campfire", {
     ns.Public.Attach(self)
     ns.Planner.Attach(self)
     ns.CampRing.Attach(self)
+    ns.Offer.Attach(self)
     ns.Card.Attach(self)
     ns.Feed.Register(self)
     B:ProvideService(self, "camps", camps(), { priority = 100 })
@@ -154,6 +161,7 @@ local mod = B:NewModule("Campfire", {
     ns.Watch.Detach()
     ns.Beacon.Detach()
     ns.Public.Detach()
+    ns.Offer.Detach()
     ns.Card.Detach()
   end,
 })
@@ -163,6 +171,7 @@ mod.Camp = ns.Camp
 mod.Model = ns.Model
 mod.Watch = ns.Watch
 mod.Card = ns.Card
+mod.Offer = ns.Offer
 mod.Beacon = ns.Beacon
 mod.Public = ns.Public
 mod.CampRing = ns.CampRing

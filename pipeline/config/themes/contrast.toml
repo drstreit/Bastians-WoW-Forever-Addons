@@ -9,6 +9,18 @@ panel = "#000000"
 header = "#1a1a1a"
 line = "#ffffff99"
 hover = "#ffffff40"
+hoverBlock = "#ffff0026"
+# the quest sheet (ADR 0053): parchment in every theme, a page of its own
+sheetInk = "#2e2014"
+sheetDim = "#57442f"
+sheetTitle = "#802b18"
+sheetGood = "#1d5220"
+sheetLine = "#3b2a1747"
+sheetTile = "#241b10"
+sheetTileText = "#f3e6c8"
+badgeInk = "#050505"       # the words on a light badge (a tile's level, ADR 0056)
+badgeInkLight = "#ffffff"  # the words on a dark badge
+sheetXp = "#9a35c8"
 press = "#ffffff33"
 faceHover = "#333333"
 track = "#ffffff26"
@@ -21,6 +33,13 @@ bright = "#ffffff"
 mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
 mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
 mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
+# a zone's level band on the map (A3.4): the difficulty colours' dark twins, readable on
+# the light rim
+mapDiffRed = "#a01c1c"
+mapDiffOrange = "#9a4a0a"
+mapDiffYellow = "#6e5a00"
+mapDiffGreen = "#2a6a22"
+mapDiffGrey = "#5c5c5c"
 accent = "#ffff00"
 wayWanderer = "#ffaa00"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
 wayScholar = "#00c8ff"     # the welcome: the Scholar's picture frame (cool)

@@ -413,9 +413,16 @@ function Region:GetFrameLevel()
   return self.level
 end
 function Region:SetToplevel() end
-function Region:Raise() end
+function Region:Raise()
+  Mock.raises = (Mock.raises or 0) + 1
+  self.raisedAt = Mock.raises
+end
 function Region:Lower() end
 function Region:SetClampedToScreen() end
+-- Frame:SetHyperlinksEnabled (retail's API docs, FrameAPIDocumentation; the chat frames' |H links)
+function Region:SetHyperlinksEnabled(on)
+  self.hyperlinksEnabled = on and true or false
+end
 function Region:SetClampRectInsets() end
 function Region:SetMovable(b)
   self.movable = b
@@ -641,7 +648,8 @@ function Region:GetRegions()
 end
 
 -- Texture
-function Region:SetTexture(tex)
+function Region:SetTexture(tex, _, _, filter)
+  self.filter = filter -- the client's fourth argument, read by the tests (measured 06.11.2026)
   -- a file the client has not seen since it started (a new file in a known addon) is taken
   -- without an error, but GetTexture stays nil until a full restart (Forever, 22.10.2026)
   if Mock.unseen and tex and Mock.unseen[tex] then
@@ -896,7 +904,13 @@ function Region:GetCursorPosition()
   return math.min(self.cursor or #text, #text)
 end
 function Region:HighlightText() end
-function Region:SetTextInsets() end
+function Region:SetTextInsets(left, right, top, bottom)
+  self.textInsets = { left or 0, right or 0, top or 0, bottom or 0 }
+end
+function Region:GetTextInsets()
+  local i = self.textInsets or { 0, 0, 0, 0 }
+  return i[1], i[2], i[3], i[4]
+end
 function Region:SetMultiLine(on)
   self.multiLine = on and true or false
 end
@@ -967,6 +981,12 @@ function Region:Clear()
 end
 function Region:SetReverse(b)
   self.reverse = b
+end
+function Region:SetSwipeTexture(t)
+  self.swipeTexture = t
+end
+function Region:SetMask(t)
+  self.maskPath = t
 end
 function Region:SetDrawEdge() end
 function Region:SetDrawBling() end
@@ -1080,30 +1100,52 @@ end
 -- pixels, then C_TooltipInfo.GetMinimapMouseover; Forever 1.60.1, both in the P1 dump). A test puts
 -- dots into Mock.minimapBlips = { { u = 20, v = -5, name = "Peacebloom", reach = 12 } }: pixels right
 -- and up from the minimap's centre; a point within `reach` of a dot answers its name (one line each).
+-- A dot's `text` is the line as the client writes it (colour codes, an icon, several names), its
+-- `secret` a text the addon may not read (combat). A point is only taken with the soft cursor on
+-- (Minimap.softCursor tells a test whether it was given back). Mock.minimapError raises from the
+-- tooltip call.
 Mock.minimapBlips = {}
 Mock.minimapProbe = nil
 Mock.minimapProbes = 0
+Mock.minimapError = nil
 function Minimap:SetUsingSoftCursor(on)
   self.softCursor = on
 end
 function Minimap:UpdateMouseoverAtPoint(x, y)
+  Mock.minimapProbes = Mock.minimapProbes + 1
+  if not self.softCursor then
+    Mock.minimapProbe = nil -- the client reads the real mouse then
+    return
+  end
   local scale = self:GetEffectiveScale()
   local w, h = self:GetWidth(), self:GetHeight()
   Mock.minimapProbe = { u = x / scale - (self:GetLeft() + w / 2), v = y / scale - (self:GetBottom() + h / 2) }
-  Mock.minimapProbes = Mock.minimapProbes + 1
 end
 C_TooltipInfo = C_TooltipInfo or {}
 C_TooltipInfo.GetMinimapMouseover = function()
+  if Mock.minimapError then
+    error(Mock.minimapError, 2)
+  end
   local p = Mock.minimapProbe
   local lines = {}
   for _, b in ipairs(p and Mock.minimapBlips or {}) do
     local du, dv = p.u - b.u, p.v - b.v
     local reach = b.reach or 12
     if du * du + dv * dv <= reach * reach then
-      lines[#lines + 1] = { leftText = b.name }
+      lines[#lines + 1] = { leftText = b.secret and Mock.Secret() or b.text or b.name }
     end
   end
   return { lines = lines }
+end
+-- The yards from the minimap's centre to its edge at the zoom (the client's own figure; outdoors
+-- the half of HereBeDragons' diameters). A test sets Mock.minimapViewRadius for another one.
+C_Minimap = C_Minimap or {}
+C_Minimap.GetViewRadius = function()
+  if Mock.minimapViewRadius then
+    return Mock.minimapViewRadius
+  end
+  local diameter = { [0] = 466.67, 400, 333.33, 266.67, 200, 133.33 }
+  return (diameter[Mock.minimapZoom or 0] or diameter[0]) / 2
 end
 function Minimap:SetZoom(zoom)
   -- the client fires MINIMAP_UPDATE_ZOOM when the zoom changes, on a later frame (an addon
@@ -1197,6 +1239,11 @@ end
 function GetScreenHeight()
   return 1080
 end
+Mock.screen = { 1920, 1080 }
+function GetPhysicalScreenSize()
+  return Mock.screen[1], Mock.screen[2]
+end
+
 function GetCursorPosition()
   return Mock.cursorX or 960, Mock.cursorY or 540
 end
@@ -1763,11 +1810,25 @@ C_UnitAuras = C_UnitAuras or {}
 -- Mock.auras: the player's helpful auras { name, spellId, expirationTime, duration, sourceUnit };
 -- Mock.unitAuras[unit] the same for another unit (a party member).
 Mock.unitAuras = {}
+-- Mock.aurasSecret = true: the client hides auras (reading one raises, as on Forever 08.11.2026)
+C_Secrets = C_Secrets or {}
+C_Secrets.ShouldAurasBeSecret = function()
+  return Mock.aurasSecret == true
+end
+C_UnitAuras.GetAuraCasterGUID = function(unit, instance)
+  local list = Mock.unitAuras[unit] or ((unit == nil or unit == "player") and Mock.auras) or {}
+  return list[instance] and list[instance].casterGUID or nil
+end
 C_UnitAuras.GetAuraDataByIndex = function(unit, i)
+  if Mock.aurasSecret then
+    error("GetAuraDataByIndex(): Auras cannot be accessed when secret while tainted", 2)
+  end
   local list = Mock.unitAuras[unit] or ((unit == nil or unit == "player") and Mock.auras) or {}
   local a = list[i]
   return a
       and {
+        auraInstanceID = i,
+        isFromPlayerOrPlayerPet = a.isFromPlayerOrPlayerPet,
         name = a.name,
         spellId = a.spellId,
         expirationTime = a.expirationTime or 0,
@@ -1858,6 +1919,12 @@ end
 C_Spell.GetSpellCooldown = function(spellID)
   local c = Mock.spellCooldowns[spellID]
   return { startTime = c and c.start or 0, duration = c and c.duration or 0, isEnabled = true, modRate = 1 }
+end
+-- Mock.toyUsable[itemID] = false: the client says the toy cannot be used now
+Mock.toyUsable = {}
+C_ToyBox = C_ToyBox or {}
+C_ToyBox.IsToyUsable = function(itemID)
+  return Mock.toyUsable[itemID] ~= false
 end
 function PlayerHasToy(itemID)
   return Mock.toys[itemID] == true
@@ -1953,6 +2020,11 @@ function C_FriendList.GetFriendInfo(name)
 end
 Mock.GetFriendInfo = C_FriendList.GetFriendInfo
 -- Mock.players[guid] = { class = "Mage", file = "MAGE" } (Mock.guids maps units to GUIDs)
+-- A table an addon may read (FrameScriptDocumentation): every table of the mock, unless a test says otherwise.
+function canaccesstable()
+  return true
+end
+
 function GetPlayerInfoByGUID(guid)
   local g = Mock.players and Mock.players[guid]
   if not g then
@@ -2016,6 +2088,33 @@ function GetInstanceInfo()
       Mock.instanceMap or 36
   end
   return "Azeroth", "none", 0, "", 0, 0, false, 0
+end
+-- the raid info (Alts' runs and lockouts): Mock.savedInstances = { { name, id, reset (seconds),
+-- difficulty, locked, extended, raid, instanceID (Map.db2) } }; RequestRaidInfo asks the server
+Mock.savedInstances = {}
+function RequestRaidInfo() end
+function GetNumSavedInstances()
+  return #Mock.savedInstances
+end
+function GetSavedInstanceInfo(i)
+  local s = Mock.savedInstances[i]
+  if not s then
+    return nil
+  end
+  return s.name,
+    s.id or i,
+    s.reset or 0,
+    s.difficulty or 1,
+    s.locked ~= false,
+    s.extended or false,
+    0,
+    s.raid or false,
+    s.maxPlayers or 5,
+    s.difficultyName or "Normal",
+    s.encounters or 0,
+    s.progress or 0,
+    false,
+    s.instanceID
 end
 function GetMoney()
   return Mock.money or 0
@@ -2815,6 +2914,14 @@ ATTACHMENTS_MAX_SEND, ATTACHMENTS_MAX_RECEIVE = 12, 16
 function GetInboxNumItems()
   return #Mock.inbox
 end
+-- an auction house mail: Mock.inbox[i].invoice = { kind, item, buyer, bid, deposit, consignment, count }
+function GetInboxInvoiceInfo(i)
+  local v = Mock.inbox[i] and Mock.inbox[i].invoice
+  if not v then
+    return nil
+  end
+  return v.kind, v.item, v.buyer, v.bid, v.bid, v.deposit, v.consignment, 0, 0, 0, v.count, false
+end
 function GetInboxHeaderInfo(i)
   local m = Mock.inbox[i]
   return nil, nil, m.sender or "Someone", m.subject or "", m.money or 0, m.cod or 0, 30, m.items ~= nil
@@ -2946,12 +3053,58 @@ end
 function GetNumQuestChoices()
   return #Mock.questFrame.choices
 end
+local function frameItem(kind, i)
+  local list = kind == "choice" and Mock.questFrame.choices or Mock.questFrame.rewards or {}
+  return list[i]
+end
 function GetQuestItemLink(kind, i)
-  local c = kind == "choice" and Mock.questFrame.choices[i]
+  local c = frameItem(kind, i)
   return c and ("item:" .. c[1]) or nil
 end
 function GetQuestItemInfo(kind, i)
-  local c = kind == "choice" and Mock.questFrame.choices[i]
+  local c = frameItem(kind, i)
+  if not c then
+    return nil
+  end
+  return "Item " .. c[1], 134400, c[2] or 1, 1, true, c[1]
+end
+-- What the open quest frame pays (ADR 0053): Mock.questFrame.rewardMoney, .rewardXP, .rewards.
+function GetRewardMoney()
+  return Mock.questFrame.rewardMoney or 0
+end
+function GetRewardXP()
+  return Mock.questFrame.rewardXP or 0
+end
+function GetNumQuestRewards()
+  return #(Mock.questFrame.rewards or {})
+end
+-- What a log quest pays: Mock.questRewards[questID] = { money, xp, items, choices }. These answer
+-- for the SELECTED quest and ignore their argument, as measured on Era: the strict case.
+Mock.questRewards = {}
+local function selectedRewards()
+  return Mock.questRewards[Mock.selectedQuest] or {}
+end
+function GetQuestLogRewardMoney()
+  return selectedRewards().money or 0
+end
+function GetQuestLogRewardXP()
+  return selectedRewards().xp or 0
+end
+function GetNumQuestLogRewards()
+  return #(selectedRewards().items or {})
+end
+function GetQuestLogRewardInfo(i)
+  local c = (selectedRewards().items or {})[i]
+  if not c then
+    return nil
+  end
+  return "Item " .. c[1], 134400, c[2] or 1, 1, true, c[1]
+end
+function GetNumQuestLogChoices()
+  return #(selectedRewards().choices or {})
+end
+function GetQuestLogChoiceInfo(i)
+  local c = (selectedRewards().choices or {})[i]
   if not c then
     return nil
   end
@@ -3009,6 +3162,15 @@ function SelectActiveQuest(i)
 end
 function SelectAvailableQuest(i)
   npcCall("greeting available", tostring(i))
+end
+-- The range of levels below the character before a quest is trivial, and the realm's clock
+-- ({ year, month, monthDay, weekday, hour, minute }): nil until a test sets them.
+function UnitQuestTrivialLevelRange()
+  return Mock.trivialRange
+end
+C_DateAndTime = C_DateAndTime or {}
+C_DateAndTime.GetCurrentCalendarTime = function()
+  return Mock.calendarTime
 end
 C_GossipInfo = C_GossipInfo or {}
 C_GossipInfo.GetActiveQuests = function()

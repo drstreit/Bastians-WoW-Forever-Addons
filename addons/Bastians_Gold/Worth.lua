@@ -1,6 +1,6 @@
 -- Bastian's Gold: what items, mobs, nodes, farm spots and strategies are worth (gold.md "Worth",
 -- C3): the AH median with its age and the vendor sell price for an item, the expected loot value
--- per kill for a mob, the item's price for a node, gold per hour and the status for a spot or a
+-- per kill for a mob, the item's price for a node, gold per hour for a spot or a
 -- strategy. Pure functions take plain tables; the provider feeds them from the services.
 -- Unknown stays unknown ("price unknown"), never 0.
 local _, ns = ...
@@ -69,19 +69,18 @@ function Worth.node(itemID, priceOf)
   return { text = L["AH"] .. " " .. B.UI.Money(price), copper = price }
 end
 
--- Worth.spot(gph, unknown, status): gold per hour in copper or nil, items without a price, the
--- status word (verified, unverified, refuted).
-function Worth.spot(gph, unknown, status)
+-- Worth.spot(gph, unknown): gold per hour in copper or nil, items without a price.
+function Worth.spot(gph, unknown)
   local parts = {}
-  if gph then
-    parts[#parts + 1] = B.UI.MoneyShort(gph) .. "/h"
-  else
-    parts[#parts + 1] = L["gold/h unknown"]
+  if not gph then
+    -- nothing to count: the short word alone (the Here rows read
+    -- "gold/h unknown, (2 items withou..." cut off, under a line that said it already)
+    return { text = L["gold/h unknown"] }
   end
+  parts[#parts + 1] = B.UI.MoneyShort(gph) .. "/h"
   if unknown and unknown > 0 then
     parts[#parts + 1] = string.format(L["(%d items without price)"], unknown)
   end
-  parts[#parts + 1] = L[status or "unverified"]
   return { text = table.concat(parts, ", "), copper = gph }
 end
 
@@ -127,6 +126,7 @@ function Worth.Register(mod)
   -- top drops with chance and price): tooltip lines only, the page has Data's Drops block.
   B:RegisterDetailSection(mod, {
     id = "gold.loot",
+    chapter = "drops", -- on the sheet (ADR 0054)
     title = L["Drops"],
     types = { "npc", "object" },
     order = 41,
@@ -177,7 +177,7 @@ function Worth.Register(mod)
           return nil
         end
         local gph, unknown = Spots.GoldPerHour(r)
-        return Worth.spot(gph, unknown, r.status)
+        return Worth.spot(gph, unknown)
       elseif typ == "strategy" then
         if not r then
           return nil
@@ -185,9 +185,8 @@ function Worth.Register(mod)
         local spot = r.subject and data:Get("spot", r.subject) or nil
         if spot and Spots then
           local gph, unknown = Spots.GoldPerHour(spot)
-          return Worth.spot(gph, unknown, r.status)
+          return Worth.spot(gph, unknown)
         end
-        return { text = L[r.status or "unverified"] }
       end
       return nil
     end,

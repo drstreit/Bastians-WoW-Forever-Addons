@@ -45,7 +45,7 @@ function Worth.quest(q, ctx)
     return nil
   end
   ctx = ctx or {}
-  local rw = q.rewards or {}
+  local rw = (q.id and ns.Logic.rewards(q.id)) or q.rewards or {}
   local parts, copper, xp = {}, nil, nil
   if rw.money and rw.money > 0 then
     parts[#parts + 1] = B.UI.Money(rw.money)
@@ -80,7 +80,7 @@ function Worth.quest(q, ctx)
     parts[#parts + 1] = string.format(L["unlocks %d"], ctx.unlocks)
   end
   if #parts == 0 then
-    return { text = L["worth unknown"] }
+    return nil -- nothing known, no line (ADR 0052)
   end
   return { text = table.concat(parts, " - "), copper = copper, xp = xp }
 end
@@ -252,7 +252,8 @@ function Worth.Register(mod)
     label = L["Most XP"],
     value = function(ref)
       local q = questOf(ref)
-      local xp = q and q.rewards and q.rewards.xp
+      local rw = q and Logic.rewards(q.id)
+      local xp = rw and rw.xp
       return xp and xp > 0 and xp or nil
     end,
     text = function(xp)
@@ -267,7 +268,8 @@ function Worth.Register(mod)
     value = function(ref)
       local q = questOf(ref)
       local best
-      for _, rep in ipairs(q and q.rewards and q.rewards.rep or {}) do
+      local rw = q and Logic.rewards(q.id)
+      for _, rep in ipairs(rw and rw.rep or {}) do
         if rep[2] and rep[2] > 0 and (best == nil or rep[2] > best) then
           best = rep[2]
         end

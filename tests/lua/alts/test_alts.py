@@ -323,3 +323,63 @@ def test_the_pages_say_who_owns_an_item_and_who_knows_a_recipe(wow: WowRuntime):
     known = rows(wow, "recipe:2330", "alts.known")
     assert len(known) == 1 and known[0].text == "Known by: you, Bankalt"
     assert wow.errors == []
+
+
+def test_the_characters_filter_finds_all_we_know(wow: WowRuntime):
+    """ "name, class, place, really all info we have ... inventory"."""
+    boot(wow)
+    with_alts(wow)
+    browser = "Bastians:GetModule('Browser').Browser"
+    wow.execute(f"CHARS = {browser}.BuildList('character')")
+
+    def found(text: str) -> set[str]:
+        out = wow.eval(f"{browser}.Filter(CHARS, {{ filterText = {text!r} }})")
+        return {wow.eval(f"CHARS.names[{i}]") for i in out.rows.values()}
+
+    assert found("bankalt") == {"Bankalt"}
+    assert "Bankalt" in found("warrior")  # the class
+    assert "Bankalt" in found("elwynn")  # the place
+    assert found("horde") == {"Orcalt"}  # the faction
+    assert found("shaman") == {"Orcalt"}
+    assert "Bankalt" in found("blood saber") and "Orcalt" not in found(
+        "blood saber"
+    )  # what it holds
+    assert "Orcalt" in found("linen")  # in the bags of both
+    assert found("nosuchthing") == set()
+    assert wow.errors == []
+
+
+def test_a_deleted_character_can_be_forgotten(wow: WowRuntime):
+    """a character deleted in the game stays in the lists."""
+    boot(wow, CORE, DATA, BROWSER, ALTS, "Bastians_Helpers")
+    with_alts(wow)
+    key = "Bankalt-Mock Realm"
+    ref = f"character:{key}"
+    helpers = "Bastians:GetModule('Helpers').Helpers.Global().characters"
+    wow.execute(f"{helpers}['{key}'] = {{ name = 'Bankalt' }}")
+    wow.execute(
+        f"{G}.requests[1] = {{ item = 2589, count = 1, holder = '{key}', asker = '{ME}', at = 1 }}"
+    )
+    ids = [a.id for a in wow.eval(f"Bastians:GetActions('{ref}')").values()]
+    assert "alts.forget" in ids
+    me = [a.id for a in wow.eval(f"Bastians:GetActions('character:{ME}')").values()]
+    assert "alts.forget" not in me  # never the one playing
+    assert wow.eval(f"{A}.Forget('{key}')") is False  # the first use asks
+    assert wow.eval(f"{G}.characters['{key}'].name") == "Bankalt"
+    wow.advance(6)
+    assert wow.eval(f"{A}.Forget('{key}')") is False  # too late: it asks again
+    assert wow.eval(f"{A}.Forget('{key}')") is True
+    assert wow.eval(f"{G}.characters['{key}']") is None
+    assert len(wow.eval(f"{G}.requests")) == 0
+    assert wow.eval(f"{helpers}['{key}']") is None
+    assert wow.errors == []
+
+
+def test_a_mail_to_a_whole_name_finds_the_character(wow: WowRuntime):
+    boot(wow)
+    with_alts(wow)
+    wow.execute(f"{G}.characters['Bankalt-Mock Realm'].full = 'Bankalt Farmadr'")
+    key = f"{A}.Model.KeyOf({G}, %s, 'Mock Realm')"
+    assert wow.eval(key % "'Bankalt Farmadr'") == "Bankalt-Mock Realm"
+    assert wow.eval(key % "'Bankalt'") == "Bankalt-Mock Realm"
+    assert wow.eval(key % "'Nobody Farmadr'") is None

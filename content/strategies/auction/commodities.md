@@ -9,7 +9,6 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 116253762191202
-stamp = "half"
 why = "The Forever client's commodity buy list shows a price and a quantity and no seller, and the buyer only chooses how many (UI source, build 70450). Which listings the house fills first we could not see."
 
 [[rumours]]

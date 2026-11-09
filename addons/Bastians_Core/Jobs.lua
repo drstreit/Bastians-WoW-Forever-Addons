@@ -28,10 +28,13 @@ local function finish(job)
   end
   if job.onDone and not job.cancelled then
     ns.safecall(job.owner, job.onDone, job)
+  elseif job.onFail and job.failed then
+    ns.safecall(job.owner, job.onFail, job) -- work that shows "loading" must hear of the end too
   end
 end
 
--- Bastians.Jobs:Run(owner, name, fn, { budgetMs = 4, onDone = function(job) end })
+-- Bastians.Jobs:Run(owner, name, fn, { budgetMs = 4, onDone = function(job) end,
+-- onFail = function(job) end }): onDone after the end, onFail after an error in fn.
 -- fn receives a `yield` function to call inside long loops; the job continues next frame.
 function Jobs:Run(owner, name, fn, opts)
   opts = opts or {}
@@ -40,6 +43,7 @@ function Jobs:Run(owner, name, fn, opts)
     name = name,
     budgetMs = opts.budgetMs or self.budgetMs,
     onDone = opts.onDone,
+    onFail = opts.onFail,
     done = false,
     cancelled = false,
   }, Handle)

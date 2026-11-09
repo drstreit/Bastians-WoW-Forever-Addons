@@ -48,6 +48,22 @@ class BuildResult:
         return not self.problems and not any(p.over_budget for p in self.packs)
 
 
+# ForeverDB's licence (GPL-3.0 section 7(b)): the line that starts "-- Data: ForeverDB.net
+# (https://foreverdb.net)" stays with its data. The market's and the book's packs hold none of it.
+FDB_CREDIT = "Data: ForeverDB.net (https://foreverdb.net), among other sources: see the About page"
+FDB_PACKS = frozenset({"world", "quests", "items", "text"})
+
+
+def pack_comment(name: str, world: World, localized: bool = False) -> str:
+    """The comment lines under a pack's header: what it is, and ForeverDB's credit if it holds its
+    data. The first line stays the pack's: tools/release.py reads the client from it."""
+    comment = f"pack {name} for {world.client}, build {world.build}"
+    has_fdb = any(source.startswith("ForeverDB") for source in world.sources)
+    if has_fdb and (name in FDB_PACKS or localized):
+        comment += f"\n-- {FDB_CREDIT}"
+    return comment
+
+
 def validate(world: World, config: BuildConfig) -> list[str]:
     """Referential integrity: every ref in `starts`/`ends` points at a known type (pipeline.md)."""
     problems: list[str] = []
@@ -122,9 +138,7 @@ def build(
                 write_text(out_dir / cfg.addon / "Generated" / cfg.file, stub)
             continue
         table = pack_table(world, cfg)
-        text = emit_pack(
-            name, table, comment=f"pack {name} for {world.client}, build {world.build}"
-        )
+        text = emit_pack(name, table, comment=pack_comment(name, world, bool(cfg.locales)))
         if cfg.locales:
             text = locale_guard(text, cfg.locales)
         path = out_dir / cfg.addon / "Generated" / cfg.file

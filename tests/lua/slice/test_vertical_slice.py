@@ -57,7 +57,7 @@ def test_data_loads_the_packs_enabled_modules_declare(wow: WowRuntime):
         for i in wow.eval(
             f"(function() local t = {{}} for id in {data}:ByZone('npc', 1429) do t[#t+1] = id end return t end)()"
         ).values()
-    ] == [54, 198, 240, 295, 327, 448, 8719]
+    ] == [54, 198, 240, 295, 327, 448, 1260, 8719]  # 1260: Leprithus, the rare of A3.3
     hits = wow.eval(f"{data}:Find('npc', 'hog', 5)")
     assert [(h.name, h.score) for h in hits.values()] == [("Hogger", 0.9)]
     assert wow.eval(f"{data}:Meta().packs.world.client") == "forever"
@@ -139,7 +139,7 @@ def test_browser_renders_the_entity_page(wow: WowRuntime):
     flat = page_rows(wow, dossier)
     # the name and the summary are on the band (ADR 0013 B, C2); the blocks are the sections
     assert band(wow, dossier)["name"] == "Marshal Dughan"
-    assert band(wow, dossier)["summary"] == "Level 10, Elwynn Forest"
+    assert band(wow, dossier)["summary"] == "Marshal in Elwynn Forest. Starts 2 quests."
     assert flat[0] == "Overview"
     assert "Overview" in flat and "Starts quests" in flat
     assert any(t.startswith("The Fargodeep Mine") for t in flat)

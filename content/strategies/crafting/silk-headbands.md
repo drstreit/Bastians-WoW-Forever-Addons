@@ -9,12 +9,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 30431173974250
-stamp = "true"
 why = "At the 7-day medians the headband sold for more than its three bolts and two threads on all four beta markets."
 
 [[rumours]]
 claim = 191836291258684
-stamp = "true"
 why = "The recipe takes one Bolt of Mageweave, one Bleach and one Heavy Silken Thread, and the thread costs 20 silver at a supplies vendor."
 
 [[rumours]]

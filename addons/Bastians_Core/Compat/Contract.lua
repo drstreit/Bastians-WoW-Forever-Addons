@@ -28,11 +28,14 @@ Compat.CONTRACT = {
   GetPlayerFacts = "-> { level, raceID, classID, faction ('Alliance' | 'Horde' | 'Neutral'), class (the"
     .. " file token, 'WARRIOR'), race (the file token, 'Human'), health (0..1 or nil) }",
   IsInGroup = "-> bool (party or raid)",
-  GetItemCount = "itemID -> number of that item in the bags (0 when none)",
+  GetItemCount = "itemID, includeBank? -> number of that item in the bags, and the bank (0 when none)",
   ItemCooldown = "itemID -> seconds left on the item's cooldown (0 when ready), nil when unknown",
   HasMsp = "-> bool ; whether a roleplay addon (Total RP 3, MyRolePlay) offers the msp protocol",
   MspName = "unit or name -> { name, title, nick } of the player's roleplay profile, or nil (read only)",
   MspRequest = "unit or name -> asked (bool) ; asks for the name fields, at most every 30 s per player",
+  GetInboxInvoices = "-> array of { kind ('buyer' | 'seller' | 'seller_temp_invoice'), item (name), bid,"
+    .. " consignment, deposit, count, daysLeft } of the inbox's auction house mails; never the other"
+    .. " player's name",
   GetBagItems = "-> array of { bag, slot, itemID, count, quality, bound, noValue, icon, link } for every"
     .. " filled slot of the equipped bags, possibly empty",
   GetContainerItems = "bagIDs -> the same rows as GetBagItems for the containers named (the bank's)",
@@ -82,6 +85,12 @@ Compat.CONTRACT = {
   ChannelNumber = "name -> the number of that joined channel, or nil",
   SendAddonMessage = "prefix, text, channel ('PARTY' | 'RAID' | 'GUILD' | 'WHISPER' | 'CHANNEL'), target"
     .. " (handed to the client)",
+  CreatureTrackingOn = "-> true while a creature-tracking spell is on, false when none is or the"
+    .. " class has none, nil when the client cannot say",
+  AurasSecret = "-> true while the client hides auras from addons (reading one then raises)",
+  ToyUsable = "toy item id -> true | false, nil when the client cannot tell",
+  FullName = "unit -> the whole name the game delivers to (Forever: with the surname), or nil",
+  ForgetSlash = "'/command' -> bool ; drops the client's cached handler of that command, if it keeps one",
   GetCorpsePosition = "-> uiMapID, x, y (map fractions) of the player's corpse, or nil (alive, no"
     .. " answer, or the corpse on no map of the player's map chain)",
   GetTaxiNodes = "-> array of { id (nil on the legacy path), name, map (uiMapID), x, y (map fractions),"
@@ -101,6 +110,7 @@ Compat.CONTRACT = {
   GetUnitNameByID = "npcID -> name or nil (a creature the client has not seen yet, or no tooltip API)",
   ItemTooltipLines = "itemID -> { { left, right, r, g, b } } (the lines of the game's item tooltip,"
     .. " the first its name) or nil (the item not cached yet, or no tooltip API)",
+  UnitEntity = "(unit) -> 'npc:<id>' | 'object:<id>' or nil ; a unit token's entity from its GUID",
   TargetEntity = "-> 'npc:<id>' | 'object:<id>' or nil ; the target's entity from UnitGUID('target'):"
     .. " Creature and Vehicle are npcs, GameObject objects; players, pets and no target give nil",
   SetObjectiveTrackerShown = "on -> bool (done) ; shows or hides the game's objective tracker"
@@ -144,6 +154,7 @@ Compat.CONTRACT = {
   ShowItem = "model, itemID -> bool ; the item's own 3D model (weapons, shields, held things, helms,"
     .. " shoulders), false when it has none or the client cannot",
   ZoomModel = "model, scale -> nil ; the camera's distance (1 the default, smaller is closer)",
+  ItemKind = "itemID -> kind, slot ; the client's words (Mail, Chest), nil where it has none, no request",
   Animate = "model, animID -> bool ; plays a model animation (SetAnimation; the emote ids are assumed,"
     .. " ADR 0034)",
   HasAnimation = "model, animID -> bool, or nil when the client cannot tell (Model:HasAnimation)",
@@ -215,8 +226,15 @@ Compat.CONTRACT = {
   QuestChoices = "-> array of { index, itemID, count } of the reward choices of the open quest frame,"
     .. " possibly empty",
   QuestTakeReward = "index or nil -> bool (asked) ; finishes the quest with that reward choice",
+  GetQuestLogRewards = "questID -> { money, xp, items, choices } or nil (not in the log, or the client"
+    .. " says nothing) ; copper, experience, { { itemID, count } } ; the log's selection is restored",
+  GetOfferRewards = "-> { money, xp, items, choices } or nil ; what the open quest frame offers",
   GreetingQuests = "-> active { { index, title, complete } }, available { { index, title } } of the"
     .. " quest greeting frame",
+  NpcEntity = "-> 'npc:<id>' | 'object:<id>' or nil ; the entity of the open gossip or quest window",
+  QuestTrivialRange = "-> how many levels below the character a quest may be before the client calls it"
+    .. " trivial, or nil when the client does not say",
+  CalendarNow = "-> { year, month, day, weekday (1 = Sunday), hour, minute } on the realm's clock, or nil",
   GossipQuests = "-> active { { questID, title, complete } }, available { { questID, title } } of the"
     .. " gossip frame",
   GossipOptions = "-> array of { id, name } of the gossip frame's options, possibly empty",
@@ -232,11 +250,15 @@ Compat.CONTRACT = {
     .. " without mouse while a conversation is shown elsewhere (alpha 0, not re-parented, never in combat"
     .. " the first time), or given back",
   InstanceMap = "-> instance map (Map.db2 id), name ; nil outside a dungeon or raid (GetInstanceInfo)",
+  SavedInstances = "-> { { name, instance (Map.db2 id), reset (seconds), locked, raid } } or nil ;"
+    .. " the raid info (GetNumSavedInstances, GetSavedInstanceInfo), nil when the client lacks it",
+  RequestRaidInfo = "-> bool ; asks the server for the raid info (UPDATE_INSTANCE_INFO follows)",
   GetDurability = "-> lowest (0..1 of the worn item with the least durability), broken (count) ; nil"
     .. " when no worn item has durability",
   BagSpace = "-> free, total of the general slots of the equipped bags",
   ModifierDown = "key ('shift' | 'ctrl' | 'alt') -> bool",
   ChatFrameNamed = "name -> the chat window whose tab carries that name (case ignored), or nil",
+  EnableLinks = "frame -> bool: its texts' |H links fire OnHyperlinkEnter, Leave and Click",
 }
 
 -- Layers call define(layer, name, fn); a later layer replaces an earlier one (Shared < Modern < client).

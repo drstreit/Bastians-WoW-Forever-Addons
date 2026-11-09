@@ -349,6 +349,14 @@ function Ring.RunGame(id)
   return Compat.RunGame(id)
 end
 
+-- After a wedge fired: a ring held on the key closes; one the key toggles stays until the key is
+-- pressed again.
+local function afterFire()
+  if not profile().toggle then
+    Ring.Close()
+  end
+end
+
 -- Fires wedge `i` of the current ring.
 function Ring.Fire(i, button)
   local ring = Ring.Current()
@@ -358,7 +366,7 @@ function Ring.Fire(i, button)
     if not item or item.disabled or item.secure then
       return false
     end
-    Ring.Close()
+    afterFire()
     return ring.plugin.fire(i, item, button) and true or false
   end
   local slot = ring and ring.slots[i]
@@ -376,7 +384,7 @@ function Ring.Fire(i, button)
   if slot.kind == "macro" or Ring.SecureText(slot) then
     return false -- only the secure button over the wedge runs it, on the player's click
   end
-  Ring.Close()
+  afterFire()
   if slot.kind == "emote" or slot.kind == "line" or slot.kind == "command" then
     local done
     if slot.kind == "emote" then
@@ -509,7 +517,7 @@ function Ring.Attach(m)
       end,
       onSecure = function(i, item, button)
         local spec = Ring.Plugin()
-        Ring.Close() -- the secure button ran the player's macro (or a registered ring's item)
+        afterFire() -- the secure button ran the player's macro (or a registered ring's item)
         if spec and spec.secure then
           spec.secure(i, item, button)
         end

@@ -29,6 +29,9 @@ local function reset()
     since = nil,
     warm = false,
     carried = {},
+    professions = nil, -- { [skill line] = rank }, nil while the client does not say
+    placedHere = nil, -- the player placed a feature at this fire (one per player and camp)
+    violet = false, -- the Violet Flames are on the player
   }
 end
 reset()
@@ -91,8 +94,18 @@ function Watch.Input()
     features[#features + 1] = key
   end
   table.sort(features)
+  local cooling = {}
+  for _, feature in ipairs(st.carried) do
+    local left = not feature.kit and B.Compat.ItemCooldown(feature.item)
+    if left and left > 1.5 then
+      cooling[feature.item] = true
+    end
+  end
   return {
     now = now(),
+    cooling = cooling,
+    professions = st.professions,
+    placedHere = st.placedHere,
     nearby = st.nearby,
     resting = st.resting,
     buffs = st.buffs,
@@ -147,13 +160,18 @@ end
 -- Reads the player's auras (UNIT_AURA on the player, at enable): the fire nearby, the rest, the
 -- camp buffs; then the transitions: warm (a word and BASTIANS_CAMP_WARMED), cold again.
 function Watch.Read()
+  if B.Compat.AurasSecret() then
+    return -- hidden (combat): the last reading stands, Offer reads again after the fight
+  end
   local nearby, resting, buffs, host = false, nil, {}, nil
-  local landed = false
+  local landed, violet = false, false
   for _, a in ipairs(B.Compat.UnitAuras("player")) do
     if a.spellId == Camp.NEARBY then
       nearby = true
     elseif Camp.RESTING[a.spellId] then
       resting = a.expires or true
+    elseif a.spellId == Camp.VIOLET.aura then
+      violet = true
     else
       local key = Camp.BY_AURA[a.spellId]
       if key then
@@ -172,6 +190,7 @@ function Watch.Read()
   groupBenefits(features)
   local changed = nearby ~= st.nearby
     or (resting ~= nil) ~= (st.resting ~= nil)
+    or violet ~= st.violet
     or landed
     or next(buffs) == nil and next(st.buffs) ~= nil
   if (nearby or resting) and not st.since then
@@ -179,7 +198,10 @@ function Watch.Read()
   elseif not (nearby or resting or next(buffs)) then
     st.since = nil
   end
-  st.nearby, st.resting, st.buffs, st.features = nearby, resting, buffs, features
+  st.nearby, st.resting, st.buffs, st.features, st.violet = nearby, resting, buffs, features, violet
+  if not (nearby or resting) then
+    st.placedHere = nil -- away from the fire: the next one is a new camp
+  end
   if nearby or resting or landed then
     st.seen = now()
   end
@@ -216,6 +238,7 @@ function Watch.Bags()
     end
   end
   st.carried = carried
+  st.professions = Model.Professions(B.Compat.GetProfessions(), ns.Planner.SkillName)
   B:Fire("BASTIANS_CAMP_CHANGED")
 end
 
@@ -256,6 +279,9 @@ function Watch.OnCast(_, _, unit, _, spellID)
   end
   local map = C_Map.GetBestMapForUnit("player")
   mod.db.char.placed = { item = feature.item, map = map, at = time() }
+  if not feature.kit and (st.nearby or st.resting) then
+    st.placedHere = true
+  end
   C_Timer.After(0.5, function()
     local left = B.Compat.ItemCooldown(feature.item)
     if left and left > 1.5 then

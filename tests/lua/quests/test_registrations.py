@@ -96,10 +96,8 @@ def test_layers_show_givers_by_status_hand_ins_and_objectives(wow: WowRuntime):
     assert list(soon) == ["npc:240"] and soon["npc:240"].status == "blocked"
     turnin = pins(wow, "quests.turnin")
     assert list(turnin) == ["npc:240"]
-    assert turnin["npc:240"].complete is True  # 62 is complete: the taker gets the hand-in colour
-    assert list(turnin["npc:240"].color.values()) == list(
-        wow.eval("Bastians.UI.Style.C.gold").values()
-    )  # the token (ST3)
+    assert turnin["npc:240"].complete is True  # 62 is complete: the large "?" (ADR 0053)
+    assert turnin["npc:240"].size == 26 and turnin["npc:240"].color is None
     assert turnin["npc:240"].label == "Marshal Dughan"
     spots = list(wow.eval(f"Bastians:QueryLayer('quests.objectives', {ELWYNN_VIEW})").values())
     assert [(p.ref, p.label, p.radius, p.cluster) for p in spots] == [
@@ -161,11 +159,11 @@ def test_quest_sections_status_chain_prerequisites_objectives_rewards_text(wow: 
     hogger = sections(wow, "quest:176")
     assert [s for s in hogger] == [
         "quests.status",
+        "quests.objectives",  # What to do leads (ADR 0052)
         "quests.givers",
         "quests.enders",
         "quests.rewards",
         "quests.choice",  # two choices: the comparison (S7)
-        "quests.objectives",
         "data.overview",
         "quests.text",
         "data.zone",
@@ -174,6 +172,10 @@ def test_quest_sections_status_chain_prerequisites_objectives_rewards_text(wow: 
     assert hogger["quests.givers"]["def"].block.columns == 1
     defs = {k: v["def"] for k, v in hogger.items()}
     assert defs["quests.text"].block.wide is True and defs["data.zone"].link == "zone"
+    assert (
+        defs["quests.objectives"].block.wide is True
+        and hogger["quests.objectives"].title == "What to do"
+    )
     assert texts(hogger["quests.status"].rows) == ["In the log 0/1"]
     # who gives and takes the quest, with a link to their page
     givers = list(hogger["quests.givers"].rows.values())
@@ -191,10 +193,13 @@ def test_quest_sections_status_chain_prerequisites_objectives_rewards_text(wow: 
     wow.execute("Bastians:GetDetailSections('quest:176')[8].rows[1].onClick()")  # the text
     wow.run_frames(5)
     text = sections(wow, "quest:176")["quests.text"].rows
-    assert texts(text) == [
+    assert texts(text) == [  # the story only: the task stands in What to do (ADR 0052)
         "Hogger has terrorised the farms of Elwynn long enough.",
-        "Bring Huge Gnoll Claw to Marshal Dughan in Goldshire.",
         "You have done Elwynn a great service.",
+    ]
+    assert texts(sections(wow, "quest:176")["quests.objectives"].rows) == [
+        "Bring Huge Gnoll Claw to Marshal Dughan in Goldshire.",  # came with the pack
+        "Explore the Fargodeep Mine  0/1",
     ]
     assert all(r.note is None and r.kind == "para" for r in text.values())
     # out of the log: the objectives come from the data
@@ -204,20 +209,14 @@ def test_quest_sections_status_chain_prerequisites_objectives_rewards_text(wow: 
     hogger = sections(wow, "quest:176")
     assert texts(hogger["quests.status"].rows) == ["Available"]
     objectives = list(hogger["quests.objectives"].rows.values())
-    assert [(strip(r.text), r.ref) for r in objectives] == [("loot: Hogger", "npc:448")]
-    # a chain quest: chain and prerequisites
+    assert [(strip(r.text), r.ref) for r in objectives] == [
+        ("Bring Huge Gnoll Claw to Marshal Dughan in Goldshire.", None),
+        ("loot: Hogger", "npc:448"),
+    ]
+    # a chain quest: its prerequisites
     jasper = sections(wow, "quest:76")
     assert texts(jasper["quests.status"].rows) == ["Needs: The Fargodeep Mine"]
-    assert texts(jasper["quests.chain"].rows) == [
-        # the progress chain: where the player stands (62 in the log),
-        # what each step needs
-        "Step 1 of 3. Next: The Fargodeep Mine",
-        "1. [7] The Fargodeep Mine  Chain 1/3  in your log  <- you are here",
-        "2. [9] The Jasperlode Mine  Chain 2/3 - > Westfall  after step 1",
-        "3. [10] Riverpaw Gnoll Bounty  Chain 3/3  (Westfall)  after step 2",
-    ]
-    assert jasper["quests.chain"].rows[2].ref == "quest:62"
-    assert jasper["quests.chain"].rows[2].color is not None  # the step to act on, accented
+    assert "quests.chain" not in jasper  # the chain is a subject of its own (ADR 0055)
     assert texts(jasper["quests.after"].rows) == [
         "one of: [7] The Fargodeep Mine  Chain 1/3",
     ]
@@ -226,7 +225,7 @@ def test_quest_sections_status_chain_prerequisites_objectives_rewards_text(wow: 
     assert "quests.unlocks" not in hogger  # nothing follows Hogger
     assert "quests.objectives" not in jasper
     # a quest without known rewards says so
-    assert texts(jasper["quests.rewards"].rows)[0].startswith("No reward known")
+    assert texts(jasper["quests.rewards"].rows)[0].startswith("The giver tells you")
     assert errors(wow) == []
 
 
@@ -298,7 +297,7 @@ def test_rewards_show_money_xp_reputation_items_and_spell_or_say_none(wow: WowRu
     assert got[4] == ("On completion: Summon Chicken Egg", None)
     assert all(r.note is None for r in rows)
     none = list(sections(wow, "quest:176")["quests.rewards"].rows.values())
-    assert len(none) == 1 and strip(none[0].text).startswith("No reward known")
+    assert len(none) == 1 and strip(none[0].text).startswith("The giver tells you")
     assert errors(wow) == []
 
 
@@ -406,11 +405,11 @@ def test_which_reward_compares_the_choices_against_the_gear_and_follows_loads(wo
     hogger = sections(wow, "quest:176")
     assert list(hogger)[:6] == [
         "quests.status",
+        "quests.objectives",
         "quests.givers",
         "quests.enders",
         "quests.rewards",
         "quests.choice",
-        "quests.objectives",
     ]
     block = hogger["quests.choice"]["def"].block
     assert (block.wide, block.twoLine, block.limit) == (True, True, 6)
@@ -508,3 +507,130 @@ def test_quest_tooltip_rows_carry_the_chain_and_the_rewards_without_experience(w
     lines = [strip(ln.left) for ln in wow.eval("GameTooltip.lines").values()]
     assert "Money" in lines
     assert errors(wow) == []
+
+
+def test_a_quest_and_its_giver_say_their_tile(wow: WowRuntime):
+    """ADR 0056, the facet "tile": Quests answers a quest's state as its picture, the giver with
+    the quest's first mark as the line and its place in its chain; Data adds the level. A giver
+    carries the number of quests it has for the character now, and none when it has none."""
+    boot(wow)
+    tile = wow.eval("Bastians:Entity('quest:62'):Facet('tile')")
+    assert tile.line == "Marshal Dughan" and tile.mark.text == "1/3"
+    assert tile.icon.endswith("done")  # in the log and ready: it looks done (ADR 0053)
+    assert (tile.badge.text, tile.badge.level) == ("7", 7)  # Data's part of the same tile
+    assert wow.eval("Bastians:Entity('quest:176'):Facet('tile').line") == "Wanted Poster, Group"
+    assert wow.eval("Bastians:Entity('quest:176'):Facet('tile').mark") is None  # no chain
+    assert wow.eval("Bastians:Entity('quest:999999'):Facet('tile')") is None  # unknown stays unsaid
+    # Marshal Dughan: one quest in the log, one waiting for it: nothing to take, no mark
+    assert wow.eval("Bastians:Entity('npc:240'):Facet('tile').mark") is None
+    wow.execute("table.remove(Mock.questLog, 3)")  # the mine abandoned: he has it again
+    wow.fire("QUEST_LOG_UPDATE")
+    wow.advance(0.3)
+    wow.run_frames(5)
+    mark = wow.eval("Bastians:Entity('npc:240'):Facet('tile').mark")
+    assert (mark.text, mark.token) == ("!1", "svcQuest")
+    assert wow.eval("Bastians:Entity('quest:62'):Facet('tile').icon").endswith("quest")
+    assert wow.errors == []
+
+
+def test_a_zone_lists_its_chains_and_what_it_means_for_each(wow: WowRuntime):
+    """quests.md "A zone's sheet": "Chains here", a row per chain with a step in the zone, by how
+    far the character is; the second line says the step the character is on, where the way
+    starts, or which steps are there."""
+    boot(wow)
+    quests = "Bastians:GetModule('Quests')"
+    root = wow.eval(f"{quests}.Logic.chainRoot(76)")
+    elwynn = sections(wow, "zone:1429")["quests.zone.chains"]
+    assert elwynn["def"].chapter == "chains" and elwynn["def"].title == "Chains here"
+    assert [(r.ref, r.text, r.meta) for r in elwynn.rows.values()] == [
+        (f"chain:{root}", "The Fargodeep Mine", "Step 1 of 3: The Fargodeep Mine"),
+    ]
+    westfall = sections(wow, "zone:1436")["quests.zone.chains"]
+    assert [r.meta for r in westfall.rows.values()] == ["Step 3 of 3 is here"]
+    assert "quests.zone.chains" not in sections(wow, "zone:1453")  # no chain passes there
+    # the words, case by case (an entry of Logic.chainsAmong)
+    words = f"{quests}.Chains.HereWords"
+    chain = "{ state = '%s', now = %s, main = { 62, 76, 11, 176, 62, 76, 11 } }"
+    start = chain % ("start", 1)
+    assert wow.eval(f"{words}({{ chain = {start}, steps = {{ 1, 2 }}, side = 0 }})") == (
+        "Starts here with Marshal Dughan"
+    )
+    later = chain % ("later", "nil")
+    assert wow.eval(f"{words}({{ chain = {later}, steps = {{ 3, 4, 5 }}, side = 0 }})") == (
+        "Steps 3 to 5 of 7 are here"
+    )
+    assert wow.eval(f"{words}({{ chain = {later}, steps = {{ 2, 5, 7 }}, side = 1 }})") == (
+        "3 of its 7 steps are here"
+    )
+    assert wow.eval(f"{words}({{ chain = {later}, steps = {{}}, side = 2 }})") == (
+        "Side quests here: 2"
+    )
+    on = chain % ("on", 4)
+    assert wow.eval(f"{words}({{ chain = {on}, steps = {{ 1, 2 }}, side = 0 }})") == (
+        "Steps 1 to 2 of 7 are here"  # the character is on a step elsewhere
+    )
+    # two chains of one name say where their way starts
+    names = wow.eval(
+        f"{quests}.Chains.Names({{"
+        " { id = 1, name = 'The Missing Diplomat', main = { 62 }, zones = { 1429 } },"
+        " { id = 2, name = 'The Missing Diplomat', main = { 62 }, zones = { 1436 } },"
+        " { id = 3, name = 'Alone', main = { 62 }, zones = { 1429 } } })"
+    )
+    assert dict(names.items()) == {
+        1: "The Missing Diplomat - Elwynn Forest",
+        2: "The Missing Diplomat - Westfall",
+        3: "Alone",
+    }
+    assert wow.errors == []
+
+
+def test_a_chain_is_a_subject_with_a_tile_and_a_page(wow: WowRuntime):
+    """ADR 0055 (PA5.2): `chain:<root>` is an entity of Quests. Its name is the chain's, its
+    summary the steps and levels, its place the step the player is on; its tile says the steps
+    and the zones, the levels as the badge, the progress as the mark, the next step; its page
+    lists the way, then where it goes."""
+    boot(wow)
+    quests = "Bastians:GetModule('Quests')"
+    root = wow.eval(f"{quests}.Logic.chainRoot(76)")
+    ref = f"chain:{root}"
+    e = f"Bastians:Entity('{ref}')"
+    assert wow.eval(f"{e}:Name()") == "The Fargodeep Mine"
+    assert wow.eval(f"{e}:Summary()") == "3 steps, Level 7-10"
+    assert wow.eval(f"{e}:Icon()").endswith("chain")
+    assert wow.eval(f"#{e}:Locations()") > 0  # where its current step is
+    assert [c.id for c in wow.eval(f"Bastians:GetChapters('chain', {root})").values()][:5] == [
+        "steps",
+        "side",
+        "others",
+        "rewards",
+        "zones",
+    ]
+    tile = wow.eval(f"{e}:Facet('tile')")
+    assert tile.line == "3 steps, 2 zones"
+    assert (tile.badge.text, tile.badge.level, tile.badge.levelHi) == ("7-10", 7, 10)
+    # quest 62 is in the log (ready to hand in): on the way, nothing done yet
+    assert (tile.mark.text, tile.mark.token) == ("0/3", "typeChain")
+    assert tile.note == "Next: The Fargodeep Mine"
+    found = sections(wow, ref)
+    steps = [(r.ref, strip(r.text)) for r in found["quests.chain.steps"].rows.values()]
+    assert steps == [
+        ("quest:62", "1. The Fargodeep Mine"),
+        ("quest:76", "2. The Jasperlode Mine"),
+        ("quest:11", "3. Riverpaw Gnoll Bounty"),
+    ]
+    assert [r.ref for r in found["quests.chain.zones"].rows.values()] == ["zone:1429", "zone:1436"]
+    assert "quests.chain.side" not in found and "quests.chain.others" not in found  # none here
+    # a step handed in: the tile follows
+    wow.execute(
+        "table.remove(Mock.questLog, 3); Mock.completedQuests[#Mock.completedQuests + 1] = 62"
+    )
+    wow.execute(f"{quests}.State.MarkDone(62)")
+    wow.fire("QUEST_LOG_UPDATE")
+    wow.advance(0.3)
+    wow.run_frames(5)
+    tile = wow.eval(f"{e}:Facet('tile')")
+    assert tile.mark.text == "1/3" and tile.note == "Next: The Jasperlode Mine"
+    # no chain, no subject
+    assert wow.eval("Bastians:Entity('chain:424242'):Name()") is None
+    assert wow.eval("Bastians:Entity('chain:424242'):Facet('tile')") is None
+    assert wow.errors == []

@@ -18,7 +18,7 @@ start asks which of the two you are and switches the suite accordingly.
 | Browser | look up any quest, NPC, item or zone, everything linked | `/bb` |
 | Gold | prices from your scans and vendor visits, farm spots, your gold over time | `/bgold` |
 | Route | the way there by flight path, boat, zeppelin, tram, portal or hearthstone | `/broute` |
-| Strategies | Bastian's Gold Rumours, a book of gold strategies with today's prices (WoW Forever) | `/bbook` |
+| Strategies | Bastian's Gold Adventures, a book of gold strategies with today's prices (WoW Forever) | `/bbook` |
 | Notes | your notes on NPCs, quests, items and spots, in lists, with reminders | `/bnotes` |
 | Alts | your characters' bags, bank, mail and equipment, searchable from any of them; ask one for items by mail | `/balts` |
 | Helpers | the small everyday helpers: sell junk, repair, restock, take all mail, quest givers, IDs on tooltips, warnings | `/bhelp` |
@@ -52,12 +52,12 @@ Bazooka, ElvUI and EllesmereUI's data bars.
 
 Game data first from the Blizzard client files read from the installed client (items, recipes,
 quest chains and areas, names in every language, map imagery and tables); what only the servers
-hold from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), Data from ForeverDB.net (https://foreverdb.net; GPL-3.0 with an
+hold from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), Questie (GPLv3, as far as its team can grant it), Data from ForeverDB.net (https://foreverdb.net; GPL-3.0 with an
 attribution term),
 CMaNGOS classic-db (GPL-3.0), TrinityCore TDB (GPL-2.0 or later, retail; the Korean and Chinese
 quest texts on Forever), NauticusClassic (MIT,
 ferry departures), Campfire Tooltips: Forever by GideonWhitlock after Tweaks Forever by cjber
-(GPL-3.0 or later, the camp features' auras and values), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger, voice lines
+(GPL-3.0 or later, the camp features' auras and values), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger and the Blizzard Game Data API (data from Blizzard Entertainment; Blizzard does not endorse this addon), voice lines
 through Spoken (MIT). Build tools: TACTSharp, DBCD and BLPSharp (MIT), WoWDBDefs (CC BY-SA 4.0).
 Libraries: LibStub, CallbackHandler, LibDataBroker. The book credits every traveller
 whose video or guide it retells, with the link. The book's drawings and the welcome's pictures are made with Google's

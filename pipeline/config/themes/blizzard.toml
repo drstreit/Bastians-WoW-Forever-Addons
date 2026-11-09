@@ -9,6 +9,18 @@ panel = "#0d0b08f5"
 header = "#1a150c"
 line = "#ffd10040"
 hover = "#ffd1001f"
+hoverBlock = "#3f7fd433"
+# the quest sheet (ADR 0053): parchment in every theme, a page of its own
+sheetInk = "#2e2014"
+sheetDim = "#57442f"
+sheetTitle = "#802b18"
+sheetGood = "#1d5220"
+sheetLine = "#3b2a1747"
+sheetTile = "#241b10"
+sheetTileText = "#f3e6c8"
+badgeInk = "#050505"       # the words on a light badge (a tile's level, ADR 0056)
+badgeInkLight = "#ffffff"  # the words on a dark badge
+sheetXp = "#9a35c8"
 press = "#ffd1002e"
 faceHover = "#2a2112"
 track = "#ffd1000f"
@@ -21,6 +33,13 @@ bright = "#ffffff"
 mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
 mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
 mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
+# a zone's level band on the map (A3.4): the difficulty colours' dark twins, readable on
+# the light rim
+mapDiffRed = "#a01c1c"
+mapDiffOrange = "#9a4a0a"
+mapDiffYellow = "#6e5a00"
+mapDiffGreen = "#2a6a22"
+mapDiffGrey = "#5c5c5c"
 accent = "#ffd100"
 wayWanderer = "#ff9a3c"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
 wayScholar = "#4fa3ff"     # the welcome: the Scholar's picture frame (cool)
@@ -30,8 +49,8 @@ good = "#1eff00"
 bad = "#ff2020"
 warn = "#ff8000"
 neutral = "#b3b3b3"
-rare = "#b23bff"
-water = "#0079ee"
+rare = "#b440ff"
+water = "#057cee"
 # the six note colours of Bastian's Notes (notes.md, J)
 note1 = "#f2c94c"
 note2 = "#6fcf97"

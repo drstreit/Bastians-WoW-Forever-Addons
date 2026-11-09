@@ -55,6 +55,7 @@ folders = [
   "Bastians_Voice",
   "Bastians_Chat",
   "Bastians_Gestures",
+  "Bastians_Courtesy",
   "Bastians_Campfire",
 ]
 required = ["Bastians_Data"]
@@ -80,6 +81,7 @@ folders = [
   "Bastians_Data_Text_zhTW",
   "Bastians_Data_Market",
   "Bastians_Data_Strategies",
+  "Bastians_Data_Nav", # the walk network (ADR 0026); never shipped before 2.0.1 (06.11.2026)
 ]
 # Data needs Core from the suite; a required relation back would be a cycle, so it is optional
 # (players install the suite, which requires Data)

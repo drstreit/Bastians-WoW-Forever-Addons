@@ -507,7 +507,7 @@ end
 local function startEdges(net, opts)
   local edges
   for _, j in ipairs(jumpsOf(opts)) do
-    local n = j.place.map == net.map and Data.Net.Join(net, j.place.wx, j.place.wy, j.place.wz)
+    local n = j.place.map == net.map and Data.Net.Join(net, j.place.wx, j.place.wy, j.place.wz, true)
     if n then
       edges = edges or {}
       edges[#edges + 1] = { b = n, seconds = j.seconds, mode = j.mode, name = j.name, jump = true }
@@ -781,7 +781,7 @@ local function crossRoute(netA, netB, a, b, opts, yield, goalName)
   local speeds = speedsOf(opts)
   local ground = speeds.ground or Net.RUN_SPEED
   local start, ds = Net.Join(netA, a.wx, a.wy, a.wz)
-  local goal, dg = Net.Join(netB, b.wx, b.wy, b.wz)
+  local goal, dg = Net.Join(netB, b.wx, b.wy, b.wz, true)
   if not start then
     return nil, "start off the network"
   end
@@ -791,7 +791,7 @@ local function crossRoute(netA, netB, a, b, opts, yield, goalName)
   local rides = crossings(netA, netB, opts and opts.faction)
   local landings = {} -- waypoint on netB -> the fastest jump landing there
   for _, j in ipairs(jumpsOf(opts)) do
-    local n = j.place.map == netB.map and Net.Join(netB, j.place.wx, j.place.wy, j.place.wz)
+    local n = j.place.map == netB.map and Net.Join(netB, j.place.wx, j.place.wy, j.place.wz, true)
     if n and (not landings[n] or j.seconds < landings[n].seconds) then
       landings[n] = j
     end
@@ -1054,7 +1054,7 @@ function service:Tour(from, stops, opts, callback)
     local ground = speeds.ground or Net.RUN_SPEED
     local nodes, skipped, open = {}, {}, {}
     local function add(place, stop)
-      local w, d = Net.Join(net, place.wx, place.wy, place.wz)
+      local w, d = Net.Join(net, place.wx, place.wy, place.wz, stop ~= nil)
       if not w then
         if stop then
           skipped[stop.id] = "off the network"
@@ -1263,7 +1263,7 @@ local function drain(yield)
       local times = clusterTimes(net, key)
       local ground = speedsOf(nil).ground or Net.RUN_SPEED
       for k, p in pairs(byCluster[key]) do
-        local n, d = Net.Join(net, p[1], p[2], p[3])
+        local n, d = Net.Join(net, p[1], p[2], p[3], true)
         local t = n and times[n]
         if cache.memoCount >= Graph.MEMO_MAX then
           cache.memo, cache.approx, cache.memoCount = {}, {}, 0

@@ -22,11 +22,11 @@ B.deferred[#B.deferred + 1] = {
         [36] = { 62 },
       },
       ["quest.byEnder"] = {
-        ["npc:234"] = { 11, 1000 },
+        ["npc:234"] = { 11, 1000, 2000 },
         ["npc:240"] = { 62, 76, 176 },
       },
       ["quest.byGiver"] = {
-        ["npc:234"] = { 11, 1000 },
+        ["npc:234"] = { 11, 1000, 2000 },
         ["npc:240"] = { 62, 76 },
         ["object:1734"] = { 176 },
       },
@@ -35,12 +35,12 @@ B.deferred[#B.deferred + 1] = {
       },
       ["quest.byStart"] = {
         [1429] = { 62, 76, 176 },
-        [1436] = { 11, 1000 },
+        [1436] = { 11, 1000, 2000 },
       },
       ["quest.byTurnIn"] = {},
       ["quest.byZone"] = {
         [1429] = { 62, 76, 176 },
-        [1436] = { 11, 1000 },
+        [1436] = { 11, 1000, 2000 },
       },
       ["quest.chainFrom"] = {},
       ["quest.chainMembers"] = {
@@ -62,6 +62,7 @@ B.deferred[#B.deferred + 1] = {
         [76] = "The Jasperlode Mine",
         [176] = "Wanted: \"Hogger\"",
         [1000] = "Horde Only Errand",
+        [2000] = "A Mage's Errand",
       },
     },
     quest = {
@@ -70,6 +71,7 @@ B.deferred[#B.deferred + 1] = {
       [76] = [=[{ "The Jasperlode Mine", 9, 7, nil, nil, nil, { "npc:240" }, nil, { "npc:240" }, nil, nil, { 62 }, nil, nil, nil, nil, nil, nil, nil, nil, 1429, nil, nil, nil, nil, nil, "forever" }]=],
       [176] = [=[{ "Wanted: \"Hogger\"", 11, 5, 1, nil, nil, { "object:1734" }, nil, { "npc:240" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1429, { { "loot", "npc:448", 0 } }, { [1429] = { { 0.25, 0.93, "loot", 1 }, { 0.4, 0.7, "loot", 1 } } }, { choices = { { 1185, 1 }, { 2318, 2 } }, money = 150, src = "classic" }, { { 1931, 1 } }, nil, "forever" }]=],
       [1000] = [=[{ "Horde Only Errand", 9, 8, nil, 178, nil, { "npc:234" }, nil, { "npc:234" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1436, nil, nil, nil, nil, nil, "forever" }]=],
+      [2000] = [=[{ "A Mage's Errand", 10, 8, nil, nil, 128, { "npc:234" }, nil, { "npc:234" }, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1436, nil, nil, nil, nil, nil, "forever" }]=],
     },
     schema = {
       attunement = { "name", "faction", "verified", "note", "steps", "src", "instance" },
@@ -77,6 +79,7 @@ B.deferred[#B.deferred + 1] = {
         "name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends",
         "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday",
         "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon",
+        "dungeonSrc",
       },
     },
     sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },

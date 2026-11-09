@@ -5,7 +5,7 @@ scale, place) and the conversation that replaces the game's quest windows."""
 import math
 
 from harness import WowRuntime
-from pages import band_buttons
+from pages import band_buttons, click_sheet_button
 
 CORE, DATA, QUESTS, BROWSER, VOICE = (
     "Bastians_Core",
@@ -234,17 +234,19 @@ def test_the_browser_card_and_the_quest_rows_play_and_stop(wow: WowRuntime):
     boot(wow, CORE, DATA, *SPOKEN, QUESTS, BROWSER, VOICE)
     browser = "Bastians:GetModule('Browser')"
     wow.execute(f"{browser}.Browser.Open('quest:176')")
-    assert "Play" in card_buttons(wow)
-    play = card_buttons(wow).index("Play") + 1
-    wow.execute(f"{browser}.dossier.buttons[{play}]:Click()")
+    # a quest's page is the quest sheet (ADR 0056): Play is the first of its buttons
+    assert card_buttons(wow)[0] == "Play"
+    click_sheet_button(wow, f"{browser}.dossier", "Play")
     assert len(queue(wow)) == 1
     wow.run_frames(5)
     wow.advance(0.2)
-    assert card_buttons(wow)[play - 1] == "Stop"  # playing: stop
-    wow.execute(f"{browser}.dossier.buttons[{play}]:Click()")
+    wow.run_frames(5)
+    assert card_buttons(wow)[0] == "Stop"  # playing: stop
+    click_sheet_button(wow, f"{browser}.dossier", "Stop")
     wow.run_frames(5)
     wow.advance(0.2)
-    assert card_buttons(wow)[play - 1] == "Play"
+    wow.run_frames(5)
+    assert card_buttons(wow)[0] == "Play"
     # a zone page has Play too; a quest page without a line has none; an NPC without a story none
     wow.execute(f"{browser}.Browser.Open('zone:1429')")
     assert "Play" in card_buttons(wow)
@@ -565,6 +567,15 @@ def test_the_conversation_replaces_the_quest_windows(wow: WowRuntime):
     wow.execute(f"{TALK}.HandIn()")
     assert any("Choose a reward first" in line for line in wow.chat)
     assert "reward" not in wow.eval("Mock.npcCalls[#Mock.npcCalls]")
+    # a reward shows the game's whole item tooltip, and how to choose it (owner, Forever
+    # 08.11.2026: "I cannot see the exact reward stats when hovering over it")
+    index = next(i for i, b in enumerate(bubbles(wow)) if b.title == "Light Leather") + 1
+    wow.execute(
+        f"GameTooltip:ClearLines() {ORBIT}.Visible()[{index}]:GetScript('OnEnter')({ORBIT}.Visible()[{index}])"
+    )
+    assert wow.eval("GameTooltip.itemID") == 2318
+    lines = [str(ln.left) for ln in wow.eval("GameTooltip.lines").values()]
+    assert lines == ["Click chooses this reward"]
     click(wow, "Light Leather")  # the second choice
     assert wow.eval(f"{TALK}.state.current.choice") == 2
     click(wow, "Hand in")
@@ -718,6 +729,8 @@ def test_the_clear_screen_key_hides_the_orbiter_and_the_hub_drags_it(wow: WowRun
     wow.execute(f"{V}.db.profile.lock = true")
     wow.execute(f"{hub}:GetScript('OnDragStart')({hub})")
     assert wow.eval(f"{ORBIT}.IsDragging()") is False
+    # and says why
+    assert wow.eval(f"{hub}.name:GetText()").startswith("Locked in place.")
     assert errors(wow) == []
 
 
@@ -802,13 +815,48 @@ def test_the_quest_marks_tooltips_show_the_chain_and_the_rewards(wow: WowRuntime
     assert "Money | " in joined and "Reputation: Faction 72 | +150" in joined
     assert "Linen Cloth" in joined
     assert "Experience" not in joined
-    # wide: a quest moon carries its own rows
+    # wide: a quest mark shows the quest sheet beside the ring while the mouse is on it (ADR 0053)
     wow.execute(f"{ORBIT}.Hover(true)")
     wow.run_frames(20)
     moon = next(i for i, b in enumerate(bubbles(wow)) if b.kind == "quest" and b.questID == 62) + 1
-    lines = tip_lines(moon)
-    assert lines[0] == "The Fargodeep Mine"
-    assert any(ln.startswith("Money | ") for ln in lines)
-    assert any("Faction 72" in ln for ln in lines)
+    assert tip_lines(moon) == []  # the sheet, no tooltip
+    assert wow.eval("BastiansQuestSheet:IsShown()") is True
+    assert wow.eval("BastiansQuestSheet:IsMouseEnabled()") is False  # a look, nothing to click
+    # the ring stands top right: the sheet opens to its left, where the room is (05.11.2026)
+    point = wow.eval("BastiansQuestSheet.points[1]")
+    assert (point.point, point.relPoint) == ("RIGHT", "LEFT")
+    wow.execute(f"local b = {ORBIT}.Visible()[{moon}]; b:GetScript('OnLeave')(b)")
+    assert wow.eval("BastiansQuestSheet:IsShown()") is False
     wow.execute(f"{ORBIT}.Hover(false)")
+    assert errors(wow) == []
+
+
+def test_the_lock_on_the_ring_toggles_dragging(wow: WowRuntime):
+    """ "a small lock symbol in Orbiter to toggle the ability to move it freely
+    around". The lock sits under the play button while the ring is wide, lit while locked; a click
+    switches the same setting as the options' "Lock the position" and says what it did."""
+    boot(wow)
+    hub, lock = f"{ORBIT}.hub", f"{ORBIT}.hub.lock"
+    wow.execute(f"{ORBIT}.SetWide(false)")
+    assert wow.eval(f"{lock}:IsShown()") is False  # the compact ring keeps to the play button
+    wow.execute(f"{ORBIT}.SetWide(true)")
+    assert wow.eval(f"{lock}:IsShown()") is True
+    assert wow.eval(f"select(5, {lock}:GetPoint(1))") < -15  # under the play button, on the hub
+    assert wow.eval(f"{V}.db.profile.lock") is False and wow.eval(f"{lock}.locked") is False
+    assert wow.eval(f"({lock}.tip())") == "Moves freely"
+    wow.execute(f"{lock}:Click()")
+    assert wow.eval(f"{V}.db.profile.lock") is True and wow.eval(f"{lock}.locked") is True
+    assert wow.eval(f"{hub}.name:GetText()") == "Locked in place"
+    assert wow.eval(f"({lock}.tip())") == "Locked in place"
+    tint = [round(v, 3) for v in wow.eval(f"{{ {lock}.glyph:GetVertexColor() }}").values()][:3]
+    assert tint == [round(v, 3) for v in wow.eval("Bastians.UI.Style.C.accent").values()][:3]
+    wow.execute(f"{hub}:GetScript('OnDragStart')({hub})")
+    assert wow.eval(f"{ORBIT}.IsDragging()") is False
+    assert wow.eval(f"{hub}.name:GetText()").startswith("Locked in place. The lock")
+    wow.execute(f"{lock}:Click()")  # unlocked again: it drags
+    assert wow.eval(f"{V}.db.profile.lock") is False
+    assert wow.eval(f"{hub}.name:GetText()") == "Moves freely"
+    wow.execute(f"{hub}:GetScript('OnDragStart')({hub})")
+    assert wow.eval(f"{ORBIT}.IsDragging()") is True
+    wow.execute(f"{hub}:GetScript('OnDragStop')({hub})")
     assert errors(wow) == []

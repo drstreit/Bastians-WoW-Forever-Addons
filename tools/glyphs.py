@@ -567,7 +567,7 @@ def _buttons() -> Shape:  # four round buttons in a frame: the minimap buttons' 
     return union(frame, *dots)
 
 
-def _ledger() -> Shape:  # a closed book with a coin on its cover: Bastian's Gold Rumours
+def _ledger() -> Shape:  # a closed book with a coin on its cover: Bastian's Gold Adventures
     cover = box(12, 6, 54, 58, 5)
     spine = box(12, 6, 20, 58, 3)
     book = cut(cover, capsule(20.5, 9, 20.5, 55, 1.0))
@@ -812,6 +812,16 @@ def _app_gestures() -> Shape:  # Gestures: a waving hand
     return union(fingers, thumb, box(20, 30, 55.5, 58, 10))
 
 
+def _app_courtesy() -> Shape:  # Courtesy: a speech bubble with a heart, the centre of its ring
+    bubble = union(box(7, 9, 57, 47, 13), polygon([(16, 42), (15, 59), (33, 45)]))
+    heart = union(
+        circle(25.5, 22.5, 7),
+        circle(38.5, 22.5, 7),
+        polygon([(19.3, 26), (32, 40), (44.7, 26), (32, 18)]),
+    )
+    return cut(bubble, heart)
+
+
 def _app_data() -> Shape:  # Data: a database cylinder
     body = union(box(12, 16, 52, 48), ellipse(32, 48, 20, 7), ellipse(32, 16, 20, 7))
     grooves = []
@@ -828,6 +838,66 @@ def _campfire() -> Shape:  # Campfire: a flame with its inner tongue over two cr
         rotate(box(10, 44, 54, 52, 1.6), 32, 48, -11), rotate(box(10, 44, 54, 52, 1.6), 32, 48, 11)
     )
     return union(cut(flame, tongue, gap=0.0), cut(logs, flame, gap=2.5))
+
+
+def _flame_points(chains: list[list[tuple[float, float]]]) -> list[tuple[float, float]]:
+    """A closed outline from smooth chains: each chain is a Catmull-Rom curve between two sharp
+    points (a flame's tips and notches stay sharp, its flanks stay round)."""
+    out: list[tuple[float, float]] = []
+    for chain in chains:
+        pts = [chain[0], *chain, chain[-1]]
+        for i in range(1, len(pts) - 2):
+            p0, p1, p2, p3 = pts[i - 1], pts[i], pts[i + 1], pts[i + 2]
+            for step in range(8):
+                t = step / 8
+                out.append(
+                    (
+                        0.5
+                        * (
+                            2 * p1[0]
+                            + (p2[0] - p0[0]) * t
+                            + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t * t
+                            + (3 * p1[0] - p0[0] - 3 * p2[0] + p3[0]) * t * t * t
+                        ),
+                        0.5
+                        * (
+                            2 * p1[1]
+                            + (p2[1] - p0[1]) * t
+                            + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t * t
+                            + (3 * p1[1] - p0[1] - 3 * p2[1] + p3[1]) * t * t * t
+                        ),
+                    )
+                )
+    return out
+
+
+def _flame() -> Shape:  # Campfire's flame: a leaning tip, a small lick on the left, a round belly
+    return polygon(
+        _flame_points(
+            [
+                [(37, 7), (44, 17), (52, 29), (54, 41), (47, 52), (32, 58)],
+                [(32, 58), (19, 55), (11, 46), (10, 35), (17, 20)],
+                [(17, 20), (20, 27), (25, 31)],
+                [(25, 31), (31, 22), (37, 7)],
+            ]
+        )
+    )
+
+
+def _flame_heart() -> Shape:  # the flame's inner tongue, drawn over `flame` in its own colour
+    return polygon(
+        _flame_points(
+            [
+                [(35, 27), (41, 36), (44, 45), (39, 52), (31, 54)],
+                [(31, 54), (23, 52), (20, 45), (24, 37), (28, 37)],
+                [(28, 37), (32, 34), (35, 27)],
+            ]
+        )
+    )
+
+
+def _flame_ring() -> Shape:  # the thin ring around the flame that runs down with the warmth
+    return cut(circle(32, 32, 27), circle(32, 32, 24), gap=0.0)
 
 
 GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
@@ -921,10 +991,15 @@ GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "app_helpers": (_app_helpers, "Bastian's Helpers"),
     "app_chat": (_app_chat, "Bastian's Chat"),
     "app_gestures": (_app_gestures, "Bastian's Gestures"),
+    "app_courtesy": (_app_courtesy, "Bastian's Courtesy, the centre of its ring"),
     "app_data": (_app_data, "Bastian's Data and its packs"),
     # the campfire (plan-second-wave.md S5, 02.11.2026): a fire's pin and wedge, the app's mark
     "campfire": (_campfire, "a campfire: a shared fire, the camp ring"),
     "app_campfire": (_campfire, "Bastian's Campfire"),
+    # the flame on screen
+    "flame": (_flame, "the flame on screen, its outer layer"),
+    "flame_heart": (_flame_heart, "the flame's inner tongue"),
+    "flame_ring": (_flame_ring, "the ring that runs down with the warmth"),
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -991,9 +1066,13 @@ TILE_COLOR: dict[str, tuple[float, float, float]] = {
     "app_helpers": _GREY,
     "app_chat": _TEAL,
     "app_gestures": _GREEN,
+    "app_courtesy": _PINK,
     "app_data": _GREY,
     "campfire": _AMBER,
     "app_campfire": _AMBER,
+    "flame": _AMBER,
+    "flame_heart": _AMBER,
+    "flame_ring": _AMBER,
 }
 
 

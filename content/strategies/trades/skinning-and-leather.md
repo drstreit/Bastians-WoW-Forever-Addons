@@ -9,12 +9,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 168971238812074
-stamp = "true"
 why = "The recipe data agrees: up to skill 225, 61 of the new leatherworking recipes take Pristine Leather."
 
 [[rumours]]
 claim = 114205532400966
-stamp = "true"
 why = "Bronze Bars go into 46 of the new recipes up to skill 225, 44 of them for blacksmiths."
 
 [[rumours]]

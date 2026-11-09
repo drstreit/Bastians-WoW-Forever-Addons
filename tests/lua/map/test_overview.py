@@ -211,3 +211,20 @@ def test_the_style_menu_holds_the_physical_map_without_a_style_addon(wow: WowRun
     wow.execute(f"{MAP_}.Fly(0, -9000, 1000, 0)")
     assert wow.eval(f"{OV}.stats.shown") == 3
     assert wow.errors == []
+
+
+def test_with_cells_no_zone_painting_shows_past_their_edge(wow: WowRuntime):
+    """ "Kalimdor has an old parchment stripe on the left side": Feralas'
+    painting reached 1,175 yd past the opaque overview cells. With cells on the continent only its
+    own painting draws under them; without the cells (the setting off) the zones' come back."""
+    boot(wow)
+    wow.execute(f"{MAP_}.Fly(0, 0, 0, 3)")  # Elwynn's paintings under a view with cells around
+    assert wow.eval(f"{OV}.Count(0)") > 0
+    assert wow.eval(f"{MOD}.Imagery.stats.zones") == 1  # the continent's painting alone
+    with_cells = wow.eval(f"{MOD}.Imagery.stats.textures")
+    wow.execute(f"{MOD}.db.profile.overviewArt = false")
+    wow.execute("Bastians:Fire('BASTIANS_SETTING_CHANGED', 'Map', 'overviewArt', false)")
+    wow.execute(f"{MAP_}.ViewChanged()")
+    assert wow.eval(f"{MOD}.Imagery.stats.zones") > 1
+    assert wow.eval(f"{MOD}.Imagery.stats.textures") > with_cells
+    assert wow.errors == []

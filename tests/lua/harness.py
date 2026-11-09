@@ -22,6 +22,16 @@ class LuaAddonError(Exception):
     """An addon file failed to compile or run."""
 
 
+def _noter(loaded: list[str]):
+    """The callback Lua calls after an addon's files ran: it knows the list, not the runtime
+    (pure Python, so lupa stays out of trouble)."""
+
+    def note(name) -> None:
+        loaded.append(str(name))
+
+    return note
+
+
 class WowRuntime:
     def __init__(
         self, client: str = "forever", addons_dir: Path = ADDONS, extra_dirs: tuple[Path, ...] = ()
@@ -42,7 +52,11 @@ class WowRuntime:
         g.BASTIANS_TEST_CLIENT = client
         self._run_file(MOCK / "wow.lua", "mock/wow.lua")
         self.mock = g.Mock
-        self.mock.onAddonLoaded = self._note_loaded
+        # Lua must not hold the runtime itself: a bound method inside the Lua state closes a
+        # circle Python cannot collect (runtime -> Lua state -> method -> runtime), and every
+        # test's runtime stayed alive (05.11.2026: 6 to 19 GB after 1,400 tests, the full suite ran
+        # out of memory). The list alone is all the callback needs.
+        self.mock.onAddonLoaded = _noter(self.loaded)
         stubs = MOCK / "Generated" / f"api_{client}.lua"
         self.stub_count = 0
         if stubs.is_file():
@@ -117,10 +131,6 @@ class WowRuntime:
             self.mock.LoadAddOnFiles(name)
         except lua51.LuaError as exc:
             raise LuaAddonError(f"{name}: {exc}") from exc
-
-    def _note_loaded(self, name: str) -> None:
-        """Called from Lua after an addon's files ran; pure Python, so lupa stays out of trouble."""
-        self.loaded.append(str(name))
 
     def is_load_on_demand(self, name: str) -> bool:
         meta, _ = self.toc(name)

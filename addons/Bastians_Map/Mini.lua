@@ -23,6 +23,8 @@ Mini.SIZE_MIN, Mini.SIZE_MAX, Mini.SIZE_STEP = 120, 400, 10
 Mini.LEVEL_MIN, Mini.LEVEL_MAX, Mini.LEVEL_STEP = 2, 7, 0.5
 Mini.BAR_H, Mini.FOOT_H, Mini.TOOLS_H, Mini.GAP = 22, 14, 22, 2
 Mini.TICK = 0.25 -- seconds between full redraws while the player moves (positions follow per frame)
+Mini.WATCH = 1 -- seconds between the looks where the player is, while shown (ADR 0066)
+Mini.MOVED = 1 -- yards that count as having moved
 Mini.DRAG_PX = 3
 Mini.BORDER = 5 -- pixels of the frame around the view -- a press that moves less is a click
 Mini.MASKS = {
@@ -77,6 +79,9 @@ local frame, bar, view, clip, catcher, arrow, foot, tools, recentre, warn
 local cam
 local following = true -- the view keeps the player in the middle until dragged
 local moving, drag = false, nil
+local drifting = false -- the player is moved without a movement event (a boat, a knockback; ADR 0066)
+local watch -- the timer of the looks
+local watched, ticked = {}, {} -- where the player was at the last look, at the last tick
 local elapsed = 0
 local taken -- what was moved: { minimap = state, cluster = state, indicators = { ... }, hidden = { ... } }
 local hider -- a hidden frame that holds the game's cluster while ours shows
@@ -183,9 +188,8 @@ function Mini.Warn(style)
     warn.text:SetPoint("TOPLEFT", 12, -10)
     warn.text:SetPoint("TOPRIGHT", -12, -10)
     warn.text:SetJustifyH("LEFT")
-    local text = "Only the game's own minimap shows what the client tracks: herbs and ore you track,"
-      .. " your group, quest areas and server pings. Bastian's styles show the map's layers instead"
-      .. " (known herb and ore places, quests, NPCs, your route)."
+    local text = "Bastian's styles show the herbs, ore and creatures you track and the map's layers (quests,"
+      .. " NPCs, your route). Only the game's own minimap shows your group, quest areas and server pings."
     warn.text:SetText(L[text])
     warn.ok = S.action(warn.content, { icon = "check", label = L["Switch"], primary = true })
     warn.ok:SetPoint("BOTTOMRIGHT", -12, 12)
@@ -656,6 +660,7 @@ function Mini.Render()
     return
   end
   local style = Mini.Style()
+  Mini.SyncWatch()
   Mini.UpdateFoot()
   if style == "game" then
     clip:Hide()
@@ -678,6 +683,7 @@ function Mini.Render()
       cam:Center(px, py)
     end
   end
+  style = ns.Styles.On(style, cam.continent) -- a baked style without cells here: the physical map
   if style == "physical" then
     ns.Overview.Load()
   end
@@ -776,7 +782,40 @@ local onUpdate
 
 local function running()
   local onTaxi = rawget(_G, "UnitOnTaxi")
-  return moving or drag ~= nil or (onTaxi ~= nil and onTaxi("player") == true)
+  return moving or drifting or drag ~= nil or (onTaxi ~= nil and onTaxi("player") == true)
+end
+
+-- Whether the player is a yard or more from `seen` (which this updates). No position, nothing to follow.
+local function movedSince(seen)
+  local c, x, y = B.Coords.Player()
+  if not c then
+    return false
+  end
+  local moved = seen.c ~= nil and (c ~= seen.c or math.abs(x - seen.x) + math.abs(y - seen.y) >= Mini.MOVED)
+  seen.c, seen.x, seen.y = c, x, y
+  return moved
+end
+
+-- The look (ADR 0066): the game moves a player without a movement event; the ticks start all the same.
+function Mini.Watch()
+  if movedSince(watched) and not frame.ticking then
+    drifting = true
+    ticked.c, ticked.x, ticked.y = watched.c, watched.x, watched.y
+    Mini.StartTicks()
+    ns.Tracked.Wake() -- new ground comes into the tracking's reach
+  end
+end
+
+-- The look runs only while one of our styles shows: the game's own minimap follows by itself.
+function Mini.SyncWatch()
+  local wanted = frame and frame:IsShown() and Mini.Style() ~= "game"
+  if wanted and not watch then
+    watched = {}
+    watch = C_Timer.NewTicker(Mini.WATCH, Mini.Watch)
+  elseif watch and not wanted then
+    watch:Cancel()
+    watch = nil
+  end
 end
 
 function Mini.StartTicks()
@@ -788,6 +827,10 @@ function Mini.StartTicks()
 end
 
 onUpdate = function(_, dt)
+  if moving and not drag and not following then
+    following = true -- a zoom at the cursor or a drag during a walk: walking brings the view back
+    markRecentre()
+  end
   if drag then
     local x, y = GetCursorPosition()
     local s = frame:GetEffectiveScale() or 1
@@ -805,6 +848,9 @@ onUpdate = function(_, dt)
   elapsed = elapsed + dt
   if elapsed >= Mini.TICK then
     elapsed = 0
+    if drifting and not movedSince(ticked) then
+      drifting = false
+    end
     Mini.Render()
   elseif Mini.Style() ~= "game" then
     follow()
@@ -1179,7 +1225,7 @@ function Mini.InfoLines()
     { L["Now:"] .. " " .. on, "tipDim" },
     { " ", "tipDim" },
     { L["Game minimap (the default)"], "tipGold" },
-    { "+ " .. L["Live: the herbs and ore you track, your group, quest areas, pings"], "tipText" },
+    { "+ " .. L["Live: the herbs, ore and creatures you track, your group, quest areas, pings"], "tipText" },
     { "+ " .. L["Other addons that draw on the minimap keep working"], "tipText" },
     { "+ " .. L["The map's pins on top: quests, NPCs, your route"], "tipText" },
     { "- " .. L["Only the game's look; it always stays on you"], "tipDim" },
@@ -1429,11 +1475,16 @@ local function build()
 
   frame:SetScript("OnShow", function()
     Mini.Render()
+    if running() then
+      Mini.StartTicks() -- it came back during a walk: no new start event will tell
+    end
   end)
   frame:SetScript("OnHide", function(self)
     self.ticking = nil
     self:SetScript("OnUpdate", nil)
     drag = nil
+    drifting = false
+    Mini.SyncWatch()
     ns.Tracked.Stop()
     -- what hung off the minimap goes with it
     ns.Pins.HideMiniCard()
@@ -1462,6 +1513,7 @@ local function build()
         markRecentre()
       end
       Mini.StartTicks()
+      ns.Tracked.Wake() -- new ground comes into the tracking's reach
     elseif event == "PLAYER_STOPPED_MOVING" then
       moving = false
     elseif event == "PLAYER_REGEN_ENABLED" then

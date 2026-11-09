@@ -64,6 +64,10 @@ local strings = {
   ["Route by default"] = "Ruta por defecto",
   ["Switch to this kind of route; it stays the default."] = "Cambiar a este tipo de ruta; sigue siendo la predeterminada.",
   ["Careful: level %d creatures"] = "Cuidado: criaturas de nivel %d",
+  -- the route's verdict (catalog review A4.3, 07.11.2026)
+  ["Safe trip"] = "Viaje seguro",
+  ["Watch out"] = "Cuidado",
+  ["Risky trip"] = "Viaje arriesgado",
   ["elite"] = "élite",
 
   -- Death.lua (R26.8)
@@ -112,6 +116,10 @@ local strings = {
   ["All flight masters"] = "Todos los maestros de vuelo",
   ["Open the step list when a route starts"] = "Abrir la lista de pasos al empezar una ruta",
   ["Show an arrow to the next step while a route is active"] = "Mostrar una flecha al siguiente paso mientras haya una ruta activa",
+  -- Flight.lua: the flight bar (catalog review A4.1, 07.11.2026)
+  ["Show a flight bar with the time left while flying"] = "Mostrar una barra de vuelo con el tiempo restante mientras vuelas",
+  ["%s to %s"] = "%s a %s",
+  ["%s left"] = "quedan %s",
   ["Route here"] = "Ruta hasta aquí",
   ["Route to"] = "Ruta a",
   ["Open Bastian's Route"] = "Abrir Bastian's Route",
@@ -150,6 +158,15 @@ local strings = {
 
   -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
   ["Next: %s"] = "Siguiente: %s",
+  -- the /way command (ADR 0062, 08.11.2026)
+  ["/way: %s"] = "/way: %s",
+  ["New route"] = "Ruta nueva",
+  ["Add to route"] = "Añadir a la ruta",
+  ["Waypoints"] = "Puntos de ruta",
+  ["What /way does while a route runs: start a new route, or add the place to the route."] = "Qué hace /way mientras hay una ruta: empezar una ruta nueva o añadir el lugar a la ruta.",
+  ["Which addon answers /way: Bastian's Route, or the one that had it first."] = "Qué addon responde a /way: Bastian's Route o el que lo tenía primero.",
+  ["No zone called %s."] = "Ninguna zona llamada %s.",
+  ["Several zones match %s: %s"] = "Varias zonas coinciden con %s: %s",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

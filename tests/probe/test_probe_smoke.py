@@ -46,7 +46,16 @@ def test_all_probes_run_without_errors(lua):
 
 def test_single_probes_and_passive_handlers(lua):
     slash = lua.globals().SlashCmdList.BASTIANSPROBE
-    for cmd in ("help", "status", "p4 Goldshire inn door", "p5 12345", "p10", "unknown", "hide"):
+    for cmd in (
+        "help",
+        "status",
+        "p4 Goldshire inn door",
+        "p5 12345",
+        "p10",
+        "minimaps",  # without the suite it says so
+        "unknown",
+        "hide",
+    ):
         slash(cmd)
     for event in ("TAXIMAP_OPENED", "TRAINER_SHOW", "MERCHANT_SHOW", "PLAYER_CONTROL_GAINED"):
         lua.globals().stub_fire(event)

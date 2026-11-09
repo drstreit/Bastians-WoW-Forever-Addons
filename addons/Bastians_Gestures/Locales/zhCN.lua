@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("zhCN", {
+  -- /bgest try (gestures.md "The voice", 08.11.2026)
   -- the owner's follow-ups (retail 01.11.2026, late)
   ["(a macro)"] = "（宏）",
   ["A macro of the account"] = "通用宏",
@@ -52,29 +53,19 @@ ns.L:Register("zhCN", {
   ["Show or hide the cloak"] = "显示或隐藏披风",
   ["A random favourite mount"] = "随机召唤偏好坐骑",
   -- plan-second-wave.md S7 (01.11.2026)
-  ["%s challenges you to a duel"] = "%s 向你发起决斗",
-  ["%s wants to trade"] = "%s 想要交易",
-  ["%s invites you to a group"] = "%s 邀请你加入队伍",
   ["Answer?"] = "回应？",
   ["Bow"] = "鞠躬",
   ["Wave"] = "挥手",
-  ["Decline politely"] = "礼貌地拒绝",
-  ["Thank you, but not today, %t."] = "谢谢，不过今天就算了，%t。",
   ["The polite decline of a duel, a trade or an invite (press Enter; %t is who asked)"] = "对决斗、交易或邀请的礼貌拒绝（按回车；%t 是提出请求的人）", -- luacheck: ignore 631
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark heard"] = "标记为已听过",
   ["Toggle the tracker"] = "切换追踪器",
-  ["%s buffed you"] = "%s 给你加了增益",
-  ["%s cast %s on you"] = "%s 对你施放了 %s",
-  ["%s greets you"] = "%s 向你问好",
-  ["%s resurrected you"] = "%s 复活了你",
   ["(a ring)"] = "（一个环）",
   ["A line for slot %d"] = "第 %d 格的台词",
   ["A ring of its own"] = "独立的一个环",
   ["A short title for the wedge"] = "扇区的简短标题",
   ["Actions"] = "动作",
   ["Add a thank-you line (press Enter; %t is who to thank)"] = "添加一句感谢的话（按回车；%t 是要感谢的人）",
-  ["Also in dungeons and battlegrounds"] = "在副本和战场中也生效",
   ["Ask"] = "询问",
   ["Ask (a bubble)"] = "询问（弹出气泡）",
   ["Automatic"] = "自动",
@@ -89,7 +80,6 @@ ns.L:Register("zhCN", {
   ["Clear the screen"] = "清屏",
   ["Click: set this slot"] = "点击：设置此格",
   ["Click: the options. Right click: edit the rings."] = "点击：选项。右键：编辑环。",
-  ["Courtesy"] = "礼貌",
   ["Courtesy: %s"] = "礼貌：%s",
   ["Default rings"] = "默认环",
   ["Edit the ring"] = "编辑此环",
@@ -105,13 +95,9 @@ ns.L:Register("zhCN", {
   ["Long road"] = "漫漫长路",
   ["Looks around"] = "环顾四周",
   ["Lore here"] = "此处传说",
-  ["May the road be kind to you, %t."] = "愿前路对你温柔以待，%t。",
-  ["Much obliged, %t."] = "万分感激，%t。",
   ["My thanks, friend."] = "多谢了，朋友。",
   ["Needs Bastian's %s"] = "需要 Bastian's %s",
-  ["Not now"] = "暂时不了",
   ["Note here"] = "在此记笔记",
-  ["Off"] = "关",
   ["Ring"] = "环",
   ["Ring %d: %s"] = "环 %d：%s",
   ["Route home"] = "回家的路线",
@@ -124,7 +110,6 @@ ns.L:Register("zhCN", {
   ["Spoken as"] = "说话方式",
   ["Thank"] = "感谢",
   ["Thank them?"] = "要感谢对方吗？",
-  ["Thank you, %t!"] = "谢谢你，%t！",
   ["Thanks, friend"] = "多谢，朋友",
   ["The common tongue"] = "通用语",
   ["The key opens and closes the ring (else: hold it, release on a wedge)"] = "按键用于打开和关闭环（否则：按住，在扇区上松开）",
@@ -143,5 +128,4 @@ ns.L:Register("zhCN", {
   ["say"] = "说",
   ["yell"] = "大喊",
   -- Bastian's Campfire (plan-second-wave.md S5, 02.11.2026)
-  ["%s's camp warmed you"] = "%s的营地温暖了你",
 })

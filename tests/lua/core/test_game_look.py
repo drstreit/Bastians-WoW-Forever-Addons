@@ -74,7 +74,7 @@ def test_the_browsers_panes_sit_in_the_games_insets(wow: WowRuntime):
     boot(wow, True, "Bastians_Core", "Bastians_Data", "Bastians_Browser")
     wow.execute("Bastians:GetModule('Browser').Browser.OpenWindow()")
     wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
-    nav = "Bastians:GetModule('Browser').nav"
+    nav = "Bastians:GetModule('Browser').listPane"  # the list tile (the navigation until ADR 0056)
     inset = f"{nav}.gameInset"
     assert wow.eval(f"{inset}:IsShown()") is True
     assert wow.eval(f"{inset}.Bg:GetTexture()") == "Interface\\FrameGeneral\\UI-Background-Marble"

@@ -1,16 +1,16 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Gestures
 ## IconTexture: Interface\AddOns\Bastians_Gestures\Icon
-## Notes: A ring of emotes, your own lines and the suite's actions on one key; a ready thank-you when someone buffs you.
-## Notes-koKR: 감정 표현, 나만의 문구, 애드온 모음의 동작을 키 하나의 링에; 누군가 버프를 주면 바로 감사 인사.
-## Notes-zhCN: 一个按键上的环：表情、你自己的台词和插件合集的动作；有人给你增益时随时道谢。
-## Notes-zhTW: 一個按鍵上的環：表情、你自己的台詞與插件合集的動作；有人給你增益時隨時道謝。
-## Notes-deDE: Ein Ring aus Emotes, deinen eigenen Zeilen und den Aktionen der Suite auf einer Taste; ein fertiges Danke, wenn dich jemand bufft.
-## Notes-frFR: Un anneau d'émotes, de vos propres lignes et des actions de la suite sur une touche ; un merci tout prêt quand quelqu'un vous améliore.
-## Notes-esES: Un anillo de emociones, tus propias líneas y las acciones de la suite en una tecla; un gracias listo cuando alguien te mejora.
-## Notes-esMX: Un anillo de emociones, tus propias líneas y las acciones de la suite en una tecla; un gracias listo cuando alguien te mejora.
-## Notes-ruRU: Круг эмоций, ваши собственные фразы и действия набора на одной клавише; готовое спасибо, когда вас усилили.
-## Notes-ptBR: Um anel de emotes, suas próprias falas e as ações da suite em uma tecla; um agradecimento pronto quando alguém lhe dá um bônus.
+## Notes: A ring of emotes, your own lines and the suite's actions on one key.
+## Notes-koKR: 감정 표현, 나만의 문구, 애드온 모음의 동작을 키 하나의 링에.
+## Notes-zhCN: 一个按键上的环：表情、你自己的台词和插件合集的动作。
+## Notes-zhTW: 一個按鍵上的環：表情、你自己的台詞與插件合集的動作。
+## Notes-deDE: Ein Ring aus Emotes, deinen eigenen Zeilen und den Aktionen der Suite auf einer Taste.
+## Notes-frFR: Un anneau d'émotes, de vos propres lignes et des actions de la suite sur une touche.
+## Notes-esES: Un anillo de emociones, tus propias líneas y las acciones de la suite en una tecla.
+## Notes-esMX: Un anillo de emociones, tus propias líneas y las acciones de la suite en una tecla.
+## Notes-ruRU: Круг эмоций, ваши собственные фразы и действия набора на одной клавише.
+## Notes-ptBR: Um anel de emotes, suas próprias falas e as ações da suite em uma tecla.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 1.6.0
+## Version: 2.1.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Voice, Bastians_Map, Bastians_Route, Bastians_Notes, Bastians_Quests
@@ -40,7 +40,6 @@ News.lua
 Compat.lua
 Model.lua
 Ring.lua
-Courtesy.lua
 Editor.lua
 Feed.lua
 Gestures.lua

@@ -138,22 +138,19 @@ def test_spots_are_entities_with_gold_per_hour_and_evidence(wow: WowRuntime):
     summary = strip(wow.eval("Bastians:Entity('spot:1'):Summary()"))
     if wow.client == "forever":
         # 30 linen at 38c = 11s 40c; the claw has no price
-        assert (
-            summary
-            == "level 8-12, 11s/h (1 items without price), verified, 3 channels, reach 12000"
-        )
+        assert summary == "level 8-12, 11s/h (1 items without price), 3 channels, reach 12000"
         assert wow.eval(f"{MOD}.Spots.GoldPerHour(Bastians:GetService('data'):Get('spot', 1))") == (
             1140,
             1,
         )
     else:
-        assert summary.startswith("level 8-12, 12s/h (1 items without price), verified")  # 30 x 40c
-    assert (
-        strip(wow.eval("Bastians:Entity('spot:3'):Summary()"))
-        == "level 10-15, gold/h unknown, refuted"
-    )
+        assert summary.startswith(
+            "level 8-12, 12s/h (1 items without price), 3 channels"
+        )  # 30 x 40c
+    # no rate known: the summary does not say it, the worth column does
+    assert strip(wow.eval("Bastians:Entity('spot:3'):Summary()")) == "level 10-15"
     assert wow.eval("Bastians:Entity('strategy:11'):Name()") == "Hogger's camp linen farm"
-    assert wow.eval("Bastians:Entity('strategy:11'):Summary()") == "farm, verified, 3 channels"
+    assert wow.eval("Bastians:Entity('strategy:11'):Summary()") == "farm, 3 channels"
     locs = wow.eval("Bastians:Entity('spot:1'):Locations()")
     assert (locs[1].map, locs[1].x, locs[1].y, locs[1].kind) == (1429, 0.27, 0.86, "spot")
     assert wow.errors == []
@@ -166,9 +163,9 @@ def test_farm_spot_layer_pins_carry_radius_colour_and_gold_per_hour(wow: WowRunt
     }
     assert sorted(pins) == ["spot:1", "spot:2"]  # Westfall is outside the view
     hogger = pins["spot:1"]
-    assert (hogger.radius, hogger.status, hogger.cluster) == (120, "verified", True)
+    assert (hogger.radius, hogger.cluster) == (120, True)
     assert list(hogger.color.values()) == list(
-        wow.eval("Bastians.UI.Style.C.good").values()
+        wow.eval("Bastians.UI.Style.C.neutral").values()
     )  # the theme's token (ST3)
     assert hogger.label.startswith("Hogger's camp (") and hogger.label.endswith("/h)")
     assert list(pins["spot:2"].color.values()) == list(
@@ -182,8 +179,8 @@ def test_where_to_farm_section_search_and_actions(wow: WowRuntime):
     sections = {s.id: s for s in wow.eval("Bastians:GetDetailSections('item:2589')").values()}
     rows = [(strip(r.text), r.ref) for r in sections["gold.farm"].rows.values()]
     assert rows == [  # no graph network in the fixture: the straight line stands in (W8)
-        ("Hogger's camp  verified, 3 channels, reach 12000, 103 yd", "spot:1"),
-        ("Fargodeep Mine  unverified, 1 channel, reach 800, 61 yd", "spot:2"),
+        ("Hogger's camp  3 channels, reach 12000, 103 yd", "spot:1"),
+        ("Fargodeep Mine  1 channel, reach 800, 61 yd", "spot:2"),
     ]
     assert "gold.farm" not in {
         s.id for s in wow.eval("Bastians:GetDetailSections('item:6948')").values()
@@ -194,7 +191,7 @@ def test_where_to_farm_section_search_and_actions(wow: WowRuntime):
     texts = [strip(r.text) for r in strategy.rows.values()]
     assert texts[0].startswith("Gold per hour (1 items without price)")
     assert texts[1] == "Linen Cloth x30/h" and texts[2] == "Huge Gnoll Claw x1/h"
-    assert "Evidence: verified, 3 channels, reach 12000" in texts
+    assert "Evidence: 3 channels, reach 12000" in texts
     assert any(
         t.startswith("Hogger's camp linen farm  last seen 2025-10-09") or "last seen" in t
         for t in texts
@@ -297,3 +294,21 @@ def test_income_per_day_files_ah_apart_from_loot_for_the_account_and_each_charac
     fresh.fire("PLAYER_MONEY")
     assert fresh.eval("BastiansGoldDB.global.income['2020-01-01']") is None
     assert fresh.errors == []
+
+
+def test_an_item_with_no_known_rate_is_unknown_not_zero(wow: WowRuntime):
+    """ "0c/h" on a spot whose items name no rate."""
+    boot(wow)
+    spots = f"{MOD}.Spots"
+    wow.execute(
+        """
+        local prices = Bastians:GetService('prices')
+        REAL_PRICE = prices and prices.Price
+        if prices then prices.Price = function() return { median = 100 } end end
+        """
+    )
+    assert wow.eval("Bastians:GetService('prices')") is not None
+    assert wow.eval(f"({spots}.GoldPerHour({{ items = {{ {{ 2589 }} }} }}))") is None
+    assert wow.eval(f"({spots}.GoldPerHour({{ items = {{ {{ 2589, 3 }} }} }}))") == 300
+    assert wow.eval(f"{spots}.GoldPerHourText({{ items = {{ {{ 2589 }} }} }})") == "gold/h unknown"
+    assert wow.errors == []

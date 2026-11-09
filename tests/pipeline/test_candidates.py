@@ -68,14 +68,14 @@ def test_the_score_has_visible_parts_and_the_page_is_marked():
     top = found["farming"][0]
     assert top.page == "hogger-camp"
     assert top.parts["channels"] == 20 and top.parts["freshness"] == 15
-    assert top.parts["verification"] == 7.5  # one verified of two
+    assert "verification" not in top.parts  # nothing is judged
     assert top.parts["level cap"] == 20  # Elwynn's lowest level is within 30
     # half the evidence, one and a half times the value, the nuggets (none of these claims has
     # a number); no price in this export: no value, a gold chapter marks it
-    assert top.evidence == 86.5 and top.parts["value"] == 0 and top.low_value is True
+    assert top.evidence == 79 and top.parts["value"] == 0 and top.low_value is True
     assert top.score == round(top.evidence / 2 + 1.5 * top.parts["value"] + top.parts["nuggets"], 1)
     low = found["farming"][-1]
-    assert low.parts["verification"] == -15 and low.parts["freshness"] == 0
+    assert low.parts["freshness"] == 0
     text = report(found)
     assert "## farming (2 strategies)" in text and "page `hogger-camp`" in text
     assert "## fishing (0 strategies)" in text

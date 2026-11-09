@@ -64,7 +64,15 @@ function Model.Card(input)
   end
   -- `features`: the benefits the camp gives anyone of the group (their auras, probe C5); the
   -- player's own buffs without a group
-  local out = { have = have, left = left, could = Model.Could(input.carried, input.features or have) }
+  local out = {
+    have = have,
+    left = left,
+    could = Model.Could(input.carried, input.features or have, {
+      professions = input.professions,
+      cooling = input.cooling,
+      placedHere = input.placedHere,
+    }),
+  }
   if input.resting then
     out.state = "warming"
     if type(input.resting) == "number" then
@@ -82,22 +90,86 @@ function Model.Card(input)
   return out
 end
 
--- The carried features whose benefit the camp does not give yet (one feature per player at a
--- camp: the suggestions are the player's own). A service feature (no benefit) is always offered.
-function Model.Could(carried, have)
+-- Whether the character can use `feature` (`professions`: { [skill line] = rank }). No answer from the
+-- client, an empty table included, is unknown: then it is offered, the game has the last word.
+local function canUse(feature, professions)
+  if type(professions) ~= "table" or next(professions) == nil then
+    return true
+  end
+  return (professions[feature.skill] or 0) >= feature.rank
+end
+
+-- The carried features whose benefit the camp does not give yet, the highest rank of each (one feature
+-- per player at a camp: the suggestions are the player's own). A service feature (no benefit) is always
+-- offered. `ctx`: `professions`, `cooling` ({ [item] = true }), `placedHere` (none after the player's
+-- own: one per player and camp).
+function Model.Could(carried, have, ctx)
+  ctx = ctx or {}
+  if ctx.placedHere then
+    return {}
+  end
   local got = {}
   for _, key in ipairs(have or {}) do
     got[key] = true
   end
-  local out, seen = {}, {}
+  local out, at = {}, {}
   for _, feature in ipairs(carried or {}) do
     local key = feature.benefit or feature.name
-    if not feature.kit and not got[feature.benefit or ""] and not seen[key] then
-      seen[key] = true
-      out[#out + 1] = feature
+    local open = not feature.kit and not got[feature.benefit or ""]
+    if open and canUse(feature, ctx.professions) and not (ctx.cooling and ctx.cooling[feature.item]) then
+      if not at[key] then
+        out[#out + 1] = feature
+        at[key] = #out
+      elseif feature.rank > out[at[key]].rank then
+        out[at[key]] = feature
+      end
     end
   end
   return out
+end
+
+-- The carried kits the character can use, the biggest fire first.
+function Model.Kits(carried, professions)
+  local out = {}
+  for _, item in ipairs(carried or {}) do
+    if item.kit and canUse(item, professions) then
+      out[#out + 1] = item
+    end
+  end
+  table.sort(out, function(a, b)
+    return a.rank > b.rank
+  end)
+  return out
+end
+
+-- The flame of each state (campfire.md "The flame"): its size and brightness, the heart's brightness, how
+-- fast and how far it flickers.
+Model.FLAME = {
+  near = { size = 0.62, outer = 0.6, heart = 0.4, speed = 2.5, depth = 0.05 },
+  warming = { size = 0.85, outer = 0.9, heart = 1, speed = 5, depth = 0.06 },
+  warm = { size = 1, outer = 1, heart = 1, speed = 3, depth = 0.04 },
+  fading = { size = 0.72, outer = 0.9, heart = 0.8, speed = 9, depth = 0.14 },
+  away = { size = 0.55, outer = 0.45, heart = 0.25, speed = 1, depth = 0.02 },
+}
+
+-- The flame at the time `t`: -> size (of the full flame), the outer brightness, the heart's. Two waves
+-- that never line up, so that it does not look like a pulsing icon.
+function Model.Flame(state, t)
+  local f = Model.FLAME[state] or Model.FLAME.near
+  local wave = (math.sin(t * f.speed) + 0.5 * math.sin(t * f.speed * 2.3 + 1)) / 1.5
+  local other = math.cos(t * f.speed * 1.4)
+  return f.size * (1 + f.depth * wave),
+    math.min(1, f.outer * (1 - f.depth * (wave + 1) / 2)),
+    math.min(1, f.heart * (1 - f.depth * (other + 1)))
+end
+
+-- How much of the heart burns: while warming the part of the minute gone by, else all of it; a time
+-- nobody knows does not fill it (it flickers whole).
+function Model.Fill(state, warmIn)
+  if state ~= "warming" or type(warmIn) ~= "number" then
+    return 1
+  end
+  return math.max(0.1, math.min(1, 1 - warmIn / Camp.REST_SECONDS))
 end
 
 -- The benefits the camp still lacks (the group's suggestion line: names of benefits, never of

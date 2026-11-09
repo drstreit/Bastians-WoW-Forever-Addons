@@ -10,12 +10,10 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 230510532365511
-stamp = "true"
 why = "The clams hold them. The old loot lists put an Iridescent Pearl in one Thick-shelled Clam out of 33, and the Bluegills drop a clam in one kill out of three."
 
 [[rumours]]
 claim = 148514907432214
-stamp = "true"
 why = "The camps near the harbour hold Bluegills of level 20 to 22, the northern camps level 23 to 26."
 
 [[rumours]]

@@ -36,7 +36,19 @@ def test_zone_names_are_text_pins_with_the_level_band_at_low_zoom(wow: WowRuntim
     style = "Bastians.UI.Style.C"
     name, band = texts[0], texts[0].sub
     assert list(name.GetTextColor(name))[:3] == list(wow.eval(f"{style}.mapText").values())[:3]
-    assert list(band.GetTextColor(band))[:3] == list(wow.eval(f"{style}.mapTextDim").values())[:3]
+    # the band in the difficulty colour against the character's level (catalog review A3.4,
+    # 07.11.2026): 7-11 against the mock's character
+    level = wow.eval("UnitLevel('player')")
+    token = wow.eval(f"Bastians.UI.Style.BandToken(7, 11, {level})")
+    assert token in ("diffRed", "diffOrange", "diffYellow", "diffGreen", "diffGrey")
+    # drawn in its dark twin, readable on the light rim (the game's
+    # yellow on the rim read 1.05:1, "white with yellow outline and hard to read")
+    twin = "map" + token[0].upper() + token[1:]
+    assert list(band.GetTextColor(band))[:3] == list(wow.eval(f"{style}.{twin}").values())[:3]
+    assert pins[1].subInk == token
+    for t in ("diffRed", "diffOrange", "diffYellow", "diffGreen", "diffGrey"):
+        tw = "map" + t[0].upper() + t[1:]
+        assert wow.eval(f"Bastians.UI.Style.Contrast({style}.{tw}, {style}.mapTextRim)") >= 4.5
     # and a light rim around them
     rims = list(name.rims.values())
     rim = list(wow.eval(f"{style}.mapTextRim").values())[:3]
@@ -63,6 +75,19 @@ def test_points_of_interest_come_by_their_role_group(wow: WowRuntime):
     minimap = WORLD.replace("level = %d", "level = 5, minimap = true") % ()
     # on the minimap too
     assert len(wow.eval(f"Bastians:QueryLayer('map.travel', {minimap})")) > 0
+    # every known spawn is for the big map; the minimap shows what the game's tracking finds
+    #
+    big = WORLD.replace("level = %d", "level = 5") % ()
+    wow.execute(
+        "Hits, Real = 0, Bastians.Entity; "
+        "Bastians.Entity = function(...) Hits = Hits + 1; return Real(...) end"
+    )
+    wow.eval(f"Bastians:QueryLayer('map.nodes', {big})")
+    assert wow.eval("Hits") > 0  # the big map looks at the known spawns
+    wow.execute("Hits = 0")
+    assert len(wow.eval(f"Bastians:QueryLayer('map.nodes', {minimap})")) == 0
+    assert wow.eval("Hits") == 0  # the minimap never does
+    wow.execute("Bastians.Entity = Real")
     on = {
         layer: wow.eval(f"{MOD}.Pins.IsLayerOn(Bastians:GetMapLayer('{layer}'))")
         for layer in ("map.zones", "map.travel", "map.services", "map.vendors", "map.nodes")
@@ -177,3 +202,6 @@ def test_a_trainer_pin_says_what_it_trains(wow: WowRuntime):
     """ "I see the trainer names - but not what they train"."""
     boot(wow)
     assert query(wow, "map.trainers", 5) == [("npc:198", "Zaldimar Wefhellt (Mage)", None)]
+    # a subname without the word Trainer, and a vendor's, stand as they are
+    labels = {ref: label for ref, label, _ in query(wow, "map.vendors", 5)}
+    assert labels["npc:54"].endswith("(Weaponsmith)")

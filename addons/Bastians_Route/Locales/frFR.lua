@@ -64,6 +64,10 @@ ns.L:Register("frFR", {
   ["Route by default"] = "Itinéraire par défaut",
   ["Switch to this kind of route; it stays the default."] = "Passer à ce type d'itinéraire ; il reste celui par défaut.",
   ["Careful: level %d creatures"] = "Attention : créatures de niveau %d",
+  -- the route's verdict (catalog review A4.3, 07.11.2026)
+  ["Safe trip"] = "Trajet sûr",
+  ["Watch out"] = "Attention",
+  ["Risky trip"] = "Trajet risqué",
   ["elite"] = "élite",
 
   -- Death.lua (R26.8)
@@ -112,6 +116,10 @@ ns.L:Register("frFR", {
   ["All flight masters"] = "Tous les maîtres de vol",
   ["Open the step list when a route starts"] = "Ouvrir la liste des étapes au début d'un itinéraire",
   ["Show an arrow to the next step while a route is active"] = "Afficher une flèche vers l'étape suivante tant qu'un itinéraire est actif",
+  -- Flight.lua: the flight bar (catalog review A4.1, 07.11.2026)
+  ["Show a flight bar with the time left while flying"] = "Afficher une barre de vol avec le temps restant pendant le vol",
+  ["%s to %s"] = "%s vers %s",
+  ["%s left"] = "%s restant",
   ["Route here"] = "Itinéraire jusqu'ici",
   ["Route to"] = "Itinéraire vers",
   ["Open Bastian's Route"] = "Ouvrir Bastian's Route",
@@ -150,4 +158,13 @@ ns.L:Register("frFR", {
 
   -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
   ["Next: %s"] = "Suivant : %s",
+  -- the /way command (ADR 0062, 08.11.2026)
+  ["/way: %s"] = "/way : %s",
+  ["New route"] = "Nouvel itinéraire",
+  ["Add to route"] = "Ajouter à l'itinéraire",
+  ["Waypoints"] = "Points de passage",
+  ["What /way does while a route runs: start a new route, or add the place to the route."] = "Ce que fait /way pendant un itinéraire : en commencer un nouveau ou y ajouter le lieu.",
+  ["Which addon answers /way: Bastian's Route, or the one that had it first."] = "Quel addon répond à /way : Bastian's Route ou celui qui l'avait en premier.",
+  ["No zone called %s."] = "Aucune zone nommée %s.",
+  ["Several zones match %s: %s"] = "Plusieurs zones correspondent à %s : %s",
 })

@@ -14,6 +14,7 @@ ns.Window = W
 local RENDER_DELAY = 0.05
 
 local mod, win, tree, summary, hint, clearButton, replanButton, homeButton
+local wayOwnerButton, wayModeButton -- who answers /way, and what it does (ADR 0062)
 local kindButtons = {} -- kind -> button (R26.5)
 local KIND_LABELS = { fastest = "Fastest", safe = "Safest", nocost = "No flights" }
 local KIND_ICONS = { fastest = "arrow", safe = "keep", nocost = "gold" } -- their pictograms (ADR 0046)
@@ -133,12 +134,39 @@ function W.RenderKinds(route)
   end
 end
 
+-- The row of /way (ADR 0062): "/way: TomTom" only where another addon has the command; what /way
+-- does only while Route is the one answering.
+function W.RenderWay()
+  local Way, x = ns.Way, 8
+  local name = Way.OwnerName()
+  local ours = not name or Way.OverOwner()
+  local function place(button)
+    button:ClearAllPoints()
+    button:SetPoint("BOTTOMLEFT", win.content, "BOTTOMLEFT", x, 30)
+    button:Show()
+    x = x + button:GetWidth() + 4
+  end
+  if name then
+    wayOwnerButton:SetLabel(string.format(L["/way: %s"], ours and L["Route"] or name))
+    place(wayOwnerButton)
+  else
+    wayOwnerButton:Hide()
+  end
+  if ours then
+    wayModeButton:SetLabel(string.format(L["/way: %s"], db().wayAdd and L["Add to route"] or L["New route"]))
+    place(wayModeButton)
+  else
+    wayModeButton:Hide()
+  end
+end
+
 function W.Render()
   if not (win and win:IsShown()) then
     return
   end
   local route = ns.Route.Active()
   W.RenderKinds(route)
+  W.RenderWay()
   if not route then
     summary:SetText(L["No route. Right click anything with a place and choose Route to."])
     tree:SetRows({})
@@ -148,11 +176,18 @@ function W.Render()
   end
   local goal = route.goal and route.goal.name or L["the target"]
   local left = Graph.FormatSeconds(Graph.Remaining(route))
+  local text
   if route.tour then -- several stops (R26.4)
-    summary:SetText(string.format(L["%s: %d stops, %s"], route.tour.name, #route.tour.stops, left))
+    text = string.format(L["%s: %d stops, %s"], route.tour.name, #route.tour.stops, left)
   else
-    summary:SetText(string.format(L["To %s: %s, %d steps"], goal, left, #route.steps))
+    text = string.format(L["To %s: %s, %d steps"], goal, left, #route.steps)
   end
+  -- the verdict (A4.3): one word on the creatures along the way, in its colour
+  local words, verdict = Graph.VerdictText(route, (B.Compat.GetPlayerFacts() or {}).level, L)
+  if verdict then
+    text = text .. "  " .. S.H[Graph.VERDICT_TOKENS[verdict]] .. words .. "|r"
+  end
+  summary:SetText(text)
   tree:SetRows(stepRows(route))
   clearButton:Show()
   replanButton:Show()
@@ -220,14 +255,28 @@ local function build()
     b:Hide()
     kindButtons[kind] = b
   end
+  wayOwnerButton = S.action(content, { icon = "arrow", label = "/way", row = true, boxed = true })
+  wayOwnerButton.tip = L["Which addon answers /way: Bastian's Route, or the one that had it first."]
+  wayOwnerButton:SetScript("OnClick", function()
+    ns.Way.SetOverOwner(not ns.Way.OverOwner())
+    W.RenderWay()
+  end)
+  wayModeButton = S.action(content, { icon = "route", label = "/way", row = true, boxed = true })
+  wayModeButton.tip =
+    L["What /way does while a route runs: start a new route, or add the place to the route."]
+  wayModeButton:SetScript("OnClick", function()
+    db().wayAdd = not db().wayAdd
+    W.RenderWay()
+  end)
   tree = B.UI.Tree(content, { db = db().tree, ctx = { source = "route" } })
   tree.chips:ClearAllPoints()
   tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -46)
   tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, -46)
   tree.scroll:ClearAllPoints()
   tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
-  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 28)
+  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 54) -- above the row of /way
   W.win, W.tree, W.summary, W.homeButton, W.kindButtons = win, tree, summary, homeButton, kindButtons
+  W.wayOwnerButton, W.wayModeButton = wayOwnerButton, wayModeButton
 end
 
 function W.Open()

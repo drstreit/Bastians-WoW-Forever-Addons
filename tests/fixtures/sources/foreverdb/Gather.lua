@@ -18,6 +18,7 @@ ns.gatherData = {
     [52] = { n = "Bloodtalon Taillasher", p = "skin", sk = 1, lv = { 6, 8 }, npc = { 3122 } },
   },
   zones = {
+    [1429] = { fish = 25, k = {} },
     [1411] = { fish = 25, k = {
       [5] = { c = "0r97159v179u1aa41j8f1k861n8c1n8e209z23ab4b9o5eav5l8b5m7v5m8j5p835p8b5p8q5t7s5t8b5u8o5w825xb66093618q618u65ar699f6ha28rax909x928g9c819c9h9d9b9d9uaofiax6xb87ubbe5bt7fc06ocadscbdrdh9he27deb5cef6mf16dg34qg588", f = "", w = 5.6 },
       [6] = { c = "079u1q834j8v5g80669ra4q9a7k6", f = "", w = 2.3 },

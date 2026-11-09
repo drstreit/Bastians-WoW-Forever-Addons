@@ -602,8 +602,11 @@ def watch(
     return report
 
 
-def daily_lines(root: Path = ROOT, today: str | None = None) -> list[str]:
-    """The daily chain's step: the report's lines, never an exception."""
+def daily_lines(
+    root: Path = ROOT, today: str | None = None, *, pages: Path | None = None
+) -> list[str]:
+    """The daily chain's step: the report's lines, never an exception. `pages` is where the
+    reference pages go (ops.toml's `companion_pages`; default the repository's docs folder)."""
     try:
         clients = client_folders(root / ".local" / "install.toml")
         if not clients:
@@ -616,7 +619,7 @@ def daily_lines(root: Path = ROOT, today: str | None = None) -> list[str]:
             clients,
             companions,
             snapshots=root / ".local" / "companions",
-            pages=root / "docs" / "reference" / "companions",
+            pages=pages or root / "docs" / "reference" / "companions",
             alert=root / ".local" / "companions" / "ALERT.md",
             today=today,
             libraries=load_libraries(config),

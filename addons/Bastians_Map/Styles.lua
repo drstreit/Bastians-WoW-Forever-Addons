@@ -12,6 +12,12 @@ local Styles = {}
 ns.Styles = Styles
 
 Styles.NEAR_LEVEL = 3 -- near cells from this level on (a 1024 px cell of 4 tiles: 256 px per tile)
+-- A picture of the world for another app (the `mapPicture` service, ADR 0056, PA6): the far cells
+-- hold 512 px per 8 tiles. Near cells only where a picture asks for clearly more than that: they
+-- are four times the file, and at the sizes of a sheet the far cells are sharp (measured
+-- 06.11.2026, forever-api.md, the probe's minimaps).
+Styles.FAR_PX = 512
+Styles.NEAR_OVER = 1.25
 Styles.MAX_TEXTURES = 48
 Styles.MARGIN = 1
 
@@ -109,6 +115,18 @@ function Styles.Count(key, which, continent)
   return n
 end
 
+-- What a continent shows under a chosen style: the style, or "physical" where a baked style holds no
+-- cell. The choice itself stays.
+function Styles.On(style, continent)
+  local st = registered[style]
+  if st and not (st.far and next(st.far.cells[continent] or {})) then
+    if not (st.near and next(st.near.cells[continent] or {})) then
+      return "physical"
+    end
+  end
+  return style
+end
+
 -- World rectangle of cell (cx, cy) of `span` tiles: wx1 < wx2, wy1 < wy2.
 function Styles.WorldRect(cx, cy, span)
   local x1, y1 = Tiles.WorldRect(cx * span + span - 1, cy * span + span - 1)
@@ -163,7 +181,7 @@ end
 -- The far cells always (they stay under the near ones while those load), the near cells from
 -- NEAR_LEVEL on; nothing when the style is not one of ours.
 function Styles.Render(cam)
-  local st = registered[Map.Style()]
+  local st = registered[Map.StyleOn(cam.continent)]
   if not st then
     Tiles.Clear(Styles.far)
     Tiles.Clear(Styles.near)
@@ -188,7 +206,41 @@ function Styles.Render(cam)
   end
 end
 
+-- The chosen style's cells for a world rectangle drawn `pixels` wide: { { path, x1, y1, x2, y2 },
+-- ... } (the shape of Styles.Visible), or nil on the physical map and where the style has no cell.
+-- `style`: a style's key in place of the large map's (the Browser's mini maps).
+function Styles.Picture(continent, wx1, wy1, wx2, wy2, pixels, style)
+  local st = registered[style or Map.Style()] or (style and registered[Map.Style()])
+  if not (st and st.far) then
+    return nil
+  end
+  local wide = wy2 - wy1
+  local farDensity = Styles.FAR_PX / (st.far.span * Tiles.TILE_YARDS)
+  local cells
+  if st.near and pixels and wide > 0 and pixels / wide > farDensity * Styles.NEAR_OVER then
+    cells = Styles.Visible(st.near, continent, wx1, wy1, wx2, wy2, 0)
+  end
+  if not cells or #cells == 0 then
+    cells = Styles.Visible(st.far, continent, wx1, wy1, wx2, wy2, 0)
+  end
+  return #cells > 0 and cells or nil
+end
+
 ns.mod.Styles = Styles
+table.insert(Map.onEnable, function(self)
+  B:ProvideService(self, "mapPicture", {
+    Cells = function(_, continent, wx1, wy1, wx2, wy2, pixels, style)
+      return Styles.Picture(continent, wx1, wy1, wx2, wy2, pixels, style)
+    end,
+    Styles = function()
+      local out = {}
+      for i, st in ipairs(Styles.List()) do
+        out[i] = { key = st.key, title = Map.StyleTitle(st.key) }
+      end
+      return out
+    end,
+  }, { priority = 100 })
+end)
 table.insert(Map.onView, Styles.Render)
 table.insert(Map.onResize, function(cam)
   Tiles.Reposition(Styles.far, cam)

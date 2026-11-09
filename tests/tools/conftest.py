@@ -23,4 +23,13 @@ def _sources_offline(monkeypatch):
     except ImportError:  # the public snapshot has no daily run (tools/publish.py PRIVATE)
         return
     monkeypatch.setattr(sources_update, "latest_on_curseforge", lambda project: None)
-    monkeypatch.setattr(sources_update, "client_build", lambda: None)
+    monkeypatch.setattr(sources_update, "client_build", lambda *a, **kw: None)
+    try:
+        from ops import watch
+    except ImportError:
+        return
+
+    def offline(url):
+        raise OSError(f"no network in a test: {url}")
+
+    monkeypatch.setattr(watch, "_fetch", offline)  # Blizzard's version service

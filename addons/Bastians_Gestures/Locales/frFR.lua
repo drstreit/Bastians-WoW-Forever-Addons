@@ -3,6 +3,7 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("frFR", {
+  -- /bgest try (gestures.md "The voice", 08.11.2026)
   -- the owner's follow-ups (retail 01.11.2026, late)
   ["(a macro)"] = "(une macro)",
   ["A macro of the account"] = "Une macro du compte",
@@ -52,29 +53,19 @@ ns.L:Register("frFR", {
   ["Show or hide the cloak"] = "Afficher ou masquer la cape",
   ["A random favourite mount"] = "Une monture favorite au hasard",
   -- plan-second-wave.md S7 (01.11.2026)
-  ["%s challenges you to a duel"] = "%s vous défie en duel",
-  ["%s wants to trade"] = "%s veut échanger",
-  ["%s invites you to a group"] = "%s vous invite dans un groupe",
   ["Answer?"] = "Répondre ?",
   ["Bow"] = "S'incliner",
   ["Wave"] = "Saluer",
-  ["Decline politely"] = "Décliner poliment",
-  ["Thank you, but not today, %t."] = "Merci, mais pas aujourd'hui, %t.",
   ["The polite decline of a duel, a trade or an invite (press Enter; %t is who asked)"] = "Le refus poli d'un duel, d'un échange ou d'une invitation (Entrée ; %t est qui a demandé)", -- luacheck: ignore 631
   -- plan-second-wave.md S6 (01.11.2026)
   ["Mark heard"] = "Marquer comme entendu",
   ["Toggle the tracker"] = "Afficher ou masquer le suivi",
-  ["%s buffed you"] = "%s vous a béni",
-  ["%s cast %s on you"] = "%s a lancé %s sur vous",
-  ["%s greets you"] = "%s vous salue",
-  ["%s resurrected you"] = "%s vous a ressuscité",
   ["(a ring)"] = "(un anneau)",
   ["A line for slot %d"] = "Une ligne pour l'emplacement %d",
   ["A ring of its own"] = "Un anneau à part",
   ["A short title for the wedge"] = "Un titre court pour la part",
   ["Actions"] = "Actions",
   ["Add a thank-you line (press Enter; %t is who to thank)"] = "Ajouter une ligne de remerciement (appuyez sur Entrée ; %t est la personne à remercier)",
-  ["Also in dungeons and battlegrounds"] = "Aussi dans les donjons et les champs de bataille",
   ["Ask"] = "Demander",
   ["Ask (a bubble)"] = "Demander (une bulle)",
   ["Automatic"] = "Automatique",
@@ -89,7 +80,6 @@ ns.L:Register("frFR", {
   ["Clear the screen"] = "Effacer l'écran",
   ["Click: set this slot"] = "Clic : définir cet emplacement",
   ["Click: the options. Right click: edit the rings."] = "Clic : les options. Clic droit : modifier les anneaux.",
-  ["Courtesy"] = "Courtoisie",
   ["Courtesy: %s"] = "Courtoisie : %s",
   ["Default rings"] = "Anneaux par défaut",
   ["Edit the ring"] = "Modifier l'anneau",
@@ -105,13 +95,9 @@ ns.L:Register("frFR", {
   ["Long road"] = "Longue route",
   ["Looks around"] = "Regarde autour",
   ["Lore here"] = "Tradition ici",
-  ["May the road be kind to you, %t."] = "Que la route vous soit douce, %t.",
-  ["Much obliged, %t."] = "Je vous suis très obligé, %t.",
   ["My thanks, friend."] = "Mes remerciements, ami.",
   ["Needs Bastian's %s"] = "Nécessite Bastian's %s",
-  ["Not now"] = "Pas maintenant",
   ["Note here"] = "Note ici",
-  ["Off"] = "Désactivé",
   ["Ring"] = "Anneau",
   ["Ring %d: %s"] = "Anneau %d : %s",
   ["Route home"] = "Itinéraire vers la maison",
@@ -124,7 +110,6 @@ ns.L:Register("frFR", {
   ["Spoken as"] = "Prononcé comme",
   ["Thank"] = "Remercier",
   ["Thank them?"] = "Les remercier ?",
-  ["Thank you, %t!"] = "Merci, %t !",
   ["Thanks, friend"] = "Merci, ami",
   ["The common tongue"] = "La langue commune",
   ["The key opens and closes the ring (else: hold it, release on a wedge)"] = "La touche ouvre et ferme l'anneau (sinon : la maintenir, la relâcher sur une part)",
@@ -143,5 +128,4 @@ ns.L:Register("frFR", {
   ["say"] = "dire",
   ["yell"] = "crier",
   -- Bastian's Campfire (plan-second-wave.md S5, 02.11.2026)
-  ["%s's camp warmed you"] = "Le camp de %s vous a réchauffé",
 })

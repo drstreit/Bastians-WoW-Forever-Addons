@@ -14,13 +14,28 @@ Prices.DEFAULT_MAX_AGE_HOURS = 24
 local PARSE_CHUNK = 2000 -- raw records per job slice
 
 -- Realm name -> ruleset and region, as AHledger names its markets
--- (`forever/{normal,pvp,rp}/{alliance,horde}/{us,eu,cn}`). Launch realm names are unknown on
--- 19.10.2026; add them here on launch night. An unknown realm gets "normal" and the region guess.
+-- (`forever/{normal,pvp,rp}/{alliance,horde}/{us,eu,cn}`). The live client reports an internal realm
+-- name, not the one its realm list shows: "CAMWOW EU5 Realm 10 RP" for "EU - RP PvE" (measured
+-- 05.11.2026, build 70790). An unknown realm gets the ruleset guess below, else "normal", and the
+-- region guess.
+Prices.MAX_CHAIN = 4 -- markets a price lookup walks
+
 Prices.REALMS = {
   ["Classic Beta PvE"] = { ruleset = "normal", region = "us" },
   ["Classic Beta PvP"] = { ruleset = "pvp", region = "us" },
+  ["CAMWOW EU5 Realm 10 RP"] = { ruleset = "rp", region = "eu" },
 }
 local REGIONS = { "us", "kr", "eu", "tw", "cn" }
+
+-- The end of an internal realm name of the measured shape ("... Realm <n> RP", "... Realm 7 PvE",
+-- the second seen in Grimlight's Depot's scans 06.11.2026). "PvP" and "RP PvP" are assumed by
+-- analogy, no such realm was seen yet (forever-api.md).
+local RULESET_WORDS = { rp = "rp", pvp = "pvp", rppvp = "rppvp", pve = "normal" }
+
+local function rulesetGuess(realm)
+  local words = string.match(realm, "Realm %d+ ([%a ]+)$")
+  return words and RULESET_WORDS[string.lower(string.gsub(words, " ", ""))] or nil
+end
 
 local mod -- the Gold module
 local market -- { id, game, ruleset, faction, region, realm, known }
@@ -46,7 +61,7 @@ function Prices.DetectMarket()
   else
     m = {
       game = "forever",
-      ruleset = known and known.ruleset or "normal",
+      ruleset = known and known.ruleset or rulesetGuess(realm) or "normal",
       faction = faction,
       region = known and known.region or regionGuess() or "unknown",
     }
@@ -175,19 +190,33 @@ local function marketInfo()
 end
 
 -- The market whose records the pack holds for the player's: its own, or the one a fill points
--- at (`alias`: an EU market before launch reads the US beta's rows, data.md "Market pack").
+-- at (`alias`: a market without rows reads its sibling's, data.md "Market pack").
 local function packMarket()
   local info = marketInfo()
   return info and info.alias or (market and market.id)
 end
 Prices.PackMarket = packMarket
 
+-- The record of the market, else of the next market its chain names (`fallback`: an EU market
+-- holds fewer items than the US one, data.md "Market pack").
 local function packPrice(itemID)
   local d = data()
   if not (d and market and d:PackLoaded("market")) then
     return nil
   end
-  return d:Get("price", packMarket() .. ":" .. itemID)
+  local id = packMarket()
+  for _ = 0, Prices.MAX_CHAIN do
+    local rec = d:Get("price", id .. ":" .. itemID)
+    if rec then
+      return rec
+    end
+    local info = d:Index("market.list", id)
+    id = info and (info.fallback or info.alias)
+    if not id then
+      return nil
+    end
+  end
+  return nil
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -206,7 +235,7 @@ function service:Market()
   return market
 end
 
--- { median, minBuyout, quantity, salesPerDay, age (seconds), source = "scan" | "market", label,
+-- { median, minBuyout, quantity, salesPerDay, age (seconds), source = "scan" | "addon" | "market", label,
 --   stale = true when an old scan is all there is } or nil when nothing is known.
 function service:Price(itemID)
   if not itemID then
@@ -216,14 +245,24 @@ function service:Price(itemID)
   local own = scan and scan.items[itemID] or nil
   local ownAge = scan and (now - (scan.ts or 0)) or nil
   if own and ownAge <= maxAge() then
+    -- the pack's 30-day figures beside the own scan's listing: a bargain is today's lowest
+    -- listing against the usual price
+    local p = packPrice(itemID)
     return {
       median = own.median,
       minBuyout = own.minBuyout,
       quantity = own.quantity,
       salesPerDay = nil, -- one scan cannot tell
+      median30d = p and p.median30d or nil,
+      low30d = p and p.low30d or nil,
+      high30d = p and p.high30d or nil,
       age = ownAge,
       source = "scan",
     }
+  end
+  local bridged = ns.Bridges.Price(itemID) -- the player's own market, where an addon knows it
+  if bridged then
+    return bridged
   end
   local p = packPrice(itemID)
   if p then
@@ -239,7 +278,7 @@ function service:Price(itemID)
       high30d = p.high30d,
       age = p.scanTs and (now - p.scanTs) or nil,
       source = "market",
-      label = (info and info.alias and info.label) or p.src or (info and info.label) or nil,
+      label = p.src or (info and info.label) or nil, -- the row's: it says when it is an old one
     }
   end
   if own then

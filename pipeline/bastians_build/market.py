@@ -79,6 +79,24 @@ def place_map(where: str | None, zones: dict[str, int]) -> int | None:
     return zones.get(text) or zones.get(text.split(",")[0].strip())
 
 
+MAX_CHAIN = 4  # markets a lookup walks, as Gold's prices do
+
+
+def old_rows(prices: list[dict], days: int) -> set[int]:
+    """The indexes of the rows more than `days` older than their market's newest scan. A row without
+    a time is not among them: unknown is not old."""
+    newest: dict[str, int] = {}
+    for row in prices:
+        ts = row.get("scan_ts")
+        if ts is not None and ts > newest.get(row["market"], 0):
+            newest[row["market"]] = ts
+    return {
+        i
+        for i, row in enumerate(prices)
+        if row.get("scan_ts") is not None and row["scan_ts"] < newest[row["market"]] - days * 86400
+    }
+
+
 def add_market(world: World, export: Export, config: MarketConfig) -> list[str]:
     """Add the export's market records to the world; returns the notes (fills applied/skipped)."""
     notes: list[str] = []
@@ -94,15 +112,20 @@ def add_market(world: World, export: Export, config: MarketConfig) -> list[str]:
         prices = [r for r in prices if r["market"] in keep]
         signals = [r for r in signals if r["market"] in keep]
         notes.append(f"market rows left out (not shipped, [market] ship): {left} prices")
+    old = old_rows(prices, config.max_age_days) if config.max_age_days else set()
+    if old:
+        notes.append(
+            f"market rows older than their market: {len(old)} prices, as {config.old_label!r}"
+        )
     markets = {row["market"] for row in prices} | {row["market"] for row in signals}
-    for row in prices:
+    for i, row in enumerate(prices):
         if row["item_id"] is None or not row["market"]:
             world.drop("price", row.get("item_id"), "price row without market or item")
             continue
         world.add(
             "price",
             price_key(row["market"], row["item_id"]),
-            _price_record(row, config.label(row["market"])),
+            _price_record(row, config.old_label if i in old else config.label(row["market"])),
         )
     for row in signals:
         if row["signal_id"] is None or not row["market"]:
@@ -113,14 +136,29 @@ def add_market(world: World, export: Export, config: MarketConfig) -> list[str]:
             f"{row['market']}:{row['signal_id']}",
             _signal_record(row, row["market"], row["src"]),
         )
+    sources = {f.to: f.source for f in config.fill}
+
+    def answers(market: str) -> bool:
+        """The market has prices, or reads a market that has: EU RP reads EU normal, which may
+        itself read US normal."""
+        for _ in range(MAX_CHAIN):
+            if any(r["market"] == market and r["item_id"] is not None for r in prices):
+                return True
+            if market not in sources:
+                return False
+            market = sources[market]
+        return False
+
     for fill in config.fill:
         if keep is not None and fill.to not in keep:
             continue
-        if fill.to in markets:
-            notes.append(f"market {fill.to} has its own rows; fill from {fill.source} not applied")
-            continue
         rows = sum(1 for r in prices if r["market"] == fill.source and r["item_id"] is not None)
-        if rows:
+        if fill.to in markets:
+            if answers(fill.source):  # thin, not empty: only the items it lacks come from there
+                world.market_fallbacks[fill.to] = fill.source
+                notes.append(f"market {fill.to}: falls back to {fill.source} per item")
+            continue
+        if answers(fill.source):
             world.market_aliases[fill.to] = (fill.source, fill.label)
             notes.append(
                 f"market {fill.to}: reads the {rows} prices of {fill.source} as {fill.label!r}"
@@ -146,7 +184,6 @@ def add_market(world: World, export: Export, config: MarketConfig) -> list[str]:
                 "levelMin": row["level_min"],
                 "levelMax": row["level_max"],
                 "items": [list(i) for i in items] if items else None,
-                "status": row["status"],
                 "strategy": row["claim_id"],
                 "src": row["src"],
             },
@@ -169,7 +206,6 @@ def add_market(world: World, export: Export, config: MarketConfig) -> list[str]:
                 "y": row["y"],
                 "weight": row["weight"],
                 "reach": row["reach"],
-                "status": row["status"],
                 "build": row["build"],
                 "firstSeen": row["first_seen"],
                 "lastSeen": row["last_seen"],
@@ -202,9 +238,14 @@ def market_list(world: World) -> dict:
         ts = rec.get("scanTs")
         if ts is not None and (entry["scanTs"] is None or ts > entry["scanTs"]):
             entry["scanTs"] = ts
-    for to, (source, label) in sorted(world.market_aliases.items()):
-        if source in out and to not in out:
-            out[to] = {**out[source], "label": label, "alias": source}
+            entry["label"] = rec.get("src") or market  # the newest row's, never an old one's
+    for to, source in sorted(world.market_fallbacks.items()):
+        if source in out and to in out:
+            out[to]["fallback"] = source
+    for _ in range(MAX_CHAIN):  # an alias may read an alias
+        for to, (source, label) in sorted(world.market_aliases.items()):
+            if source in out and to not in out:
+                out[to] = {**out[source], "label": label, "alias": source}
     return out
 
 
@@ -217,9 +258,14 @@ def signals_by_market(world: World) -> dict:
         m: [k for _, k in sorted(v, key=lambda p: (str(type(p[0])), p[0]))]
         for m, v in sorted(out.items())
     }
-    for to, (source, _) in sorted(world.market_aliases.items()):
+    chains = {**world.market_fallbacks}
+    chains.update({to: source for to, (source, _) in world.market_aliases.items()})
+    for to in sorted(chains):
+        source, hops = chains[to], 0
+        while source not in lists and source in chains and hops < MAX_CHAIN:
+            source, hops = chains[source], hops + 1
         if source in lists and to not in lists:
-            lists[to] = list(lists[source])  # the alias market reads its source's signals
+            lists[to] = list(lists[source])  # it reads the nearest market's signals
     return lists
 
 

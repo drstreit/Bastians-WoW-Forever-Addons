@@ -9,7 +9,8 @@ local Settings_ = B.UI.Settings
 local Hub = {}
 B.UI.Hub = Hub
 
-local NAV_W = 150
+local NAV_W = 200 -- the rail: the app's icon, its name and its sentence (ADR 0058, PH7)
+local ROW_H, ROW_TALL = 24, 40 -- a plain row; a row with a sentence under its name
 local win, nav, canvas, scroll, bar
 local navButtons = {}
 
@@ -187,11 +188,14 @@ local function build()
   Hub.win, Hub.nav, Hub.canvas, Hub.navButtons = win, nav, canvas, navButtons
 end
 
-local function navButton(i, entry)
+-- A row of the rail (ADR 0058, PH7): the icon, the name, and under it the app's one sentence
+-- (`entry.tip`) where there is one; a page of an app sits indented under it on a plain row.
+-- `y` is where the row starts; the row's height comes back.
+local function navButton(i, entry, y)
   local b = navButtons[i]
   if not b then
     b = CreateFrame("Button", nil, nav)
-    b:SetHeight(24)
+    b:SetHeight(ROW_H)
     b:SetPoint("LEFT", 0, 0)
     b:SetPoint("RIGHT", 0, 0)
     b.hl = S.fill(b, S.C.hover, "ARTWORK")
@@ -202,6 +206,10 @@ local function navButton(i, entry)
     b.label = S.text(b, 12)
     b.label:SetPoint("LEFT", 10, 0)
     b.label:SetPoint("RIGHT", -4, 0)
+    b.label:SetWordWrap(false)
+    b.sub = S.text(b, 10, S.C.dim)
+    b.sub:SetWordWrap(false)
+    b.sub:Hide()
     b.line = S.fill(b, S.C.accent, "OVERLAY")
     b.line:ClearAllPoints()
     b.line:SetPoint("TOPLEFT", 0, 0)
@@ -230,16 +238,32 @@ local function navButton(i, entry)
   else
     b.icon:Hide()
   end
+  local tall = entry.tip ~= nil and not entry.indent
+  local height = tall and ROW_TALL or ROW_H
+  local left = entry.icon and (tall and 34 or 26) or (entry.indent and 26 or 10)
+  b.icon:SetSize(tall and 20 or 14, tall and 20 or 14)
   b.label:ClearAllPoints()
-  b.label:SetPoint("LEFT", entry.icon and 26 or (entry.indent and 26 or 10), 0)
-  b.label:SetPoint("RIGHT", -4, 0)
+  b.sub:ClearAllPoints()
+  if tall then
+    b.label:SetPoint("TOPLEFT", left, -6)
+    b.label:SetPoint("RIGHT", -4, 0)
+    b.sub:SetPoint("TOPLEFT", left, -21)
+    b.sub:SetPoint("RIGHT", -4, 0)
+    b.sub:SetText(entry.tip)
+    b.sub:Show()
+  else
+    b.label:SetPoint("LEFT", left, 0)
+    b.label:SetPoint("RIGHT", -4, 0)
+    b.sub:Hide()
+  end
   local off = entry.mod and entry.mod.state ~= "enabled" and not entry.mod.def.noSwitch
   b.label:SetText(entry.title .. (off and (" " .. S.H.muted .. "(" .. L["off"] .. ")|r") or ""))
+  b:SetHeight(height)
   b:ClearAllPoints()
-  b:SetPoint("TOPLEFT", 0, -(6 + (i - 1) * 24))
+  b:SetPoint("TOPLEFT", 0, -y)
   b:SetPoint("RIGHT", 0, 0)
   b:Show()
-  return b
+  return height
 end
 
 local refresh
@@ -253,8 +277,9 @@ end
 refresh = function()
   canvas:SetWidth(math.max(100, (scroll:GetWidth() or 440)))
   local list = entries()
+  local y = 6
   for i, entry in ipairs(list) do
-    navButton(i, entry)
+    y = y + navButton(i, entry, y)
   end
   for i = #list + 1, #navButtons do
     navButtons[i]:Hide()

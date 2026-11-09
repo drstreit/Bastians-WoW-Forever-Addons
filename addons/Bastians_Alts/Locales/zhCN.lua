@@ -3,6 +3,9 @@ local _, ns = ...
 local B = Bastians
 ns.L = ns.L or B.NewLocale()
 ns.L:Register("zhCN", {
+  ["%s is forgotten. Logging in with that character records it again."] = "已忘记 %s。用该角色登录后会重新记录。",
+  ["Forget %s? Use the action again within 5 seconds."] = "忘记 %s？请在 5 秒内再次执行。",
+  ["Forget this character"] = "忘记此角色",
   ["Alts"] = "小号",
   ["Characters"] = "角色",
   ["Your characters"] = "你的角色",
@@ -12,6 +15,32 @@ ns.L:Register("zhCN", {
   ["You have it"] = "你拥有",
   ["you"] = "你",
   ["Known by: %s"] = "已学会：%s",
+  -- Runs.lua, dungeon runs and lockouts (catalog review A2.5, 07.11.2026)
+  ["Your runs"] = "你的副本记录",
+  ["%s: one run"] = "%s：1次",
+  ["%s: %d runs"] = "%s：%d次",
+  ["last %s"] = "最近%s",
+  ["locked, resets in %s"] = "已锁定，%s后重置",
+  ["No run recorded yet."] = "尚无副本记录。",
+  ["Dungeon runs"] = "副本次数",
+  -- Train.lua, the trainer view (catalog review A5.7, 07.11.2026)
+  ["Trainer"] = "训练师",
+  ["what your class trainers teach you next"] = "你的职业训练师接下来教你什么",
+  ["Learn now"] = "现在可学",
+  ["Later"] = "以后",
+  ["at %s, %s"] = "在%s，%s",
+  ["at %s"] = "在%s",
+  ["You know every spell for your level."] = "你已掌握当前等级的所有法术。",
+  ["Nothing to learn now; %d at later levels"] = "现在没有可学的；之后等级有%d个",
+  ["%d spells to learn now for %s; %d at later levels"] = "现在可学%d个法术，花费%s；之后等级有%d个",
+  ["; %d unknown whether known"] = "；%d个不知是否已学",
+  ["The trainer view needs Bastian's Data."] = "训练师视图需要 Bastian's Data。",
+  -- the gold goals (catalog review A5.5, 07.11.2026)
+  ["Next training"] = "下次训练",
+  ["Training at level %d"] = "%d级训练",
+  ["Riding at level %d"] = "%d级骑术",
+  ["A mount at level %d"] = "%d级坐骑",
+  ["Spell"] = "法术",
   ["Owned"] = "拥有",
   ["You"] = "你",
   ["Nobody"] = "无人",
@@ -77,4 +106,7 @@ ns.L:Register("zhCN", {
   ["Click a line: its page. Right click: its entity menu."] = "点击一行：其页面。右键：其实体菜单。",
   ["Click: your characters' window. Right click: its settings."] = "点击: 角色窗口。右键: 设置。",
   ["Item"] = "物品",
+  -- Alts.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Gold on all"] = "所有角色的金币",
+  ["Highest level"] = "最高等级",
 })

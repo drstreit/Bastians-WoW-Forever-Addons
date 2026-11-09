@@ -161,6 +161,35 @@ def test_the_emitted_table_carries_the_names():
     assert '{ "Goldshire", -9460.0, 60.0, 40.0, "place", 87, 2 },' in lua
 
 
+def test_the_far_image_draws_a_capital_as_the_near_cells_do():
+    """zoomed out Stormwind was the zone painting's old city, zoomed in the
+    city plan. The plan goes over the finished far image; a field away nothing changes."""
+    from mapstyle.blizzard import FAR_PIXELS, Rect, city_plans
+    from PIL import Image
+
+    maxx, maxy = ORIGIN - Y * TILE_YARDS, ORIGIN - X * TILE_YARDS
+    frame = (maxx - TILE_YARDS, maxy - TILE_YARDS, maxx, maxy, 0.0, 0.0, 1.0, 1.0)
+    a = atlas()
+    a.uimaps[1453] = {"ID": 1453, "Type": 3}
+    a.art_of[1453] = 2
+    a.frames[1453] = frame
+    rect = Rect(X, Y, X, Y, FAR_PIXELS * 4)
+    owner = np.full((rect.h, rect.w), 1429, "i4")
+    owner[40:120, 40:120] = 1453
+    sea = np.zeros((rect.h, rect.w), bool)
+    paintings = {
+        1429: Image.new("RGB", (1002, 668), (200, 0, 0)),
+        1453: Image.new("RGB", (1002, 668), (0, 200, 0)),
+    }
+    far = np.zeros((rect.h, rect.w, 3), "f4")
+    far[..., 2] = 1  # the finished far image: blue
+    out = city_plans(a, rect, owner, sea, paintings.__getitem__, far)
+    assert out[80, 80, 1] > 0.75 and out[80, 80, 2] < 0.05  # the plan's green in the city
+    assert np.array_equal(out[230, 230], far[230, 230])  # a field away
+    no_city = np.full_like(owner, 1429)
+    assert city_plans(a, rect, no_city, sea, paintings.__getitem__, far) is far
+
+
 def test_a_sea_drawing_brings_its_ink_and_nothing_else():
     """Blizzard's drawings in the sea come along; only the strokes darken our
     sea, in brown ink, fading in at the box's edges; the parchment's own tints stay out."""

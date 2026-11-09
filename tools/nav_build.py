@@ -69,6 +69,18 @@ class NavBuildError(Exception):
     pass
 
 
+def navnet_config(settings: dict, client: str, path: Path) -> list[str]:
+    """`clientdump navnet --config` when this client has ground to leave out, else nothing."""
+    hidden = (settings.get("hidden") or {}).get(client) or []
+    if not hidden:
+        return []
+    keep = ("continent", "wx", "wy", "z")
+    write_text(
+        path, json.dumps({"hidden": [{k: h[k] for k in keep} for h in hidden]}, indent=1) + "\n"
+    )
+    return ["--config", str(path)]
+
+
 def clientdump(*args: str) -> str:
     cmd = ["dotnet", "run", "--project", str(PROJECT), "-c", "Release", "--no-build", "--", *args]
     run = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, check=False)
@@ -234,6 +246,7 @@ def build(
                 client,
                 "--out",
                 str(net),
+                *navnet_config(settings, client, OUT / f"navnet_{client}" / "config.json"),
             )
             print(f"  {directory}: " + out.strip().splitlines()[-1])
         nodes_json = nav_dir / f"{continent}.nodes.json"

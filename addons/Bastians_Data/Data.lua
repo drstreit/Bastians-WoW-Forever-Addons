@@ -495,6 +495,17 @@ function service:Each(typ)
   return ids
 end
 
+-- Whether the type has any record: true or false once its pack is loaded, nil before (unknown,
+-- not "none"). Cheap: it builds nothing (the Browser hides a list without rows, ADR 0054 B14).
+function service:Any(typ)
+  local packName = Data.typePack[typ]
+  if not (packName and Data.loaded[packName]) then
+    return nil
+  end
+  local pack = Data.packs[packName]
+  return pack ~= nil and pack[typ] ~= nil and next(pack[typ]) ~= nil
+end
+
 function service:PackLoaded(name)
   return Data.loaded[name] == true
 end
@@ -633,8 +644,9 @@ local SUMMARY = {
     end
     -- a trainer says what it trains: its subname, and how many it
     -- teaches where the pack lists them (Forever; the retail sources carry no trainer lists)
-    if Data.Poi and Data.Poi.TrainerWords(r.subname) then
-      parts[#parts + 1] = r.subname
+    local trade = Data.Poi and Data.Poi.ServiceWords(r)
+    if trade then
+      parts[#parts + 1] = trade
       if type(r.trainer) == "table" and #r.trainer > 0 then
         parts[#parts + 1] = string.format(L["teaches %d"], #r.trainer)
       end
@@ -728,6 +740,66 @@ local SUMMARY = {
   end,
 }
 
+-- The sheet's lead (ADR 0054): one or two sentences from the record alone, so they hold until
+-- the data changes (the facade keeps them). A person says what they are, where they stand and
+-- what they do for the player; a zone its quest levels; a dungeon its levels and its door. A type
+-- without one keeps its summary as the lead.
+local function counted(n, one, many)
+  return n == 1 and one or string.format(many, n)
+end
+
+local LEAD = {
+  npc = function(r, id)
+    if service:IsMonster(r) then
+      return nil
+    end
+    local parts = {}
+    local zone = zoneName(r.zone)
+    if r.subname and zone then
+      parts[#parts + 1] = string.format(L["%s in %s."], r.subname, zone)
+    elseif zone then
+      parts[#parts + 1] = string.format(L["Stands in %s."], zone)
+    end
+    if type(r.vendor) == "table" and #r.vendor > 0 then
+      parts[#parts + 1] = counted(#r.vendor, L["Sells one item."], L["Sells %d items."])
+    end
+    if type(r.trainer) == "table" and #r.trainer > 0 then
+      parts[#parts + 1] = counted(#r.trainer, L["Teaches one skill."], L["Teaches %d skills."])
+    end
+    local quests = service:Index("quest.byGiver", "npc:" .. id)
+    if type(quests) == "table" and #quests > 0 then
+      parts[#parts + 1] = counted(#quests, L["Starts one quest."], L["Starts %d quests."])
+    end
+    return #parts > 0 and table.concat(parts, " ") or nil
+  end,
+  zone = function(r)
+    if not (r.levelLo and r.levelHi) then
+      return nil
+    end
+    local text = string.format(L["Quests from level %d to %d."], r.levelLo, r.levelHi)
+    local parent = r.parent and zoneName(r.parent)
+    text = parent and (text .. " " .. parent .. ".") or text
+    if r.fishing then
+      -- the Classic fishing skill the zone asks for (catalog review A3.6); nothing when unknown
+      text = text .. " " .. string.format(L["Fishing from skill %d."], r.fishing)
+    end
+    return text
+  end,
+  dungeon = function(r)
+    local parts = {}
+    if r.levelLo and r.levelHi then
+      local text = r.kind == "raid" and L["A raid for levels %d to %d."]
+        or L["A dungeon for levels %d to %d."]
+      parts[#parts + 1] = string.format(text, r.levelLo, r.levelHi)
+    end
+    local zone = zoneName(r.zone)
+    if zone then
+      parts[#parts + 1] = string.format(L["The door is in %s."], zone)
+    end
+    return #parts > 0 and table.concat(parts, " ") or nil
+  end,
+}
+
 -- The places of a quest:
 -- the giver places (else the givers' own first places), the objective spots per map, the
 -- hand-in places (else the takers'); `kind` says which. Built once per record.
@@ -788,11 +860,94 @@ local ICON_KIND = {
   dungeon = "keep",
 }
 
+-- The reading order of each type's sheet (ADR 0054, core-contracts §7): the chapters a detail
+-- section of any addon may name. A chapter without a title takes its first section's; the `tail`
+-- ones come after a section that names no chapter. A monster reads in another order than a vendor.
+local BOOK, NOTES = { id = "book", tail = true }, { id = "notes", tail = true }
+local CHAPTERS = {
+  npc = {
+    { id = "sells" },
+    { id = "teaches" },
+    { id = "quests", title = L["Quests"] },
+    { id = "drops" },
+    { id = "where" },
+    BOOK,
+    NOTES,
+  },
+  monster = {
+    { id = "drops" },
+    { id = "quests", title = L["Wanted by quests"] },
+    { id = "where" },
+    BOOK,
+    NOTES,
+  },
+  item = {
+    { id = "get", title = L["Where to get it"] },
+    { id = "use", title = L["What it is for"] },
+    { id = "worth", title = L["Worth"] },
+    { id = "yours", title = L["Yours"] },
+    BOOK,
+    NOTES,
+  },
+  object = {
+    { id = "gathering" },
+    { id = "where" },
+    { id = "quests", title = L["Quests"] },
+    { id = "drops" },
+    BOOK,
+    NOTES,
+  },
+  quest = {
+    { id = "todo" },
+    { id = "people", title = L["Giver and hand-in"] },
+    { id = "rewards" },
+    { id = "text" },
+    NOTES,
+  },
+  zone = {
+    { id = "quests", title = L["Your quests here"] },
+    { id = "chains" }, -- Quests' "Chains here" (ADR 0055)
+    { id = "places", title = L["Places"] },
+    { id = "people" },
+    { id = "monsters" },
+    { id = "roads", title = L["Roads"] },
+    BOOK,
+    NOTES,
+  },
+  -- a dungeon reads in tabs (ADR 0058, PH5): Overview (the map with the facts, your runs, the
+  -- notes), then Bosses, Quests, Attunement (always there), Loot, Strategy (the book's pages)
+  dungeon = {
+    { id = "map" },
+    { id = "bosses", tab = true },
+    { id = "quests", tab = true },
+    { id = "attunement", tab = true, always = true, empty = L["No attunement needed."] },
+    { id = "loot", tab = true },
+    { id = "runs" }, -- Alts' "Your runs" (A2.5)
+    {
+      id = "book",
+      tab = true,
+      always = true,
+      title = L["Strategy"],
+      empty = L["No page of the book names this dungeon yet."],
+    },
+    NOTES,
+  },
+}
+CHAPTERS.node, CHAPTERS.area = CHAPTERS.object, CHAPTERS.zone
+
 local function registerTypes(self)
   for _, typ in ipairs(TYPES) do
+    local chapters = CHAPTERS[typ]
+    if typ == "npc" then
+      chapters = function(id)
+        local r = record("npc", id)
+        return r and service:IsMonster(r) and CHAPTERS.monster or CHAPTERS.npc
+      end
+    end
     B:RegisterEntityType(self, {
       type = typ,
       priority = 100,
+      chapters = chapters,
       -- the record's name, else the client's (Names.lua: retail packs carry no quest titles)
       name = function(id)
         local r = record(typ, id)
@@ -835,6 +990,11 @@ local function registerTypes(self)
         local fn = SUMMARY[typ]
         return fn and fn(r) or nil
       end,
+      lead = function(id)
+        local r = record(typ, id)
+        local fn = r and LEAD[typ]
+        return fn and fn(r, id) or nil
+      end,
       locations = function(id)
         local r = record(typ, id)
         if not r then
@@ -870,14 +1030,15 @@ local function overviewRows(ref)
     return nil
   end
   local rows = {}
-  if r.level then
+  local onBand = typ == "quest" -- a quest's band says its level and zone (ADR 0052)
+  if r.level and not onBand then
     rows[#rows + 1] = { text = L["Level"], value = r.level, valueKind = "number" }
   end
   if r.minLevel then
     rows[#rows + 1] = { text = L["Requires level"], value = r.minLevel, valueKind = "number" }
   end
   local zone = zoneName(r.zone)
-  if zone then
+  if zone and not onBand then
     rows[#rows + 1] = { text = L["Zone"] .. ": " .. zone, ref = "zone:" .. r.zone }
   end
   if r.flags then
@@ -1431,9 +1592,10 @@ local function madeByRows(ref)
   return recipeRows(recipesBy().makes[id], id, false)
 end
 
--- The places of a zone that matter on the way (ADR 0013, the zone page): flight master, inn, then
--- vendors, trainers and the rest of the service NPCs as folded groups, and the gathering nodes by
--- profession. From the byZone indexes; an NPC's flags list names its services.
+-- The people of a zone by what they do for the player (ADR 0013, the zone page; the sheet's
+-- People chapter, ADR 0054): flight master and inn as they are, then quest givers, vendors,
+-- trainers and the rest of the service NPCs as folded groups. From the byZone indexes; an NPC's
+-- flags list names its services. "Near" (the Here column) reads the same groups.
 local PLACE_GROUPS = {
   { "flightmaster", "Flight master", "flight", false },
   { "innkeeper", "Inn", "innkeeper", false },
@@ -1482,38 +1644,214 @@ local function standsIn(r, inside)
   return false
 end
 
-local function placeRows(ref)
+local RANK_FLAGS = { elite = true, rareelite = true, rare = true, boss = true }
+local function hasService(r)
+  for flag in pairs(flagsOf(r)) do
+    if not RANK_FLAGS[flag] then
+      return true
+    end
+  end
+  return false
+end
+
+-- A monster (the zone's Monsters, the Browser's Mobs list, the Map's monster areas; owner, retail
+-- 31.10.2026): an NPC without a service and without a faction it belongs to.
+function service:IsMonster(r)
+  return type(r) == "table" and not r.faction and not hasService(r)
+end
+
+-- What a tile says of a record (ADR 0056; the facet "tile", core-contracts §4): the line under the
+-- name, a badge, a mark, a note. Record facts only, so an answer holds until the data changes; a
+-- badge carries its level and the tile's host colours it for the character. A type without a rule
+-- here (an item, a recipe, an area) shows its summary as the line.
+local function levelBadge(lo, hi)
+  if type(lo) ~= "number" or lo <= 0 then
+    return nil -- unknown is no badge, never a 0
+  end
+  if type(hi) == "number" and hi > lo then
+    return { text = lo .. "-" .. hi, level = lo, levelHi = hi }
+  end
+  return { text = tostring(lo), level = lo }
+end
+
+local function joined(...)
+  local parts = {}
+  for i = 1, select("#", ...) do
+    local part = select(i, ...)
+    if part and part ~= "" then
+      parts[#parts + 1] = part
+    end
+  end
+  return #parts > 0 and table.concat(parts, ", ") or nil
+end
+
+local function placesNote(r)
+  local n = #(r.spawns or {})
+  return n > 1 and string.format(L["%d places"], n) or nil
+end
+
+-- A person's designation where the record has no subname: the first service it offers, the
+-- quest giver last.
+local SERVICE_ORDER = {
+  "trainer",
+  "innkeeper",
+  "flightmaster",
+  "banker",
+  "auctioneer",
+  "stablemaster",
+  "battlemaster",
+  "repair",
+  "vendor",
+  "questgiver",
+}
+local RANK_ORDER = { "boss", "rareelite", "rare", "elite" }
+local function firstKind(flags, order)
+  for _, flag in ipairs(order) do
+    if flags[flag] then
+      return (service:Kind("npc", flag))
+    end
+  end
+  return nil
+end
+
+local TILE = {
+  npc = function(r)
+    local flags = flagsOf(r)
+    local zone = zoneName(r.zone)
+    if service:IsMonster(r) then
+      local rank = firstKind(flags, RANK_ORDER)
+      return {
+        line = zone,
+        badge = levelBadge(r.level, r.levelMax),
+        mark = rank and { text = rank, token = "rare" } or nil,
+        note = placesNote(r),
+      }
+    end
+    -- a person's level says nothing to the player: no badge, also not the list's
+    return { line = joined(r.subname or firstKind(flags, SERVICE_ORDER), zone), badge = false }
+  end,
+  quest = function(r)
+    return { line = zoneName(r.zone), badge = levelBadge(r.level) }
+  end,
+  zone = function(r, id)
+    local within = r.parent and zoneName(r.parent) or B.Coords.ContinentName(r.continent)
+    return {
+      line = within ~= r.name and within or nil, -- a continent lies in nothing
+      badge = levelBadge(r.levelLo, r.levelHi),
+      map = id, -- the tile's picture is the zone (ADR 0056)
+    }
+  end,
+  object = function(r)
+    return { line = joined((service:Kind("object", r.kind)), zoneName(r.zone)), note = placesNote(r) }
+  end,
+  node = function(r)
+    local skill = (r.profession or "") .. (r.skill and (" " .. r.skill) or "")
+    return { line = joined(skill, zoneName(r.zone)), note = placesNote(r) }
+  end,
+  -- the client's words: nil where it knows none, and the tile says the summary
+  item = function(_, id)
+    local kind, slot = B.Compat.ItemKind(id)
+    return { line = joined(kind, slot) }
+  end,
+  -- what goes in: "2 Linen Cloth, Coarse Thread"
+  recipe = function(r)
+    local parts = {}
+    for _, rg in ipairs(r.reagents or {}) do
+      local name, count = itemName(rg[1]), rg[2] or 1
+      parts[#parts + 1] = count > 1 and (count .. " " .. name) or name
+    end
+    return { line = #parts > 0 and table.concat(parts, ", ") or nil }
+  end,
+  dungeon = function(r)
+    local bosses = type(r.bosses) == "table" and #r.bosses or 0
+    local badge = levelBadge(r.levelLo, r.levelHi)
+    if badge then
+      badge.countdown = true -- the tile says "in 4 levels" while the band is ahead (A2.2)
+    end
+    return {
+      line = joined(zoneName(r.zone), bosses > 0 and string.format(L["%d bosses"], bosses) or nil),
+      badge = badge,
+      mark = r.kind == "raid" and { text = L["Raid"] } or nil,
+    }
+  end,
+}
+
+local function registerTiles(self)
+  local types = {}
+  for typ in pairs(TILE) do
+    types[#types + 1] = typ
+  end
+  table.sort(types)
+  B:RegisterFacet(self, {
+    facet = "tile",
+    types = types,
+    priority = 100,
+    invalidateOn = { "BASTIANS_DATA_LOADED" },
+    rule = function(ref)
+      local typ, id = B.Entity.Parse(ref)
+      local r = typ and record(typ, id)
+      local facts = r and TILE[typ](r, id) or nil
+      return facts and next(facts) ~= nil and facts or nil
+    end,
+  })
+end
+
+-- "People" (the sheet's chapter, ADR 0054): everyone in the zone who is not a monster. A person
+-- with two services stands in both groups; a quest giver without a service among the quest
+-- givers; who has neither among the others, one row per name (a city's guards are one row). A
+-- group of one that is not folded is its own row; the folded groups carry their count.
+local PEOPLE_GROUPS = { { "questgiver", "Quest givers", "quest", true } }
+for i, g in ipairs(PLACE_GROUPS) do
+  -- the flight master and the inn first, then the quest givers, then the rest
+  table.insert(PEOPLE_GROUPS, i <= 2 and i or (i + 1), g)
+end
+PEOPLE_GROUPS[#PEOPLE_GROUPS + 1] = { "other", "Others", "service", true }
+
+local function personRow(id, r, iconKind)
+  local text = r.name or ("npc " .. id)
+  if r.subname then
+    text = text .. "  " .. S.H.muted .. r.subname .. "|r"
+  end
+  return { ref = "npc:" .. id, text = text, icon = B.UI.IconTexture(iconKind) }
+end
+
+local function peopleRows(ref)
   local map, inside = scopeOf(ref)
   if not map then
     return nil
   end
-  local byFlag = {}
+  local byFlag, named = {}, {}
+  local function put(flag, id, r, iconKind)
+    local list = byFlag[flag]
+    if not list then
+      list = {}
+      byFlag[flag] = list
+    end
+    list[#list + 1] = personRow(id, r, iconKind)
+  end
   for id in service:ByZone("npc", map) do
     local r = record("npc", id)
-    if r and standsIn(r, inside) then
+    if r and not service:IsMonster(r) and standsIn(r, inside) then
       local set = flagsOf(r)
-      for _, g in ipairs(PLACE_GROUPS) do
+      local grouped = false
+      for _, g in ipairs(PEOPLE_GROUPS) do
         if set[g[1]] then
-          local list = byFlag[g[1]]
-          if not list then
-            list = {}
-            byFlag[g[1]] = list
-          end
-          local text = r.name or ("npc " .. id)
-          if r.subname then
-            text = text .. "  " .. S.H.muted .. r.subname .. "|r"
-          end
-          list[#list + 1] = { ref = "npc:" .. id, text = text, icon = B.UI.IconTexture(g[3]) }
+          put(g[1], id, r, g[3])
+          grouped = true
         end
+      end
+      if not grouped and r.name and not named[r.name] then
+        named[r.name] = true
+        put("other", id, r, "service")
       end
     end
   end
   local rows = {}
-  for _, g in ipairs(PLACE_GROUPS) do
+  for _, g in ipairs(PEOPLE_GROUPS) do
     local list = byFlag[g[1]]
     if list then
-      table.sort(list, function(a, b)
-        return a.text < b.text
+      table.sort(list, function(x, y)
+        return x.text < y.text
       end)
       if g[4] or #list > 1 then
         rows[#rows + 1] = {
@@ -1527,6 +1865,16 @@ local function placeRows(ref)
       end
     end
   end
+  return #rows > 0 and rows or nil
+end
+
+-- "Gathering" on a zone's sheet: the gathering nodes by profession, folded.
+local function gatheringRows(ref)
+  local map, inside = scopeOf(ref)
+  if not map then
+    return nil
+  end
+  local rows = {}
   local byProfession, professions = {}, {}
   for id in service:ByZone("node", map) do
     local r = record("node", id)
@@ -1545,8 +1893,8 @@ local function placeRows(ref)
   table.sort(professions)
   for _, key in ipairs(professions) do
     local list = byProfession[key]
-    table.sort(list, function(a, b)
-      return a.text < b.text
+    table.sort(list, function(x, y)
+      return x.text < y.text
     end)
     rows[#rows + 1] = {
       text = L[key] .. "  " .. S.H.muted .. #list .. "|r",
@@ -1782,22 +2130,6 @@ local function whereRows(ref)
 end
 
 -- An NPC's flags beyond its rank (elite, rare, boss are no service: Hogger is a monster).
-local RANK_FLAGS = { elite = true, rareelite = true, rare = true, boss = true }
-local function hasService(r)
-  for flag in pairs(flagsOf(r)) do
-    if not RANK_FLAGS[flag] then
-      return true
-    end
-  end
-  return false
-end
-
--- A monster (the zone's Monsters, the Browser's Mobs list, the Map's monster areas; owner, retail
--- 31.10.2026): an NPC without a service and without a faction it belongs to.
-function service:IsMonster(r)
-  return type(r) == "table" and not r.faction and not hasService(r)
-end
-
 -- "Areas" (data.md "Areas"): the zone's subzones by name, each leads to its own page
 local function areaRows(ref)
   local _, map = B.Entity.Parse(ref)
@@ -1863,6 +2195,7 @@ local function registerSections(self)
   end
   section({
     id = "data.node",
+    chapter = "gathering", -- on the sheet (ADR 0054)
     title = L["Gathering"],
     types = { "object", "node" },
     order = 13,
@@ -1873,6 +2206,7 @@ local function registerSections(self)
   })
   section({
     id = "data.where",
+    chapter = "get", -- on the sheet (ADR 0054)
     title = L["Where to get it"],
     types = { "item" },
     order = 21,
@@ -1883,6 +2217,7 @@ local function registerSections(self)
   })
   section({
     id = "data.monsters",
+    chapter = "monsters", -- on the sheet (ADR 0054)
     title = L["Monsters"],
     types = { "zone", "area" }, -- an area: the zone's that stand in it
     order = 30,
@@ -1901,15 +2236,26 @@ local function registerSections(self)
   -- the dossier blocks (C2, ADR 0014): Overview and Places show more rows before "+N more", the
   -- lists eight; the "zone" link leads to the entity's zone page
   section({
-    id = "data.places",
-    title = L["Places"],
+    id = "data.people",
+    chapter = "people", -- on the sheet (ADR 0054)
+    title = L["People"],
     types = { "zone", "area" },
     order = 12,
     block = { wide = true, limit = 12 },
-    build = placeRows,
+    build = peopleRows,
+  })
+  section({
+    id = "data.gathering",
+    chapter = "places", -- on the sheet (ADR 0054), under the areas
+    title = L["Gathering"],
+    types = { "zone", "area" },
+    order = 15,
+    block = { limit = 12 },
+    build = gatheringRows,
   })
   section({
     id = "data.areas",
+    chapter = "places", -- on the sheet (ADR 0054)
     title = L["Areas"],
     types = { "zone" },
     order = 14,
@@ -1918,6 +2264,7 @@ local function registerSections(self)
   })
   section({
     id = "data.overview",
+    chapter = "facts", -- on the sheet (ADR 0054)
     title = L["Overview"],
     types = "*",
     order = 10,
@@ -1926,6 +2273,7 @@ local function registerSections(self)
   })
   section({
     id = "data.spawns",
+    chapter = "where", -- on the sheet (ADR 0054)
     title = L["Locations"],
     types = { "npc", "object", "node" },
     order = 15,
@@ -1933,6 +2281,7 @@ local function registerSections(self)
   })
   section({
     id = "data.vendor",
+    chapter = "sells", -- on the sheet (ADR 0054)
     title = L["Sells"],
     types = { "npc" },
     order = 30,
@@ -1941,6 +2290,7 @@ local function registerSections(self)
   })
   section({
     id = "data.trainer",
+    chapter = "teaches", -- on the sheet (ADR 0054)
     title = L["Teaches"],
     types = { "npc" },
     order = 31,
@@ -1950,6 +2300,7 @@ local function registerSections(self)
   })
   section({
     id = "data.loot",
+    chapter = "drops", -- on the sheet (ADR 0054)
     title = L["Drops"],
     types = { "npc", "object" },
     order = 40,
@@ -1958,6 +2309,7 @@ local function registerSections(self)
   })
   section({
     id = "data.sources",
+    chapter = "get", -- on the sheet (ADR 0054)
     title = L["Sources"],
     types = { "item" },
     order = 20,
@@ -1967,6 +2319,7 @@ local function registerSections(self)
   })
   section({
     id = "data.reagents",
+    chapter = "reagents", -- on the sheet (ADR 0054)
     title = L["Reagents"],
     types = { "recipe" },
     order = 20,
@@ -1975,6 +2328,7 @@ local function registerSections(self)
   -- owner round 5 (retail, 31.10.2026): the product and the item's lines, an item's recipes
   section({
     id = "data.product",
+    chapter = "makes", -- on the sheet (ADR 0054)
     title = L["Makes"],
     types = { "recipe" },
     order = 12,
@@ -1984,6 +2338,7 @@ local function registerSections(self)
   })
   section({
     id = "data.stats",
+    chapter = "facts", -- on the sheet (ADR 0054)
     title = L["Stats"],
     types = { "item" },
     order = 12,
@@ -1993,6 +2348,7 @@ local function registerSections(self)
   })
   section({
     id = "data.disenchant",
+    chapter = "use", -- on the sheet (ADR 0054)
     title = L["Disenchants into"],
     types = { "item" },
     order = 24,
@@ -2002,6 +2358,7 @@ local function registerSections(self)
   })
   section({
     id = "data.usedin",
+    chapter = "use", -- on the sheet (ADR 0054)
     title = L["Used in recipes"],
     types = { "item" },
     order = 23,
@@ -2012,6 +2369,7 @@ local function registerSections(self)
   })
   section({
     id = "data.madeby",
+    chapter = "get", -- on the sheet (ADR 0054)
     title = L["Made by"],
     types = { "item" },
     order = 19,
@@ -2023,14 +2381,40 @@ local function registerSections(self)
   -- from a boss, a dungeon quest or a door to its dungeon
   section({
     id = "data.bosses",
+    chapter = "bosses", -- on the sheet (ADR 0054)
     title = L["Bosses"],
     types = { "dungeon" },
     order = 20,
     build = bossRows,
     tooltip = { max = 3, build = bossRows },
   })
+  -- the dungeon's facts as tiles on its overview (ADR 0058, PH5)
+  section({
+    id = "data.dungeonfacts",
+    chapter = "map",
+    title = L["Overview"],
+    types = { "dungeon" },
+    order = 10,
+    block = { stats = true },
+    build = function(ref)
+      local _, id = B.Entity.Parse(ref)
+      local r = record("dungeon", tonumber(id))
+      if not r then
+        return nil
+      end
+      local rows = {}
+      rows[#rows + 1] =
+        { text = L["Level"], value = r.levelLo and r.levelHi and (r.levelLo .. "-" .. r.levelHi) or nil }
+      rows[#rows + 1] = { text = L["Bosses"], value = type(r.bosses) == "table" and #r.bosses or nil }
+      rows[#rows + 1] = { text = L["Players"], value = r.size }
+      local floors = type(r.floors) == "table" and #r.floors or nil
+      rows[#rows + 1] = { text = L["Floors"], value = floors }
+      return rows
+    end,
+  })
   section({
     id = "data.floors",
+    chapter = "map", -- on the sheet (ADR 0054)
     title = L["Map"],
     types = { "dungeon" },
     order = 25,
@@ -2039,6 +2423,7 @@ local function registerSections(self)
   })
   section({
     id = "data.dungeonloot",
+    chapter = "loot", -- on the sheet (ADR 0054)
     title = L["Loot"],
     types = { "dungeon" },
     order = 40,
@@ -2108,10 +2493,21 @@ mod = B:NewModule("Data", {
         return Data.ForeignNote() or L["Packs are built for this client."]
       end,
     },
+    {
+      -- the captures as a text to share (catalog review B5, 07.11.2026; Export.lua)
+      type = "execute",
+      label = L["Copy my captures"],
+      icon = "copy",
+      desc = L["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."], -- luacheck: ignore 631 (a locale key stays one literal)
+      func = function()
+        Data.Export.Show()
+      end,
+    },
   },
   OnEnable = function(self)
     B:ProvideService(self, "data", service, { priority = 100 })
     registerTypes(self)
+    registerTiles(self) -- what a tile says of a record (ADR 0056)
     registerSections(self)
     registerSearch(self)
     -- an item's vendor price as its worth, below Gold's (priority 50): retail has no Gold since

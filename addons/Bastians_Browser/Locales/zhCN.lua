@@ -63,10 +63,6 @@ ns.L:Register("zhCN", {
   ["Your bookmarks and the pages you opened last."] = "你的书签和最近打开的页面。",
   ["The pages you kept with Bookmark on a page."] = "你用页面上的“书签”保留的页面。",
   ["Drag to widen the Here column"] = "拖动以加宽“此处”栏",
-  ["Slim"] = "窄",
-  ["Slim or wide"] = "窄或宽",
-  ["Slim keeps only the Here column (your zone, your quests here) and hides the game's quest tracker; Wide shows the page beside it."] = "窄模式只保留“此处”栏(你所在区域、你在此处的任务),并隐藏游戏的任务追踪器;宽模式在旁边显示页面。",
-  ["Wide"] = "宽",
   ["Dock"] = "停靠",
   ["Dock to the map"] = "停靠到地图",
   ["The window sits beside the map at its height and moves with it. Click again to undock."] = "窗口位于地图旁边,与地图等高并随之移动。再次点击取消停靠。",
@@ -74,19 +70,17 @@ ns.L:Register("zhCN", {
   -- settings, tooltip hint
   ["Show what quests and items are worth (rewards, prices) on the rows"] = "在行上显示任务和物品的价值(奖励、价格)",
   ["Follow the target: an NPC or object you target becomes the subject"] = "跟随目标: 你选中的NPC或世界物体成为主题",
-  ["Hide the game's objective tracker in slim mode"] = "窄模式下隐藏游戏的目标追踪器",
   ["Preview a row in the page pane"] = "在页面窗格中预览一行",
   ["While Shift is held"] = "按住 Shift 时",
   ["On every hover"] = "每次悬停时",
   ["Never"] = "从不",
   ["Open in Browser"] = "在浏览器中打开",
-  ["Right click: open in the Browser"] = "右键点击: 在浏览器中打开",
+  ["%s: open in the Browser"] = "%s: 在浏览器中打开",
+  ["Open what is under the mouse in the Browser"] = "在浏览器中打开鼠标下的对象",
 
   -- list types (Browser.LISTS and registered lists)
-  ["NPCs"] = "NPC",
   ["Items"] = "物品",
   ["Objects"] = "世界物体",
-  ["Nodes"] = "采集点",
   ["Zones"] = "区域",
   ["Recipes"] = "配方",
   ["Quests"] = "任务",
@@ -94,7 +88,6 @@ ns.L:Register("zhCN", {
   ["Dungeon"] = "地下城",
   ["Raid"] = "团队副本",
   ["Farm spots"] = "刷怪点",
-  ["Quest chains"] = "任务链",
 
   -- dimension titles and their values
   ["Service"] = "服务",
@@ -208,9 +201,6 @@ ns.L:Register("zhCN", {
   ["First Aid"] = "急救",
 
   -- spot statuses
-  ["Verified"] = "已验证",
-  ["Unverified"] = "未验证",
-  ["Refuted"] = "已证伪",
 
   -- sort labels registered by the apps (the Browser translates them once more)
   ["Loot per kill"] = "每次击杀战利品",
@@ -241,18 +231,62 @@ ns.L:Register("zhCN", {
   ["Here, your quests, the lists, bookmarks and recent pages."] = "此处、你的任务、列表、书签和最近的页面。",
   ["Search: a name, or a type first (npc wel)"] = "搜索: 名称,或先输入类型(npc wel)",
   ["Drag to widen the list or the page"] = "拖动以加宽列表或页面",
-  ["Slim keeps only your quests (the tracker) in a narrow window and hides the game's quest tracker; Wide brings the lists and the page back."] = "窄模式只在窄窗口中保留你的任务(追踪器),并隐藏游戏的任务追踪器;宽模式带回列表和页面。",
   ["Copy Wowhead link"] = "复制Wowhead链接",
   ["Wowhead"] = "Wowhead",
   ["The link is in the chat input: copy it with Ctrl+C."] = "链接已在聊天输入框中: 用Ctrl+C复制。",
   ["Slide the list in"] = "滑入列表",
   ["Slide the list out"] = "滑出列表",
   -- owner round 5 (31.10.2026): the Mobs list, the list pane's filter
-  ["Mobs"] = "怪物",
   ["Filter"] = "筛选",
+  ["Filter this page"] = "筛选本页",
   -- the search syntax (ADR 0045)
   ["type (npc, item, quest, zone, ...)"] = "type (npc, item, quest, zone, ...)",
   -- the broker displays' feed (ADR 0043, 31.10.2026)
   ["Click: the Browser. Right click: the bookmarks."] = "点击: 浏览器。右键: 书签。",
   ["Everything the suite knows: quests, NPCs, items, places."] = "套件所知的一切: 任务、NPC、物品、地点。",
+  ["in %s"] = "在%s",
+  ["Everywhere"] = "所有地方",
+  ["%d more elsewhere. Click to look everywhere."] = "其他地方还有 %d 个。点击在所有地方查找。",
+  ["%d in the other lists. Click to look in all."] = "其他列表中有 %d 个。点击在全部列表中查找。",
+  ["The search failed. See /bastians log."] = "搜索失败。请查看 /bastians log。",
+  ["Where the search looks: in your zone, on your continent, or everywhere."] = "搜索范围：你所在的区域、你所在的大陆，或所有地方。",
+  ["Look everywhere"] = "在所有地方查找",
+  -- Browser.lua: a list grouped by one of its dimensions (PA5.4)
+  ["Zone"] = "区域",
+  ["The rows under a heading: what they are grouped by."] = "标题下的行：按什么分组。",
+  -- Browser.lua: the lists by the model's words (ADR 0056, PA2.3)
+  ["People"] = "居民",
+  ["Monsters"] = "怪物",
+  ["Gathering"] = "采集",
+  ["Chains"] = "任务链",
+  -- Browser.lua:
+  ["All Notes"] = "全部笔记",
+  ["Gold Stories"] = "金币故事",
+  ["Chapter"] = "章节",
+  ["Map style of the mini maps"] = "小地图的地图样式",
+  ["As on the large map"] = "与大地图相同",
+  ["The client's painting"] = "游戏的绘图",
+  -- Browser.lua: the rail, the tabs and More (ADR 0058, 07.11.2026)
+  ["%d-%d of %d"] = "%d-%d / 共 %d",
+  ["Previous page"] = "上一页",
+  ["Next page"] = "下一页",
+  ["Opens the search box over the title; a second click brings the title back."] = "在标题上打开搜索框；再次点击恢复标题。",
+  ["World"] = "世界",
+  ["Characters"] = "角色",
+  ["Gold"] = "金币",
+  ["More"] = "更多",
+  ["%s needs %s"] = "%s需要%s",
+  ["Settings"] = "设置",
+  ["Help"] = "帮助",
+  ["What's new"] = "新功能",
+  ["About"] = "关于",
+  ["Every app, the looks, the keys."] = "每个应用、外观和按键。",
+  ["The story, the commands, the keys."] = "故事、命令和按键。",
+  ["The last releases."] = "最近的版本。",
+  ["The sources and their licences."] = "来源及其许可。",
+  ["Everything else: the other apps' views, your bookmarks, the settings."] = "其他一切：其他应用的视图、你的书签、设置。",
+  -- Browser.lua: the stat tiles (ADR 0058, 07.11.2026)
+  ["Lands for you"] = "适合你的地区",
+  ["at your level"] = "与你等级相符",
+  ["unknown"] = "未知",
 })

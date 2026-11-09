@@ -789,9 +789,7 @@ local function build()
     minHeight = 320,
     lockable = true,
     db = p.window,
-    onShow = function(w)
-      w.frame:SetFrameStrata("MEDIUM") -- a chat window: under the game's panels and the suite's
-    end,
+    strata = "MEDIUM", -- a chat window: under the game's panels and the suite's
     onResize = function()
       Messenger.Refresh()
     end,

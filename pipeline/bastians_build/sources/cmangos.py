@@ -77,10 +77,14 @@ WANTED: dict[str, tuple[str, ...]] = {
         "TrainerTemplateId",
         "Rank",
         "Faction",  # a FactionTemplate id: the client's table says side and hostility
+        "UnitFlags",  # not selectable: a helper creature (internal.py, data.md "Internal records")
     ),
     "creature": ("guid", "id", "map", "position_x", "position_y", "position_z", "spawndist"),
     "gameobject_template": ("entry", "type", "name"),
     "gameobject": ("guid", "id", "map", "position_x", "position_y", "position_z"),
+    # a spawn with id 0 takes one of these entries at random (06.11.2026)
+    "creature_spawn_entry": ("guid", "entry"),
+    "gameobject_spawn_entry": ("guid", "entry"),
     "npc_vendor": ("entry", "item", "maxcount", "incrtime"),
     "npc_trainer": _TRAINER_COLUMNS,
     "npc_trainer_template": _TRAINER_COLUMNS,
@@ -110,6 +114,30 @@ WANTED: dict[str, tuple[str, ...]] = {
         *(f"EffectTriggerSpell{i}" for i in range(1, 4)),
         *(f"EffectItemType{i}" for i in range(1, 4)),
     ),
+}
+
+# creature_template.NpcFlags bits -> service flags (data.md npc record). These are the **Classic
+# 1.12** bits (mangos-classic ``enum NPCFlags``), not the retail family's that TrinityCore's dump
+# carries (``tdb.NPC_FLAGS``: vendor 128, repair 4096, flight master 8192, auctioneer 2097152 ...).
+# Measured 05.11.2026 on ClassicDB_1_12_1_z2815 by the sub-titles per bit: 8 = 61 flight masters
+# ("Gryphon Master", "Wind Rider Master" ...), 128 = 45 "Innkeeper" of 54, 256 = 26 "Banker",
+# 2048 = the battlemasters, 4096 = 33 rows, 32 of them named "Auctioneer ...", 8192 = 46 "Stable
+# Master", 16384 = 299 smiths and armour merchants. Until that day the build read them with the
+# retail table: auctioneers showed as repair, stable masters as flight masters, and no vendor (4),
+# flight master, innkeeper or banker was found. The order is the retail table's, so a record's
+# flags list reads the same on both clients. Bits without a service flag: 1 gossip, 32 spirit
+# healer, 64 spirit guide, 512 petitioner, 1024 tabard designer.
+NPC_FLAGS = {
+    2: "questgiver",
+    16: "trainer",
+    4: "vendor",
+    16384: "repair",
+    8: "flightmaster",
+    128: "innkeeper",
+    256: "banker",
+    2048: "battlemaster",
+    4096: "auctioneer",
+    8192: "stablemaster",
 }
 
 _CREATE = re.compile(r"^CREATE TABLE `(\w+)`")
@@ -154,6 +182,10 @@ def parse_values(text: str) -> Iterator[list[Any]]:
             row.append(float(num) if "." in num or "e" in num.lower() else int(num))
 
 
+# Columns a dump may lack (an older or a cut-down dump): their value is None then.
+OPTIONAL: dict[str, tuple[str, ...]] = {"creature_template": ("UnitFlags",)}
+
+
 def read_lines(
     lines: Iterable[str], wanted: dict[str, tuple[str, ...]] | None = None
 ) -> dict[str, list[dict[str, Any]]]:
@@ -177,12 +209,14 @@ def read_lines(
         if not m or m.group(1) not in wanted:
             continue
         table = m.group(1)
-        missing = [c for c in wanted[table] if c not in columns.get(table, [])]
+        have = columns.get(table, [])
+        optional = OPTIONAL.get(table, ())
+        missing = [c for c in wanted[table] if c not in have and c not in optional]
         if missing:
             raise KeyError(f"{table}: no such column(s) {', '.join(missing)}")
-        idx = [(c, columns[table].index(c)) for c in wanted[table]]
+        idx = [(c, have.index(c) if c in have else None) for c in wanted[table]]
         for row in parse_values(line[m.end() :]):
-            out[table].append({c: row[i] for c, i in idx})
+            out[table].append({c: None if i is None else row[i] for c, i in idx})
     return out
 
 
@@ -192,6 +226,13 @@ def read_tables(
     """Stream the gzip dump; only the wanted columns of the wanted tables."""
     with gzip.open(path, "rt", encoding="utf-8", errors="replace") as fh:
         return read_lines(fh, wanted)
+
+
+def npc_services(npc_flags: int | None) -> list[str]:
+    """The service flags of a ``creature_template.NpcFlags`` value, in ``NPC_FLAGS`` order; a
+    missing value and bits without a service flag give none."""
+    flags = int(npc_flags or 0)
+    return [name for bit, name in NPC_FLAGS.items() if flags & bit]
 
 
 # ---------------------------------------------------------------- typed rows
@@ -474,19 +515,25 @@ def loot_rows(tables: dict[str, list[dict[str, Any]]]) -> list[LootRow]:
 def spawn_rows(tables: dict[str, list[dict[str, Any]]]) -> list[SpawnRow]:
     out = []
     for table, kind in (("creature", "creature"), ("gameobject", "object")):
+        entries: dict[int, list[int]] = {}
+        for r in tables.get(f"{table}_spawn_entry", []):
+            entries.setdefault(r["guid"], []).append(r["entry"])
         for r in tables.get(table, []):
-            out.append(
-                SpawnRow(
-                    kind=kind,
-                    guid=r["guid"],
-                    entry=r["id"],
-                    map_id=r["map"],
-                    position_x=float(r["position_x"]),
-                    position_y=float(r["position_y"]),
-                    position_z=None if r.get("position_z") is None else float(r["position_z"]),
-                    spawndist=None if r.get("spawndist") in (None, "") else float(r["spawndist"]),
+            for entry in entries.get(r["guid"], ()) if not r["id"] else (r["id"],):
+                out.append(
+                    SpawnRow(
+                        kind=kind,
+                        guid=r["guid"],
+                        entry=entry,
+                        map_id=r["map"],
+                        position_x=float(r["position_x"]),
+                        position_y=float(r["position_y"]),
+                        position_z=None if r.get("position_z") is None else float(r["position_z"]),
+                        spawndist=None
+                        if r.get("spawndist") in (None, "")
+                        else float(r["spawndist"]),
+                    )
                 )
-            )
     return out
 
 

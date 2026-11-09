@@ -35,7 +35,8 @@ def test_the_monsters_layer_draws_regions_of_the_monsters_only(wow: WowRuntime):
     boot(wow)
     pins = list(wow.eval(f"Bastians:QueryLayer('map.monsters', {WORLD % 5})").values())
     refs = sorted({p.ref for p in pins})
-    assert refs == ["npc:327", "npc:448"]  # Goldtooth and Hogger; no vendor, no innkeeper
+    # Leprithus (the rare), Goldtooth and Hogger; no vendor, no innkeeper
+    assert refs == ["npc:1260", "npc:327", "npc:448"]
     hogger = [p for p in pins if p.ref == "npc:448"]
     assert len(hogger) == 1 and hogger[0].radius >= 20  # its two places lie together
     assert hogger[0].label == "Hogger  11"
@@ -57,4 +58,22 @@ def test_the_level_colour_follows_the_games_scale(core: WowRuntime):
     assert core.eval(f"{tok}(5, 10)") == "diffGreen"  # 6 levels below still give experience
     assert core.eval(f"{tok}(3, 10)") == "diffGrey"
     assert core.eval(f"{tok}(nil, 10)") is None
+    assert core.errors == []
+
+
+def test_a_level_band_takes_the_characters_level_inside_it_and_the_nearer_end_outside(
+    core: WowRuntime,
+):
+    tok = "Bastians.UI.Style.BandToken"
+    assert core.eval(f"{tok}(7, 11, 9)") == "diffYellow"  # inside the band
+    assert core.eval(f"{tok}(7, 11, 7)") == "diffYellow"
+    assert core.eval(f"{tok}(7, 11, 1)") == "diffRed"  # the band is ahead: its low end counts
+    assert core.eval(f"{tok}(7, 11, 5)") == "diffYellow"
+    assert (
+        core.eval(f"{tok}(7, 11, 14)") == "diffGreen"
+    )  # behind: the high end still gives experience
+    assert core.eval(f"{tok}(7, 11, 40)") == "diffGrey"
+    assert core.eval(f"{tok}(60, nil, 50)") == "diffRed"  # one end only
+    assert core.eval(f"{tok}(nil, nil, 50)") is None
+    assert core.eval(f"{tok}(7, 11, nil)") is None
     assert core.errors == []

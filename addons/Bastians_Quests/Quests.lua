@@ -53,12 +53,14 @@ end
 -- One refresh per burst of quest events: diff the log, tell the suite which quests changed.
 local function refresh(self)
   local diff = ns.State.Refresh()
+  ns.Rewards.ReadLog() -- quests not asked yet; cheap once they all are
   if self.db.profile.autoTrack ~= false then
     autoTrack(self, diff)
   else
     acceptedBurst = false
   end
   if diff then
+    ns.Chains.FollowTick() -- a followed chain tracks its next step (ADR 0055)
     self:Fire("BASTIANS_QUESTS_CHANGED", diff.ids, diff)
   end
 end
@@ -98,9 +100,10 @@ local mod = B:NewModule("Quests", {
       timeEvent = 2, -- minutes per event or exploration
       timeDelivery = 1, -- minutes for a quest without objectives
     },
-    -- hidden: the quests hidden from Do here (R3); chainNext: [next quest id] = the quest handed in,
-    -- the chains the character follows after a hand-in (the log's "Next in chain" entries)
-    char = { flightPaths = {}, hidden = {}, chainNext = {} },
+    -- hidden: the quests hidden from Do here (R3)
+    -- followed: the chains the character follows (ADR 0055, Chains.lua)
+    -- missed, offered: what the game's gossip left out or offered (ADR 0051, Offers.lua)
+    char = { flightPaths = {}, hidden = {}, followed = {}, missed = {}, offered = {} },
   },
   options = {
     { type = "header", label = L["The tracker (My quests)"] },
@@ -189,13 +192,18 @@ local mod = B:NewModule("Quests", {
   },
   OnEnable = function(self)
     ns.Logic.SetData(data())
+    self.db.profile.chainWindow = nil -- the chain window's place: the window is gone (ADR 0055)
     ns.State.Attach(self) -- facts, completed set, first snapshot; then the service, so consumers see state
     B:ProvideService(self, "progress", ns.Progress, { priority = 100 })
+    ns.Rewards.Register(self) -- the client's answers on what quests pay (ADR 0053)
     ns.Window.Register(self)
     ns.Tracker.Register(self) -- the log view in its own frame (R6)
     ns.Registrations.Register(self)
+    ns.Chains.Register(self) -- the chain as a subject (ADR 0055)
+    ns.Sheet.Register(self) -- the quest sheet (ADR 0053)
     ns.Journey.Register(self) -- the journey per zone and session (S3)
     ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
+    ns.Offers.Register(self) -- what the givers really offer (ADR 0051)
     self:RegisterEvent("QUEST_LOG_UPDATE", scheduleRefresh)
     self:RegisterEvent("QUEST_ACCEPTED", function(mod, _, a, b)
       local id = tonumber(b) or tonumber(a) -- retail: questID; Classic shape: questLogIndex, questID
@@ -214,11 +222,11 @@ local mod = B:NewModule("Quests", {
     self:RegisterEvent("QUEST_TURNED_IN", function(mod, _, questID)
       ns.State.MarkDone(questID)
       ns.Journey.OnQuest(questID)
-      mod.FollowChain(questID)
       scheduleRefresh(mod)
     end)
     self:RegisterEvent("PLAYER_LEVEL_UP", function(mod, _, level)
       ns.State.SetLevel(tonumber(level) or ns.State.facts.level)
+      ns.Rewards.Forget() -- experience follows the level
       mod:Fire("BASTIANS_QUESTS_CHANGED", nil, { level = ns.State.facts.level }) -- every status may change
     end)
     self:RegisterEvent("TAXIMAP_OPENED", function(mod)
@@ -268,6 +276,8 @@ local mod = B:NewModule("Quests", {
 ns.mod = mod
 mod.Logic = ns.Logic -- the pure logic, reachable for tests and other views of this addon
 mod.State = ns.State -- the cached quest state (State.lua)
+mod.Holidays = ns.Holidays -- which world events run (Holidays.lua)
+mod.Offers = ns.Offers -- what the givers really offer (Offers.lua)
 mod.Tracker = ns.Tracker -- the tracker frame (Tracker.lua, R6)
 mod.Journey = ns.Journey -- the journey per zone and session (Journey.lua, S3)
 mod.Round = ns.Round -- the quest round (Round.lua, R26.4)
@@ -275,33 +285,5 @@ mod.Rows = ns.Rows -- the row builders (Rows.lua)
 mod.Views = ns.Views -- the view builders (Views.lua)
 mod.Recommend = ns.Recommend -- scoring and the next-area planner (Recommend.lua)
 mod.Window = ns.Window -- the window (Window.lua)
-
--- A hand-in: the chain's next quest becomes a "Next in chain" entry of the log until it is taken
--- ("grayed out as long as not active, then when I close the prior quest
--- it gets activated and the next greyed out quest will be shown"). The handed-in quest's own
--- entry leaves the follow list.
-function mod.FollowChain(questID)
-  local follow = mod.db and mod.db.char and mod.db.char.chainNext
-  if not follow then
-    return
-  end
-  follow[questID] = nil
-  local nextID = ns.Logic.nextInChain(questID, ns.State.ForLogic())
-  if nextID and not ns.State.IsQuestDone(nextID) then
-    follow[nextID] = questID
-  end
-end
-
--- The chains the character follows, without the entries that are in the log or done by now.
-function mod.FollowedChains()
-  local follow = mod.db and mod.db.char and mod.db.char.chainNext
-  if not follow then
-    return nil
-  end
-  for nextID in pairs(follow) do
-    if ns.State.IsInLog(nextID) or ns.State.IsQuestDone(nextID) then
-      follow[nextID] = nil
-    end
-  end
-  return follow
-end
+mod.Sheet = ns.Sheet -- the quest sheet (Sheet.lua)
+mod.Rewards = ns.Rewards -- the client's answers on rewards (Rewards.lua)

@@ -102,10 +102,15 @@ local KINDS = {
   "app_helpers",
   "app_chat",
   "app_gestures",
+  "app_courtesy",
   "app_data",
   -- the campfire (plan-second-wave.md S5, 02.11.2026): a shared fire's pin, the camp ring, the app
   "campfire",
   "app_campfire",
+  -- the flame on screen and its ring (campfire.md "The flame", 08.11.2026)
+  "flame",
+  "flame_heart",
+  "flame_ring",
 }
 local PATHS = {}
 local GLYPH_PATHS = {}
@@ -253,9 +258,13 @@ local GROUP = {
   app_helpers = "tileGrey",
   app_chat = "tileTeal",
   app_gestures = "tileGreen",
+  app_courtesy = "tilePurple",
   app_data = "tileGrey",
   campfire = "tileGold",
   app_campfire = "tileGold",
+  flame = "tileGold",
+  flame_heart = "tileGold",
+  flame_ring = "tileGold",
 }
 function B.UI.TileGroup(kind)
   if kind == "mob" then

@@ -10,7 +10,6 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 177468802778193
-stamp = "true"
 why = "The loot tables agree, though our data calls them trunks: the wreckage that yields Watertight Trunks gives the trunk on three casts in five, Rumsey Rum Dark and Stranglekelp on one in five each."
 
 [[rumours]]

@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.1.0:1",
+    date = "2026-11-09",
+    version = "2.1.0",
+    text = "Hovering a quest reward in the Orbiter shows the item's full stats.",
+  },
+  {
+    id = "2.0.0:1",
+    date = "2026-11-06",
+    version = "2.0.0",
+    text = "The Orbiter has a small lock under its play button: click it to lock the ring in place or to move it freely.",
+  },
+  {
     id = "1.6.0:1",
     date = "2026-11-05",
     version = "1.6.0",

@@ -91,4 +91,8 @@ ns.L:Register("ruRU", {
   ["Near here:"] = "Рядом:",
   ["No notes near here."] = "Рядом нет заметок.",
   ["and %d more"] = "и еще %d",
+  -- Notes.lua: All Notes (06.11.2026)
+  ["On"] = "На",
+  -- Notes.lua: All Notes, empty (06.11.2026)
+  ["No notes yet. Add note on a page writes the first."] = "Заметок пока нет. Первую можно написать на странице: Добавить заметку.",
 })

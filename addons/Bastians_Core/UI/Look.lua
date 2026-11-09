@@ -47,7 +47,49 @@ function S.Draw(frame)
   if draw then
     draw(frame)
   end
+  if kind == "action" and frame.spec.hue then
+    S.DrawHue(frame)
+  end
   return frame
+end
+
+-- A coloured symbol with its text ("remove them all with coloured
+-- symbols with text", of the Browser's green-on-green buttons): `spec.hue`, a tile token, paints
+-- the pictogram on a small square of that colour, as the kind tiles are; no plate, no edge in
+-- any look. `spec.primary` is the lit one: its word bright and a line of its colour under it.
+function S.DrawHue(b)
+  local spec = b.spec
+  local token = S.Tok(b, spec.hue) or S.Tok(b, "accent")
+  if S.hideGameArt then
+    S.hideGameArt(b)
+  end
+  b:SetNormalTexture("")
+  b:SetPushedTexture("")
+  b:SetHighlightTexture("")
+  S.tint(b.face, S.Tok(b, "panel"), 0)
+  S.setEdges(b.edges, S.Tok(b, "line"), 0)
+  if b.sheen then
+    b.sheen:Hide()
+  end
+  if not b.hueSquare then
+    b.hueSquare = S.fill(b, token, "BORDER")
+    b.hueLine = S.fill(b, token, "OVERLAY")
+  end
+  local shown = spec.icon ~= nil and b.icon:IsShown()
+  local size = (b.icon:GetWidth() or 0) + 6
+  b.hueSquare:ClearAllPoints()
+  b.hueSquare:SetPoint("CENTER", b.icon, "CENTER", 0, 0)
+  b.hueSquare:SetSize(size, size)
+  S.tint(b.hueSquare, token, 1)
+  b.hueSquare:SetShown(shown)
+  S.untint(b.icon) -- the white pictogram on its colour, as on a kind tile
+  S.ink(b.label, S.Tok(b, spec.primary and "bright" or "text"))
+  b.hueLine:ClearAllPoints()
+  b.hueLine:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", 2, 0)
+  b.hueLine:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -2, 0)
+  b.hueLine:SetHeight(2)
+  S.tint(b.hueLine, token, 1)
+  b.hueLine:SetShown(spec.primary == true)
 end
 
 -- Every live widget again: a preset or theme change. The radii first (a look may bring its own),
@@ -230,6 +272,68 @@ local function layoutTile(t, size, edgeColor, edgeAlpha)
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- The stat tile (ADR 0058): a small label, a large figure and a note under it; a figure nobody
+-- knows reads the host's word for unknown in dim ink. spec = { label, value, note, unknown,
+-- onClick, tip }; SetStat replaces it. The look draws the plate and the edges.
+-- ---------------------------------------------------------------------------------------------
+
+S.STAT_H = 56
+
+function S.stat(parent, spec)
+  spec = spec or {}
+  local f = CreateFrame("Button", nil, parent)
+  f.spec = spec
+  f.face = S.roundFill(f, S.C.card, "radiusSmall")
+  f.edges = S.roundEdges(f, S.C.line, "radiusSmall")
+  f.label = S.text(f, 10, S.C.dim)
+  f.label:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -6)
+  f.label:SetPoint("RIGHT", f, "RIGHT", -6, 0)
+  f.label:SetWordWrap(false)
+  f.value = S.heading(f, 16, 18, S.C.text)
+  f.value:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -19)
+  f.value:SetPoint("RIGHT", f, "RIGHT", -6, 0)
+  f.value:SetWordWrap(false)
+  f.note = S.text(f, 10, S.C.dim)
+  f.note:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 8, 5)
+  f.note:SetPoint("RIGHT", f, "RIGHT", -6, 0)
+  f.note:SetWordWrap(false)
+  f:SetHeight(S.STAT_H)
+  f:SetScript("OnClick", function(self, button)
+    if self.spec.onClick then
+      self.spec.onClick(self, button)
+    end
+  end)
+  f:SetScript("OnEnter", S.TipEnter)
+  f:SetScript("OnLeave", S.TipLeave)
+  function f.SetStat(self, s)
+    self.spec = s or {}
+    S.Draw(self)
+  end
+  S.widgets[f] = "stat"
+  S.Draw(f)
+  return f
+end
+
+local function layoutStat(f, face, edge, edgeAlpha)
+  local spec = f.spec
+  S.tint(f.face, face, 1)
+  S.setEdges(f.edges, edge, edgeAlpha)
+  f.label:SetText(spec.label or "")
+  S.ink(f.label, S.Tok(f, "dim"))
+  if spec.value == nil then
+    f.value:SetText(spec.unknown or "?")
+    S.ink(f.value, S.Tok(f, "dim"))
+  else
+    f.value:SetText(tostring(spec.value))
+    S.ink(f.value, S.Tok(f, "text"))
+  end
+  f.note:SetText(spec.note or "")
+  S.ink(f.note, S.Tok(f, "dim"))
+  f.tip = spec.tip
+  f:EnableMouse(spec.onClick ~= nil or spec.tip ~= nil)
+end
+
+-- ---------------------------------------------------------------------------------------------
 -- Modern: quiet rounded buttons (a face only when boxed or primary), the text colour on the
 -- icon, the accent for a button that is on; tiles with the theme's radius and a thin edge.
 -- ---------------------------------------------------------------------------------------------
@@ -271,6 +375,9 @@ LOOKS.modern = {
   tile = function(t)
     layoutTile(t, t.spec.big and S.G.tileBig or S.G.tile, S.Tok(t, "line"), 0.6)
   end,
+  stat = function(f)
+    layoutStat(f, S.Tok(f, "card"), S.Tok(f, "line"), 0.6)
+  end,
 }
 
 -- ---------------------------------------------------------------------------------------------
@@ -291,6 +398,9 @@ LOOKS.wow = {
   end,
   tile = function(t)
     layoutTile(t, t.spec.big and S.G.tileBig or S.G.tile, S.Palette("blizzard").C.gold, 0.8)
+  end,
+  stat = function(f)
+    layoutStat(f, S.Tok(f, "card"), S.Palette("blizzard").C.gold, 0.8)
   end,
 }
 
@@ -685,6 +795,9 @@ LOOKS.parchment = {
   tile = function(t)
     layoutTile(t, t.spec.big and S.G.tileBig or S.G.tile, S.Tok(t, "muted"), 0.9)
   end,
+  stat = function(f)
+    layoutStat(f, S.Tok(f, "card"), S.Tok(f, "muted"), 0.9)
+  end,
   pill = function(p)
     local spec = p.spec
     hideSheen(p)
@@ -750,6 +863,9 @@ LOOKS.glass = {
   end,
   tile = function(t)
     layoutTile(t, t.spec.big and S.G.tileBig or S.G.tile, S.Tok(t, "line"), 0)
+  end,
+  stat = function(f)
+    layoutStat(f, S.Tok(f, "card"), S.Tok(f, "line"), 0)
   end,
   pill = function(p)
     local spec = p.spec

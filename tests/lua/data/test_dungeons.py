@@ -232,7 +232,7 @@ def test_a_hand_drawn_floor_credits_its_artist_under_the_plate_and_in_the_window
     wow.execute(f"local b = {win}.link; b:SetText('x'); b:GetScript('OnTextChanged')(b, true)")
     assert wow.eval(f"{win}.link:GetText()") == "https://www.artstation.com/sr433_20"
     # the client's own floor: no credit
-    wow.execute("Bastians.UI.Scenery.OpenFloor(BF.cells[1].rows, 2, Host)")
+    wow.execute("Bastians.UI.Scenery.OpenFloor(BF.cells[1].floorRows, 2, Host)")
     assert wow.eval(f"{win}.credit:IsShown()") is False
     assert wow.eval(f"{win}.link:IsShown()") is False
     wow.execute(f"{win}:Hide()")
@@ -255,4 +255,53 @@ def test_a_boss_without_a_known_creature_is_its_name_alone(wow: WowRuntime):
     smite = rows[-1]
     assert (smite.text, smite.ref, smite.value) == ("Mr. Smite", None, 3)
     assert rows[0].ref == "npc:644"
+    assert wow.errors == []
+
+
+def test_a_cell_that_drew_a_floor_is_a_place_cell_again(wow: WowRuntime):
+    """a screenshot: after a dungeon's page an object's Locations
+    showed a huge plate with the boss pins 1 to 5 and the door, and it stayed. A block's cells
+    are pooled: a cell that drew a floor keeps nothing of it as a place (its plate's size, its
+    pins, its click). A click on a place opens the map at that place; the "+N more" cell shows
+    its words above its plate."""
+    boot(wow)
+    wow.execute(
+        """local rows = {}
+        for _, s in ipairs(Bastians:GetDetailSections('dungeon:36')) do
+          if s.id == 'data.floors' then for _, r in ipairs(s.rows) do rows[#rows + 1] = r end end
+        end
+        Clicks, Shown = {}, {}
+        Host = { opts = {}, RowClick = function(_, row, button) Clicks[#Clicks + 1] = { row.kind or row.ref, button } end }
+        BF = CreateFrame('Frame', nil, UIParent)
+        local Scenery = Bastians.UI.Scenery
+        Scenery.RenderCells(BF, 'floors', rows, 501, 0, Host)
+        Places = {
+          { text = 'Elwynn Forest  42, 69', ref = 'object:1', place = { map = 1429, x = 0.42, y = 0.69 } },
+          { text = '+5 more', kind = 'more', onClick = function() end },
+        }
+        Scenery.RenderCells(BF, 'places', Places, 501, 0, Host)
+        Cell = BF.cells[1]"""
+    )
+    assert wow.eval("Cell.pins[1]:IsShown()") is False  # the boss pins are gone
+    assert wow.eval("Cell.floorRows") is None
+    assert round(wow.eval("Cell.cut:GetWidth()")) == wow.eval("Bastians.UI.Scenery.CUT_W")
+    assert round(wow.eval("Cell.cut:GetHeight()")) == wow.eval("Bastians.UI.Scenery.CUT_H")
+    # a click on the mini map: the map at that place, not the floor window, not the page again
+    wow.execute(
+        """Bastians:RegisterAction(Bastians:GetModule('Data'), { id = 'map.show', label = 'Show on map',
+          types = '*', run = function(ref, ctx) Shown[#Shown + 1] = { ref, ctx.points[1].map, ctx.points[1].x } end })
+        Cell:Click('LeftButton')"""
+    )
+    assert [list(s.values()) for s in wow.eval("Shown").values()] == [["object:1", 1429, 0.42]]
+    win = wow.eval("Bastians.UI.Scenery.FloorWindow()")
+    assert win is None or win.IsShown(win) is False
+    # the right button is the host's, as on every row
+    wow.execute("Cell:Click('RightButton')")
+    assert [list(c.values()) for c in wow.eval("Clicks").values()] == [["object:1", "RightButton"]]
+    # "+5 more": its words stand on a frame above the plate, and its click is the host's
+    assert wow.eval("BF.cells[2].caption:GetText()") == "+5 more"
+    assert wow.eval("BF.cells[2].caption:GetParent() == BF.cells[2].over") is True
+    assert wow.eval("BF.cells[2].over:GetFrameLevel() > BF.cells[2].cut:GetFrameLevel()") is True
+    wow.execute("BF.cells[2]:Click('LeftButton')")
+    assert list(wow.eval("Clicks[2]").values()) == ["more", "LeftButton"]
     assert wow.errors == []

@@ -873,8 +873,97 @@ mod = B:NewModule("Notes", {
   },
   OnEnable = function(self)
     Model.Ensure(self.db.global)
+    -- "All Notes" in the Browser: every thing with a note, one row each;
+    -- a click opens the thing, its notes on its page. A note on a spot of the world has no thing:
+    -- it is an entity of its own, `note:<id>`, its page its text
+    local function allNotes()
+      local out, seen = {}, {}
+      for _, list in pairs(Notes.Global().lists) do
+        for _, note in pairs(list.notes) do
+          local key = Model.IsSpot(note.on) and note.id or note.on
+          if not seen[key] then
+            seen[key] = note
+            out[#out + 1] = key
+          end
+        end
+      end
+      table.sort(out, function(a, b)
+        return tostring(a) < tostring(b)
+      end)
+      return out, seen
+    end
+    local function noteByID(id)
+      return (Model.Find(Notes.Global(), id))
+    end
+    B:RegisterEntityType(self, {
+      type = "note",
+      priority = 100,
+      name = function(id)
+        local note = noteByID(id)
+        return note and Notes.Where(note) or nil
+      end,
+      summary = function(id)
+        local note = noteByID(id)
+        return note and note.title or nil
+      end,
+      icon = function()
+        return B.UI.IconTexture("note")
+      end,
+    })
+    B:RegisterDetailSection(self, {
+      id = "notes.spot",
+      chapter = "notes",
+      title = L["My notes"],
+      types = { "note" },
+      order = 1,
+      block = { wide = true },
+      invalidateOn = { "BASTIANS_NOTES_CHANGED" },
+      build = function(ref)
+        local _, id = B.Entity.Parse(ref)
+        local note = noteByID(id)
+        return note and { { kind = "para", text = note.text or note.title or "" } } or nil
+      end,
+    })
+    B:RegisterList(self, {
+      type = "note",
+      label = "All Notes",
+      glyph = "note",
+      emptyWords = L["No notes yet. Add note on a page writes the first."],
+      ids = function()
+        return (allNotes())
+      end,
+      record = function(key)
+        local _, seen = allNotes()
+        local note = seen[key]
+        if not note then
+          return nil
+        end
+        local typ = not Model.IsSpot(note.on) and B.Entity.Parse(note.on) or nil
+        return {
+          name = Notes.Where(note),
+          kind = typ or "spot",
+          thing = typ and note.on or nil,
+          note = note.id,
+        }
+      end,
+      ref = function(_, r)
+        return r.thing or ("note:" .. tostring(r.note))
+      end,
+    })
+    B:RegisterFilter(self, {
+      id = "notes.kind",
+      kind = "facet",
+      types = { "note" },
+      label = L["On"],
+      chips = true,
+      invalidateOn = { "BASTIANS_NOTES_CHANGED" }, -- a note written: the list is built again
+      value = function(_, r)
+        return r and r.kind or nil
+      end,
+    })
     B:RegisterDetailSection(self, {
       id = "notes.mine",
+      chapter = "notes", -- on the sheet (ADR 0054)
       title = L["My notes"],
       types = Notes.TYPES,
       order = 1,
@@ -895,6 +984,7 @@ mod = B:NewModule("Notes", {
     })
     B:RegisterAction(self, {
       id = "notes.add",
+      main = { "npc", "character" }, -- a button of the sheet (ADR 0054)
       label = L["Add note"],
       icon = B.UI.IconTexture("open"),
       types = "*",
@@ -909,6 +999,7 @@ mod = B:NewModule("Notes", {
     -- the map's right click on empty ground: the zone's menu with the point in the context
     B:RegisterAction(self, {
       id = "notes.here",
+      main = true, -- a button of the sheet (ADR 0054)
       label = L["Add note here"],
       icon = B.UI.IconTexture("spot"),
       types = { "zone" },
@@ -993,6 +1084,7 @@ mod = B:NewModule("Notes", {
     })
     B:RegisterAction(self, {
       id = "notes.send",
+      main = { "spot" }, -- a button of the sheet (ADR 0054)
       label = L["Send to my group"],
       icon = B.UI.IconTexture("spot"),
       types = "*",

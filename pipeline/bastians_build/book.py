@@ -27,8 +27,6 @@ ENTITY_TOKEN = re.compile(r"\{(item|npc|object|zone|price|vendor):(\d+)\}")
 ANY_TOKEN = re.compile(r"\{[^{}]*\}")
 MARKERS = {"{plate}": "plate", "{live}": "live", "{table}": "table"}
 STEP = re.compile(r"^(\d+)\.\s+(.*)$")
-STAMPS = ("true", "half", "lies", "open")
-STATUS_STAMP = {"verified": "true", "refuted": "lies", "unverified": "open"}
 SHELVES = ("active", "back")
 NOT_CHAPTERS = {"art"}  # content/strategies/art: the pictures' art direction, no pages
 ART_FILES = (".jpg", ".png")  # a page's picture in the export's art/ folder (art/README.md)
@@ -502,7 +500,6 @@ def rumour_record(row: Mapping) -> dict:
     return {
         "claim": plain(row.get("claim") or row.get("subject")),
         "kind": row["kind"],
-        "status": row["status"],
         "subject": plain(row.get("subject")),
         "sources": _sources(row),
     }
@@ -609,12 +606,11 @@ def add_book(
             row = claims.get(claim_id)
             if row is None:
                 raise BookError(f"{where}: rumour {i}: claim {claim_id} is not in the export")
-            stamp = r.get("stamp") or STATUS_STAMP.get(row["status"] or "", "open")
-            if stamp not in STAMPS:
-                raise BookError(f"{where}: rumour {i}: stamp must be one of {STAMPS}")
             if r.get("why"):
                 check_text(r["why"], f"{where}: rumour {i}")
-            page_rumours.append([claim_id, stamp, r.get("why")])
+            # three slots: the second held the stamp, and Suite and Data files reach players
+            # apart, so `why` stays third for both
+            page_rumours.append([claim_id, False, r.get("why")])
             rumours[claim_id] = rumour_record(row)
         markers = {b[0] for b in blocks}
         plate = None

@@ -8,11 +8,14 @@ Usage: python tools/data_update.py [--export <dir>] [--out build/data] [--send]
    game data, the market prices of the export, the book with the rumours its pages rest on and
    the Rumour mill, and the candidate report `build/book-candidates.md` for choosing new pages.
    The build gets the book's state of the last sent edition and writes What's new entries for
-   what changed since (pipeline book_news.py: new travellers, stamps, mill rumours).
+   what changed since (pipeline book_news.py: new travellers, mill rumours).
 2. Compares the data project's files (the packs, the loader's and the packs' code, without the
    TOC version line) with the last edition in `.local/data-editions.json`. Unchanged and sent:
    says so and stops, so the command can run as often as one likes. Changed: a new edition,
    numbered per day; its book state goes to `.local/book-states/`.
+   A pack whose rows fell by more than a tenth since the last sent edition holds the run
+   (catalog review B2, 07.11.2026: a source that changed shape would ship a thin pack); the
+   build report's counts ride with the edition, `--allow-drift` ships a fall that is right.
 3. Zips the whole install, the suite and its data (tools/release.py into `<out>/release`), boots it
    on the WoW mock (with the Suite as it was last sent when `.local/released/forever/` keeps it:
    what players run), and writes the Data project's CurseForge file with the version
@@ -40,6 +43,7 @@ import dataclasses
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -94,6 +98,7 @@ SOURCES = (
     "EverythingQuests",
     "ForeverDB/Data",
     "QuestieDB/support/Forever/Zones/areaIdToUiMapId.lua",
+    "Questie/Database/Corrections/QuestieQuestBlacklist.lua",
 )
 
 
@@ -393,12 +398,96 @@ def mark_status(ledger_path: Path, file_id: object, state: str) -> None:
     write_ledger(ledger_path, ledger)
 
 
+NAV = Path("Bastians_Data_Nav") / release.GENERATED / "Nav.lua"
+
+
 def run_build(inputs: build_client.BuildInputs, packs: Path) -> None:
-    cmd = build_client.commands(inputs, packs, skip_mapart=True)[0]
-    print("> " + " ".join(cmd[3:]), flush=True)
-    code = stream(cmd, ROOT)
-    if code:
-        raise DataUpdateError(f"the data build exited with {code}")
+    # the data packs and the walk network (the nav step): Bastian's Data ships both. 2.0.0 and
+    # every release before went out without the network because only the first command ran
+    # (06.11.2026); the stub the nav step writes without graphs is refused below
+    for cmd in build_client.commands(inputs, packs, skip_mapart=True):
+        print("> " + " ".join(cmd[3:]), flush=True)
+        code = stream(cmd, ROOT)
+        if code:
+            raise DataUpdateError(f"the {cmd[3]} build exited with {code}")
+
+
+DROP = (
+    0.10  # a pack type whose rows fell by more than a tenth holds the edition (catalog review B2)
+)
+MIN_ROWS = 50  # under this many rows before, a fall is noise, not drift
+
+
+def report_counts(packs: Path) -> dict[str, dict[str, int]]:
+    """The record counts per pack and type from the build's report (`report.md` beside the packs,
+    its Packs table), {} without one."""
+    path = packs / "report.md"
+    if not path.is_file():
+        return {}
+    out: dict[str, dict[str, int]] = {}
+    in_packs = False
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.startswith("## "):
+            in_packs = line.strip() == "## Packs"
+            continue
+        if not in_packs or not line.startswith("| ") or line.startswith("| Pack"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) < 5:
+            continue
+        counts: dict[str, int] = {}
+        for part in cells[4].split(","):
+            m = re.match(r"^(\S+) (\d+)$", part.strip())
+            if m:
+                counts[m.group(1)] = int(m.group(2))
+        if counts:
+            out[cells[0]] = counts
+    return out
+
+
+def drift(old: dict | None, new: dict) -> tuple[list[str], list[str]]:
+    """The row counts against the last sent edition's: (the falls that hold the edition, every
+    change as a line). A type gone is a fall; a type under MIN_ROWS before never is."""
+    held: list[str] = []
+    lines: list[str] = []
+    for pack in sorted(old or {}):
+        for typ, before in sorted(old[pack].items()):
+            now = new.get(pack, {}).get(typ, 0)
+            if now != before:
+                lines.append(f"{pack} {typ} {before} -> {now}")
+            if before >= MIN_ROWS and now < before * (1 - DROP):
+                held.append(f"{pack} {typ} {before} -> {now}")
+    return held, lines
+
+
+def check_drift(packs: Path, sent: dict | None, allow: bool) -> dict[str, dict[str, int]]:
+    """Says every change of the row counts since the last sent edition and refuses a fall of more
+    than a tenth unless `allow` (catalog review B2: a source that changed shape without notice
+    would ship a thin pack otherwise). -> this build's counts, for the edition."""
+    records = report_counts(packs)
+    if not records:
+        print("drift: no build report beside the packs, the row counts were not checked")
+        return records
+    held, lines = drift(sent.get("records") if sent else None, records)
+    for line in lines:
+        print(f"drift: {line}")
+    if held and not allow:
+        raise DataUpdateError(
+            "rows fell by more than a tenth since the last sent edition: "
+            + "; ".join(held)
+            + " (a source changed shape? pass --allow-drift when the fall is right)"
+        )
+    return records
+
+
+def check_nav(packs: Path) -> None:
+    """Refuses an edition whose walk network is the stub: Route would plan without it."""
+    nav = packs / NAV
+    if not nav.is_file():
+        raise DataUpdateError(f"the build wrote no {NAV}")
+    head = nav.read_text(encoding="utf-8", errors="replace")[:400]
+    if "no walk network" in head or not ("waypoints" in head or "nodes" in head):
+        raise DataUpdateError(f"{NAV} holds no walk network (a stub): build the graphs first")
 
 
 Builder = Callable[[build_client.BuildInputs, Path], None]
@@ -422,6 +511,7 @@ def update(
     inputs_commit: str | None = None,
     notes: Notes = data_notes,
     counts: dict | None = None,
+    allow_drift: bool = False,
 ) -> tuple[dict, list[curseforge.Upload] | None]:
     """Steps 1 to 3 of the module docstring. -> (the edition, the planned uploads, or None when
     the data is unchanged and that edition was sent)."""
@@ -452,6 +542,8 @@ def update(
     if pictures:
         print(f"book art: {len(pictures)} pictures from {art} and {book_art.FRONT.name}/")
     data = config["projects"][PROJECT]["folders"]
+    check_nav(packs)
+    records = check_drift(packs, sent, allow_drift)
     sha = data_hash(packs, data, addons_dir)
     write_downloads(packs, counts)  # after the hash: a new count is no new edition
     with book_toml.open("rb") as fh:
@@ -468,6 +560,7 @@ def update(
         edition["inputs"] = inputs_commit  # the last commit on what the build reads (the skip)
         edition["export"] = export_id(inputs.export)
         edition["export_sha"] = export_fingerprint(inputs.export) if inputs.export else None
+        edition["records"] = records  # the row counts the next edition is held against (B2)
         if state:
             name = f"{edition['date']}.{edition['n']}.json"
             book_states.mkdir(parents=True, exist_ok=True)
@@ -564,6 +657,11 @@ def main(
     )
     parser.add_argument("--out", type=Path, default=ROOT / "build" / "data")
     parser.add_argument("--send", action="store_true", help="upload; without it a dry run")
+    parser.add_argument(
+        "--allow-drift",
+        action="store_true",
+        help="ship although a pack's rows fell by more than a tenth since the last sent edition",
+    )
     args = parser.parse_args(argv)
     try:
         inputs = build_client.read_inputs(CLIENT)
@@ -580,6 +678,7 @@ def main(
             commit=release_notes.head(),
             inputs_commit=last,
             counts=downloads(curseforge.load_config(), transport),
+            allow_drift=args.allow_drift,
         )
     except ERRORS as err:
         print(f"error: {err}", file=sys.stderr)

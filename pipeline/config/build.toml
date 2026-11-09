@@ -8,7 +8,7 @@ addon = "Bastians_Data_World"
 file = "World.lua"
 # 12 MB since 20.10.2026 (was 10): Classic mob places, up to 12 per map, made the Forever pack 10.9 MB
 budget_kb = 12288
-indexes = ["npc.byZone", "npc.bySoldItem", "object.byZone", "node.byZone", "entrance.byZone", "entrance.byInstance", "area.byZone", "area.toMap"]
+indexes = ["npc.byZone", "npc.bySoldItem", "object.byZone", "node.byZone", "node.objects", "entrance.byZone", "entrance.byInstance", "area.byZone", "area.toMap"]
 
 [packs.world.schema]
 # loot = { {itemID, chance percent}, ... } with lootSrc "classic" (CMaNGOS) or "tdb" (retail, ItemDB)
@@ -16,7 +16,7 @@ indexes = ["npc.byZone", "npc.bySoldItem", "object.byZone", "node.byZone", "entr
 # an item ForeverDB players saw drop in Forever, its chance unknown
 npc = ["name", "subname", "level", "levelMax", "zone", "flags", "faction", "spawns", "vendor", "trainer", "loot", "lootSrc", "src", "dungeon"]
 object = ["name", "kind", "zone", "spawns", "loot", "lootSrc", "src"]
-zone = ["name", "parent", "continent", "levelLo", "levelHi", "levelMed", "questsA", "questsH", "mapType"]
+zone = ["name", "parent", "continent", "levelLo", "levelHi", "levelMed", "questsA", "questsH", "mapType", "fishing"]
 # the subzones (data.md "Areas"), id = AreaTable id: zone the uiMapID it lies in; continent, wx, wy
 # the world place (the chunk nearest the mean of its terrain chunks), r its radius in yards; spawns
 # the map place for drawing when the build had transforms; chunks how many terrain chunks carry it
@@ -63,7 +63,7 @@ indexes = [
 ]
 
 [packs.quests.schema]
-quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon"]
+quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon", "dungeonSrc"]
 # attunements (quests.md): hand-written lists from pipeline/config/attunements_<client>.toml; steps are
 # [kind, id, label(, standing)] with kind "quest" | "rep" | "item"
 attunement = ["name", "faction", "verified", "note", "steps", "src", "instance"]
@@ -89,9 +89,8 @@ disenchant = ["loot", "src"]
 [packs.market]
 addon = "Bastians_Data_Market"
 file = "Market.lua"
-# 23.10.2026, the first real export shipped for EU RP (8,281 US beta prices, 1,008 claims):
-# 1,149 KB on disk, 2.3 MB of Lua memory after loading (measured on Lua 5.1)
-budget_kb = 1536
+# 06.11.2026 every market of the export; 23.10.2026 EU RP alone was 1,149 KB
+budget_kb = 8192
 optional = true
 indexes = ["market.list", "signal.byMarket", "spot.all", "spot.byItem", "strategy.all"]
 
@@ -101,9 +100,9 @@ price = ["median", "minBuyout", "quantity", "median7d", "median30d", "low30d", "
 # signal keyed "<market>:<signalID>" (the Today lines); flags such as "needs:<profession>" or "spot:<id>"
 signal = ["module", "action", "item", "horizon", "confidence", "rationale", "capital", "profit", "minutes", "flags", "validUntil", "src"]
 # farm spots by id: items = { {itemID, perHour}, ... }, strategy = the claim behind it
-spot = ["name", "map", "x", "y", "radius", "levelMin", "levelMax", "items", "status", "strategy", "src"]
+spot = ["name", "map", "x", "y", "radius", "levelMin", "levelMax", "items", "strategy", "src"]
 # strategies (claims) by id
-strategy = ["kind", "subject", "item", "map", "x", "y", "weight", "reach", "status", "build", "firstSeen", "lastSeen", "src"]
+strategy = ["kind", "subject", "item", "map", "x", "y", "weight", "reach", "build", "firstSeen", "lastSeen", "src"]
 
 # the Strategies book (strategies-design.md section 6): content/strategies with the export's claims;
 # optional, built with --export when the content folder exists (fixture builds name it with --book)
@@ -121,14 +120,14 @@ chapter = ["name", "order", "opening", "active"]
 # art = true when the page's picture ships (Generated/Art/<id>.blp, tools/book_art.py)
 page = ["name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate", "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor", "art"]
 # the claims the pages rest on, by claim id: AHSync's own sentence and the sources (channel, date, link)
-rumour = ["claim", "kind", "status", "subject", "sources"]
+rumour = ["claim", "kind", "subject", "sources"]
 # What's new, newest first: book.toml's entries and the ones the build writes (book_news.py);
 # an entry links its page or its chapter's Rumour mill (`mill` = the chapter id); the build's own
-# carry `kind` (travellers, stamp, mill, more) and `n` (how many), so the suite's What's new can
-# fold a day into one line (ADR 0021); book.toml's have neither
+# carry `kind` (travellers, mill, more) and `n` (how many), so the suite's What's new can fold a day
+# into one line (ADR 0021); book.toml's have neither
 news = ["date", "text", "page", "mill", "kind", "n"]
-# the Rumour mill (design section 7), by claim id: per chapter the strongest strategies no page
-# tells yet, by rank; the zone, or the claim's own place without one; how many channels and claims
+# the Rumour mill (ADR 0057), by claim id: per chapter what the road is saying that no page tells
+# yet, by rank; the zone, or the claim's own place without one; how many channels and claims
 mill = ["chapter", "rank", "zone", "where", "channels", "claims"]
 
 [packs.text]
@@ -282,43 +281,93 @@ sea = "b8a380"
 skip_sea = 0.98
 budget_kb = 81920
 
-# Market pack rules (data.md, roadmap B10.2). labels: what the player sees as the source of a market's
-# prices (default: the market id). fill: a market with no export rows takes another market's prices and
-# signals under its own id with the given label; EU has no AHledger data before launch, so EU players
-# see the US beta range with its date rather than nothing.
-# ship (23.10.2026): the markets the pack carries, with the sources their fills read; empty or
-# absent: every market of the export. The first real export had four US beta markets, 16,870
-# prices, 7.5 MB of Lua memory, for a player who reads one market. The owner plays RP in the EU.
+# Market pack rules (data.md "Market pack"). Every market of the export ships ("we
+# want to support all forever markets", memory is no concern); `ship` could still name a subset.
+# labels: what the player sees as the source of a market's prices. fill: `to` reads `from`, labelled:
+# a market without rows of its own reads all of it (an alias), one with rows only the items it lacks
+# (a fallback); the chains run from the same region's normal market to the other region's.
 [market]
-ship = ["forever/rp/alliance/eu", "forever/rp/horde/eu", "retail/normal/neutral/eu"]
-labels = { "forever/normal/alliance/us" = "US beta", "forever/normal/horde/us" = "US beta", "forever/pvp/alliance/us" = "US beta", "forever/pvp/horde/us" = "US beta", "retail/normal/neutral/eu" = "retail EU" }
+# a row this many days older than its market's newest scan shows as `old_label`: 11,414 of 23,277
+# prices were the beta's of 21. to 23.10. under live markets (measured 06.11.2026). They stay: a
+# labelled old price beats none, and a market's scans replace them item by item
+max_age_days = 10
+old_label = "US beta"
+
+[market.labels]
+"forever/normal/alliance/eu" = "EU normal"
+"forever/normal/alliance/us" = "US normal"
+"forever/normal/horde/eu" = "EU normal"
+"forever/normal/horde/us" = "US normal"
+"forever/pvp/alliance/eu" = "EU PvP"
+"forever/pvp/alliance/us" = "US PvP"
+"forever/pvp/horde/eu" = "EU PvP"
+"forever/pvp/horde/us" = "US PvP"
+"forever/rp/alliance/eu" = "EU RP"
+"forever/rp/alliance/us" = "US RP"
+"forever/rp/horde/eu" = "EU RP"
+"forever/rp/horde/us" = "US RP"
+"forever/rppvp/alliance/eu" = "EU RP PvP"
+"forever/rppvp/alliance/us" = "US RP PvP"
+"forever/rppvp/horde/eu" = "EU RP PvP"
+"forever/rppvp/horde/us" = "US RP PvP"
+"retail/normal/neutral/eu" = "retail EU"
+
+[[market.fill]]
+to = "forever/rp/alliance/eu"
+from = "forever/normal/alliance/eu"
+label = "EU normal"
+
+[[market.fill]]
+to = "forever/rp/horde/eu"
+from = "forever/normal/horde/eu"
+label = "EU normal"
+
+[[market.fill]]
+to = "forever/rp/horde/us"
+from = "forever/normal/horde/us"
+label = "US normal"
+
+[[market.fill]]
+to = "forever/rp/alliance/us"
+from = "forever/normal/alliance/us"
+label = "US normal"
 
 [[market.fill]]
 to = "forever/normal/alliance/eu"
 from = "forever/normal/alliance/us"
-label = "US beta"
+label = "US normal"
 
 [[market.fill]]
 to = "forever/normal/horde/eu"
 from = "forever/normal/horde/us"
-label = "US beta"
+label = "US normal"
 
 [[market.fill]]
 to = "forever/pvp/alliance/eu"
 from = "forever/pvp/alliance/us"
-label = "US beta"
+label = "US PvP"
 
 [[market.fill]]
 to = "forever/pvp/horde/eu"
 from = "forever/pvp/horde/us"
-label = "US beta"
+label = "US PvP"
 
 [[market.fill]]
-to = "forever/rp/alliance/eu"
-from = "forever/normal/alliance/us"
-label = "US beta"
+to = "forever/rppvp/alliance/eu"
+from = "forever/pvp/alliance/eu"
+label = "EU PvP"
 
 [[market.fill]]
-to = "forever/rp/horde/eu"
-from = "forever/normal/horde/us"
-label = "US beta"
+to = "forever/rppvp/alliance/us"
+from = "forever/pvp/alliance/us"
+label = "US PvP"
+
+[[market.fill]]
+to = "forever/rppvp/horde/eu"
+from = "forever/pvp/horde/eu"
+label = "EU PvP"
+
+[[market.fill]]
+to = "forever/rppvp/horde/us"
+from = "forever/pvp/horde/us"
+label = "US PvP"

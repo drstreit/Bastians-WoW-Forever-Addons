@@ -59,7 +59,7 @@ static class Minimap
         return null;
     }
 
-    static (int id, string dir) ResolveMap(Client c, string defsDir, string map)
+    internal static (int id, string dir) ResolveMap(Client c, string defsDir, string map)
     {
         var storage = Db2.Load(c, defsDir, "Map");
         foreach (var key in storage.Keys)

@@ -50,14 +50,14 @@ def test_without_a_previous_state_only_the_state_is_written():
     assert "no earlier state" in notes[0]
     assert [n["text"] for n in news(world)] == ["New page: Hogger's Camp.", "The book opens."]
     page = state["pages"]["hogger-camp"]
-    assert "Alpha" in page["channels"] and page["stamps"]["12"] == "half"
+    assert "Alpha" in page["channels"] and "stamps" not in page
     assert "old-gnolls" not in state["pages"]  # a tombstone has no travellers
     assert state["mill"] == {"farming": [901]} and state["news"] == []
 
 
-def test_new_travellers_stamps_and_mill_rumours_become_linked_entries():
+def test_new_travellers_and_mill_rumours_become_linked_entries():
     previous = book_state(book_world(mill=(901,)), strategies("Alpha"))
-    previous["pages"]["hogger-camp"]["stamps"]["11"] = "open"
+    previous["pages"]["hogger-camp"]["stamps"] = {"11": "open"}  # an older state still has them
     world = book_world(mill=(901, 902, 903))
     current = strategies("Alpha", "Beta", "Gamma")
     state, _ = add_generated_news(world, current, previous, "2026-10-25")
@@ -65,9 +65,7 @@ def test_new_travellers_stamps_and_mill_rumours_become_linked_entries():
     texts = {n["text"]: n for n in generated}
     assert texts['2 new travellers on "Hogger\'s Camp".']["page"] == "hogger-camp"
     assert texts["Farming and easy kills: 2 new rumours in the mill."]["mill"] == "farming"
-    # claim 11 is verified in the export and has no stamp of its own: open -> true
-    assert texts['A rumour on "Hogger\'s Camp" proved true.']["page"] == "hogger-camp"
-    assert state["pages"]["hogger-camp"]["stamps"]["11"] == "true"
+    assert not any("proved" in t for t in texts)  # nothing is judged any more
     # newest first, the hand-written entries kept, the ids their place in that order
     assert news(world)[-1]["text"] == "The book opens."
     assert [n["date"] for n in news(world)] == sorted(

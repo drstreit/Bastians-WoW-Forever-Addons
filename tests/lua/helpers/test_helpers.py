@@ -444,3 +444,166 @@ def test_mail_rules_put_the_kind_into_a_mail_the_player_sends(wow: WowRuntime):
     wow.execute(f"{H}.SetMailRule('herb', '')")
     assert wow.eval(f"{H}.MailRulesText()") is None
     assert wow.chat == [] and wow.errors == []
+
+
+def test_a_rare_creature_targeted_or_under_the_mouse_is_named_once(wow: WowRuntime):
+    """helpers.md "Warnings", the rare alert (catalog review A3.3, 07.11.2026)."""
+    boot(wow, CORE, DATA, HELPERS)
+    guid = "Creature-0-1-0-1-%d-0000000001"
+    wow.execute(f"Mock.guids = {{ target = '{guid % 1260}' }}; Mock.Fire('PLAYER_TARGET_CHANGED')")
+    assert notice(wow) == "Rare: Leprithus"
+    assert wow.eval("BastiansHelpersNotice.button:IsShown()") is False  # no Map: no button
+    wow.execute(f"{H}.lastNotice = nil; Mock.Fire('PLAYER_TARGET_CHANGED')")
+    assert notice(wow) is None  # once per creature and session
+    wow.execute(f"Mock.guids.mouseover = '{guid % 448}'; Mock.Fire('UPDATE_MOUSEOVER_UNIT')")
+    assert notice(wow) is None  # Hogger is elite, not rare
+    wow.execute("Mock.guids.target = 'Player-1-00000002'; Mock.Fire('PLAYER_TARGET_CHANGED')")
+    assert notice(wow) is None
+    assert wow.eval(f"{H}.Model.IsRare({{ 'elite', 'rareelite' }})") is True
+    assert wow.eval(f"{H}.Model.IsRare('rare')") is True
+    assert wow.eval(f"{H}.Model.IsRare(nil)") is False
+    assert wow.errors == []
+
+
+def test_the_rare_alert_offers_the_map_and_follows_its_setting(wow: WowRuntime):
+    boot(wow, CORE, DATA, "Bastians_Map", HELPERS)
+    wow.execute(f"{P}.warnRares = false")
+    wow.execute("Mock.guids = { mouseover = 'Creature-0-1-0-1-1260-0000000001' }")
+    wow.execute("Mock.Fire('UPDATE_MOUSEOVER_UNIT')")
+    assert notice(wow) is None  # the setting off: nothing, and the creature is not used up
+    wow.execute(f"{P}.warnRares = true; Mock.Fire('UPDATE_MOUSEOVER_UNIT')")
+    assert notice(wow) == "Rare: Leprithus"
+    assert wow.eval("BastiansHelpersNotice.button.label:GetText()") == "Map"
+    wow.execute("BastiansHelpersNotice.button:Click()")
+    assert wow.eval("Bastians:GetModule('Map').Map.IsShown()") is True
+    assert wow.errors == []
+
+
+def test_a_send_to_button_says_who_it_is(wow: WowRuntime):
+    """ "the mail buttons should state the class, level and place"."""
+    boot(wow)
+    wow.execute(
+        f"""{H}.Global().characters['Bankalt-Mock Realm'] = {{ name = "Bankalt", realm = "Mock Realm",
+          faction = "Alliance", className = "Mage", level = 4, zone = "Stormwind City" }}
+        {H}.Global().characters['Oldalt-Mock Realm'] = {{ name = "Oldalt", realm = "Mock Realm",
+          faction = "Alliance" }}"""
+    )
+    wow.execute("Mock.OpenMailbox()")
+    first = "BastiansHelpersSendTo.buttons[1]"
+    assert wow.eval(f"{first}.label:GetText()") == "Bankalt"
+    assert wow.eval(f"{first}.detail:GetText()") == "Level 4 Mage, Stormwind City"
+    assert wow.eval(f"{first}:GetHeight()") == 34
+    # recorded before the level and the place were: the name alone, and nothing made up
+    second = "BastiansHelpersSendTo.buttons[2]"
+    assert wow.eval(f"{second}.label:GetText()") == "Oldalt"
+    assert wow.eval(f"{second}.detail:IsShown()") is False
+    assert wow.eval(f"{second}:GetHeight()") < 34
+    assert wow.errors == []
+
+
+def test_describe_says_only_what_is_known(wow: WowRuntime):
+    boot(wow)
+    d = f"{H}.Model.Describe"
+    assert (
+        wow.eval(f"{d}({{ level = 4, zone = 'Goldshire' }}, 'Mage')") == "Level 4 Mage, Goldshire"
+    )
+    assert wow.eval(f"{d}({{ level = 4 }})") == "Level 4"
+    assert wow.eval(f"{d}({{ zone = 'Goldshire' }})") == "Goldshire"
+    assert wow.eval(f"{d}({{}})") is None
+    assert wow.eval(f"{d}(nil, 'Mage')") is None
+
+
+def test_the_record_follows_the_level_and_the_zone(wow: WowRuntime):
+    boot(wow)
+    me = f"{H}.Global().characters[{H}.Key()]"
+    wow.execute("Mock.Fire('PLAYER_LEVEL_UP', 37)")
+    assert wow.eval(f"{me}.level") == 37
+    zone = wow.eval("GetZoneText()")
+    assert wow.eval(f"{me}.zone") == zone
+    wow.execute("GetZoneText = function() return '' end; Mock.Fire('ZONE_CHANGED_NEW_AREA')")
+    assert wow.eval(f"{me}.zone") == zone  # a zone not known yet keeps the last one
+    assert wow.errors == []
+
+
+def test_a_send_to_button_writes_the_whole_name(wow: WowRuntime):
+    """ "you need the surname now, first name alone will not send it"."""
+    boot(wow)
+    wow.execute(
+        f"""{H}.Global().characters['Bankalt-Mock Realm'] = {{ name = "Bankalt", full = "Bankalt Farmadr",
+          realm = "Mock Realm", faction = "Alliance" }}"""
+    )
+    wow.execute("Mock.OpenMailbox()")
+    wow.execute("BastiansHelpersSendTo.buttons[1]:Click()")
+    assert wow.eval("BastiansHelpersSendTo.buttons[1].label:GetText()") == "Bankalt"
+    assert wow.eval("SendMailNameEditBox:GetText()") == "Bankalt Farmadr"
+    # sent to in full, the recent list does not name the alt a second time
+    wow.execute('SendMail("Bankalt Farmadr", "Hi", "")')
+    assert list(wow.eval(f"{H}.Mail.Names()").values()) == ["Bankalt"]
+    assert wow.errors == []
+
+
+def test_my_record_keeps_the_surname(wow: WowRuntime):
+    boot(wow)
+    me = f"{H}.Global().characters[{H}.Key()]"
+    assert wow.eval(f"{me}.full") == wow.eval(f"{me}.name")  # no second value: the name is whole
+    wow.execute(
+        """UnitName = function() return "Arnhild", "Farmadr" end
+        Mock.Fire('ZONE_CHANGED_NEW_AREA')"""
+    )
+    assert wow.eval(f"{me}.name") == "Arnhild"
+    sep = " " if wow.eval("Bastians.Client") == "forever" else "-"  # a surname, or a realm
+    assert wow.eval(f"{me}.full") == f"Arnhild{sep}Farmadr"
+    assert wow.errors == []
+
+
+def test_an_alt_that_has_not_logged_in_gets_my_surname_a_stranger_does_not(wow: WowRuntime):
+    """ "I need name and surname (with a space in between)"."""
+    boot(wow)
+    wow.execute(
+        f"""Bastians.Client = "forever"
+        UnitName = function() return "Arnhild", "Farmadr" end
+        Mock.Fire('ZONE_CHANGED_NEW_AREA')
+        for key, c in pairs({H}.Global().characters) do
+          if c.name == "Mockchar" then {H}.Global().characters[key] = nil end -- the boot's name
+        end
+        {H}.Global().characters['Bankalt-Mock Realm'] = {{ name = "Bankalt", realm = "Mock Realm",
+          faction = "Alliance" }}
+        {H}.Char().recent = {{ "Stranger", "Bankalt Farmadr" }}
+        Mock.OpenMailbox()"""
+    )
+    assert wow.eval("BastiansHelpersSendTo.buttons[1].label:GetText()") == "Bankalt"
+    wow.execute("BastiansHelpersSendTo.buttons[1]:Click()")
+    assert wow.eval("SendMailNameEditBox:GetText()") == "Bankalt Farmadr"
+    assert wow.eval("BastiansHelpersSendTo.buttons[2].label:GetText()") == "Stranger"
+    wow.execute("BastiansHelpersSendTo.buttons[2]:Click()")
+    assert wow.eval("SendMailNameEditBox:GetText()") == "Stranger"
+    assert wow.eval("BastiansHelpersSendTo.buttons[3]") is None  # no second Bankalt
+    assert wow.errors == []
+
+
+def test_the_mail_name_prefers_the_alts_own_and_guesses_nothing_without_a_surname(wow: WowRuntime):
+    boot(wow)
+    m = f"{H}.Model"
+    assert wow.eval(f"{m}.Surname({{ name = 'Ann', full = 'Ann Oak' }})") == "Oak"
+    assert wow.eval(f"{m}.Surname({{ name = 'Ann', full = 'Ann' }})") is None
+    assert wow.eval(f"{m}.Surname(nil)") is None
+    assert wow.eval(f"{m}.MailName({{ name = 'Ann', full = 'Ann Oak' }}, 'Elm')") == "Ann Oak"
+    assert wow.eval(f"{m}.MailName({{ name = 'Ann', full = 'Ann' }}, 'Elm')") == "Ann Elm"
+    assert wow.eval(f"{m}.MailName({{ name = 'Ann' }}, 'Elm')") == "Ann Elm"
+    assert (
+        wow.eval(f"{m}.MailName({{ name = 'Ann' }}, nil)") is None
+    )  # the button keeps the first name
+    assert wow.eval(f"{m}.MailName(nil, 'Elm')") is None
+    assert wow.errors == []
+
+
+def test_no_surname_is_guessed_when_the_accounts_surnames_differ(wow: WowRuntime):
+    """ "you can have as many surnames as you want"."""
+    boot(wow)
+    m = f"{H}.Model"
+    one = "{ a = { name = 'A', full = 'A Oak' }, b = { name = 'B', full = 'B Oak' }, c = { name = 'C' } }"
+    two = "{ a = { name = 'A', full = 'A Oak' }, b = { name = 'B', full = 'B Elm' } }"
+    assert wow.eval(f"{m}.SharedSurname({one})") == "Oak"
+    assert wow.eval(f"{m}.SharedSurname({two})") is None
+    assert wow.eval(f"{m}.SharedSurname({{ c = {{ name = 'C' }} }})") is None
+    assert wow.errors == []

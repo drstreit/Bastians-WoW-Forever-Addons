@@ -9,22 +9,18 @@ updated = "2026-10-23"
 
 [[rumours]]
 claim = 11656586993982
-stamp = "half"
 why = "The export has never seen a Veteran's, Guard's, Protector's, Acolyte's or Crusader's piece listed, but the new Sterling Silver and Skyforged pieces sell."
 
 [[rumours]]
 claim = 43932162629856
-stamp = "true"
 why = "Not one of the 219 new role pieces that smiths, leatherworkers and tailors make up to skill 225 has been listed on any of the four markets in the export."
 
 [[rumours]]
 claim = 219283286532484
-stamp = "true"
 why = "The Linen, Woolen, Silk, Mageweave and Runecloth Reagent Bags all sell in the export."
 
 [[rumours]]
 claim = 151499821012928
-stamp = "true"
 why = "The Spinning Wheel blueprint trades on the auction house in the export."
 
 [plate]

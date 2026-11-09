@@ -65,6 +65,10 @@ ns.L:Register("deDE", {
   ["Route by default"] = "Route standardmäßig",
   ["Switch to this kind of route; it stays the default."] = "Zu dieser Art Route wechseln; sie bleibt die Vorgabe.",
   ["Careful: level %d creatures"] = "Vorsicht: Kreaturen der Stufe %d",
+  -- the route's verdict (catalog review A4.3, 07.11.2026)
+  ["Safe trip"] = "Sichere Reise",
+  ["Watch out"] = "Vorsicht",
+  ["Risky trip"] = "Riskante Reise",
   ["elite"] = "Elite",
 
   -- Death.lua (R26.8)
@@ -113,6 +117,10 @@ ns.L:Register("deDE", {
   ["All flight masters"] = "Alle Flugmeister",
   ["Open the step list when a route starts"] = "Die Schrittliste öffnen, wenn eine Route beginnt",
   ["Show an arrow to the next step while a route is active"] = "Einen Pfeil zum nächsten Schritt zeigen, solange eine Route aktiv ist",
+  -- Flight.lua: the flight bar (catalog review A4.1, 07.11.2026)
+  ["Show a flight bar with the time left while flying"] = "Eine Flugleiste mit der Restzeit zeigen, solange du fliegst",
+  ["%s to %s"] = "%s nach %s",
+  ["%s left"] = "noch %s",
   ["Route here"] = "Route hierher",
   ["Route to"] = "Route zu",
   ["Open Bastian's Route"] = "Bastian's Route öffnen",
@@ -151,4 +159,13 @@ ns.L:Register("deDE", {
 
   -- Welcome, Suite page, Help page, app pages, Words (01.11.2026)
   ["Next: %s"] = "Weiter: %s",
+  -- the /way command (ADR 0062, 08.11.2026)
+  ["/way: %s"] = "/way: %s",
+  ["New route"] = "Neue Route",
+  ["Add to route"] = "Zur Route hinzufügen",
+  ["Waypoints"] = "Wegpunkte",
+  ["What /way does while a route runs: start a new route, or add the place to the route."] = "Was /way tut, während eine Route läuft: eine neue Route beginnen oder den Ort zur Route hinzufügen.",
+  ["Which addon answers /way: Bastian's Route, or the one that had it first."] = "Welches Addon auf /way antwortet: Bastian's Route oder das Addon, das es zuerst hatte.",
+  ["No zone called %s."] = "Keine Zone namens %s.",
+  ["Several zones match %s: %s"] = "Mehrere Zonen passen zu %s: %s",
 })

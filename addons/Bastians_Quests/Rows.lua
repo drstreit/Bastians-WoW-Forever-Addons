@@ -70,7 +70,7 @@ end
 local ICON = {
   done = "done",
   log = "questActive",
-  complete = "questActive",
+  complete = "done", -- done looks done, not like the open quests (ADR 0053)
   available = "quest",
   soon = "waiting",
   level = "waiting",
@@ -85,23 +85,9 @@ function R.statusIcon(status)
   return B.UI.Icon(ICON[status] or "quest")
 end
 
--- The first sentence of a text, at most `max` characters, for a folded text row.
-function R.firstSentence(text, max)
-  max = max or 90
-  local s = string.gsub(tostring(text or ""), "%$[Bb]", " ")
-  s = string.gsub(s, "%s+", " ")
-  s = string.match(s, "^%s*(.-)%s*$")
-  if s == "" then
-    return nil
-  end
-  local stop = string.find(s, "[%.!%?]%s")
-  if stop and stop < max then
-    s = string.sub(s, 1, stop)
-  end
-  if #s > max then
-    s = string.gsub(string.sub(s, 1, max - 1), "%s+%S*$", "") .. "..."
-  end
-  return s
+-- The same picture as a texture, for a tile (ADR 0056: a quest's state is its picture).
+function R.statusTexture(status)
+  return B.UI.IconTexture(ICON[status] or "quest")
 end
 
 -- Paragraphs of a quest text ($B is the client's line break).
@@ -117,9 +103,14 @@ function R.paragraphs(text)
   return out
 end
 
--- Finished and total objectives of a log entry (0, 0 without objectives).
+-- How far a log entry is: the count of a single counted objective ("0/6", not "0/1"), else its
+-- finished and total objectives (0, 0 without objectives).
 function R.progressOf(entry)
   local total = #(entry.objectives or {})
+  local only = total == 1 and entry.objectives[1]
+  if only and only.required and only.required > 0 then
+    return only.fulfilled or 0, only.required
+  end
   local done = 0
   for _, o in ipairs(entry.objectives or {}) do
     if o.finished then
@@ -129,7 +120,7 @@ function R.progressOf(entry)
   return done, total
 end
 
--- "done/total" of a log entry's objectives, or "" without objectives.
+-- R.progressOf as "done/total", or "" without objectives.
 function R.progressText(entry)
   local done, total = R.progressOf(entry)
   if total == 0 then
@@ -141,6 +132,21 @@ end
 -- Objective progress in colour: red at
 -- nothing, through orange and yellow, green when done. Takes `fulfilled, required` or a fraction
 -- alone; white when the progress is unknown (no required count).
+-- On a light ground (a page on paper, the Parchment theme) the bright scale cannot be read (owner,
+-- Forever 05.11.2026: yellow counts on parchment): there it runs between the colour set's own
+-- difficulty colours, which are made for that ground.
+local function lightGround()
+  local t = B.UI.Style.C.text
+  return t ~= nil and (0.2126 * t[1] + 0.7152 * t[2] + 0.0722 * t[3]) < 0.5
+end
+
+local function mixed(a, b, t)
+  local function part(i)
+    return math.floor((a[i] + (b[i] - a[i]) * t) * 255 + 0.5)
+  end
+  return string.format("|cff%02x%02x%02x", part(1), part(2), part(3))
+end
+
 function R.progressColor(fulfilled, required)
   local p
   if required == nil then
@@ -156,6 +162,13 @@ function R.progressColor(fulfilled, required)
   end
   if p < 0 then
     p = 0
+  end
+  if lightGround() then
+    local c = B.UI.Style.C
+    if p < 0.5 then
+      return mixed(c.diffRed, c.diffYellow, p * 2)
+    end
+    return mixed(c.diffYellow, c.diffGreen, (p - 0.5) * 2)
   end
   local r, g, b
   if p < 0.5 then -- red (255, 64, 64) to yellow (255, 224, 0)
@@ -222,9 +235,13 @@ function R.tags(qid, q, state, map)
   local function add(color, text)
     tags[#tags + 1] = color .. text .. "|r"
   end
-  local ch = Logic.chain(qid, state)
-  if ch and ch.pos[qid] then -- retail chains may not list every quest that names them (25.10.2026)
-    add(accent(), L["Chain"] .. " " .. ch.pos[qid] .. "/" .. #ch.quests)
+  -- its step on the chain's main line, as the strip of its sheet says it (ADR 0055); a side
+  -- quest carries the word alone
+  local place = Logic.chainPlace(qid, state)
+  if place and place.step then
+    add(accent(), L["Chain"] .. " " .. place.step .. "/" .. place.steps)
+  elseif place and not place.why then
+    add(accent(), L["Chain"])
   end
   for _, m in ipairs(Logic.marks(q)) do
     add(C.orange, L[m])
@@ -302,7 +319,8 @@ function R.quest(qid, state, opts)
   if meta ~= "" then
     row.meta = meta
   end
-  local money = q.rewards and q.rewards.money
+  local rw = Logic.rewards(qid)
+  local money = rw and rw.money
   if money and money > 0 then
     row.value, row.valueKind = money, "money"
   end
@@ -354,7 +372,8 @@ function R.chain(ch, state, map)
     if not nextQ and (st == "available" or st == "log") then
       nextQ, nextSt = qid, st
     end
-    local money = q.rewards and q.rewards.money
+    local rw = Logic.rewards(qid)
+    local money = rw and rw.money
     if money and money > 0 then
       total = (total or 0) + money
     end
@@ -377,6 +396,7 @@ function R.chain(ch, state, map)
   return {
     id = "k:" .. ch.id,
     chain = ch.id,
+    block = true,
     nextQuest = nextQ,
     nextStatus = nextSt,
     text = text,
@@ -391,6 +411,70 @@ function R.chain(ch, state, map)
       end
     end,
   }
+end
+
+-- An objective's words without the count the client's text may carry ("0/6 Shiny Junk", "Shiny
+-- Junk: 0/6"): the row prints the count itself.
+function R.objectiveLabel(o)
+  local text = tostring(o.text or "")
+  if not (o.required and o.required > 0) then
+    return text -- no count of ours: the client's stays
+  end
+  text = string.gsub(text, "^%d+/%d+%s+", "")
+  return (string.gsub(text, ":?%s+%d+/%d+$", ""))
+end
+
+-- The task row of a quest (ADR 0052): what to do in the quest's own words, or nil without them.
+function R.taskRow(qid, text)
+  local parts = R.paragraphs(text)
+  if #parts == 0 then
+    return nil
+  end
+  return { id = "task:" .. qid, kind = "para", text = table.concat(parts, " ") }
+end
+
+-- Who takes a done quest, in words, or nil when nobody is known: "Hand in to Morgan Pestle,
+-- Stormwind"; the zone only when it is not the one the player is on (`map`).
+function R.handInWords(q, map)
+  local ref = q and q.ends and q.ends[1]
+  local name = ref and B:Entity(ref):Name() or nil
+  if not name then
+    return nil
+  end
+  local there = Logic.turnInMap(q)
+  if there and there ~= map then
+    return string.format(L["Hand in to %s, %s"], name, R.zoneName(there))
+  end
+  return string.format(L["Hand in to %s"], name)
+end
+
+-- The lines under a quest's name in My quests (ADR 0053): who takes a done quest, else the first
+-- objective, and the others as a list for the lines below it.
+function R.nextStep(entry, q, map)
+  if entry.isComplete then
+    local words = R.handInWords(q, map)
+    return C.green .. L["Done."] .. (words and (" " .. words) or "") .. "|r"
+  end
+  local lines = R.objectiveLines(entry)
+  if #lines == 0 then
+    return C.grey .. L["In progress"] .. "|r"
+  end
+  return table.remove(lines, 1), lines
+end
+
+-- Every objective of a log entry, one line each with its count first (
+-- "I cannot see multiple objectives in a quest, but that is necessary").
+function R.objectiveLines(entry)
+  local lines = {}
+  for _, o in ipairs(entry.objectives or {}) do
+    local count = ""
+    if o.required and o.required > 0 then
+      local col = o.finished and C.green or R.progressColor(o.fulfilled or 0, o.required)
+      count = col .. (o.fulfilled or 0) .. "/" .. o.required .. "|r "
+    end
+    lines[#lines + 1] = count .. (o.finished and C.green or C.white) .. R.objectiveLabel(o) .. "|r"
+  end
+  return lines
 end
 
 -- Objective rows of a log entry: finished ones grey with a check, open ones with their count.
@@ -411,7 +495,7 @@ function R.objectives(entry)
     end
     out[#out + 1] = {
       id = "ob:" .. entry.questID .. ":" .. i,
-      text = (o.finished and B.UI.Icon("done") or "") .. col .. tostring(o.text or "") .. "|r" .. progress,
+      text = (o.finished and B.UI.Icon("done") or "") .. col .. R.objectiveLabel(o) .. "|r" .. progress,
     }
   end
   return out
@@ -439,6 +523,7 @@ local STATE_WORDS = {
   rep = { "needs reputation", "grey" },
   superseded = { "replaced by another quest", "grey" },
   never = { "not for this character", "grey" },
+  inactive = { "not offered now", "grey" },
 }
 
 -- The words of a quest's state on a step; a prerequisite inside the chain reads "after step k".

@@ -12,6 +12,8 @@
 -- Mini.lua) gives its own centre, scale, size and shape; north stays up there.
 -- The minimap search's mark (MM.SetMark, map.md "The minimap search", L4) is one more pin above
 -- the layers' pins, drawn at any distance (on the rim when far) and also with the layers off.
+-- The live pins (MM.SetLive: the game's tracked dots read back on our styles, Tracked.lua) are no
+-- layer's either: drawn with the layers off, beside the nearest N and above them.
 local _, ns = ...
 local B = Bastians
 local S = B.UI.Style
@@ -46,6 +48,7 @@ local pins = {} -- the nearest pins of the last query, with their world coordina
 local paths = {} -- the path pins of the last query (points in world yards)
 local center -- { continent, wx, wy } of the last query
 local mark -- the search's mark: { ref, continent, wx, wy, icon, color, label, card } or nil
+local live = {} -- the live pins: { ref, continent, wx, wy, icon, color, label, card } each
 local host -- nil: the game's minimap; else { frame, Center(), Scale(), Half(), Shape() }
 local indoors = false
 local elapsed = 0
@@ -310,7 +313,8 @@ function MM.Reposition()
     if pin.color then
       S.tint(f.icon, pin.color, 1)
     end
-    f:SetFrameLevel((frame:GetFrameLevel() or 0) + (pin.isMark and 3 or 1)) -- the mark on top
+    -- the mark on top, a live pin above the layers' (a tracked herb on its known place)
+    f:SetFrameLevel((frame:GetFrameLevel() or 0) + (pin.isMark and 3 or pin.isLive and 2 or 1))
     f.ring:SetShown(pin.isMark == true and not onEdge)
     if onEdge then
       edge = edge + 1
@@ -363,7 +367,8 @@ local function isMarked(pin)
   return dx * dx + dy * dy <= MM.MARK_SAME * MM.MARK_SAME
 end
 
--- Ask every enabled layer for the pins around the player, keep the nearest N; the mark first.
+-- Ask every enabled layer for the pins around the player, keep the nearest N; the mark first,
+-- then the live pins, all of them.
 function MM.Query()
   pins = {}
   paths = {}
@@ -372,7 +377,7 @@ function MM.Query()
     return -- hidden by the key: nothing drawn until the key brings it back
   end
   local on = enabled()
-  if not (on or mark) then
+  if not (on or mark or #live > 0) then
     hideFrom(0)
     hidePiecesFrom(0)
     frame:Hide()
@@ -421,6 +426,14 @@ function MM.Query()
   if mark and mark.continent == continent then
     pins[1] = markPin(px, py)
   end
+  for _, pin in ipairs(live) do
+    if pin.continent == continent then
+      local dx, dy = pin.wx - px, pin.wy - py
+      pin.distance = math.sqrt(dx * dx + dy * dy)
+      pin.isLive = true
+      pins[#pins + 1] = pin
+    end
+  end
   local max = db().minimapMax or 20
   for i = 1, math.min(max, #found) do
     pins[#pins + 1] = found[i]
@@ -439,7 +452,7 @@ end
 
 -- A layer changed, the zone changed, the settings changed: one query, coalesced.
 function MM.Schedule()
-  if mod and enabled() then
+  if mod and (enabled() or #live > 0) then
     mod:Coalesce("minimap", 0.1, MM.Query)
   end
 end
@@ -523,6 +536,25 @@ function MM.Mark()
   return mark
 end
 
+-- The live pins (Tracked.lua): a list of { ref, continent, wx, wy, icon, color, label, card },
+-- empty to clear them. Drawn with or without the layers on the minimap, never counted against the
+-- nearest N; one query, coalesced (a sweep changes several at once).
+function MM.SetLive(list)
+  local had = #live > 0
+  live = mod and mod:IsEnabled() and list or {}
+  if not mod or not (had or #live > 0) then
+    return
+  end
+  if not frame then
+    build()
+  end
+  mod:Coalesce("minimap", 0.1, MM.Query)
+end
+
+function MM.Live()
+  return live
+end
+
 -- Puts the overlay on a host (nil: back on the game's minimap) and asks the layers again.
 function MM.SetHost(newHost)
   host = newHost
@@ -583,8 +615,8 @@ function MM.Apply()
     MM.stats.shown, MM.stats.edge, MM.stats.queried, MM.stats.pieces = 0, 0, 0, 0
     stopTicks()
     frame:Hide()
-    if mark then
-      MM.Query() -- the search's mark stays without the layers
+    if mark or #live > 0 then
+      MM.Query() -- the search's mark and the live pins stay without the layers
     end
   end
 end
@@ -644,6 +676,7 @@ table.insert(Map.onLayerChanged, MM.Schedule)
 table.insert(Map.onSuiteHidden, MM.HideByKey)
 table.insert(Map.onDisable, function()
   mark = nil
+  live = {}
   if frame then
     hideFrom(0)
     hidePiecesFrom(0)

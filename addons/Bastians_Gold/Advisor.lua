@@ -23,7 +23,8 @@ local function prices()
 end
 
 -- One item: { itemID, count, quality (0 = poor), bound, noValue, sell (copper per unit or nil),
--- price = { median, minBuyout, salesPerDay, stale } or nil } -> { verdict, reason, unit, total }.
+-- cost (what the ledger says one unit cost, or nil), price = { median, minBuyout, salesPerDay,
+-- stale } or nil } -> { verdict, reason, unit, total }.
 -- `unit` is the copper one unit is expected to bring on the advised way, nil when nothing is known.
 function Advisor.Advise(item, opts)
   local cut = opts and opts.cut or Advisor.AH_CUT
@@ -73,6 +74,14 @@ function Advisor.Advise(item, opts)
       sell
     )
   end
+  if item.cost and net < item.cost then
+    local words = L["you paid %s, the AH pays %s after the cut"]
+    return out("keep", string.format(words, B.UI.Money(item.cost), B.UI.Money(net)) .. stale, nil)
+  end
+  if ns.Pricing.Dumped(p) and not p.stale then
+    local words = L["the lowest listing %s is far under the median %s: wait"]
+    return out("keep", string.format(words, B.UI.Money(p.minBuyout), B.UI.Money(median)), nil)
+  end
   if slowSales and sell then
     return out(
       "vendor",
@@ -91,6 +100,66 @@ function Advisor.Advise(item, opts)
     reason = reason .. string.format(L[", slow (%.1f a day)"], p.salesPerDay)
   end
   return out("post", reason .. stale, net)
+end
+
+-- One answer per bag item (ADR 0058, PH6; catalog review A5.4): sell, auction, disenchant, mail,
+-- keep, with the reason. Pure: `ctx` = { wanted = { name, count } (another character of yours
+-- asked for it: Alts' requests), neverSell = true (Helpers' list), disenchant = copper per unit
+-- (the materials' value with every one priced, else nil) }. Built on Advise: its post is auction,
+-- its vendor sell, its keep keeps; disenchanting wins when it beats the way Advise found; a
+-- character who asked wins over everything. Unknown stays unknown: no price, no figure.
+Advisor.ANSWERS = { "mail", "sell", "auction", "disenchant", "keep" }
+
+function Advisor.Answer(item, ctx, opts)
+  ctx = ctx or {}
+  local count = item.count or 1
+  if ctx.wanted and ctx.wanted.name then
+    local n = math.min(count, ctx.wanted.count or count)
+    return {
+      answer = "mail",
+      to = ctx.wanted.name,
+      reason = string.format(L["%s asked for %d of these"], ctx.wanted.name, n),
+      unit = nil,
+      total = nil,
+    }
+  end
+  if item.quality == 0 and ctx.neverSell then
+    return { answer = "keep", reason = L["on your never-sell list"], unit = nil, total = nil }
+  end
+  local a = Advisor.Advise(item, opts)
+  local de = ctx.disenchant and ctx.disenchant > 0 and ctx.disenchant or nil
+  if de and not item.bound and (a.unit == nil or de > a.unit) and item.quality ~= 0 then
+    local words = item.sell and L["disenchanting brings %s, the vendor pays %s"]
+      or L["disenchanting brings %s"]
+    return {
+      answer = "disenchant",
+      reason = string.format(words, B.UI.Money(de), B.UI.Money(item.sell or 0)),
+      unit = de,
+      total = de * count,
+    }
+  end
+  local answer = a.verdict == "post" and "auction" or a.verdict == "vendor" and "sell" or "keep"
+  return { answer = answer, reason = a.reason, unit = a.unit, total = a.total }
+end
+
+-- The answers of the bags: every slot with its answer, in bag order; what Alts and Helpers know
+-- comes through Core's services (every app works alone: without them no mail, no never-sell).
+function Advisor.Answers()
+  local requests = B:GetService("requests")
+  local neverSell = B:GetService("neversell")
+  local out = {}
+  for _, item in ipairs(Advisor.BagItems()) do
+    local wanted = requests and requests:For(item.itemID) or nil
+    local ctx = {
+      wanted = wanted and wanted[1] or nil,
+      neverSell = neverSell and neverSell:Is(item.itemID) or nil,
+      disenchant = ns.Sections.DisenchantValue(item.itemID),
+    }
+    local a = Advisor.Answer(item, ctx)
+    a.item = item
+    out[#out + 1] = a
+  end
+  return out
 end
 
 -- The verdicts of a bag, grouped: { post = { items, total }, vendor = { items, total }, keep = {
@@ -130,6 +199,7 @@ function Advisor.BagItems()
   local out = {}
   for _, slot in ipairs(B.Compat.GetBagItems()) do
     local info = B.Compat.GetItemInfo(slot.itemID)
+    local name = B:Entity("item:" .. slot.itemID):Name() or (info and info.name)
     out[#out + 1] = {
       itemID = slot.itemID,
       bag = slot.bag,
@@ -138,9 +208,8 @@ function Advisor.BagItems()
       quality = slot.quality or (info and info.quality),
       bound = slot.bound,
       noValue = slot.noValue,
-      name = B:Entity("item:" .. slot.itemID):Name()
-        or (info and info.name)
-        or (L["Item"] .. " " .. slot.itemID),
+      name = name or (L["Item"] .. " " .. slot.itemID),
+      cost = ns.Ledger.AvgBuy(name),
       icon = (info and info.icon) or slot.icon,
       sell = ns.Sections.SellPrice(slot.itemID),
       price = service and service:Price(slot.itemID) or nil,

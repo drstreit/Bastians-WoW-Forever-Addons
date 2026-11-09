@@ -1343,7 +1343,7 @@ function View.Copy(text)
     })
     local scroll = CreateFrame("ScrollFrame", nil, copyWin.content)
     scroll:SetPoint("TOPLEFT", 8, -8)
-    scroll:SetPoint("BOTTOMRIGHT", -8, 8)
+    scroll:SetPoint("BOTTOMRIGHT", -18, 8) -- room for the bar
     copyEdit = CreateFrame("EditBox", nil, scroll)
     copyEdit:SetMultiLine(true)
     copyEdit:SetAutoFocus(false)
@@ -1354,19 +1354,25 @@ function View.Copy(text)
       copyWin:Hide()
     end)
     scroll:SetScrollChild(copyEdit)
-    scroll:EnableMouseWheel(true)
-    scroll:SetScript("OnMouseWheel", function(self, delta)
-      local v = (self:GetVerticalScroll() or 0) - delta * 40
-      self:SetVerticalScroll(math.max(0, math.min(v, self:GetVerticalScrollRange() or 0)))
+    copyWin.bar = S.scrollbar(scroll, copyWin.content) -- the wheel and the thumb
+    copyEdit:SetScript("OnSizeChanged", function(self)
+      copyWin.bar.SetTotal(self:GetHeight() or 0) -- the box grows with its text
     end)
     copyWin.scroll = scroll
   end
-  copyEdit:SetWidth(math.max(200, (copyWin.content:GetWidth() or 520) - 20))
+  copyEdit:SetWidth(math.max(200, (copyWin.content:GetWidth() or 520) - 30))
   copyEdit:SetText(text or "")
+  copyWin.scroll:SetVerticalScroll(0)
   copyWin:Show()
+  copyWin.bar.SetTotal(copyEdit:GetHeight() or 0)
   copyEdit:SetFocus()
   copyEdit:HighlightText()
   return copyEdit
+end
+
+-- The copy box's scroll bar (tests), nil before the box was first opened.
+function View.CopyBar()
+  return copyWin and copyWin.bar or nil
 end
 
 -- The lines of tab `id` (default: the main window's selected tab) as plain text.
@@ -1580,9 +1586,7 @@ newWindow = function(wid)
       return p.places[wid]
     end)(),
     escape = false, -- Escape must not close the chat
-    onShow = function(w)
-      w.frame:SetFrameStrata("LOW") -- under every other window, as the game's chat
-    end,
+    strata = "LOW", -- under every other window, as the game's chat; the game's input bar lives here
   })
   local head = W.win.head
   if main then

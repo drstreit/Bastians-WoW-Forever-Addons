@@ -3,10 +3,15 @@ must stay current; every theme names exactly the reference theme's tokens; bad i
 
 import shutil
 
+import numpy as np
 import pytest
+from PIL import Image
 
 from bastians_build.themes import (
     OUT,
+    PAPER_GROUND,
+    PAPER_READABLE,
+    PAPER_THEME,
     READABLE,
     REFERENCE,
     THEMES_DIR,
@@ -15,6 +20,7 @@ from bastians_build.themes import (
     contrast,
     emit_themes,
     minimum_ratio,
+    over,
     parse_color,
     read_theme,
     read_themes,
@@ -91,7 +97,8 @@ def test_the_contrast_ratio_is_wcag_2():
 
 def test_every_shipped_theme_reads_at_4_5_to_1():
     for path in sorted(THEMES_DIR.glob("*.toml")):
-        assert unreadable(read_theme(path).colors) == [], path.name
+        theme = read_theme(path)
+        assert unreadable(theme.colors, paper=theme.id == PAPER_THEME) == [], path.name
     # the pairs cover the UI's text on its grounds, the title bar, the tooltips, the map, the tiles
     texts = {t for texts, _, _ in READABLE for t in texts}
     assert {
@@ -107,6 +114,31 @@ def test_every_shipped_theme_reads_at_4_5_to_1():
     } <= texts
     grounds = {g for _, grounds, _ in READABLE for g in grounds}
     assert {"bg", "panel", "header", "mapTextRim", "tileGold"} <= grounds
+    # the pocket atlas (ADR 0056, PA7): a tile's plate over both grounds, the sheet's inks on
+    # the parchment, and the paper palette's words on the parchment and on a plate over it
+    assert {"card/bg", "card/panel", PAPER_GROUND} <= grounds
+    assert {"sheetInk", "sheetDim", "sheetTitle", "sheetGood", "sheetTileText"} <= texts
+    assert [g for _, grounds, _ in PAPER_READABLE for g in grounds] == [
+        PAPER_GROUND,
+        "card/" + PAPER_GROUND,
+    ]
+
+
+def test_the_paper_ground_is_the_parchments_mean_colour():
+    """The ground the sheet's inks are measured on is the texture the sheet is drawn on."""
+    image = Image.open(OUT.parent.parent / "Media" / "Parchment.tga").convert("RGB")
+    mean = (np.asarray(image, dtype=float).reshape(-1, 3).mean(axis=0) / 255).tolist()
+    ground = parse_color(PAPER_GROUND, "x")
+    assert all(abs(mean[i] - ground[i]) <= 2 / 255 for i in range(3)), mean
+    # a plate lightens the ground: laid over the parchment, not darker than it
+    assert over([1.0, 1.0, 1.0, 0.5], ground)[0] > ground[0]
+
+
+def test_only_the_paper_theme_answers_for_a_paper_page():
+    """A dark theme's words are never drawn on the parchment: the page takes the paper palette."""
+    teal = read_theme(THEMES_DIR / "teal.toml")
+    assert unreadable(teal.colors) == []
+    assert any(" on #d5b175 " in line for line in unreadable(teal.colors, paper=True))
 
 
 def test_an_unreadable_theme_does_not_compile(tmp_path):
@@ -125,4 +157,6 @@ def test_an_unreadable_theme_does_not_compile(tmp_path):
     assert [p.split(" ")[0:3] for p in unreadable(theme.colors)] == [
         ["dim", "on", "bg"],
         ["dim", "on", "panel"],
+        ["dim", "on", "card/bg"],  # a tile's plate over each of them (ADR 0056)
+        ["dim", "on", "card/panel"],
     ]

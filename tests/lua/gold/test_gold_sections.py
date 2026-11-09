@@ -66,6 +66,7 @@ def test_price_section_and_tooltip_lines_from_the_own_scan(wow: WowRuntime):
         ("AH median (scan, 0 min ago)", 20, "money"),
         ("AH lowest buyout", 10, "money"),
         ("Listed", 21, "number"),
+        ("The lowest listing is far under the median: wait, do not follow it.", None, None),
         ("Vendor sells for", 13, "money"),
     ]
     tips = wow.tooltip("Item", 2589)
@@ -83,10 +84,19 @@ def test_price_section_from_the_market_pack_with_its_label(wow: WowRuntime):
     boot(wow, realm="Classic Beta PvE")
     price = rows(sections(wow, "item:2589")["gold.price"])
     if wow.client == "forever":
-        assert price[0][0].startswith("AH median (US beta, ")
+        assert price[0][0].startswith("AH median (US normal, ")
         assert ("Sales per day", 21.9, "number") in price
         assert ("30-day median", 75, "money") in price
         assert any(t.startswith("30-day range") for t, _, _ in price)
+        # the lowest listing (20) is far under the 30-day median (75): a bargain, on the section
+        # and as the tile's mark (catalog review A5.3, 07.11.2026)
+        assert (
+            "The lowest listing is far under the 30-day median: a bargain to buy.",
+            None,
+            None,
+        ) in price
+        tile = wow.eval("Bastians:Entity('item:2589'):Facet('tile')")
+        assert (tile.mark.text, tile.mark.token) == ("Bargain", "good")
     else:
         assert price[0][0].startswith("AH median (retail EU, ")
     assert price[-1] == ("Vendor sells for", 13, "money")

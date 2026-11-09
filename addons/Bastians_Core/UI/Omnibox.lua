@@ -159,14 +159,19 @@ function Omnibox.TypeFilter()
   return typeFilter
 end
 
+local running -- the box's search: a new text cancels it, nobody else does
 local function search(text)
   text = string.gsub(text or "", "^%s*(.-)%s*$", "%1")
+  if running then
+    running:Cancel()
+    running = nil
+  end
   if text == "" then
     tree:SetRows({})
     status:SetText(L["Type to search quests, NPCs, items, zones..."])
     return
   end
-  B:Search(text, { limit = LIMIT }, showResults)
+  running = B:Search(text, { limit = LIMIT }, showResults)
 end
 
 local function build()
