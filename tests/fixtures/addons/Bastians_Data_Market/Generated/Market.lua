@@ -96,6 +96,7 @@ B.deferred[#B.deferred + 1] = {
       spot = { "name", "map", "x", "y", "radius", "levelMin", "levelMax", "items", "strategy", "src" },
       strategy = { "kind", "subject", "item", "map", "x", "y", "weight", "reach", "build", "firstSeen", "lastSeen", "src" },
     },
+    shape = 2,
     signal = {
       ["forever/normal/alliance/us:1"] = [=[{ "m1", "sell", 2589, "day", 0.8, "Linen sells 20 % above the 30-day median", 0, 800, 5, nil, 1760090000, "ahsync" }]=],
       ["forever/normal/alliance/us:2"] = [=[{ "m1", "farm", 2589, "week", 0.7, "Hogger's gnolls drop linen and silver", 0, 3000, 30, { "spot:1" }, 1760090000, "ahsync" }]=],

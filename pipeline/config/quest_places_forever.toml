@@ -1,0 +1,23 @@
+# Bastian's quest places for forever (ADR 0070 decision 5, data.md "Our authored table"): where
+# a quest's step is done, as a person checked or read it, for a step no source places or places
+# wrongly. A row wins over every source. `verified` says when, on which build and how the row
+# was checked in game (empty: assumed; the build report lists such a row until it is checked).
+#
+# What to look for: the build writes `links-unplaced-forever.tsv` (the steps without a place)
+# and `links-classic-forever.tsv` (the steps only Classic knowledge places) beside its report,
+# the lowest quest level first.
+#
+#   [[place]]
+#   quest = 1861
+#   n = 1                    # the objective's number in the quest log, from 1; left out: the
+#                            # quest as a whole (the steps without a place take it, else a
+#                            # step "go there" is made)
+#   ref = "object:174794"    # optional: the creature or object that stands there
+#   map = 1429               # uiMapID (in game: /dump C_Map.GetBestMapForUnit("player"))
+#   x = 28.6                 # map percent, as the map's cursor coordinates say them
+#   y = 61.4
+#   src = "walked there"     # where the knowledge comes from, in words
+#   verified = ""            # e.g. "11.11.2026, 1.60.1.70888, the count rose here"
+#
+# Several rows of one quest and number are several places of that step. No row yet: nothing
+# here is read or played, and a place nobody checked is no better than the source it replaces.

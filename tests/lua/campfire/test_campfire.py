@@ -573,6 +573,7 @@ def test_the_foot_icon_places_what_the_camp_lacks_and_goes_away(wow: WowRuntime)
     carry(wow, FIRST_AID, LODESTONE)
     foot = f"{OFFER}.Foot()"
     assert wow.eval(f"{foot}:IsShown()") is True
+    assert attr(wow, foot, "useOnKeyDown") is False  # hears the release only, so it acts on it
     assert attr(wow, foot, "type1") == "item"
     assert attr(wow, foot, "item") == f"item:{FIRST_AID}"
     wow.execute(f"local b = {foot} ; b:GetScript('PostClick')(b, 'RightButton')")

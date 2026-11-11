@@ -15,6 +15,78 @@ B.deferred[#B.deferred + 1] = {
     dungeon = {
       [36] = [=[{ "The Deadmines", "dungeon", 5, 15, 25, 10, 1436, { { 1, 644, "Rhahk'Zor" }, { 2, 639, "Edwin VanCleef" } }, { { 1185, 1, "s" }, { 2589, 0, "c" } }, { 62 }, "forever", { { a = "interface/worldmap/thedeadmines/thedeadmines1_", g = { 4, 3 }, h = 668, m = 291, n = "The Deadmines 1", w = 1002 }, { h = 668, m = 292, n = "The Deadmines 2", w = 1002 } }, { { 1, 1, 38.59, 60.88 }, { 2, 2, 50, 50 } }, { 2, 60.22, 84.32 } }]=],
     },
+    edges = {
+      drops = {
+        from = { "npc", "object" },
+        parts = {
+          {
+            far = "item",
+            field = "loot",
+            form = "rows",
+            on = "npc",
+            props = {
+              chance = 2,
+            },
+            ref = 1,
+            side = "from",
+          },
+          {
+            far = "item",
+            field = "loot",
+            form = "rows",
+            on = "object",
+            props = {
+              chance = 2,
+            },
+            ref = 1,
+            side = "from",
+          },
+        },
+        to = { "item" },
+      },
+      sells = {
+        from = { "npc" },
+        index = "npc.bySoldItem",
+        key = "id",
+        parts = {
+          {
+            far = "item",
+            field = "vendor",
+            form = "rows",
+            on = "npc",
+            props = {
+              limited = 4,
+              price = 2,
+              stack = 3,
+            },
+            ref = 1,
+            side = "from",
+          },
+        },
+        to = { "item" },
+      },
+      teaches = {
+        from = { "npc" },
+        index = "edge.teaches",
+        key = "ref",
+        parts = {
+          {
+            far = "spell",
+            field = "trainer",
+            form = "rows",
+            on = "npc",
+            props = {
+              cost = 3,
+              level = 5,
+              skill = 4,
+            },
+            ref = 1,
+            side = "from",
+          },
+        },
+        to = { "spell" },
+      },
+    },
     entrance = {
       ["36-1"] = [=[{ "Deadmines", nil, 36, 10, 1436, 0, -11208.7, 1675.9, 24.6, { { 1436, 0.42, 0.72, "places", 24.6 } }, nil, nil, "places" }]=],
     },
@@ -34,6 +106,7 @@ B.deferred[#B.deferred + 1] = {
         [87] = 1429,
         [1519] = 1453,
       },
+      ["edge.teaches"] = [=[{ ["spell:116"] = { 198 }, ["spell:133"] = { 198 } }]=],
       ["entrance.byInstance"] = {
         [36] = { "36-1" },
       },
@@ -151,6 +224,7 @@ B.deferred[#B.deferred + 1] = {
         "fishing",
       },
     },
+    shape = 2,
     sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
     teleport = {
       ["mage-stormwind"] = [=[{ "Stormwind", "spell", 3561, nil, "A", 8, 17031, nil, 0, 100, -50, 11, 10, nil, nil, "places" }]=],

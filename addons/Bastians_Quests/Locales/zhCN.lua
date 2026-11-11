@@ -350,6 +350,7 @@ ns.L:Register("zhCN", {
   ["Next"] = "下一步",
   ["Open the quest sheet"] = "打开任务页",
   ["Right here"] = "就在这里",
+  ["Where this is done is not known"] = "尚不清楚在哪里完成",
   ["Sheet"] = "详情",
   ["Show the quest chain"] = "显示任务链",
   ["Still ahead: %s."] = "后续奖励：%s。",

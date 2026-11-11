@@ -22,9 +22,8 @@ from lupa import lua51
 
 ROOT = Path(__file__).resolve().parent.parent
 
-# nfr.md "Performance budgets"
-MEMORY_NO_PACKS_KB = 8 * 1024  # Core + Data (no packs) + all apps
-MEMORY_WITH_PACKS_KB = 35 * 1024
+# nfr.md "Performance budgets". Memory has no fixed limit: it is
+# reported and its history shown; the frame times are what a player feels, and stay.
 FRAME_MS = 4.0  # any single frame in our code
 FRAME_MS_MAP = 8.0  # map pan and zoom
 MAP_MODULES = ("Map",)
@@ -80,15 +79,6 @@ def memory_totals(snapshot: dict) -> tuple[float, float, bool]:
 
 def breaches(snapshot: dict) -> list[str]:
     out = []
-    total, without, packs_loaded = memory_totals(snapshot)
-    if without > MEMORY_NO_PACKS_KB:
-        out.append(
-            f"memory without packs {without / 1024:.1f} MB over {MEMORY_NO_PACKS_KB / 1024:.0f} MB"
-        )
-    if packs_loaded and total > MEMORY_WITH_PACKS_KB:
-        out.append(
-            f"memory with packs {total / 1024:.1f} MB over {MEMORY_WITH_PACKS_KB / 1024:.0f} MB"
-        )
     for name, stat in sorted((snapshot.get("modules") or {}).items()):
         limit = FRAME_MS_MAP if name in MAP_MODULES else FRAME_MS
         max_ms = float(stat.get("maxMs") or 0)
@@ -126,21 +116,9 @@ def render(snapshots: list[dict], last: int = 1) -> str:
     def row(measure, value, budget, ok):
         lines.append(f"| {measure} | {value} | {budget} | {'ok' if ok else '**BREACH**'} |")
 
-    row(
-        "Memory without data packs",
-        f"{without / 1024:.2f} MB",
-        f"< {MEMORY_NO_PACKS_KB / 1024:.0f} MB",
-        without <= MEMORY_NO_PACKS_KB,
-    )
-    if packs_loaded:
-        row(
-            "Memory with data packs",
-            f"{total / 1024:.2f} MB",
-            f"< {MEMORY_WITH_PACKS_KB / 1024:.0f} MB",
-            total <= MEMORY_WITH_PACKS_KB,
-        )
-    else:
-        lines.append("| Memory with data packs | no pack loaded | < 35 MB | not measured |")
+    lines.append(f"| Memory without data packs | {without / 1024:.2f} MB | no fixed limit | - |")
+    with_packs = f"{total / 1024:.2f} MB" if packs_loaded else "no pack loaded"
+    lines.append(f"| Memory with data packs | {with_packs} | no fixed limit | - |")
     modules = newest.get("modules") or {}
     worst = max(
         (float(s.get("maxMs") or 0) for n, s in modules.items() if n not in MAP_MODULES), default=0

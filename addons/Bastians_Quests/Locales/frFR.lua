@@ -350,6 +350,7 @@ ns.L:Register("frFR", {
   ["Next"] = "Suivante",
   ["Open the quest sheet"] = "Ouvrir la fiche de quête",
   ["Right here"] = "Juste ici",
+  ["Where this is done is not known"] = "On ne sait pas où cela se fait",
   ["Sheet"] = "Fiche",
   ["Show the quest chain"] = "Afficher la chaîne de quêtes",
   ["Still ahead: %s."] = "À venir : %s.",

@@ -1790,6 +1790,8 @@ end)
 -- The whole name of a unit, for a mail or a whisper. UnitName's second value is the surname on Forever
 -- (measured 08.11.2026, 1.60.1.70862; the first name alone does not deliver), a realm on retail,
 -- nil for the player's own realm. A mail takes "First Surname".
+-- Forever's first value can hold both names (Blizzard's NameUtil.GetUnitFirstName, 1.60.1.70862;
+-- assumed): then it is the whole name, and what follows is no surname.
 define("shared", "FullName", function(unit)
   local first, second = UnitName(unit)
   first, second = plain(first), plain(second)
@@ -1799,7 +1801,10 @@ define("shared", "FullName", function(unit)
   if type(second) ~= "string" or second == "" then
     return first
   end
-  return first .. (Bastians.Client == "forever" and " " or "-") .. second
+  if Bastians.Client ~= "forever" then
+    return first .. "-" .. second
+  end
+  return string.find(first, " ", 1, true) and first or (first .. " " .. second)
 end)
 
 -- The client remembers a slash command's handler after its first use (hash_SlashCmdList, FrameXML;

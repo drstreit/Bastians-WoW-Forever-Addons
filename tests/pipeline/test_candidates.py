@@ -94,3 +94,57 @@ def test_value_comes_from_loot_prices_margins_and_stated_gold_per_hour():
     assert by[2].parts["nuggets"] == 10  # a concrete number in every claim
     assert found["farming"][0] is by[1]  # the paying one first
     assert "Hogger: 15s 31c a kill" in report(found)
+
+
+def test_a_loot_row_without_a_chance_adds_no_worth_and_stops_no_build():
+    """Found 11.11.2026: since QuestieDB's droppers list their items (package QD2) a creature's
+    loot row may be `[item]`, the chance unknown. The report unpacked every row as item and
+    chance, so every Forever build with an export ended there. Unknown is not zero: such a row
+    adds nothing, and a creature with no other priced loot has no worth per kill."""
+    world = read_fixture(WORLD, "forever")
+    hogger = world.get("npc", 448)
+    hogger["loot"] = [*hogger["loot"], [4306], [2592, None]]  # seen to drop, how often unknown
+    world.add("npc", 99001, {"name": "Silk Gnoll", "spawns": [[1429, 0.3, 0.8]], "loot": [[4306]]})
+    rich = claim(1, "farm_spot", "Hogger gnolls", "elwynn forest", "v1", "A")
+    silk = claim(2, "farm_spot", "Silk Gnoll", "elwynn forest", "v2", "B")
+    prices = [(1185, 50000), (2589, 26), (4306, 900), (2592, 300)]
+    found = candidates(export(rich, silk, prices=prices), world, now=NOW)
+    by = {s.claims[0]["claim_id"]: s for s in found["farming"]}
+    assert "Hogger: 15s 31c a kill" in by[1].value_notes  # as without the two rows
+    assert not any("Silk Gnoll" in note for note in by[2].value_notes)
+
+
+def test_the_report_leads_with_what_changed_and_what_is_to_decide(tmp_path):
+    """the claims grow every night, the report a person reads must not. First
+    what entered or left a chapter's first five since the last build, then the strategies among
+    the first five that no page tells; everything else is the appendix."""
+    from bastians_build.candidates import Strategy, changes, report, to_decide, write_report
+
+    def strategy(title: str, score: float, page: str | None = None) -> Strategy:
+        s = Strategy(chapter="farming", zone=None, tokens=set())
+        s.title, s.score, s.page = title, score, page
+        sources = [{"channel": "A"}, {"channel": "B"}]
+        s.claims = [{"claim_id": 7, "claim": f"{title} pays.", "sources": sources}]
+        s.parts = {"evidence": score}
+        return s
+
+    found = {"farming": [strategy("Elwynn: boars", 30, "boar-run"), strategy("Westfall: wool", 20)]}
+    assert changes(found, None) == []
+    text = report(found)
+    assert "No earlier report to compare with." in text
+    assert text.index("## To decide") < text.index("# Appendix")
+    assert to_decide(found) == [
+        "- farming #2: **Westfall: wool**: 20; 1 claims, 2 channels",
+        "   - `7` Westfall: wool pays.",
+    ]  # the first has its page
+    # the next build: a newcomer pushes in, the old first five is the last report's twin
+    write_report(found, tmp_path)
+    later = {"farming": [strategy("Duskwood: silk", 40), *found["farming"]]}
+    later["farming"] = later["farming"][:1] + [strategy(f"Filler {n}", 35 - n) for n in range(4)]
+    second = write_report(later, tmp_path).read_text(encoding="utf-8")
+    assert (
+        "- farming: **entered** the first five: Duskwood: silk: 40; 1 claims, 2 channels" in second
+    )
+    assert "- farming: left the first five: Elwynn: boars" in second
+    third = write_report(later, tmp_path).read_text(encoding="utf-8")
+    assert "Nothing entered or left a chapter's first five." in third

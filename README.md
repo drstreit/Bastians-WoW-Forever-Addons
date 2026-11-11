@@ -29,7 +29,7 @@ start asks which of the two you are and switches the suite accordingly.
 ## Install
 
 From launch day (4 November 2026) on CurseForge: install **Bastian's Suite**, and the CurseForge
-app installs **Bastian's Data** with it. The first time, restart the game fully: `/reload` does not
+app installs **Bastian's Data** and **Bastian's Maps** (the map styles) with it. The first time, restart the game fully: `/reload` does not
 find new addons. Recommended on WoW Forever: Questie and Spoken. No waypoint addon is needed:
 Route has its own arrow and the map its own waypoints. The suite needs no other addon. Languages: English, German, French, Spanish, Korean, Simplified
 and Traditional Chinese.

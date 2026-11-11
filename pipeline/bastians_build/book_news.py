@@ -63,7 +63,10 @@ def book_state(world: World, found: Mapping[str, list[Strategy]]) -> dict:
     out_pages: dict[str, dict] = {}
     for pid in sorted(channels):
         for cid, _, _why in pages[pid].get("rumours") or []:
-            for source in (rumours.get(cid) or {}).get("sources") or []:
+            rumour = rumours.get(cid) or {}
+            # every channel that tells it, also those the page no longer names (book.py)
+            channels[pid] |= set(rumour.get("allChannels") or [])
+            for source in rumour.get("sources") or []:
                 if source and source[0]:
                     channels[pid].add(str(source[0]))
         out_pages[pid] = {"channels": sorted(channels[pid])}

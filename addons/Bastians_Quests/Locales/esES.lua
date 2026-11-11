@@ -350,6 +350,7 @@ local strings = {
   ["Next"] = "Siguiente",
   ["Open the quest sheet"] = "Abrir la hoja de misión",
   ["Right here"] = "Aquí mismo",
+  ["Where this is done is not known"] = "No se sabe dónde se hace esto",
   ["Sheet"] = "Hoja",
   ["Show the quest chain"] = "Mostrar la cadena de misiones",
   ["Still ahead: %s."] = "Por delante: %s.",

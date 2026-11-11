@@ -90,6 +90,7 @@ from bastians_build.navnet import (
 from bastians_build.overview import install_overview
 from bastians_build.places import PlacesError, add_entrances, add_teleports, read_places
 from bastians_build.probetruth import check_probe
+from bastians_build.quest_places import add_quest_places, read_quest_places
 from bastians_build.sources import client_tables
 from bastians_build.sources.ahsync_export import ExportError, read_export
 from bastians_build.sources.clientdump import ClientDumpError
@@ -119,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
             "--dungeons",
             type=Path,
             help="ForeverDB's Dungeons.lua for a client whose AddOns lack it (retail tests)",
+        )
+        p.add_argument(
+            "--foreverdb-api",
+            type=Path,
+            help="ForeverDB's API rows as AHSync stored them (quests.json, vendors.json): places "
+            "players saw in Forever, for gaps only (data.md)",
         )
         p.add_argument(
             "--floor-art",
@@ -203,6 +210,12 @@ def build_parser() -> argparse.ArgumentParser:
             "--places",
             type=Path,
             help="our places table (default: pipeline/config/places_<client>.toml; ADR 0026)",
+        )
+        p.add_argument(
+            "--quest-places",
+            type=Path,
+            help="our authored quest places (default: pipeline/config/quest_places_<client>.toml; "
+            "ADR 0070): where a quest's step is done, before every source",
         )
         p.add_argument(
             "--no-eq-spawns", action="store_true", help="skip Everything Quests objective spots"
@@ -509,6 +522,7 @@ def main(argv: list[str] | None = None) -> int:
                 cmangos=args.cmangos,
                 probe=args.probe,
                 dungeons=args.dungeons,
+                foreverdb_api=args.foreverdb_api,
                 floor_art=args.floor_art,
                 floor_art_prefix=args.floor_art_prefix,
                 listfile=args.listfile,
@@ -545,6 +559,14 @@ def main(argv: list[str] | None = None) -> int:
                 tables = read_places(places_file)
                 add_entrances(world, tables["entrance"], sources.transforms or None)
                 add_teleports(world, tables["teleport"])
+            # where a quest's step is done as a person checked or read it (ADR 0070, QD5): the
+            # steps' resolver puts these rows before every source
+            quest_places = args.quest_places or (
+                (args.config or CONFIG_DIR / "build.toml").parent
+                / f"quest_places_{args.client}.toml"
+            )
+            if quest_places.is_file():
+                add_quest_places(world, read_quest_places(quest_places))
         else:
             print(
                 "error: give --fixture, or --addons / --cmangos / --probe / --taxi / --dumps",
@@ -668,7 +690,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"skipped: pack {name} (optional, no records)")
     for p in result.packs:
         state = "written" if p.changed else "unchanged"
-        over = " OVER BUDGET" if p.over_budget else ""
+        over = " ABOVE THE CEILING (build.toml [limits] pack_kb)" if p.over_ceiling else ""
         print(f"{state}: {p.path} ({p.size / 1024:.1f} KB){over}")
     if result.transforms_path:
         print(
@@ -676,6 +698,12 @@ def main(argv: list[str] | None = None) -> int:
         )
     if result.report_path:
         print(f"report: {result.report_path}")
+    if result.links_path:
+        c = result.steps.counts()
+        print(
+            f"quest steps: {c['steps']}, {c['placed']} with a place, {c['unplaced']} without, "
+            f"the Classic debt {c['classic']}: {result.links_path}"
+        )
     return 0 if result.ok else 1
 
 

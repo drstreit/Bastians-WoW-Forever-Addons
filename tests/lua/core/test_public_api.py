@@ -15,7 +15,7 @@ API = "Bastians.API"
 
 def test_without_the_apps_every_answer_is_nil(wow: WowRuntime):
     wow.start("Bastians_Core")
-    assert wow.eval(f"{API}.VERSION") == 1
+    assert wow.eval(f"{API}.VERSION") == 2  # ADR 0069: Where of a quest with an unknown step
     for call in (
         "Price(2589)",
         "Quest(7)",
@@ -142,6 +142,29 @@ def test_the_functions_and_events_are_the_documented_ones(wow: WowRuntime):
     assert events == re.findall(r"^\| `(BASTIANS_\w+)`", doc, flags=re.M)  # same order too
     assert f"`Bastians.API.VERSION` is `{wow.eval(f'{API}.VERSION')}`" in doc
     assert "docs/" not in doc  # public: no links into the private documents
+
+
+def test_where_of_a_quest_is_its_next_step_or_nil(wow: WowRuntime):
+    """Version 2 (ADR 0069): a running quest whose step nobody can place answers nil, where
+    version 1 answered the giver and the hand-in."""
+    wow.start("Bastians_Core", "Bastians_Data", "Bastians_Quests")
+    wow.run_frames(10)
+    wow.advance(0.3)
+    wow.run_frames(10)
+    giver = [dict(p.items()) for p in wow.eval(f"{API}.Where('quest:76')").values()]
+    assert len(giver) == 1 and giver[0]["uiMapID"] == 1429  # not taken: where it is given
+    wow.execute(
+        "local q = Bastians:GetModule('Quests').Logic.quest(76); "
+        "q.objectives = { { 'loot', 'item:7206' } }; q.spots = nil; "
+        "Mock.questLog[#Mock.questLog + 1] = { questID = 76, title = 'Mirror Lake', level = 10, "
+        "complete = false, objectives = { { text = 'Water Sample', type = 'item', "
+        "finished = false, numFulfilled = 0, numRequired = 1 } } }"
+    )
+    wow.fire("QUEST_LOG_UPDATE")
+    wow.advance(0.5)
+    wow.run_frames(5)
+    assert wow.eval(f"{API}.Where('quest:76')") is None
+    assert wow.errors == []
 
 
 def test_entity_where_notes_near_and_income(wow: WowRuntime):

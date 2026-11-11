@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 
 from bastians_build import __version__
 
@@ -251,13 +251,25 @@ def emit_call(function: str, args: Sequence, comment: str | None = None) -> str:
     return "\n".join(lines) + "\n"
 
 
-def emit_pack(name: str, pack: Mapping, comment: str | None = None) -> str:
+def lazy_index(index: object) -> Literal:
+    """An index as text the loader compiles when it is first asked for (`lazy` of emit_pack)."""
+    return compact(index)
+
+
+def emit_pack(
+    name: str, pack: Mapping, comment: str | None = None, lazy: Collection[str] = ()
+) -> str:
     """The text of a pack file: header, optional comment line, RegisterPack call (data.md).
 
     Every record row of a schema type goes out as one long-bracket string holding its Lua literal
     (format A): the loader compiles a record on first access, so a loaded pack costs about its file
-    size in memory instead of five times that (measured 20.10.2026, data.md "Pack format")."""
+    size in memory instead of five times that (measured 20.10.2026, data.md "Pack format"). The
+    indexes named in `lazy` go out the same way, each as one string."""
     packed = dict(pack)
+    if lazy and isinstance(pack.get("index"), Mapping):
+        packed["index"] = {
+            key: lazy_index(index) if key in lazy else index for key, index in pack["index"].items()
+        }
     for record_type in pack.get("schema") or {}:
         rows = pack.get(record_type)
         if isinstance(rows, Mapping):

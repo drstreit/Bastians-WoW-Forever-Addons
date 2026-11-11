@@ -383,3 +383,15 @@ def test_a_mail_to_a_whole_name_finds_the_character(wow: WowRuntime):
     assert wow.eval(key % "'Bankalt Farmadr'") == "Bankalt-Mock Realm"
     assert wow.eval(key % "'Bankalt'") == "Bankalt-Mock Realm"
     assert wow.eval(key % "'Nobody Farmadr'") is None
+
+
+def test_a_reload_at_the_mailbox_raises_nothing(wow: WowRuntime):
+    """(BugGrabber): "bad argument #1 to 'ipairs'" in RequestsFor. Core
+    prunes the empty request list at the logout, then the mail strip was refreshed from it."""
+    boot(wow)
+    wow.fire("MAIL_SHOW")
+    # Core was first: the client picks the order of the event's frames
+    wow.execute(f"rawset({G}, 'requests', nil)")
+    wow.fire("PLAYER_LOGOUT")
+    assert wow.errors == []
+    assert not [e for e in wow.eval("Bastians:GetLog()").values() if e.level == "error"]

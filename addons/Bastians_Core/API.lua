@@ -13,12 +13,12 @@
 local _, ns = ...
 local B = ns.B
 
-local API = { VERSION = 1 }
+local API = { VERSION = 2 }
 B.API = API
 
 -- What other addons may listen to; WeakAuras and ForeverAuras get the same (ADR 0043 decision 5).
 API.EVENTS = {
-  "BASTIANS_QUESTS_CHANGED", -- the quest log changed; read Quest/QuestLog again
+  "BASTIANS_QUESTS_CHANGED", -- the quest log or a quest's place changed; read Quest/QuestLog/Where again
   "BASTIANS_TRACKED_CHANGED", -- ref ("quest:123"), tracked
   "BASTIANS_ROUTE_CHANGED", -- a route started, moved on a step or ended; read Route again
   "BASTIANS_PRICES_UPDATED", -- source: "scan", "market" or "merchant"; read Price again
@@ -317,7 +317,9 @@ API.Entity = safe(function(ref)
 end)
 
 -- Where(ref, max) -> { { uiMapID, x, y } } (x, y in 0..1): the places of the thing that matter now
--- (a quest's giver, an NPC's spawns, a node's spots), at most `max` (10 by default); nil without one.
+-- (an NPC's spawns, a node's spots, a quest's next step), at most `max` (10 by default); nil
+-- without one. Version 2 (ADR 0069): a running quest whose next step nobody can place answers nil;
+-- version 1 answered its giver and its hand-in.
 API.Where = safe(function(ref, max)
   if type(ref) ~= "string" or not B.Entity.Parse(ref) then
     return nil

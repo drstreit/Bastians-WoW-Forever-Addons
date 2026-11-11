@@ -242,8 +242,9 @@ def test_twenty_quests_refresh_under_two_ms(wow: WowRuntime):
     for i in range(5):
         wow.execute(f"Mock.questLog[11].objectives[2].numFulfilled = {i + 1}")
         start = time.perf_counter()
-        diff = refresh()
+        diff, rose = refresh()  # the second answer: whose count rose (package QK1)
         elapsed = time.perf_counter() - start
         best = min(best, elapsed)
         assert ids(diff.changed) == [1010] and ids(diff.added) == [] and ids(diff.removed) == []
+        assert [tuple(r.values()) for r in rose.values()] == [(1010, 2)]
     assert best < 0.002, f"refresh took {best * 1000:.2f} ms"

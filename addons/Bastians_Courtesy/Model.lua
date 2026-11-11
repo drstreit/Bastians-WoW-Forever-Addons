@@ -9,7 +9,8 @@ Model.COURTESY_SECONDS = 600 -- one answer per person in ten minutes
 Model.ACCEPT_SECONDS = 120 -- how long after an invite a joined group still counts as that invite
 Model.REFRESH_SECONDS = 5 -- an aura whose end moves this much later was cast again
 Model.SETTLE_SECONDS = 5 -- after a login or a loading screen every aura only arrives
-Model.AFTER_FIGHT_SECONDS = 60 -- a longer fight: when a buff landed is not known, no ring for it
+Model.AFTER_FIGHT_SECONDS = 60 -- unread for longer (a fight): a buff must say when it landed
+Model.LATE_SECONDS = 300 -- then it still gets its ring when it landed this lately
 
 -- The spells that have lines of their own: the base ranks, read as the client's own names, so that
 -- every rank and every language matches (ids assumed on Forever, forever-api.md).
@@ -133,6 +134,17 @@ function Model.AimedAtMe(text)
     return false
   end
   return string.find(text, " you[ .,!]", 1) ~= nil or string.find(text, " your ", 1, true) ~= nil
+end
+
+-- Whether a buff just read still gets its ring. The auras were unread for `blind` seconds before
+-- (a fight, hidden auras; nil: read all along). After up to AFTER_FIGHT_SECONDS every new one is
+-- that fresh; after longer only one the aura dates (`landed`, on the clock of `now`) to
+-- LATE_SECONDS ago at most. Unknown is not "just now".
+function Model.Timely(landed, now, blind)
+  if type(blind) ~= "number" or blind <= Model.AFTER_FIGHT_SECONDS then
+    return true
+  end
+  return type(landed) == "number" and now - landed <= Model.LATE_SECONDS
 end
 
 -- A reading of the auras as `{ [key] = end or true }` for the next comparison.

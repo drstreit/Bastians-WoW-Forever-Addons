@@ -76,6 +76,19 @@ define("modern", "SetQuestWatched", function(questID, on)
   return false
 end)
 
+-- The items the abandoned quest takes back, as the popup's text: the client answers item ids. nil when
+-- there are none or the client knows none of their names yet.
+local function abandonItemNames()
+  local names = {}
+  for _, id in ipairs(C_QuestLog.GetAbandonQuestItems and C_QuestLog.GetAbandonQuestItems() or {}) do
+    local info = Compat.GetItemInfo(id)
+    if info then
+      names[#names + 1] = info.name
+    end
+  end
+  return #names > 0 and table.concat(names, ", ") or nil
+end
+
 -- Abandon a log quest the way the default quest log does (retail QuestMapFrame, assumed for Forever
 -- 05.11.2026): select it, mark it, open Blizzard's own confirmation, whose Yes calls
 -- C_QuestLog.AbandonQuest. The popup with the items warning when the quest gave items.
@@ -91,9 +104,9 @@ define("modern", "AbandonQuest", function(questID)
   local last = C_QuestLog.GetSelectedQuest()
   C_QuestLog.SetSelectedQuest(questID)
   C_QuestLog.SetAbandonQuest()
-  local items = C_QuestLog.GetAbandonQuestItems and C_QuestLog.GetAbandonQuestItems() or nil
+  local items = abandonItemNames()
   local title = C_QuestLog.GetTitleForQuestID(questID) or ""
-  if items and #items > 0 then
+  if items then
     StaticPopup_Hide("ABANDON_QUEST")
     StaticPopup_Show("ABANDON_QUEST_WITH_ITEMS", title, items)
   else
@@ -189,7 +202,8 @@ define("modern", "GetTaxiNodes", function()
         else
           state = STATE_NAMES[state]
         end
-        out[#out + 1] = { id = n.nodeID, name = n.name, map = map, x = x, y = y, state = state }
+        out[#out + 1] =
+          { id = n.nodeID, name = n.name, map = map, x = x, y = y, state = state, slot = n.slotIndex }
       end
       return out
     end
@@ -207,6 +221,7 @@ define("modern", "GetTaxiNodes", function()
       x = x,
       y = y,
       state = LEGACY_STATES[TaxiNodeGetType(i)],
+      slot = i,
     }
   end
   return out

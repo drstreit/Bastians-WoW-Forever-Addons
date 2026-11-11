@@ -350,6 +350,7 @@ ns.L:Register("zhTW", {
   ["Next"] = "下一步",
   ["Open the quest sheet"] = "開啟任務頁",
   ["Right here"] = "就在這裡",
+  ["Where this is done is not known"] = "尚不清楚在哪裡完成",
   ["Sheet"] = "詳情",
   ["Show the quest chain"] = "顯示任務鏈",
   ["Still ahead: %s."] = "後續獎勵：%s。",

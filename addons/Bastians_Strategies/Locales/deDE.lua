@@ -77,6 +77,8 @@ ns.L:Register("deDE", {
   ["From the back shelf"] = "Aus dem hinteren Regal",
   ["The rumours on this page"] = "Die Gerüchte auf dieser Seite",
   ["at %s"] = "bei %s",
+  ["and 1 more traveller tells it"] = "und 1 weiterer Reisender erzählt es",
+  ["and %d more travellers tell it"] = "und %d weitere Reisende erzählen es",
   ["copy the link"] = "Link kopieren",
   ["Read it on the web"] = "Im Netz lesen",
   ["Puts the link into the chat input: copy it with Ctrl+C."] = "Schreibt den Link in die Chat-Eingabe: kopiere ihn mit Strg+C.",

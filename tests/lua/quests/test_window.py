@@ -85,9 +85,8 @@ def test_bq_opens_the_zone_page_with_its_sections_and_counts(wow: WowRuntime):
     )
     assert page_rows(wow, DS) == [
         "To do here  2",
-        "[7] The Fargodeep Mine II  Chain 1/3  304 xp, +2 unlocks, 3 min (distance unknown)",
-        "[11] The Fargodeep Mine  Group  532 xp, 1s reward, 5 min (item price unknown, distance "
-        "unknown, group quest)",
+        "[7] The Fargodeep Mine II  Chain 1/3  304 xp, +2 unlocks, 1 min",
+        "[11] The Fargodeep Mine  Group  532 xp, 1s reward, 2 min (item price unknown, group quest)",
         "Hand in  1",
         "Marshal Dughan",
         "[7] The Fargodeep Mine  Chain 1/3",

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import subprocess
 import sys
 import tomllib
@@ -73,11 +74,72 @@ class BuildInputs:
     # listfile in .local/listfile, for both clients, when they exist
     floor_art: Path | None = None
     listfile: Path | None = None
+    # Forever: ForeverDB's API rows as AHSync stored them ([build.foreverdb_api], else AHSync's
+    # data/external/foreverdb-api/latest when it exists): seen places for gaps (data.md)
+    foreverdb_api: Path | None = None
     extra: list[str] = field(default_factory=list)
 
 
 class BuildClientError(Exception):
     pass
+
+
+def _tree(path: Path | None) -> tuple[int, int]:
+    """(files, bytes) under a folder or of a file; (0, 0) when it is not there."""
+    if path is None or not path.exists():
+        return 0, 0
+    files = [path] if path.is_file() else [p for p in path.rglob("*") if p.is_file()]
+    return len(files), sum(p.stat().st_size for p in files)
+
+
+def _git_head(path: Path | None) -> str:
+    """A checkout's commit, read from its files (no git needed); "" when it is none."""
+    if path is None or not (path / ".git" / "HEAD").is_file():
+        return ""
+    head = (path / ".git" / "HEAD").read_text(encoding="utf-8").strip()
+    if not head.startswith("ref: "):
+        return head[:12]
+    ref = path / ".git" / head[5:]
+    if ref.is_file():
+        return ref.read_text(encoding="utf-8").strip()[:12]
+    packed = path / ".git" / "packed-refs"
+    if packed.is_file():
+        for line in packed.read_text(encoding="utf-8").splitlines():
+            if line.endswith(" " + head[5:]):
+                return line.split(" ", 1)[0][:12]
+    return ""
+
+
+def local_inputs(inputs: BuildInputs, dumps: Path = DUMPS) -> tuple[str, list[str]]:
+    """What the build reads from this machine besides the repository, the export and the source
+    addons: the client's dumps, the CMaNGOS mirror, the language lookups and long texts. -> (a
+    short hash, one line per input). The edition's skip check takes the hash (until 10.11.2026 a
+    new dump with an unchanged export built nothing), and the lines say why two machines build
+    different packs (09.11.2026: the French text pack was 4,028 KB on one and 5,292 KB on the
+    other). Sizes and names, never times: a copy has other times."""
+    n, size = 0, 0
+    for path in sorted(dumps.glob(f"{inputs.prefix}_*")) if dumps.is_dir() else []:
+        files, more = _tree(path)
+        n, size = n + files, size + more
+    parts = [f"dumps {inputs.prefix}: {n} files, {size} bytes"]
+    parts.append(f"cmangos: {_git_head(inputs.cmangos) or 'none'}")
+    for name, path in (
+        ("l10n", inputs.l10n),
+        ("long texts", inputs.tdb_texts),
+        ("ForeverDB API", inputs.foreverdb_api),
+    ):
+        files, more = _tree(path)
+        parts.append(f"{name}: {files} files, {more} bytes")
+    digest = hashlib.sha1("\n".join(parts).encode()).hexdigest()[:12]
+    return digest, parts
+
+
+FOREVERDB_API = ROOT / "ahsync" / "data" / "external" / "foreverdb-api" / "latest"
+
+
+def _default_api() -> Path | None:
+    """AHSync's last complete fetch of ForeverDB's API, when there is one."""
+    return FOREVERDB_API if (FOREVERDB_API / "quests.json").is_file() else None
 
 
 def _retail_tdb(build: dict) -> Path | None:
@@ -151,6 +213,9 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         dungeons=dungeons,
         floor_art=DUMPS if (DUMPS / "retail_UiMapArtTile.json").is_file() else None,
         listfile=LISTFILE if LISTFILE.is_file() else None,
+        foreverdb_api=(optional("foreverdb_api") or _default_api())
+        if client == "forever"
+        else None,
     )
 
 
@@ -193,6 +258,8 @@ def commands(inputs: BuildInputs, out: Path, *, skip_mapart: bool = False) -> li
         data += ["--floor-art", str(inputs.floor_art)]
     if inputs.listfile:
         data += ["--listfile", str(inputs.listfile)]
+    if inputs.foreverdb_api:
+        data += ["--foreverdb-api", str(inputs.foreverdb_api)]
     data += inputs.extra
     cmds = [data]
     tiles = DUMPS / f"mm_{inputs.prefix}"

@@ -67,8 +67,9 @@ end
 
 local function secureButton(name, parent)
   local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate")
-  -- a real mouse press acts on its release whatever ActionButtonUseKeyDown says (Core's Ring.lua)
+  -- acts on the release, whatever ActionButtonUseKeyDown says (Core's Ring.lua)
   b:RegisterForClicks("AnyUp")
+  b:SetAttribute("useOnKeyDown", false)
   b.icon = b:CreateTexture(nil, "ARTWORK")
   return b
 end

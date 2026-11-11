@@ -76,6 +76,8 @@ ns.L:Register("zhTW", {
   ["From the back shelf"] = "來自後架",
   ["The rumours on this page"] = "此頁的傳聞",
   ["at %s"] = "於 %s",
+  ["and 1 more traveller tells it"] = "還有 1 位旅人也這麼說",
+  ["and %d more travellers tell it"] = "還有 %d 位旅人也這麼說",
   ["copy the link"] = "複製連結",
   ["Read it on the web"] = "在網頁上閱讀",
   ["Puts the link into the chat input: copy it with Ctrl+C."] = "將連結放入聊天輸入框：請用 Ctrl+C 複製。",

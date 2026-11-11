@@ -7,6 +7,7 @@ ns.L:Register("ruRU", {
   ["Packs built for another client"] = "Пакеты, созданные для другого клиента",
   ["Their ids and places belong to that client; install the packs for this one."] = "Их идентификаторы и места относятся к тому клиенту; установите пакеты для этого.",
   ["Packs are built for this client."] = "Пакеты созданы для этого клиента.",
+  ["This Data edition needs a newer Bastian's suite"] = "Этому выпуску данных нужен более новый Bastian's Suite",
   ["World database"] = "База данных мира",
   ["Data"] = "Данные",
 
@@ -79,6 +80,7 @@ ns.L:Register("ruRU", {
   -- the words of a record's kind (KINDS, PLACE_GROUPS)
   ["Other"] = "Прочее",
   ["Quest object"] = "Объект задания",
+  ["Quest place"] = "Место задания",
   ["Chest"] = "Сундук",
   ["Signpost"] = "Указатель",
   ["Fire and forge"] = "Огонь и кузня",
@@ -212,7 +214,7 @@ ns.L:Register("ruRU", {
   ["No page of the book names this dungeon yet."] = "Ни одна страница книги пока не упоминает это подземелье.",
   -- Export.lua: the captures as a text (catalog review B5, 07.11.2026)
   ["Copy my captures"] = "Скопировать мои записи",
-  ["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Выученные пути, время полётов и ожидания кораблей как текст для GitHub issue (Share your captures). Только позиции и время, без имён.",
+  ["Your learned walks, flight times, ride waits and the places where your quest steps counted, as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Выученные пути, время полётов, ожидания кораблей и места, где засчитывались шаги ваших заданий, как текст для GitHub issue (Share your captures). Только позиции и время, без имён.",
   ["Your captures"] = "Ваши записи",
   ["The text is selected: press Ctrl+C, then paste it into a GitHub issue (Share your captures). Positions and times only, no names."] = "Текст выделен: нажмите Ctrl+C и вставьте его в GitHub issue (Share your captures). Только позиции и время, без имён.",
   ["Nothing learned yet: walk off the roads, fly, ride a boat; then come back here."] = "Пока ничего не выучено: сойдите с дорог, полетайте, сядьте на корабль; потом вернитесь сюда.",

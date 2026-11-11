@@ -1,5 +1,6 @@
 """QuestieDB's baked store (sources.md, read since 06.11.2026): the NPCs, objects and quests of its
-Forever build, which hold what no other source has for the zones Forever added.
+Forever build, which hold what no other source has for the zones Forever added; and its items
+(10.11.2026, plan-quest-links.md QD1): who drops, holds and sells one.
 
 The addon keeps its data in the TOC, one metadata line per field, so the client hands it over
 without loading a file:
@@ -9,7 +10,8 @@ without loading a file:
     ## X-Npc-254089-7: ~3~                the same, cut in three parts that follow as
     ## X-Npc-254089-7-1: <base64>         -1, -2, -3
 
-Field numbers are the addon's `src/meta/*Meta.lua`. Spawns are `{ [zone] = { {x, y, phase?} } }`
+Field numbers are the addon's `src/meta/*Meta.lua` (an item's: `itemMeta.lua`, read 10.11.2026
+in 1.0.13). Spawns are `{ [zone] = { {x, y, phase?} } }`
 in map percent, the zone an AreaTable id. An NPC's level 9999 is a placeholder and stays unknown.
 """
 
@@ -22,7 +24,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-LINE = re.compile(r"^## X-(Quest|Npc|Object)-(\d+)-(\w+?)(?:-(\d+))?: (.*)$")
+LINE = re.compile(r"^## X-(Quest|Npc|Object|Item)-(\d+)-(\w+?)(?:-(\d+))?: (.*)$")
 PARTS = re.compile(r"~\d+~")
 PLACEHOLDER_LEVEL = 9999
 
@@ -160,6 +162,22 @@ class StoreQuest:
     next_quest: int | None = None
     exclusive: tuple[int, ...] = ()
     rep: tuple[tuple[int, int], ...] = ()
+    # the links of package QD3 (plan-quest-links.md G3, G6); questMeta.lua's fields 11, 9, 29
+    source_item: int | None = None  # the item the giver hands over
+    trigger_end: Places | None = None  # where the quest is finished by going there
+    # the things to do the quest log does not list: (the refs named, where)
+    extra: tuple[tuple[tuple[str, ...], Places], ...] = ()
+
+
+@dataclass(frozen=True)
+class StoreItem:
+    """Where an item comes from; the store has no chance for any of it."""
+
+    id: int
+    npc_drops: tuple[int, ...] = ()  # creatures
+    object_drops: tuple[int, ...] = ()  # objects
+    item_drops: tuple[int, ...] = ()  # the items that hold it (containers)
+    vendors: tuple[int, ...] = ()  # creatures
 
 
 @dataclass
@@ -167,6 +185,7 @@ class Store:
     npcs: dict[int, StoreNpc] = field(default_factory=dict)
     objects: dict[int, StoreObject] = field(default_factory=dict)
     quests: dict[int, StoreQuest] = field(default_factory=dict)
+    items: dict[int, StoreItem] = field(default_factory=dict)  # only those with a source
 
 
 def _level(value) -> int | None:
@@ -199,7 +218,10 @@ def _group(value, index: int) -> list:
 
 
 def _ids(value) -> tuple[int, ...]:
-    return tuple(int(v) for v in value or () if isinstance(v, int))
+    """An id list; one kept as a map (an array with gaps) in the order of its keys."""
+    if isinstance(value, dict):
+        value = [value[key] for key in sorted(value, key=lambda k: (not isinstance(k, int), k))]
+    return tuple(int(v) for v in value or () if isinstance(v, int) and not isinstance(v, bool))
 
 
 def _targets(value, index: int) -> tuple[int, ...]:
@@ -249,11 +271,53 @@ def _quest(entity: int, row: dict) -> StoreQuest:
         rep=tuple(
             (int(r[0]), int(r[1])) for r in row.get(26) or () if isinstance(r, list) and len(r) > 1
         ),
+        source_item=row.get(11) if isinstance(row.get(11), int) and row.get(11) else None,
+        trigger_end=_trigger(row.get(9)),
+        extra=_extra(row.get(29)),
+    )
+
+
+EXTRA_KINDS = {"monster": "npc", "creature": "npc", "npc": "npc", "object": "object"}
+
+
+def _trigger(value) -> Places | None:
+    """`triggerEnd` = { text, { [zone] = { {x, y} } } }: the places, or None without any."""
+    if isinstance(value, list) and len(value) > 1:
+        return _places(value[1]) or None
+    return None
+
+
+def _extra(value) -> tuple[tuple[tuple[str, ...], Places], ...]:
+    """`extraObjectives` = { { spawns or nil, icon, text, objective index, { {kind, id} } } }."""
+    out = []
+    for row in value or ():
+        if not isinstance(row, list) or not row:
+            continue
+        refs = []
+        for ref in row[4] if len(row) > 4 and isinstance(row[4], list) else ():
+            if isinstance(ref, list) and len(ref) > 1 and isinstance(ref[1], int):
+                kind = EXTRA_KINDS.get(str(ref[0]))
+                if kind:
+                    refs.append(f"{kind}:{ref[1]}")
+        places = _places(row[0])
+        if refs or places:
+            out.append((tuple(refs), places))
+    return tuple(out)
+
+
+def _item(entity: int, row: dict) -> StoreItem:
+    return StoreItem(
+        id=entity,
+        npc_drops=_ids(row.get(2)),
+        object_drops=_ids(row.get(3)),
+        item_drops=_ids(row.get(4)),
+        vendors=_ids(row.get(14)),
     )
 
 
 def parse_store(lines: Iterable[str]) -> Store:
     rows = _rows(lines)
+    items = (_item(i, r) for i, r in rows.get("Item", {}).items())
     return Store(
         npcs={i: _npc(i, r) for i, r in rows.get("Npc", {}).items()},
         objects={
@@ -261,6 +325,11 @@ def parse_store(lines: Iterable[str]) -> Store:
             for i, r in rows.get("Object", {}).items()
         },
         quests={i: _quest(i, r) for i, r in rows.get("Quest", {}).items()},
+        items={
+            it.id: it
+            for it in items
+            if it.npc_drops or it.object_drops or it.item_drops or it.vendors
+        },
     )
 
 

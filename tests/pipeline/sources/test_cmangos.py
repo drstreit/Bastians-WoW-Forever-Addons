@@ -62,7 +62,7 @@ def test_table_counts(tables):
         "quest_template": 5,
         "creature_template": 6,
         "creature": 6,
-        "gameobject_template": 3,
+        "gameobject_template": 4,  # with Mageroyal, the owner of loot list 1417 (11.11.2026)
         "gameobject": 3,
         "npc_vendor": 6,
         "npc_trainer": 6,
@@ -75,6 +75,15 @@ def test_table_counts(tables):
         "disenchant_loot_template": 4,  # lists 1 and 21 (31.10.2026)
         "creature_spawn_entry": 0,  # the fixture has none: test_a_spawn_of_id_0_takes_its_entries
         "gameobject_spawn_entry": 0,
+        # the links' tables (package QD3): not in the fixture dump; the tests below read text
+        "item_loot_template": 0,
+        "skinning_loot_template": 0,
+        "pickpocketing_loot_template": 0,
+        "fishing_loot_template": 0,
+        "spell_script_target": 0,
+        "quest_poi": 0,
+        "quest_poi_points": 0,
+        "areatrigger_involvedrelation": 0,
     }
 
 
@@ -161,7 +170,13 @@ def test_spawns(tables):
 
 def test_gameobject_template(tables):
     objs = {r["entry"]: r for r in tables["gameobject_template"]}
-    assert objs[1617] == {"entry": 1617, "type": 3, "name": "Silverleaf"}
+    assert objs[1617] == {
+        "entry": 1617,
+        "type": 3,
+        "name": "Silverleaf",
+        "data0": 29,
+        "data1": 1414,  # its list in gameobject_loot_template
+    }
     assert objs[35]["name"] == "Captain's Footlocker"
 
 
@@ -206,7 +221,10 @@ def test_loot_rows(tables):
     assert by_item[117].quest_drop is False
     ref = next(r for r in hogger if r.reference_id)
     assert ref == cmangos.LootRow("creature", 448, None, 0.8, False, None, None, None, 50502)
-    obj = [r for r in rows if r.kind == "object" and r.entry == 1417]
+    # a chest's rows are those of the list it names in `data1`, under the chest's own id: list
+    # 1417 is Mageroyal's (object 1620), and no object 1417 holds it (11.11.2026)
+    assert not [r for r in rows if r.kind == "object" and r.entry == 1417]
+    obj = [r for r in rows if r.kind == "object" and r.entry == 1620]
     assert len(obj) == 3 and obj[0].item_id == 785 and obj[0].max_count == 3
     refs = [r for r in rows if r.kind == "reference"]
     assert len(refs) == 5 and all(r.group_id == 1 for r in refs)
@@ -272,3 +290,131 @@ def test_a_spawn_of_id_0_takes_its_entries():
         ("creature", 7, 98),
         ("creature", 8, 46),
     ]  # the object has no entry row: it stays out, as an id of 0 did
+
+
+# ---- the links (package QD3): text dumps of the tables the fixture dump lacks ------------------
+
+LOOT = (
+    "  `entry` int,\n  `item` int,\n  `ChanceOrQuestChance` float,\n  `groupid` int,\n"
+    "  `mincountOrRef` int,\n  `maxcount` int\n);\n"
+)
+LINKS_SQL = (
+    "CREATE TABLE `quest_template` (\n"
+    "  `entry` int,\n  `SrcItemId` int,\n  `SrcItemCount` int,\n"
+    "  `ReqCreatureOrGOId1` int,\n  `ReqCreatureOrGOId2` int,\n"
+    "  `ReqCreatureOrGOCount1` int,\n  `ReqCreatureOrGOCount2` int,\n"
+    "  `ReqSpellCast1` int,\n  `ReqSpellCast2` int,\n"
+    "  `SpecialFlags` int,\n  `PointMapId` int,\n  `PointX` float,\n  `PointY` float\n);\n"
+    "INSERT INTO `quest_template` VALUES (1861,7207,1,0,0,0,0,0,0,0,0,0,0),"
+    "(905,0,0,3256,-20359,8,0,0,6717,2,1,-650.5,-3900.25);\n"
+    "CREATE TABLE `item_template` (\n"
+    "  `entry` int,\n  `name` varchar(100),\n  `spellid_1` int,\n  `spelltrigger_1` int\n);\n"
+    "INSERT INTO `item_template` VALUES (7207,'Jennea''s Flask',8919,0),"
+    "(7206,'Mirror Lake Water Sample',0,0),(5,'Worn Charm',8919,1),(6,'Totem',700,0);\n"
+    "CREATE TABLE `spell_template` (\n"
+    "  `Id` int,\n  `SpellName` varchar(100),\n  `RequiresSpellFocus` int,\n"
+    "  `Effect1` int,\n  `EffectItemType1` int\n);\n"
+    "INSERT INTO `spell_template` VALUES (8919,'Fill Jennea''s Flask',123,24,7206),"
+    "(700,'Plant Totem',0,3,0);\n"
+    "CREATE TABLE `spell_script_target` (\n"
+    "  `entry` int,\n  `type` int,\n  `targetEntry` int\n);\n"
+    "INSERT INTO `spell_script_target` VALUES (700,1,4000),(700,0,5000);\n"
+    "CREATE TABLE `gameobject_template` (\n"
+    "  `entry` int,\n  `type` int,\n  `name` varchar(100),\n  `data0` int,\n  `data1` int\n);\n"
+    "INSERT INTO `gameobject_template` VALUES (174794,8,'Mirror Lake Waterwall',123,0),"
+    "(102414,8,'Mirror Lake Water',123,0),(2843,3,'Battered Chest',57,2843),"
+    "(2849,3,'Battered Chest',57,2843),(180000,25,'School of Fish',0,9000);\n"
+    "CREATE TABLE `gameobject_loot_template` (\n" + LOOT + "INSERT INTO `gameobject_loot_template` "
+    "VALUES (2843,2589,40,0,1,2),(9000,6358,100,0,1,1),(77,1,100,0,1,1);\n"
+    "CREATE TABLE `creature_template` (\n"
+    "  `Entry` int,\n  `Name` varchar(100),\n  `PickpocketLootId` int,\n  `SkinningLootId` int\n"
+    ");\n"
+    "INSERT INTO `creature_template` VALUES (113,'Stonetusk Boar',0,113),(119,'Longsnout',0,113),"
+    "(98,'Riverpaw Taskmaster',98,0);\n"
+    "CREATE TABLE `item_loot_template` (\n" + LOOT + "INSERT INTO `item_loot_template` VALUES "
+    "(5523,5498,5,0,1,1),(5523,7974,95,0,1,1),(5523,11111,100,0,-11111,1);\n"
+    "CREATE TABLE `skinning_loot_template` (\n" + LOOT + "INSERT INTO `skinning_loot_template` "
+    "VALUES (113,2318,60,1,1,1),(113,2934,0,1,1,1);\n"
+    "CREATE TABLE `pickpocketing_loot_template` (\n" + LOOT + "INSERT INTO "
+    "`pickpocketing_loot_template` VALUES (98,2589,12.5,0,1,1);\n"
+    "CREATE TABLE `fishing_loot_template` (\n" + LOOT + "INSERT INTO `fishing_loot_template` "
+    "VALUES (12,6291,50,0,1,1),(40,6291,20,0,1,1);\n"
+    "CREATE TABLE `quest_poi` (\n"
+    "  `questId` int,\n  `poiId` int,\n  `objIndex` int,\n  `mapId` int\n);\n"
+    "INSERT INTO `quest_poi` VALUES (905,0,-1,1),(905,1,0,1),(905,2,16,1),(905,3,4,1);\n"
+    "CREATE TABLE `quest_poi_points` (\n"
+    "  `questId` int,\n  `poiId` int,\n  `x` int,\n  `y` int\n);\n"
+    "INSERT INTO `quest_poi_points` VALUES (905,0,-400,-2600),(905,1,-10,-20),(905,1,-30,-40),"
+    "(905,2,5,6);\n"
+    "CREATE TABLE `areatrigger_involvedrelation` (\n  `id` int,\n  `quest` int\n);\n"
+    "INSERT INTO `areatrigger_involvedrelation` VALUES (87,76),(88,76),(98,201);\n"
+)
+
+
+@pytest.fixture(scope="module")
+def link_tables():
+    """The tables of LINKS_SQL with the columns the text has; a column it lacks reads as None."""
+    wanted = {}
+    for name, columns in cmangos.WANTED.items():
+        block = LINKS_SQL.partition(f"CREATE TABLE `{name}` (")[2].partition(");")[0]
+        if block:
+            wanted[name] = tuple(c for c in columns if f"`{c}`" in block)
+    return cmangos.read_lines(LINKS_SQL.splitlines(), wanted)
+
+
+def test_a_quests_goals_its_handed_item_and_its_own_point(link_tables):
+    """plan-quest-links.md G3, G6: the creature and object columns with their counts and the
+    spell to cast, the provided item with its count, the quest's own point."""
+    quests = {q.id: q for q in cmangos.quest_rows(link_tables)}
+    mirror, totem = quests[1861], quests[905]
+    assert mirror.src_item_id == 7207 and mirror.src_item_count == 1
+    assert mirror.goals == () and mirror.point is None and mirror.exploration is False
+    assert totem.goals == (
+        cmangos.QuestGoal("npc", 3256, 8, None, column=1),
+        # a negative id is an object; no count
+        cmangos.QuestGoal("object", 20359, None, 6717, column=2),
+    )
+    assert totem.point == (1, -650.5, -3900.25) and totem.exploration is True
+    assert totem.src_item_id is None and totem.src_item_count is None
+
+
+def test_a_chests_list_is_read_under_every_object_that_opens_it(link_tables):
+    """11.11.2026: `gameobject_loot_template` is keyed by `data1`, not by the object."""
+    assert cmangos.object_loot_owners(link_tables) == {2843: [2843, 2849], 9000: [180000]}
+    rows = [r for r in cmangos.loot_rows(link_tables) if r.kind == "object"]
+    assert [(r.entry, r.item_id) for r in rows] == [(2843, 2589), (2849, 2589), (180000, 6358)]
+    # a dump cut down to the old columns: the list id stands for the object, as before
+    old = {
+        "gameobject_template": [{"entry": 77, "type": 3, "name": "Chest"}],
+        "gameobject_loot_template": link_tables["gameobject_loot_template"],
+    }
+    assert cmangos.object_loot_owners(old) is None
+    assert {r.entry for r in cmangos.loot_rows(old)} == {77, 2843, 9000}
+
+
+def test_links_what_is_made_held_skinned_picked_and_fished(link_tables):
+    links = cmangos.links(link_tables)
+    flask = cmangos.Made(item_id=7207, spell_id=8919, focus=123, targets=())
+    assert links.made == {7206: [flask]}  # the charm's spell is no use spell (trigger 1)
+    totem = cmangos.Made(6, 700, None, (("npc", 4000), ("object", 5000)))
+    assert links.uses == {6: [totem], 7207: [flask]}  # used at a place, product or not
+    assert links.spells == {6: (700,), 7207: (8919,)}
+    assert links.focus_objects == {123: [102414, 174794]}  # a chest's data0 is no focus
+    # only what a list names itself: the lockbox's shared list (a reference) is no source
+    assert links.held == {5498: [(5523, 5.0)], 7974: [(5523, 95.0)]}
+    # a list is shared by the creatures that name it; a member without a chance shares the rest
+    assert links.skinned == {2318: [(113, 60.0), (119, 60.0)], 2934: [(113, 40.0), (119, 40.0)]}
+    assert links.picked == {2589: [(98, 12.5)]}
+    assert links.fished == {6291: [(12, 50.0), (40, 20.0)]}  # by AreaTable id, the likeliest first
+
+
+def test_links_a_quests_classic_points_and_triggers(link_tables):
+    links = cmangos.links(link_tables)
+    assert links.points == {
+        905: [
+            (-1, 1, ((-400.0, -2600.0),)),
+            (0, 1, ((-10.0, -20.0), (-30.0, -40.0))),
+            (16, 1, ((5.0, 6.0),)),
+        ]  # the area without a point (poi 3) is left out
+    }
+    assert links.triggers == {76: [87, 88], 201: [98]}

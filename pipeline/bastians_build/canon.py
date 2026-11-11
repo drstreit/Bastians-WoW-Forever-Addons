@@ -29,7 +29,7 @@ from bastians_build.coords import (
 )
 from bastians_build.internal import drop_internal
 from bastians_build.model import World
-from bastians_build.sources import cmangos, foreverdb
+from bastians_build.sources import cmangos, foreverdb, foreverdb_api
 from bastians_build.sources.allthethings import AllTheThings
 from bastians_build.sources.client_tables import ClientTables
 from bastians_build.sources.clientdump import (
@@ -55,6 +55,7 @@ GRAPH_CONTINENTS = (0, 1, 2991)
 FOREVER_NEW_MAPS = frozenset({2482, 2548, 2652})
 MAX_SPOTS_PER_MAP = 8  # objective spots kept per quest and map (EQ orders densest first)
 MAX_DROPS_PER_ITEM = 20
+SPOT_DROPPERS = 12  # droppers an item's spots come from, as the addon follows it (Steps.lua)
 MAX_LOOT_PER_NPC = 30
 # An item that reaches this many creatures and objects through shared loot lists
 # (``reference_loot_template``) is a world drop: the item keeps the droppers' level band and their
@@ -135,6 +136,7 @@ class Sources:
     # what players saw in Forever (06.11.2026): places, XP, rewards, stock, trainers
     fdb_seen: dict[int, foreverdb.QuestSeen] = field(default_factory=dict)
     fdb_npc_names: dict[int, str] = field(default_factory=dict)
+    fdb_triggers: dict[int, foreverdb.SeenPoint] = field(default_factory=dict)  # `qfArea`
     fdb_xp: dict[int, int] = field(default_factory=dict)
     fdb_guide: dict[int, foreverdb.GuideRewards] = field(default_factory=dict)
     fdb_sold: dict[int, list[foreverdb.SoldRow]] = field(default_factory=dict)
@@ -144,6 +146,8 @@ class Sources:
     fdb_dungeons: list[foreverdb.DungeonRow] = field(default_factory=list)
     fdb_dungeon_maps: list[foreverdb.DungeonMapRow] = field(default_factory=list)
     fdb_boss_creatures: foreverdb.BossCreatures | None = None  # Loot.lua (02.11.2026)
+    # ForeverDB's API rows AHSync fetched (10.11.2026): places players saw, for gaps only
+    fdb_api: foreverdb_api.ApiRows | None = None
     # the client's dungeon maps by instance (retail's UiMap tables, DG2c): the floors' art
     floor_art: dict[int, list[FloorArt]] = field(default_factory=dict)
     cm_quests: list[cmangos.QuestRow] = field(default_factory=list)
@@ -155,6 +159,7 @@ class Sources:
     cm_loot: list[cmangos.LootRow] = field(default_factory=list)
     cm_items: list[cmangos.ItemRow] = field(default_factory=list)
     cm_disenchant: dict[int, list[list[Any]]] = field(default_factory=dict)
+    cm_links: cmangos.Links | None = None  # what is made, held, skinned; the quests' points
     cm_spell_names: dict[int, str] = field(default_factory=dict)  # spell_template SpellName
     # the client's FactionTemplate as { id: (side, hostile) } (sources/tdb.faction_sides):
     # the side and hostility of CMaNGOS' creatures (guards and the danger, R26.5)
@@ -598,17 +603,23 @@ def merge_quests(world: World, s: Sources) -> None:
                 flags.append("repeatable")
             rec["flags"] = flags or None
             rec["holiday"] = q.holiday
-            if q.coord:
-                rec["zone"] = q.coord.ui_map_id
-            elif start_points:
-                rec["zone"] = start_points[0][0]
+            zone = quest_start_zone(q.coord, start_points)
+            if zone is not None:
+                rec["zone"] = zone
             rec["objectives"] = [[o.kind, f"npc:{o.npc_id}", o.index] for o in q.objectives] or None
+            # the same rows for the steps' resolver (steps.py), which groups them by number
+            # before `fix_loot_objectives` pairs them with the items by row; a row names an
+            # object where no creature has the id (build-time only: no pack schema carries it)
+            rec["eqRows"] = [
+                [o.kind, _eq_ref(world, o.kind, o.npc_id), o.index] for o in q.objectives
+            ] or None
             spots: dict[int, list] = {}
             for p in q.spawns:
                 lst = spots.setdefault(p.ui_map_id, [])
                 if len(lst) < MAX_SPOTS_PER_MAP:
                     lst.append([round(p.x, 4), round(p.y, 4), p.kind, p.objective_mask or 0])
             rec["spots"] = {m: v for m, v in sorted(spots.items())} or None
+            rec["spotsSrc"] = "eq" if spots else None  # the resolver's label (steps.py)
             rec["src"] = "forever"
     # ForeverDB quest facts: Forever-new flag, players who saw it, fallback names and places
     for fq in s.fdb_quests:
@@ -668,6 +679,16 @@ def merge_quests(world: World, s: Sources) -> None:
         _set_if_missing(rec, "src", "classic")
 
 
+def _eq_ref(world: World, kind: str, entry: int) -> str:
+    """Everything Quests packs one id per row: a creature, or the object of an `object` row; a
+    `loot` row names who has the item, a creature unless only an object has that id."""
+    if kind == "object" or (
+        kind == "loot" and world.get("npc", entry) is None and world.get("object", entry)
+    ):
+        return f"object:{entry}"
+    return f"npc:{entry}"
+
+
 def _seen_rows(points) -> list[list]:
     return [[p.ui_map_id, round(p.x_pct / 100, 4), round(p.y_pct / 100, 4), "fdb"] for p in points]
 
@@ -703,6 +724,12 @@ def merge_fdb_quest_facts(world: World, s: Sources) -> None:
             rec["startPlaces"] = _seen_rows(seen.starts) or None
         if not rec.get("endPlaces"):
             rec["endPlaces"] = _seen_rows(seen.ends) or None
+        # every objective players saw advance, for the steps' resolver (build-time only)
+        rec["seenSpots"] = {
+            number: [row[:3] for row in _seen_rows(points)]
+            for number, points in sorted(seen.objectives.items())
+            if points
+        } or None
         if not rec.get("spots"):
             by_map: dict[int, list] = {}
             for number, points in seen.objectives.items():
@@ -714,6 +741,64 @@ def merge_fdb_quest_facts(world: World, s: Sources) -> None:
                             [round(p.x_pct / 100, 4), round(p.y_pct / 100, 4), "area", mask]
                         )
             rec["spots"] = dict(sorted(by_map.items())) or None
+            rec["spotsSrc"] = "fdb" if by_map else None
+
+
+def merge_fdb_api(world: World, s: Sources) -> None:
+    """ForeverDB's API (data.md "ForeverDB's API fills gaps"): where players saw a quest's giver,
+    its hand-in and a vendor. It fills gaps only, after every other source: a quest without a
+    start or end place gets the seen one, a giver or vendor without any place gets its spot, and
+    a vendor no source knows becomes a record. Nothing that has a value is changed."""
+    api = s.fdb_api
+    if api is None:
+        return
+    filled = {"start": 0, "end": 0, "giver": 0, "vendor": 0, "new": 0}
+    for p in api.quest_places:
+        rec = world.get("quest", p.quest_id)
+        if rec is None:
+            continue
+        row = pct_to_fraction(p.ui_map_id, p.x_pct, p.y_pct, "fdb").row()
+        key = "startPlaces" if p.role == "start" else "endPlaces"
+        if not rec.get(key):
+            rec[key] = [row]
+            filled[p.role] += 1
+        _set_if_missing(rec, "starts" if p.role == "start" else "ends", [f"{p.kind}:{p.source_id}"])
+        who = world.get(p.kind, p.source_id)
+        if who is not None and not who.get("spawns"):
+            who["spawns"] = [row]
+            filled["giver"] += 1
+    for v in api.vendors:
+        rec = world.get("npc", v.id)
+        row = pct_to_fraction(v.ui_map_id, v.x_pct, v.y_pct, "fdb").row()
+        if rec is None:
+            name = clean_name(v.name)
+            if not name or localized_name(name):
+                continue  # a vendor needs a name players can read in English
+            world.add(
+                "npc",
+                v.id,
+                {
+                    "name": name,
+                    "subname": clean_name(v.title),
+                    "faction": v.side,
+                    "flags": ["vendor"],
+                    "spawns": [row],
+                    "src": "forever",
+                },
+            )
+            filled["new"] += 1
+        elif not rec.get("spawns"):
+            rec["spawns"] = [row]
+            filled["vendor"] += 1
+    world.notes.append(
+        "ForeverDB API"
+        + (f" (build {api.build})" if api.build else "")
+        + f": {len(api.quest_places)} seen quest places and {len(api.vendors)} seen vendors read; "
+        f"filled {filled['start']} quest starts, {filled['end']} hand-ins, "
+        f"{filled['giver']} givers' places, {filled['vendor']} vendors' places, "
+        f"{filled['new']} vendors no other source had"
+    )
+    world.notes.extend(api.notes)
 
 
 def _places_of(world: World, refs: list[str], limit: int) -> list[list]:
@@ -745,6 +830,17 @@ def _questie_spots(world: World, q: StoreQuest) -> dict[int, list]:
         ui_map: [r[1:] for r in farthest_points(rows[ui_map], MAX_SPOTS_PER_MAP)]
         for ui_map in sorted(rows)
     }
+
+
+def quest_start_zone(coord, start_points: list) -> int | None:
+    """The map a quest starts on (data.md, the zone pages' "quests starting there"): the giver's.
+    Everything Quests' coordinate is where the quest is advanced, for many an objective's spawn
+    (Redridge Goulash: Hillsbrad Foothills, its giver in Lakeshire; 1134 of 4488 quests differed,
+    09.11.2026), so it decides only among a giver's several maps, or when nobody is placed."""
+    maps = [p[0] for p in start_points]
+    if coord is not None and (not maps or coord.ui_map_id in maps):
+        return coord.ui_map_id
+    return maps[0] if maps else None
 
 
 def _new_questie_quest(world: World, s: Sources, q: StoreQuest, classic: set[int]) -> dict | None:
@@ -797,11 +893,59 @@ def merge_questie_quests(world: World, s: Sources) -> None:
             rec["objectives"] = rows or None
         if not rec.get("spots"):
             rec["spots"] = _questie_spots(world, q) or None
+            rec["spotsSrc"] = "spawns" if rec["spots"] else None  # the subjects' own places
         if q.rep:
             rewards = rec.get("rewards") or {"src": "forever"}
             _set_if_missing(rewards, "rep", [list(r) for r in q.rep])
             rec["rewards"] = rewards
         _set_if_missing(rec, "objectiveText", clean_name(q.objective_text))
+
+
+def merge_questie_items(world: World, s: Sources) -> int:
+    """Who has an item no loot table knows (data.md "Links and steps", package QD1): QuestieDB's
+    item rows name the creatures and objects, without a chance, which stays unknown. Mirror Lake's
+    water sample comes from the Mirror Lake Waterwall, and nothing else said so. It fills a gap
+    and replaces nothing: an item with drops or a world drop keeps them. Only droppers the world
+    knows, those with a place first (the addon follows the first ones), then creatures before
+    objects, then by id. Labelled `classic` for an item CMaNGOS has (the store's rows of those
+    are Classic knowledge), `questie` for one of Forever's own. The link is stored at both ends
+    (links.py, the edge `drops`): each of those droppers lists the item in its `loot`, without a
+    chance, where its list has room. Returns how many items it filled."""
+    store = s.questie
+    if store is None or not store.items:
+        return 0
+    classic = {it.id for it in s.cm_items}
+    filled = unknown = 0
+    for item_id, row in sorted(store.items.items()):
+        rec = world.get("item", item_id)
+        if rec is None or rec.get("drops") is not None or rec.get("worldDrop") is not None:
+            continue
+        found = []
+        for order, (kind, ids) in enumerate((("npc", row.npc_drops), ("object", row.object_drops))):
+            for entity in sorted(set(ids)):
+                dropper = world.get(kind, entity)
+                if dropper is None:
+                    unknown += 1
+                else:
+                    found.append((not dropper.get("spawns"), order, entity, f"{kind}:{entity}"))
+        if not found:
+            continue
+        rec["drops"] = [[ref] for *_, ref in sorted(found)[:MAX_DROPS_PER_ITEM]]
+        rec["dropsSrc"] = "classic" if item_id in classic else "questie"
+        filled += 1
+        for (ref,) in rec["drops"]:
+            kind, _, raw = ref.partition(":")
+            dropper = world.get(kind, int(raw))
+            loot = dropper.get("loot") or []
+            if len(loot) < MAX_LOOT_PER_NPC and all(row[0] != item_id for row in loot):
+                dropper["loot"] = [*loot, [item_id]]
+                _set_if_missing(dropper, "lootSrc", rec["dropsSrc"])
+    if filled:
+        world.notes.append(
+            f"{filled} items without a loot table got their droppers from QuestieDB's item rows "
+            f"(no chance); {unknown} droppers it names are not in the world"
+        )
+    return filled
 
 
 def merge_objective_texts(world: World) -> None:
@@ -1522,6 +1666,244 @@ def derive_dungeon_quests(world: World, s: Sources) -> int:
 
 
 # ---------------------------------------------------------------------------------------------
+# Links (ADR 0070, data.md "Links and steps", package QD3)
+# ---------------------------------------------------------------------------------------------
+
+# A spell focus with more objects than this is a kind of place, not a place: every campfire is
+# focus 4 (2,276 objects), every anvil focus 1 (215), measured 11.11.2026
+FOCUS_MAX = 6
+MAX_WAYS = 12  # rows of one kind (who it is skinned from, where it is fished) per item
+MAX_POINTS = 24  # Classic points kept per subject of a quest before the resolver spreads them
+QUEST_PLACE = "quest place"
+
+
+def _add_way(rec: dict, row: list) -> None:
+    ways = rec.setdefault("ways", [])
+    while row and row[-1] is None:
+        row.pop()
+    if row not in ways:
+        ways.append(row)
+
+
+def _at_refs(links: cmangos.Links, way: cmangos.Made) -> list[str]:
+    """Where an item is used: the creatures and objects its spell is cast on, and the objects
+    that are its spell focus when they are few enough to be a place."""
+    refs = [f"{kind}:{entry}" for kind, entry in way.targets]
+    objects = links.focus_objects.get(way.focus or 0, [])
+    if len(objects) <= FOCUS_MAX:
+        refs += [f"object:{o}" for o in objects]
+    return refs
+
+
+def merge_item_ways(world: World, s: Sources) -> None:
+    """The ways an item is come by that are no drop (`item.ways` = { { how, ref, chance, at } }):
+    `make` (using another item, `at` the object or creature it is used at or on), `container`
+    (the item that holds it), `skin` and `pick` (the creature), `fish` (the zone). From CMaNGOS;
+    QuestieDB's `itemDrops` names a container for an item CMaNGOS has none for. All of it is
+    Classic knowledge. An object named as `at` is a quest place, not a forge (G8)."""
+    links, store = s.cm_links, s.questie
+    counts: dict[str, int] = {}
+
+    def add(item_id: int, row: list) -> None:
+        rec = world.get("item", item_id)
+        if rec is not None:
+            before = len(rec.get("ways") or ())
+            _add_way(rec, row)
+            counts[row[0]] = counts.get(row[0], 0) + len(rec["ways"]) - before
+
+    if links is not None:
+        for product, ways in links.made.items():
+            for way in ways:
+                places = [ref for ref in _at_refs(links, way) if _known(world, ref)]
+                for at in places or [None]:
+                    add(product, ["make", f"item:{way.item_id}", None, at])
+                for ref in places:
+                    _quest_place(world, ref)
+        for item_id, rows in links.held.items():
+            for holder, chance in rows[:MAX_WAYS]:
+                add(item_id, ["container", f"item:{holder}", chance])
+        for how, table in (("skin", links.skinned), ("pick", links.picked)):
+            for item_id, rows in table.items():
+                known = [(n, c) for n, c in rows if world.get("npc", n) is not None]
+                for npc, chance in known[:MAX_WAYS]:
+                    add(item_id, [how, f"npc:{npc}", chance])
+        for item_id, rows in links.fished.items():
+            zones: dict[int, float] = {}
+            for area, chance in rows:
+                ui_map = s.area_to_map.get(area)
+                if ui_map is not None and world.get("zone", ui_map) is not None:
+                    zones[ui_map] = max(zones.get(ui_map, 0.0), chance)
+            ranked = sorted(zones.items(), key=lambda pair: (-pair[1], pair[0]))
+            for ui_map, chance in ranked[:MAX_WAYS]:
+                add(item_id, ["fish", f"zone:{ui_map}", chance])
+    if store is not None:
+        for item_id, row in sorted(store.items.items()):
+            rec = world.get("item", item_id)
+            if rec is None or any(w[0] == "container" for w in rec.get("ways") or ()):
+                continue
+            for holder in sorted(set(row.item_drops))[:MAX_WAYS]:
+                if world.get("item", holder) is not None:
+                    add(item_id, ["container", f"item:{holder}"])
+    if counts:
+        said = ", ".join(f"{how} {n}" for how, n in sorted(counts.items()))
+        world.notes.append(f"item ways beyond drops (classic): {said}")
+
+
+def _known(world: World, ref: str) -> bool:
+    kind, _, raw = ref.partition(":")
+    return raw.isdigit() and world.get(kind, int(raw)) is not None
+
+
+def _quest_place(world: World, ref: str) -> None:
+    """A spell focus object a quest's item is used at reads "quest place" (it read "fire and
+    forge": the Mirror Lake Waterwall, )."""
+    kind, _, raw = ref.partition(":")
+    rec = world.get(kind, int(raw)) if kind == "object" and raw.isdigit() else None
+    if rec is not None and rec.get("kind") == OBJECT_KINDS[cmangos.GO_SPELL_FOCUS]:
+        rec["kind"] = QUEST_PLACE
+
+
+def merge_questie_vendors(world: World, s: Sources) -> int:
+    """QuestieDB's item rows name who sells an item (plan-quest-links.md G7): a vendor the world
+    knows that does not list the item gets it, without a price (unknown stays unknown)."""
+    store = s.questie
+    if store is None:
+        return 0
+    classic = {it.id for it in s.cm_items}
+    added = 0
+    for item_id, row in sorted(store.items.items()):
+        if world.get("item", item_id) is None:
+            continue
+        for npc_id in sorted(set(row.vendors)):
+            npc = world.get("npc", npc_id)
+            if npc is None or any(v[0] == item_id for v in npc.get("vendor") or ()):
+                continue
+            src = "classic" if item_id in classic else "questie"
+            npc["vendor"] = [*(npc.get("vendor") or []), [item_id, None, None, None, src]]
+            if "vendor" not in (npc.get("flags") or []):
+                npc["flags"] = [*(npc.get("flags") or []), "vendor"]
+            added += 1
+    if added:
+        world.notes.append(f"{added} vendor rows from QuestieDB's item rows (no price)")
+    return added
+
+
+def _classic_frame(s: Sources) -> dict:
+    """The maps a Classic world point may land on: not the zones Forever added."""
+    frame = s.transforms
+    if s.client == "forever" and frame:
+        frame = {k: v for k, v in frame.items() if k not in FOREVER_NEW_MAPS}
+    return frame or {}
+
+
+def _add_points(points: dict[str, list], key: str, rows: list[list]) -> None:
+    for row in rows:
+        have = points.setdefault(key, [])
+        if row not in have and len(have) < MAX_POINTS:
+            have.append(row)
+
+
+def merge_quest_links(world: World, s: Sources) -> None:
+    """What the resolver of a quest's steps needs beyond the objectives (steps.py), from CMaNGOS,
+    QuestieDB and ForeverDB:
+
+    - `gives`: the item the giver hands over, with its count (shipped: the edge `gives`).
+    - `goals`: the creature and object columns with their counts and the spell to cast.
+    - `castAt`: the handed item is used at or on a thing (its spell's focus or target), where
+      that makes no item (an item it makes is the item's own way).
+    - `classicPoints`: the quest log's map points of a later client, per subject: the centre of
+      each area; and under `""` the quest's own: its event points, its `PointX`/`PointY`, the
+      area triggers that finish it (placed by the Forever client's table), QuestieDB's
+      `triggerEnd` and the places of what its hidden objectives name.
+
+    Only `gives` is in a pack; the rest is the build's (no schema carries it)."""
+    links = s.cm_links
+    frame = _classic_frame(s)
+    cities = CAPITALS.get(s.client, ())
+    quests = world.records.get("quest", {})
+    made_from = (
+        {(w.item_id, w.spell_id) for ways in links.made.values() for w in ways} if links else set()
+    )
+    counts = {"gives": 0, "goals": 0, "castAt": 0, "points": 0, "own points": 0}
+    for cq in s.cm_quests:
+        rec = quests.get(cq.id)
+        if rec is None:
+            continue
+        if cq.src_item_id:
+            rec["gives"] = [[cq.src_item_id, cq.src_item_count]]
+            counts["gives"] += 1
+        if cq.goals:
+            rec["goals"] = [[f"{g.kind}:{g.entry}", g.count, g.spell] for g in cq.goals]
+            counts["goals"] += 1
+        cast: list[list] = []
+        for way in links.uses.get(cq.src_item_id or 0, []) if links else []:
+            if (way.item_id, way.spell_id) not in made_from:
+                cast += [[f"item:{way.item_id}", ref] for ref in _at_refs(links, way)]
+        for goal in cq.goals:
+            spells = links.spells.get(cq.src_item_id or 0, ()) if links else ()
+            if goal.spell and goal.spell in spells:
+                cast.append([f"item:{cq.src_item_id}", f"{goal.kind}:{goal.entry}"])
+        cast = [row for i, row in enumerate(cast) if row not in cast[:i] and _known(world, row[1])]
+        if cast:
+            rec["castAt"] = cast
+            counts["castAt"] += 1
+            for row in cast:
+                _quest_place(world, row[1])
+        points: dict[str, list] = {}
+        for index, cm_map, corners in links.points.get(cq.id, []) if links else []:
+            if index < 0:
+                continue  # the hand-in: the quest's `ends` say it
+            wx = sum(p[0] for p in corners) / len(corners)
+            wy = sum(p[1] for p in corners) / len(corners)
+            placed = place_world_point(frame, cm_map, wx, wy, "classic", cities=cities)
+            if placed is None:
+                continue
+            key = ""
+            if index < 4:
+                goal = next((g for g in cq.goals if g.column == index + 1), None)
+                key = f"{goal.kind}:{goal.entry}" if goal else ""
+            elif index < 8 and index - 4 < len(cq.required_items):
+                key = f"item:{cq.required_items[index - 4][0]}"
+            _add_points(points, key, [[placed.ui_map_id, placed.x, placed.y]])
+        if cq.point:
+            placed = place_world_point(frame, *cq.point, "classic", cities=cities)
+            if placed is not None:
+                _add_points(points, "", [[placed.ui_map_id, placed.x, placed.y]])
+        for trigger in links.triggers.get(cq.id, []) if links else []:
+            where = s.fdb_triggers.get(trigger)
+            if where is not None:
+                row = [where.ui_map_id, round(where.x_pct / 100, 4), round(where.y_pct / 100, 4)]
+                _add_points(points, "", [row])
+        if points:
+            rec["classicPoints"] = points
+    for quest_id, q in sorted(s.questie.quests.items()) if s.questie else ():
+        rec = quests.get(quest_id)
+        if rec is None:
+            continue
+        if q.source_item and not rec.get("gives"):
+            rec["gives"] = [[q.source_item]]
+            counts["gives"] += 1
+        points = rec.get("classicPoints") or {}
+        for places in [q.trigger_end or {}, *(pl for _refs, pl in q.extra)]:
+            _add_points(points, "", [row[:3] for row in _questie_rows(places, s)])
+        for refs, _places in q.extra:
+            # where a thing to do that the log does not list is done: the quest's own place
+            _add_points(points, "", [row[:3] for row in _places_of(world, list(refs), MAX_POINTS)])
+        if points:
+            rec["classicPoints"] = points
+    for rec in quests.values():
+        points = rec.get("classicPoints") or {}
+        counts["points"] += sum(1 for key in points if key)
+        counts["own points"] += "" in points
+    if any(counts.values()):
+        world.notes.append(
+            f"quest links: {counts['gives']} quests hand an item over, {counts['goals']} name "
+            f"creatures or objects (CMaNGOS), {counts['castAt']} use the handed item at a place; "
+            f"Classic points for {counts['points']} subjects and {counts['own points']} quests"
+        )
+
+
+# ---------------------------------------------------------------------------------------------
 # Gather nodes
 # ---------------------------------------------------------------------------------------------
 
@@ -1569,26 +1951,115 @@ ALLIANCE_RACES = 0b01001101  # Human, Dwarf, Night Elf, Gnome (bits 0, 2, 3, 6)
 HORDE_RACES = 0b10110010  # Orc, Undead, Tauren, Troll (bits 1, 4, 5, 7)
 
 
+def _gives(world: World, source: str | None, item_id: int) -> bool:
+    """Whether a table names `source` (npc:1, object:2) as giving the item: the item's droppers,
+    the source's loot or its stock. Both loot lists are capped, so either side proves it."""
+    kind, _, raw = (source or "").partition(":")
+    if kind not in ("npc", "object") or not raw.isdigit():
+        return False
+    item = world.get("item", item_id) or {}
+    rec = world.get(kind, int(raw)) or {}
+    return (
+        any(row[0] == source for row in item.get("drops") or ())
+        or any(row[0] == item_id for row in rec.get("loot") or ())
+        or any(row[0] == item_id for row in rec.get("vendor") or ())
+    )
+
+
+def _named_source(obj: list, item_ref: str) -> str | None:
+    """The source a loot objective names: its fourth field, or its target before it became the
+    item."""
+    if len(obj) > 3:
+        return obj[3]
+    return obj[1] if obj[1] and obj[1] != item_ref else None
+
+
 def fix_loot_objectives(world: World) -> None:
     """Everything Quests encodes a loot objective by the NPC or object the item comes from
     (CLUCK!: "loot npc:233", Farmer Saldean, who sells the Special Chicken Feed). The objective is
-    the item: the n-th loot objective takes the n-th required item (CMaNGOS ReqItemId), and the
-    source moves to a fourth field so the page can still say where to get it."""
+    the item: the n-th loot objective takes the n-th required item (CMaNGOS ReqItemId), and a
+    source moves to a fourth field so the page can still say where to get it.
+
+    Everything Quests' list is not one source per item (Redridge Goulash, 09.11.2026: Bellygrub, a
+    condor and a boar beside three items, no spider), so an item takes the named source a table
+    proves. An item whose droppers are known and none of them named has no source (unknown). An
+    item without a table keeps the one at its position, unless that one is proven for another."""
     for rec in world.records.get("quest", {}).values():
         objectives = rec.get("objectives")
         items = rec.get("requiredItems")
         if not objectives or not items:
             continue
-        loot_index = 0
-        for obj in objectives:
-            if obj[0] != "loot":
-                continue
-            if loot_index < len(items) and items[loot_index][0]:
-                target = obj[1]
-                obj[1] = f"item:{items[loot_index][0]}"
-                if target and target != obj[1] and len(obj) < 4:
-                    obj.append(target)
-            loot_index += 1
+        loot = [o for o in objectives if o[0] == "loot"]
+        pairs = [(o, items[n][0]) for n, o in enumerate(loot) if n < len(items) and items[n][0]]
+        named = {id(o): _named_source(o, f"item:{item_id}") for o, item_id in pairs}
+        sources = [s for s in named.values() if s]
+        proven = {
+            item_id: [s for s in sources if _gives(world, s, item_id)] for _, item_id in pairs
+        }
+        spoken_for = {s for given in proven.values() for s in given}
+        for obj, item_id in pairs:
+            own, given = named[id(obj)], proven[item_id]
+            if given:
+                source = own if own in given else given[0]
+            elif (world.get("item", item_id) or {}).get("drops") or own in spoken_for:
+                source = None
+            else:
+                source = own
+            obj[1] = f"item:{item_id}"
+            del obj[3:]
+            if source:
+                obj.extend([None] * (3 - len(obj)))
+                obj.append(source)
+
+
+def _item_bits(rec: dict) -> dict[int, int]:
+    """The bit of each item a quest asks for, as the addon counts them (Steps.lua): with numbered
+    rows (Everything Quests) the item's place among the required items, else its place among the
+    loot rows. An item neither names has no bit: no step would read its spots."""
+    rows = rec.get("objectives") or ()
+    if any(len(o) > 2 and isinstance(o[2], int) for o in rows):
+        required = rec.get("requiredItems") or ()
+        return {row[0]: bit for bit, row in enumerate(required) if row[0]}
+    bits: dict[int, int] = {}
+    for bit, o in enumerate(o for o in rows if o[0] == "loot"):
+        kind, _, raw = str(o[1]).partition(":")
+        if kind == "item" and raw.isdigit():
+            bits.setdefault(int(raw), bit)
+    return bits
+
+
+def merge_item_spots(world: World) -> int:
+    """A quest without any spot gets, for each item it asks for, the places of who has the item
+    (plan-quest-links.md G2, package QD1): the first SPOT_DROPPERS of the item's droppers, a
+    spread per map, as spots of kind `loot` with the item's bit and, as a fifth field, who stands
+    there. An item has no place of its own, and a reader that takes a quest's places from its
+    spots alone (every suite before "Where a quest sends you") sent the player back to the giver.
+    Runs last: a quest with spots of any source keeps them (the client's own areas too), and the
+    loot rows are the items by then. Returns how many quests it placed."""
+    placed = 0
+    for _quest_id, rec in sorted(world.records.get("quest", {}).items()):
+        if rec.get("spots"):
+            continue
+        rows: dict[int, list] = {}
+        for item, bit in sorted(_item_bits(rec).items(), key=lambda pair: pair[1]):
+            drops = (world.get("item", item) or {}).get("drops") or ()
+            for drop in drops[:SPOT_DROPPERS]:
+                kind, _, raw = str(drop[0]).partition(":")
+                dropper = world.get(kind, int(raw)) if raw.isdigit() else None
+                for row in (dropper or {}).get("spawns") or ():
+                    rows.setdefault(row[0], []).append(
+                        [row[0], row[1], row[2], "loot", 1 << bit, drop[0]]
+                    )
+        if rows:
+            rec["spots"] = {
+                ui_map: [r[1:] for r in farthest_points(rows[ui_map], MAX_SPOTS_PER_MAP)]
+                for ui_map in sorted(rows)
+            }
+            rec["spotsSrc"] = "items"  # made from the items' droppers: the resolver asks them
+            placed += 1
+    if placed:
+        world.notes.append(f"{placed} quests without a spot got the places of who has their items")
+    return placed
 
 
 def zone_statistics(world: World) -> None:
@@ -1916,6 +2387,7 @@ def merge_client_quest_areas(world: World, s: Sources) -> None:
             spots.append([round(xy[0], 4), round(xy[1], 4), "area", 1 << min(a.objective, 30)])
     for quest_id, by_map in found.items():
         quests[quest_id]["spots"] = {m: v for m, v in sorted(by_map.items())}
+        quests[quest_id]["spotsSrc"] = "client"
 
 
 def merge_dungeons(world: World, s: Sources) -> None:
@@ -2141,6 +2613,7 @@ def build_world(s: Sources) -> World:
     merge_vendors_and_trainers(world, s)
     merge_quests(world, s)
     merge_fdb_quest_facts(world, s)
+    merge_fdb_api(world, s)
     merge_att_quests(world, s)
     merge_att_recipes(world, s)
     merge_fdb_previous_quests(world, s)
@@ -2151,7 +2624,11 @@ def build_world(s: Sources) -> World:
     merge_client_recipes(world, s)
     merge_client_items(world, s)
     merge_client_quest_lines(world, s)
+    merge_questie_items(world, s)
+    merge_questie_vendors(world, s)
+    merge_item_ways(world, s)
     merge_questie_quests(world, s)
+    merge_quest_links(world, s)
     merge_objective_texts(world)
     merge_client_quest_areas(world, s)
     merge_tdb_loot(world, s)
@@ -2165,6 +2642,8 @@ def build_world(s: Sources) -> World:
     fix_loot_objectives(world)
     # the internal records leave before the statistics count them (data.md "Internal records")
     drop_internal(world, {row["Entry"]: row.get("UnitFlags") for row in s.cm_creatures})
+    if s.client == "forever":  # retail's pack has no spots: its steps' places are the client's
+        merge_item_spots(world)  # last: what the other sources place stays, and who is left is real
     zone_statistics(world)
     name_unnamed_zones(world, s)
     for rows in world.records.values():

@@ -1,4 +1,4 @@
-"""Build configuration: pipeline/config/build.toml (packs, schemas, budgets, clients)."""
+"""Build configuration: pipeline/config/build.toml (packs, schemas, the ceiling, clients)."""
 
 from __future__ import annotations
 
@@ -22,15 +22,10 @@ class PackConfig:
     file: str
     schema: dict[str, list[str]]  # type -> field order
     indexes: list[str]
-    budget_kb: int | None = None
     optional: bool = False  # not written when every type of the pack has zero records
-    budget_kb_by_client: dict[str, int] = field(default_factory=dict)  # overrides per client
     # the client locales that read the pack (data.md "Game data in other languages"): the file
     # returns at once on any other, so its tables are never built there
     locales: list[str] = field(default_factory=list)
-
-    def budget_for(self, client: str) -> int | None:
-        return self.budget_kb_by_client.get(client, self.budget_kb)
 
 
 @dataclass(frozen=True)
@@ -88,6 +83,9 @@ class BuildConfig:
     pack_order: list[str] = field(default_factory=list)
     market: MarketConfig = field(default_factory=MarketConfig)
     mapart: MapArtConfig = field(default_factory=MapArtConfig)
+    # [limits] pack_kb (ADR 0072): the one size above which a pack stops the build; no budget.
+    # None: nothing stops for its size
+    pack_ceiling_kb: int | None = None
 
     def pack_for_type(self, record_type: str) -> PackConfig | None:
         for name in self.pack_order:
@@ -106,16 +104,19 @@ def load_config(path: Path | None = None) -> BuildConfig:
         for key in ("addon", "file", "schema"):
             if key not in p:
                 raise ConfigError(f"pack {name}: missing `{key}`")
-        by_client = {c: p[f"budget_kb_{c}"] for c in CLIENTS if f"budget_kb_{c}" in p}
+        old = sorted(key for key in p if key.startswith("budget_kb"))
+        if old:
+            raise ConfigError(
+                f"pack {name}: `{old[0]}` is gone (ADR 0072: no size budgets); "
+                "a pack's size is reported, and [limits] pack_kb is the one ceiling"
+            )
         packs[name] = PackConfig(
             name=name,
             addon=p["addon"],
             file=p["file"],
             schema={t: list(fields) for t, fields in p["schema"].items()},
             indexes=list(p.get("indexes", [])),
-            budget_kb=p.get("budget_kb"),
             optional=bool(p.get("optional", False)),
-            budget_kb_by_client=by_client,
             locales=list(p.get("locales", [])),
         )
         order.append(name)
@@ -168,4 +169,9 @@ def load_config(path: Path | None = None) -> BuildConfig:
         sea=sea,
         skip_sea=skip_sea,
     )
-    return BuildConfig(packs=packs, pack_order=order, market=market, mapart=mapart)
+    ceiling = raw.get("limits", {}).get("pack_kb")
+    if ceiling is not None and (isinstance(ceiling, bool) or not isinstance(ceiling, int)):
+        raise ConfigError(f"limits.pack_kb must be a whole number of KB, got {ceiling!r}")
+    return BuildConfig(
+        packs=packs, pack_order=order, market=market, mapart=mapart, pack_ceiling_kb=ceiling
+    )

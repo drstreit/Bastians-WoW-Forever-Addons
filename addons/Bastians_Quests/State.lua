@@ -136,7 +136,9 @@ end
 -- Re-reads the quest log through Compat and diffs it against the cache. Returns nil when nothing
 -- changed, else { added, removed, changed, ids } (arrays of questIDs; ids = all three together).
 -- Unchanged quests keep their cached entry table (only `index` is refreshed), so consumers may hold
--- on to entries and compare them by identity.
+-- on to entries and compare them by identity. The second answer names the objectives whose count
+-- rose since the last snapshot, { { questID, n } }, or nil (Logic.Risen; quests.md "Step places a
+-- player learns").
 function State.Refresh()
   if not State.doneLoaded and doneAttempts < DONE_RETRIES then
     State.LoadDone()
@@ -144,6 +146,7 @@ function State.Refresh()
   local entries = B.Compat.GetQuestLogEntries()
   local log, order = State.log, State.order
   local added, removed, changed = {}, {}, {}
+  local rose
   local seen = {}
   local newOrder = {}
   for i, entry in ipairs(entries) do
@@ -157,6 +160,10 @@ function State.Refresh()
     elseif sameEntry(old, entry) then
       old.index = entry.index
     else
+      for _, n in ipairs(ns.Logic.Risen(old, entry)) do
+        rose = rose or {}
+        rose[#rose + 1] = { id, n }
+      end
       log[id] = entry
       changed[#changed + 1] = id
     end
@@ -178,7 +185,7 @@ function State.Refresh()
       ids[#ids + 1] = id
     end
   end
-  return { added = added, removed = removed, changed = changed, ids = ids }
+  return { added = added, removed = removed, changed = changed, ids = ids }, rose
 end
 
 function State.Entry(questID)

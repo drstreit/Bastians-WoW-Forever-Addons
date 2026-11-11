@@ -351,6 +351,7 @@ ns.L:Register("ptBR", {
   ["Next"] = "Próxima",
   ["Open the quest sheet"] = "Abrir a ficha da missão",
   ["Right here"] = "Bem aqui",
+  ["Where this is done is not known"] = "Não se sabe onde isso é feito",
   ["Sheet"] = "Ficha",
   ["Show the quest chain"] = "Mostrar a cadeia de missões",
   ["Still ahead: %s."] = "Ainda por vir: %s.",

@@ -7,6 +7,7 @@ ns.L:Register("koKR", {
   ["Packs built for another client"] = "다른 클라이언트용으로 빌드된 팩",
   ["Their ids and places belong to that client; install the packs for this one."] = "이 팩의 ID와 장소는 해당 클라이언트의 것입니다. 이 클라이언트용 팩을 설치하세요.",
   ["Packs are built for this client."] = "팩이 이 클라이언트용으로 빌드되었습니다.",
+  ["This Data edition needs a newer Bastian's suite"] = "이 데이터 에디션에는 더 새로운 Bastian's Suite가 필요합니다",
   ["World database"] = "월드 데이터베이스",
   ["Data"] = "데이터",
 
@@ -79,6 +80,7 @@ ns.L:Register("koKR", {
   -- the words of a record's kind (KINDS, PLACE_GROUPS)
   ["Other"] = "기타",
   ["Quest object"] = "퀘스트 오브젝트",
+  ["Quest place"] = "퀘스트 장소",
   ["Chest"] = "상자",
   ["Signpost"] = "이정표",
   ["Fire and forge"] = "불과 대장간",
@@ -212,7 +214,7 @@ ns.L:Register("koKR", {
   ["No page of the book names this dungeon yet."] = "아직 이 던전을 다루는 책 페이지가 없습니다.",
   -- Export.lua: the captures as a text (catalog review B5, 07.11.2026)
   ["Copy my captures"] = "내 기록 복사",
-  ["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "학습한 길, 비행 시간, 배 대기 시간을 GitHub 이슈용 텍스트로 (Share your captures). 위치와 시간만, 이름 없음.",
+  ["Your learned walks, flight times, ride waits and the places where your quest steps counted, as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "학습한 길, 비행 시간, 배 대기 시간, 퀘스트 단계가 집계된 위치를 GitHub 이슈용 텍스트로 (Share your captures). 위치와 시간만, 이름 없음.",
   ["Your captures"] = "내 기록",
   ["The text is selected: press Ctrl+C, then paste it into a GitHub issue (Share your captures). Positions and times only, no names."] = "텍스트가 선택되었습니다. Ctrl+C를 누른 뒤 GitHub 이슈에 붙여 넣으세요 (Share your captures). 위치와 시간만, 이름 없음.",
   ["Nothing learned yet: walk off the roads, fly, ride a boat; then come back here."] = "아직 학습한 것이 없습니다. 길을 벗어나 걷고, 날고, 배를 타고 돌아오세요.",

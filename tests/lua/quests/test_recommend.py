@@ -84,14 +84,13 @@ def test_ranking_reasons_and_flags(wow: WowRuntime):
     recs = rank(wow)
     assert [r[0] for r in recs] == [62, 176]
     done, hogger = recs
-    # 62: complete, hand-in place unknown in the fixture -> one unknown leg, 3 min, full XP for level 7
-    assert done[2] == "304 xp, +2 unlocks, 3 min (distance unknown)"  # 76, then 11
-    assert done[1] > 304 / 3 and done[3] is True and done[4] == 0.7
-    # 176: a group quest alone scores 0; one open objective (2 min), the near spot, hand-in unknown
+    # 62: complete, handed in where the character stands (the taker's own place: the steps'
+    # hand-in, where the quest record names none), full XP for level 7
+    assert done[2] == "304 xp, +2 unlocks, 1 min"  # 76, then 11
+    assert done[1] > 304 / 3 and done[3] is True and done[4] == 1
+    # 176: a group quest alone scores 0; one open objective (2 min), the near spot, the hand-in
     assert hogger[1] == 0 and hogger[3] is True
-    assert (
-        hogger[2] == "532 xp, 1s reward, 5 min (item price unknown, distance unknown, group quest)"
-    )
+    assert hogger[2] == "532 xp, 1s reward, 2 min (item price unknown, group quest)"
     # grouped: the group quest counts; 62 gives XP faster than the long Hogger hunt
     ctx(wow, log=f"{MOD}.State.log", grouped="true")
     recs = {r[0]: r for r in rank(wow)}
@@ -111,8 +110,8 @@ def test_a_leg_the_graph_holds_without_a_time_is_unknown_never_a_straight_line(w
               return nil
             end"""
         )
-        q, entry = f"{MOD}.Logic.quest(176)", f"{MOD}.State.log[176]"
-        return wow.eval(f"{REC}.minutes({q}, {entry}, 1429, ctx, {REC}.DEFAULT_TIMES)")
+        entry = f"{MOD}.State.log[176]"
+        return wow.eval(f"{REC}.minutes({entry}, 1429, ctx, {REC}.DEFAULT_TIMES)")
 
     straight, unknown_straight = minutes("nil")  # no network: the straight line stands in
     timed, unknown_timed = minutes("60")
@@ -131,8 +130,9 @@ def test_unlocks_next_area_bonus_and_hard_quests(wow: WowRuntime):
     recs = {r[0]: r for r in rank(wow)}
     jasper = recs[76]  # available now: unlocks 11 in Westfall, which is a planned next area
     assert jasper[3] is False
-    assert jasper[2] == "412 xp, +1 unlock, leads to the next area, 7 min (distance unknown)"
-    assert jasper[4] == 0.4  # two unknown legs
+    # taken and handed in where the character stands: a delivery, no unknown leg
+    assert jasper[2] == "412 xp, +1 unlock, leads to the next area, 1 min"
+    assert jasper[4] == 1
     unlocks = wow.eval(f"{REC}.unlocks(76, {state(wow)})")
     assert unlocks[0] == 1 and round(unlocks[1]) == 470  # 11 is level 10: 470 xp at depth 1
     # without the planned area the bonus and its reason go

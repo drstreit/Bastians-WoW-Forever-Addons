@@ -32,7 +32,7 @@ local trace = {} -- the last buffs and what became of them, newest first (saved:
 local refusal -- why the last Offer was not answered
 local known -- the last reading of the auras (Model.Reading), nil before the first
 local settleUntil = 0 -- readings before this only note what is there (a login, a loading screen)
-local fightAt -- when the running fight began
+local blindSince -- since when the auras went unread (a fight, hidden auras); nil while they are read
 Courtesy.TRACE = 30 -- kept; `/bcourtesy why` prints the newest ten
 
 local function now()
@@ -116,7 +116,7 @@ end
 
 -- Up to `count` lines for a moment: different moods where it can, never one line twice; lines said
 -- lately only when nothing else is left.
-function Courtesy.Lines(facts, count, onlyMood)
+function Courtesy.Lines(facts, count, onlyMood, via)
   local weights = onlyMood and { [onlyMood] = 1 } or Courtesy.Moods()
   local left, out, offered = {}, {}, {}
   for mood, weight in pairs(weights) do
@@ -124,9 +124,9 @@ function Courtesy.Lines(facts, count, onlyMood)
   end
   local avoid = setmetatable({}, { __index = recent })
   for _ = 1, count do
-    local line = Mine.Choose(facts, { moods = left, recent = avoid, fresh = true })
-      or Mine.Choose(facts, { moods = weights, recent = avoid, fresh = true })
-      or Mine.Choose(facts, { moods = weights, recent = offered, fresh = true })
+    local line = Mine.Choose(facts, { moods = left, recent = avoid, fresh = true, via = via })
+      or Mine.Choose(facts, { moods = weights, recent = avoid, fresh = true, via = via })
+      or Mine.Choose(facts, { moods = weights, recent = offered, fresh = true, via = via })
     if not line then
       break
     end
@@ -151,15 +151,27 @@ function Courtesy.Macro(line, facts)
   return text and #text <= Courtesy.MACRO_MAX and { type = "macro", macrotext = text } or nil
 end
 
+-- The whole name a whisper to this person needs, nil when the client does not give it.
+local function wholeName(event)
+  if event.full then
+    return event.full
+  elseif unitOf(event) then
+    return B.Compat.FullName(event.unit)
+  end
+  return event.guid and Compat.WholeNameOfGUID(event.guid) or nil
+end
+
 local function kindItems(event, facts, onlyMood)
   local items = {}
-  for i, line in ipairs(Courtesy.Lines(facts, 3, onlyMood)) do
+  local whisper = event.full ~= nil -- to the person; else aloud, through the secure button
+  for i, line in ipairs(Courtesy.Lines(facts, 3, onlyMood, whisper and "say" or nil)) do
     items[i] = {
-      icon = line.act and "app_gestures" or "app_chat",
+      icon = (line.act and not whisper) and "app_gestures" or "app_chat",
       label = MOOD_WORD[line[2]],
-      tip = preview(line, facts),
+      tip = whisper and ("/w " .. (event.who or "") .. " " .. Voice.Words(line, facts, "say"))
+        or preview(line, facts),
       line = line,
-      secure = Courtesy.Macro(line, facts),
+      secure = not whisper and Courtesy.Macro(line, facts) or nil,
     }
   end
   for i = #items + 1, 3 do
@@ -188,6 +200,11 @@ end
 -- Sends a line, as the line asks. Only ever from a click (courtesy.md "What the client allows").
 function Courtesy.Say(line, facts, event)
   Voice.Remember(recent, line)
+  if event.full then -- to the person: no target needed, the player's own stays, nothing public
+    local spoken = Voice.Words(line, facts, "say")
+    Compat.SendChat(spoken, "WHISPER", event.full)
+    return spoken
+  end
   local channel = Voice.Channel(line)
   local words = Voice.Words(line, facts, channel == "SAY" and "say" or "emote")
   Compat.SendChat(words, channel)
@@ -240,6 +257,7 @@ end
 -- Opens the ring for a moment. `facts` and `onlyMood` from `/bcourtesy try ring`.
 function Courtesy.Show(event, facts, onlyMood)
   facts = facts or Facts.Moment(event)
+  event.full = event.who and wholeName(event) or nil
   pending, pendingFacts = event, facts
   local items = Courtesy.IsRequest(event) and requestItems(event) or kindItems(event, facts, onlyMood)
   Medallion.Open(items, Courtesy.Words(event), Courtesy.Fire, function()
@@ -308,7 +326,9 @@ end
 local function onFresh(a)
   local spell, source = a.name, a.source
   if source then
-    if Compat.IsMineOrGroup(source) then
+    if Compat.IsMe(source) then
+      return -- my own cast: no line of the trace (they pushed every stranger's buff out of it)
+    elseif Compat.IsMineOrGroup(source) then
       return note("own or group", spell, "unit")
     end
     local who = Compat.UnitPlayerName(source)
@@ -318,8 +338,8 @@ local function onFresh(a)
     return offerBuff({ kind = "buff", who = who, unit = source, what = spell }, "unit")
   end
   local guid = Compat.CasterGUID(a.instance)
-  if guid == plain(UnitGUID("player")) then
-    return note("own or group", spell, "guid")
+  if guid and guid == plain(UnitGUID("player")) then
+    return -- my own cast
   elseif guid and not string.find(guid, "^Player%-") then
     return note("not a player", spell, "guid")
   end
@@ -329,26 +349,39 @@ local function onFresh(a)
       return note("own or group", spell, "guid")
     end
     return offerBuff({ kind = "buff", who = who, guid = guid, what = spell }, "guid")
-  elseif a.fromPlayer == true or (a.fromPlayer == nil and Facts.BuffKind(spell)) then
-    return offerBuff({ kind = "buff", key = "unseen:" .. (spell or "?"), what = spell }, "none")
   end
-  return note("not from a player", spell, "none")
+  local how = guid and "guid without a name" or "none"
+  if a.fromPlayer == true or (a.fromPlayer == nil and Facts.BuffKind(spell)) then
+    return offerBuff({ kind = "buff", key = "unseen:" .. (spell or "?"), what = spell }, how)
+  end
+  return note("not from a player", spell, how)
 end
 
 -- Reads the auras and compares (courtesy.md "The moments"): UNIT_AURA says only that something changed,
 -- its own list can be secret, empty on a full update and says nothing of a buff cast again.
 function Courtesy.ReadAuras()
-  if not mod or not mod:IsEnabled() or (InCombatLockdown and InCombatLockdown()) then
+  if not mod or not mod:IsEnabled() then
+    return
+  elseif InCombatLockdown and InCombatLockdown() then
+    blindSince = blindSince or now()
     return -- in a fight: PLAYER_REGEN_ENABLED reads
   end
   local list = Compat.HelpfulAuras()
   if not list then
+    blindSince = blindSince or now()
     return note("auras hidden")
   end
-  local fresh = now() >= settleUntil and Model.NewAuras(known, list) or {}
+  local t = now()
+  local blind = blindSince and (t - blindSince) or nil
+  blindSince = nil
+  local fresh = t >= settleUntil and Model.NewAuras(known, list) or {}
   known = Model.Reading(list)
   for _, a in ipairs(fresh) do
-    onFresh(a)
+    if Model.Timely(a.landed, t, blind) then
+      onFresh(a)
+    else
+      note("long fight", a.name) -- unread too long, and the aura does not say it landed lately
+    end
   end
 end
 
@@ -358,17 +391,14 @@ function Courtesy.OnAura(_, _, unit)
   end
 end
 
--- A fight: the ring closes. After it the auras are read; a buff of a short fight still gets its ring.
+-- A fight: the ring closes. After it the auras are read: a buff of a short fight still gets its
+-- ring, one of a longer fight when the aura says it landed lately (Model.Timely).
 function Courtesy.OnFight()
-  fightAt = now()
+  blindSince = blindSince or now()
   Courtesy.Hide()
 end
 
 function Courtesy.OnFightOver()
-  if fightAt and now() - fightAt > Model.AFTER_FIGHT_SECONDS then
-    settleUntil = now() + 0.1
-  end
-  fightAt = nil
   Courtesy.ReadAuras()
 end
 
@@ -467,7 +497,7 @@ end
 
 function Courtesy.Attach(m)
   mod = m
-  state, invite, known, fightAt = { seen = {} }, nil, nil, nil
+  state, invite, known, blindSince = { seen = {} }, nil, nil, nil
   m.db.global.trace = type(m.db.global.trace) == "table" and m.db.global.trace or {}
   trace = m.db.global.trace
   Courtesy.Settle()

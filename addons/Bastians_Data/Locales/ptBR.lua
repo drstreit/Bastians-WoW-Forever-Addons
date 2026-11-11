@@ -7,6 +7,7 @@ ns.L:Register("ptBR", {
   ["Packs built for another client"] = "Pacotes criados para outro cliente",
   ["Their ids and places belong to that client; install the packs for this one."] = "Os IDs e locais deles pertencem a esse cliente; instale os pacotes para este.",
   ["Packs are built for this client."] = "Os pacotes foram criados para este cliente.",
+  ["This Data edition needs a newer Bastian's suite"] = "Esta edição de dados precisa de um Bastian's Suite mais recente",
   ["World database"] = "Banco de dados do mundo",
   ["Data"] = "Dados",
 
@@ -79,6 +80,7 @@ ns.L:Register("ptBR", {
   -- the words of a record's kind (KINDS, PLACE_GROUPS)
   ["Other"] = "Outros",
   ["Quest object"] = "Objeto de missão",
+  ["Quest place"] = "Local de missão",
   ["Chest"] = "Baú",
   ["Signpost"] = "Placa",
   ["Fire and forge"] = "Fogo e forja",
@@ -212,7 +214,7 @@ ns.L:Register("ptBR", {
   ["No page of the book names this dungeon yet."] = "Nenhuma página do livro menciona esta masmorra ainda.",
   -- Export.lua: the captures as a text (catalog review B5, 07.11.2026)
   ["Copy my captures"] = "Copiar minhas capturas",
-  ["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Seus caminhos aprendidos, tempos de voo e esperas de barco como texto para uma issue do GitHub (Share your captures). Só posições e tempos, sem nomes.",
+  ["Your learned walks, flight times, ride waits and the places where your quest steps counted, as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Seus caminhos aprendidos, tempos de voo, esperas de barco e os lugares onde as etapas das suas missões contaram, como texto para uma issue do GitHub (Share your captures). Só posições e tempos, sem nomes.",
   ["Your captures"] = "Suas capturas",
   ["The text is selected: press Ctrl+C, then paste it into a GitHub issue (Share your captures). Positions and times only, no names."] = "O texto está selecionado: pressione Ctrl+C e cole em uma issue do GitHub (Share your captures). Só posições e tempos, sem nomes.",
   ["Nothing learned yet: walk off the roads, fly, ride a boat; then come back here."] = "Nada aprendido ainda: ande fora das estradas, voe, pegue um barco; depois volte aqui.",

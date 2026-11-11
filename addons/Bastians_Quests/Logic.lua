@@ -92,6 +92,304 @@ function Logic.SetData(service)
   Logic.Reset()
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- Which place of several (quests.md "Where a quest sends you": the readers)
+-- ---------------------------------------------------------------------------------------------
+
+-- The nearest of `places` ({ map, x, y, ... }, map fractions) for where = { map, x, y, yards =
+-- fn(map, x, y) -> yards or nil }: a place on where's map before any other, there the nearest by
+-- the map's fractions; else the nearest by yards, a measured one before an unmeasured; else the
+-- first on the lowest map id, so the answer is the same every time. Returns the place and its
+-- squared distance in map fractions (math.huge off where's map or without a position); nil
+-- without a place. Pure.
+function Logic.NearestPlace(places, where)
+  where = where or {}
+  local best, bestD
+  for _, p in ipairs(places or {}) do
+    if p.map ~= nil and p.map == where.map then
+      local d = (where.x and where.y and p.x and p.y) and ((where.x - p.x) ^ 2 + (where.y - p.y) ^ 2)
+        or math.huge
+      if not best or d < bestD then
+        best, bestD = p, d
+      end
+    end
+  end
+  if best then
+    return best, bestD
+  end
+  local bestYards
+  for _, p in ipairs(places or {}) do
+    if p.map ~= nil then
+      local yards = where.yards and where.yards(p.map, p.x, p.y) or nil
+      local better
+      if not best then
+        better = true
+      elseif yards and bestYards then
+        better = yards < bestYards
+      elseif yards or bestYards then
+        better = yards ~= nil
+      else
+        better = p.map < best.map
+      end
+      if better then
+        best, bestYards = p, yards
+      end
+    end
+  end
+  if not best then
+    return nil
+  end
+  return best, math.huge
+end
+
+-- The places of one step on one map, { { map, x, y, ref, src } }, and that map: where's map, then
+-- the maps of `home` in order (where the quest lives: its giver's, its hand-in's), then the
+-- nearest, else the lowest id. One map at a time: spider meat drops in twelve zones, and the map
+-- must not fly to the wrong one. Nil when the step has no place. Pure.
+function Logic.StepPlaces(step, where, home)
+  local byMap, firsts = {}, {}
+  for _, p in ipairs(type(step) == "table" and step.places or {}) do
+    if p.map and p.x and p.y then
+      if not byMap[p.map] then
+        byMap[p.map] = {}
+        firsts[#firsts + 1] = p
+      end
+      table.insert(byMap[p.map], p)
+    end
+  end
+  if #firsts == 0 then
+    return nil
+  end
+  where = where or {}
+  if where.map and byMap[where.map] then
+    return byMap[where.map], where.map
+  end
+  for _, map in ipairs(home or {}) do
+    if byMap[map] then
+      return byMap[map], map
+    end
+  end
+  local nearest = Logic.NearestPlace(firsts, { yards = where.yards })
+  return byMap[nearest.map], nearest.map
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- A quest's steps with the log's state (ADR 0069, quests.md "Where a quest sends you")
+-- ---------------------------------------------------------------------------------------------
+
+-- The client's objective type a step counts among.
+local STEP_TYPE = { slay = "monster", use = "object", get = "item" }
+
+-- A `cast` step (the handed item used on a creature or an object) counts as its subject does.
+local function stepType(s)
+  if s.step == "cast" then
+    return type(s.ref) == "string" and s.ref:find("^object:") and "object" or "monster"
+  end
+  return STEP_TYPE[s.step]
+end
+
+-- The sources of a step's places that are the quest's own points for it: chosen for this quest
+-- (data.md "A quest's `steps`": `data` is a pack without `steps`). Places from anything else
+-- (where the creature lives, a Classic point) give way to the client's own area for the step.
+local OWN_PLACES = { data = true, eq = true, capture = true, verified = true, authored = true }
+-- A place of our own table for the objective (data.md "Our authored table") wins over every
+-- source, the quest's own points included: it is there because a source was wrong or silent.
+local AUTHORED = { verified = true, authored = true }
+
+-- The things to do of `steps` (those between take and hand-in) joined with the log's objectives;
+-- each gets `n`, the client's number, where that is known.
+--   A step with `n` is the client's n-th.
+--   A step with `nth` is the client's nth objective of its kind (Everything Quests' numbering).
+--   A step with neither is the same number among the objectives of its kind as among such
+--   steps; when the pack and the client count the kind differently, nothing says which is which.
+--   A bare area (a `reach` step with `n` and no subject) is the client's own place for its n-th
+--   objective. The step that turns out to be that objective takes its places, and the area goes.
+--   Beside areas a step nobody can match is left out: the areas stand for the things to do.
+--   Without areas it stays, and stays open: unknown is not done.
+local function thingsToDo(steps, objectives)
+  local areas, taken, wanted, listed = {}, {}, {}, {}
+  for i = 2, #steps - 1 do
+    local s = steps[i]
+    local kind = stepType(s)
+    if s.n and not s.ref and s.step == "reach" then
+      areas[s.n] = s
+    elseif s.n then
+      taken[s.n] = true
+    elseif kind and not s.nth then
+      wanted[kind] = (wanted[kind] or 0) + 1
+    end
+  end
+  for j, o in ipairs(objectives) do
+    if o.kind and not taken[j] then
+      listed[o.kind] = (listed[o.kind] or 0) + 1
+    end
+  end
+  local function nthOf(kind, nth)
+    local seen = 0
+    for j, o in ipairs(objectives) do
+      if o.kind == kind and not taken[j] then
+        seen = seen + 1
+        if seen == nth then
+          return j
+        end
+      end
+    end
+    return nil
+  end
+  local kept, nth, gone = {}, {}, {}
+  for i = 2, #steps - 1 do
+    local s = steps[i]
+    local kind = not s.n and stepType(s)
+    if not kind then
+      kept[#kept + 1] = s
+    else
+      local j
+      if s.nth then
+        j = nthOf(kind, s.nth)
+      else
+        nth[kind] = (nth[kind] or 0) + 1
+        j = listed[kind] == wanted[kind] and nthOf(kind, nth[kind]) or nil
+      end
+      if j then
+        s.n = j
+        local area = areas[j]
+        if area then
+          gone[area] = true
+          -- its own spots stay; otherwise the client's area, and always the place we authored
+          if not OWN_PLACES[s.src] or AUTHORED[area.src] then
+            s.places, s.src = area.places, area.src
+          end
+        end
+        kept[#kept + 1] = s
+      elseif not next(areas) then
+        kept[#kept + 1] = s
+      end
+    end
+  end
+  local out = {}
+  for _, s in ipairs(kept) do
+    if not gone[s] then
+      out[#out + 1] = s
+    end
+  end
+  return out
+end
+
+-- The steps of `data:Steps` (take, each thing to do, hand-in) with the log's state, as the facet
+-- `steps` (core-contracts §4): `state`, and per step `open`, `done`, `have`, `count`, `text`.
+-- entry = the quest's log entry or nil; status = Logic.status' word for a quest not in the log.
+--   done: nothing is open. In the log and complete: the hand-in. In the log: every thing to do
+--   that is not finished; a step nobody can match stays open; an unfinished objective of the
+--   client that no step covers is a step of its own (`do`), without a place; none of them: the
+--   hand-in (a delivery). Every other status: `take`.
+-- The input is not changed. Pure.
+function Logic.Steps(steps, entry, status)
+  if type(steps) ~= "table" or #steps < 2 then
+    return nil
+  end
+  local copies = {}
+  for i, s in ipairs(steps) do
+    local copy = {}
+    for key, value in pairs(s) do
+      copy[key] = value
+    end
+    copies[i] = copy
+  end
+  local take, handin = copies[1], copies[#copies]
+  if not entry then
+    copies.state = status ~= "log" and status or "available"
+    if copies.state ~= "done" then
+      take.open = true
+    end
+    return copies
+  end
+  take.done = true
+  if entry.isComplete or entry.readyForTurnIn then
+    copies.state = "complete"
+    handin.open = true
+    return copies
+  end
+  local objectives = type(entry.objectives) == "table" and entry.objectives or {}
+  local out = { state = "active", take }
+  local covered, kinds, anyOpen = {}, {}, false
+  for _, s in ipairs(thingsToDo(copies, objectives)) do
+    local o = s.n and objectives[s.n]
+    if o then
+      covered[s.n] = true
+      s.text, s.have = o.text, o.fulfilled
+      s.count = s.count or o.required
+      s.done = o.finished and true or false
+    end
+    if stepType(s) then
+      kinds[stepType(s)] = true
+    end
+    s.open = not s.done
+    anyOpen = anyOpen or s.open
+    out[#out + 1] = s
+  end
+  for j, o in ipairs(objectives) do
+    if not covered[j] and not o.finished and not (o.kind and kinds[o.kind]) then
+      out[#out + 1] = {
+        step = "do",
+        n = j,
+        text = o.text,
+        have = o.fulfilled,
+        count = o.required,
+        how = "unknown",
+        open = true,
+      }
+      anyOpen = true
+    end
+  end
+  handin.open = not anyOpen or nil
+  out[#out + 1] = handin
+  return out
+end
+
+-- A quest's steps with the state of `entry` (its log entry, or nil: then by Logic.status):
+-- `data:Steps` through Logic.Steps. A quest the pack does not know and the log holds has what the
+-- client lists, without a place. Nil for a quest nobody knows. The client's waypoint is not asked
+-- here: that is the game's (Registrations).
+function Logic.QuestSteps(qid, entry, state)
+  local plain = data and data.Steps and data:Steps("quest:" .. qid) or nil
+  if not plain then
+    if not entry then
+      return nil
+    end
+    plain = { { step = "take", places = {} }, { step = "handin", places = {} } }
+    return Logic.Steps(plain, entry)
+  end
+  return Logic.Steps(plain, entry, not entry and Logic.status(qid, state) or nil)
+end
+
+-- The objectives of a quest whose count rose from one snapshot of the log to the next, as
+-- their numbers in the client's list (quests.md "Step places a player learns", package QK1).
+-- A count that grew, or an objective that finished (an exploration has no count). Only where
+-- both snapshots list the same objectives (their number, and each one's kind and required
+-- count): a quest of several stages replaces its list, and then the number means another thing.
+-- A count unknown before is no rise: unknown is not zero. Pure.
+function Logic.Risen(old, new)
+  local was = type(old) == "table" and old.objectives or nil
+  local now = type(new) == "table" and new.objectives or nil
+  if not (was and now) or #was ~= #now then
+    return {}
+  end
+  for n, o in ipairs(now) do
+    if o.kind ~= was[n].kind or o.required ~= was[n].required then
+      return {}
+    end
+  end
+  local out = {}
+  for n, o in ipairs(now) do
+    local b = was[n]
+    local grew = type(o.fulfilled) == "number" and type(b.fulfilled) == "number" and o.fulfilled > b.fulfilled
+    if grew or (o.finished and not b.finished) then
+      out[#out + 1] = n
+    end
+  end
+  return out
+end
+
 local byStart, byTurnIn, followers
 local compOf, members, chainFrom, chainCache
 local shapes -- a chain's shape per root, race and class (chainShape)

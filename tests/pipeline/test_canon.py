@@ -16,6 +16,7 @@ from bastians_build.canon import (
     localized_name,
     merge_creatures,
     object_kind,
+    quest_start_zone,
     zone_statistics,
 )
 from bastians_build.config import load_config
@@ -23,7 +24,7 @@ from bastians_build.derive import build_index
 from bastians_build.load import SourcePaths, load_sources
 from bastians_build.model import World
 from bastians_build.sources import clientdump, cmangos, foreverdb, probe, questiedb
-from bastians_build.sources.everything_quests import read_everything_quests
+from bastians_build.sources.everything_quests import Place, read_everything_quests
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "sources"
 
@@ -115,6 +116,96 @@ def test_loot_objectives_point_at_the_required_item():
     assert world.get("quest", 1)["objectives"] == [["loot", "npc:5", 0]]
     fix_loot_objectives(world)  # idempotent
     assert world.get("quest", 3861)["objectives"][0] == ["loot", "item:11109", 0, "npc:233"]
+
+
+def test_a_loot_objective_keeps_only_a_source_that_gives_the_item():
+    """Redridge Goulash, measured 09.11.2026: Everything Quests names Bellygrub, the condor and the
+    boar beside three items in another order, and no spider at all; pairing them by position said
+    Crisp Spider Meat comes from a boar."""
+    world = World(client="forever")
+    world.add("item", 1, {"drops": [["npc:547", 50.0, True], ["npc:345", 10.0, True]]})  # snout
+    world.add("item", 2, {"drops": [["npc:442", 40.0, True]]})  # spider meat
+    world.add("item", 3, {"drops": [["npc:428", 40.0, True]]})  # condor meat
+    world.add(
+        "quest",
+        92,
+        {
+            "objectives": [["loot", "npc:345", 1], ["loot", "npc:428", 2], ["loot", "npc:547", 3]],
+            "requiredItems": [[1, 10], [2, 5], [3, 5]],
+        },
+    )
+    fix_loot_objectives(world)
+    expected = [
+        ["loot", "item:1", 1, "npc:345"],  # its own source gives it
+        ["loot", "item:2", 2],  # no named source gives it: unknown, not a boar
+        ["loot", "item:3", 3, "npc:428"],  # the source named beside another item
+    ]
+    assert world.get("quest", 92)["objectives"] == expected
+    fix_loot_objectives(world)  # idempotent
+    assert world.get("quest", 92)["objectives"] == expected
+
+
+def test_a_loot_objective_source_is_proven_by_any_table():
+    """The lists are capped (20 droppers per item, 30 items per creature), so either side proves
+    a source; a merchant's stock does too (CLUCK!'s feed)."""
+    world = World(client="forever")
+    world.add("item", 1, {"drops": [["npc:9", 50.0, True]]})
+    world.add("npc", 5, {"loot": [[1, 12.0]]})  # the item's list is full, the creature's names it
+    world.add("item", 2, {"drops": [["npc:9", 50.0, True]]})
+    world.add("npc", 6, {"vendor": [[2, 100, None, False, "classic"]]})
+    world.add(
+        "quest",
+        10,
+        {
+            "objectives": [["loot", "npc:5", 1], ["loot", "npc:6", 1]],
+            "requiredItems": [[1, 1], [2, 1]],
+        },
+    )
+    fix_loot_objectives(world)
+    assert [o[3] for o in world.get("quest", 10)["objectives"]] == ["npc:5", "npc:6"]
+
+
+def test_a_loot_objective_without_a_table_keeps_its_source_unless_it_gives_another_item():
+    """No loot record for the item: nothing contradicts the named source. But one proven for the
+    quest's other item is that item's, not this one's."""
+    world = World(client="forever")
+    world.add("item", 1, {"drops": [["npc:7", 50.0, True]]})
+    world.add(
+        "quest",
+        11,
+        {
+            "objectives": [["loot", "npc:7", 1], ["loot", "npc:8", 1]],
+            "requiredItems": [[2, 1], [3, 1]],
+        },
+    )
+    world.add(
+        "quest",
+        12,
+        {
+            "objectives": [["loot", "npc:7", 1], ["loot", "npc:8", 1]],
+            "requiredItems": [[2, 1], [1, 1]],
+        },
+    )
+    fix_loot_objectives(world)
+    assert world.get("quest", 11)["objectives"] == [
+        ["loot", "item:2", 1, "npc:7"],
+        ["loot", "item:3", 1, "npc:8"],
+    ]
+    assert world.get("quest", 12)["objectives"] == [
+        ["loot", "item:2", 1],  # npc:7 is proven for item 1
+        ["loot", "item:1", 1, "npc:7"],
+    ]
+
+
+def test_a_quests_zone_is_where_its_giver_stands():
+    """Everything Quests' coordinate is where a quest is advanced: an objective's spawn for many.
+    Redridge Goulash said Hillsbrad Foothills with its giver in Lakeshire (09.11.2026)."""
+    giver_on = [[1433, 0.2, 0.4], [1429, 0.1, 0.1]]
+    assert quest_start_zone(Place(1424, 0.5, 0.5, "progress"), giver_on) == 1433
+    assert quest_start_zone(Place(1429, 0.5, 0.5, "progress"), giver_on) == 1429  # a giver's map
+    assert quest_start_zone(None, giver_on) == 1433
+    assert quest_start_zone(Place(1424, 0.5, 0.5, "progress"), []) == 1424  # nobody placed
+    assert quest_start_zone(None, []) is None
 
 
 def test_clean_name():

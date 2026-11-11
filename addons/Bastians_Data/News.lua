@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.2.0:1",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = 'Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.',
+  },
+  {
     id = "2.0.0:1",
     date = "2026-11-06",
     version = "2.0.0",

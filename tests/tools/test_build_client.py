@@ -12,6 +12,12 @@ sys.path.insert(0, str(ROOT / "tools"))
 import build_client  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def no_real_api_rows(tmp_path: Path, monkeypatch):
+    """AHSync's fetch of ForeverDB's API on this machine is no input of these tests."""
+    monkeypatch.setattr(build_client, "FOREVERDB_API", tmp_path / "no-api")
+
+
 def make_config(tmp_path: Path, build: str = "") -> Path:
     client = tmp_path / "wow" / "_retail_"
     (client / "Interface" / "AddOns").mkdir(parents=True)
@@ -139,3 +145,53 @@ def test_a_forever_build_passes_the_books_pictures_and_last_state(tmp_path, monk
     assert build_client.main(["--client", "forever", "--dry-run", "--config", str(config)]) == 0
     out = capsys.readouterr().out
     assert f"--art {art}" in out and "--book-previous" in out
+
+
+def test_this_machines_inputs_have_a_hash_and_say_what_they_are(tmp_path: Path):
+    """plan-nightly-content.md F8 and F14: a new client dump, mirror commit or language lookup is
+    new input for the edition, and two machines can compare what they build from."""
+    dumps = tmp_path / "out"
+    dumps.mkdir()
+    (dumps / "f70862_Map.json").write_text("{}", encoding="utf-8")
+    (dumps / "other_Map.json").write_text("{}{}", encoding="utf-8")
+    mirror = tmp_path / "cmangos"
+    (mirror / ".git" / "refs" / "heads").mkdir(parents=True)
+    (mirror / ".git" / "HEAD").write_text("ref: refs/heads/master\n", encoding="utf-8")
+    (mirror / ".git" / "refs" / "heads" / "master").write_text("ec4f596aaaaabbbbb\n", "utf-8")
+    l10n = tmp_path / "l10n"
+    l10n.mkdir()
+    (l10n / "frFR.lua").write_text("x" * 10, encoding="utf-8")
+    inputs = build_client.BuildInputs("forever", tmp_path, "f70862", cmangos=mirror, l10n=l10n)
+    first, parts = build_client.local_inputs(inputs, dumps)
+    assert parts == [
+        "dumps f70862: 1 files, 2 bytes",
+        "cmangos: ec4f596aaaaa",
+        "l10n: 1 files, 10 bytes",
+        "long texts: 0 files, 0 bytes",
+        "ForeverDB API: 0 files, 0 bytes",
+    ]
+    assert build_client.local_inputs(inputs, dumps)[0] == first  # the same inputs, the same hash
+    (l10n / "frFR.lua").write_text("x" * 11, encoding="utf-8")
+    assert build_client.local_inputs(inputs, dumps)[0] != first
+    bare = build_client.BuildInputs("forever", tmp_path, "none")
+    assert build_client.local_inputs(bare, tmp_path / "missing")[1][:2] == [
+        "dumps none: 0 files, 0 bytes",
+        "cmangos: none",
+    ]
+
+
+def test_the_api_rows_ride_the_forever_build_when_ahsync_fetched_them(tmp_path, monkeypatch):
+    """ForeverDB's API (data.md): AHSync's last complete fetch is an input of the Forever build,
+    found by itself or named in install.toml; retail never reads it."""
+    monkeypatch.setattr(build_client, "DUMPS", tmp_path / "out")
+    config = make_config(tmp_path)
+    assert build_client.read_inputs("forever", config).foreverdb_api is None
+    latest = tmp_path / "latest"
+    latest.mkdir()
+    (latest / "quests.json").write_text("[]", encoding="utf-8")
+    monkeypatch.setattr(build_client, "FOREVERDB_API", latest)
+    inputs = build_client.read_inputs("forever", config)
+    assert inputs.foreverdb_api == latest
+    data = build_client.commands(inputs, tmp_path / "packs", skip_mapart=True)[0]
+    assert data[data.index("--foreverdb-api") + 1] == str(latest)
+    assert build_client.read_inputs("retail", config).foreverdb_api is None

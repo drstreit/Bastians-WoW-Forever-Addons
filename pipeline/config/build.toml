@@ -1,13 +1,23 @@
-# Build configuration: packs, their schemas (field order per type), indexes and size budgets (data.md).
+# Build configuration: packs, their schemas (field order per type) and indexes (data.md).
+# No size budgets ("we do not have any fixed budget, outside of not crushing
+# the machine of a user"; ADR 0072): a pack's size is reported, it stops no build. [limits] holds
+# the one ceiling, far above every pack, that stops a build gone wrong. The sizes the comments
+# below name are measurements of their day.
 # A type belongs to exactly one pack. The loader never hard-codes positions: it reads the schema.
 # Field meanings: data.md "Canonical model". Coordinates: spawns = { {uiMapID, x, y, src}, ... } as
 # map fractions; spots = { [uiMapID] = { {x, y, kind, objectiveMask}, ... } }. Money is integer copper.
 
+# The one ceiling (ADR 0072). A pack above it stops the build: a file that size is a build gone
+# wrong, or a decision to take on purpose by raising the number. It is no design limit and no
+# measurement of what a machine takes: 100 MB is the number the owner gave the Market pack on
+# 09.11.2026, used for every pack. The largest pack of 11.11.2026 is 11.3 MB (World).
+[limits]
+pack_kb = 102400
+
 [packs.world]
 addon = "Bastians_Data_World"
 file = "World.lua"
-# 12 MB since 20.10.2026 (was 10): Classic mob places, up to 12 per map, made the Forever pack 10.9 MB
-budget_kb = 12288
+# 20.10.2026: Classic mob places, up to 12 per map, made the Forever pack 10.9 MB
 indexes = ["npc.byZone", "npc.bySoldItem", "object.byZone", "node.byZone", "node.objects", "entrance.byZone", "entrance.byInstance", "area.byZone", "area.toMap"]
 
 [packs.world.schema]
@@ -49,11 +59,9 @@ dungeon = ["name", "kind", "size", "levelLo", "levelHi", "levelReq", "zone", "bo
 [packs.quests]
 addon = "Bastians_Data_Quests"
 file = "Quests.lua"
-budget_kb = 6144
-# retail (20.10.2026): 32,409 obtainable quests with a giver, place or zone make 9.0 MB; budget per
-# client, the in-game cost is measured in B11.1 (data.md "Retail data")
-# 11 MB since 29.10.2026: the client's quest lines and objective areas (ADR 0035) took it to 10.9 MB
-budget_kb_retail = 11264
+# retail (20.10.2026): 32,409 obtainable quests with a giver, place or zone make 9.0 MB; the
+# in-game cost is measured in B11.1 (data.md "Retail data")
+# 29.10.2026: the client's quest lines and objective areas (ADR 0035) took retail's to 10.9 MB
 # byStart, byTurnIn, followers, chainMembers and chainFrom are the quest graph Quests' Logic reads
 # (B11.1, 21.10.2026): shipped, so no zone page decodes every quest to build them
 indexes = [
@@ -63,7 +71,11 @@ indexes = [
 ]
 
 [packs.quests.schema]
-quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon", "dungeonSrc"]
+# steps (data.md "A quest's `steps`", package QD3, 11.11.2026): the things to do as the build
+# resolved them, rows { n, kind, ref, count, how, via, places = { [uiMapID] = { {x, y, ref} } },
+# src, nth, more }; gives = { {itemID, count} }, what the giver hands over. `objectives` and
+# `spots` stay beside them for the suites that do not read `steps` (shape 2)
+quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon", "dungeonSrc", "steps", "gives"]
 # attunements (quests.md): hand-written lists from pipeline/config/attunements_<client>.toml; steps are
 # [kind, id, label(, standing)] with kind "quest" | "rep" | "item"
 attunement = ["name", "faction", "verified", "note", "steps", "src", "instance"]
@@ -71,16 +83,18 @@ attunement = ["name", "faction", "verified", "note", "steps", "src", "instance"]
 [packs.items]
 addon = "Bastians_Data_Items"
 file = "Items.lua"
-budget_kb = 8192
 # retail (20.10.2026): 57,726 referenced items make 10.2 MB in format A (the plain name table for
-# search adds 1.7 MB); headroom for the next AllTheThings release
-budget_kb_retail = 14336  # 13 MB since 28.10.2026: TrinityCore's loot (11.0 MB) and 12,208 recipes from
+# search adds 1.7 MB)
+# retail, 28.10.2026: TrinityCore's loot (11.0 MB) and 12,208 recipes from
 # AllTheThings (+1.1 MB) took it to 12.1 MB; 14 MB since 29.10.2026: the client's item facts and the
 # recipes' names, products and reagents (ADR 0035) took it to 13.5 MB
 indexes = []
 
 [packs.items.schema]
-item = ["name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew", "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src", "disenchant"]
+# ways (package QD3): how an item is come by besides a drop, rows { how, ref, chance, at } with
+# how = make (ref the item that is used, at the object or creature it is used at or on),
+# container (the item that holds it), skin, pick (the creature), fish (the zone); classic
+item = ["name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew", "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src", "disenchant", "ways"]
 recipe = ["name", "profession", "skill", "item", "count", "reagents", "source", "sourceItem", "foreverNew", "src"]
 # disenchant lists (CMaNGOS disenchant_loot_template, 31.10.2026): loot = { {item, percent, min, max} }
 disenchant = ["loot", "src"]
@@ -90,7 +104,8 @@ disenchant = ["loot", "src"]
 addon = "Bastians_Data_Market"
 file = "Market.lua"
 # 06.11.2026 every market of the export; 23.10.2026 EU RP alone was 1,149 KB
-budget_kb = 8192
+# 09.11.2026: 9.5 MB with the Chinese markets stopped the build at an 8 MB budget; the owner
+# set 100 MB, which is [limits] pack_kb for every pack since 11.11.2026
 optional = true
 indexes = ["market.list", "signal.byMarket", "spot.all", "spot.byItem", "strategy.all"]
 
@@ -109,7 +124,6 @@ strategy = ["kind", "subject", "item", "map", "x", "y", "weight", "reach", "buil
 [packs.book]
 addon = "Bastians_Data_Strategies"
 file = "Book.lua"
-budget_kb = 1024
 optional = true
 indexes = ["book.toc", "book.mill"]
 
@@ -120,7 +134,8 @@ chapter = ["name", "order", "opening", "active"]
 # art = true when the page's picture ships (Generated/Art/<id>.blp, tools/book_art.py)
 page = ["name", "chapter", "order", "levelMin", "levelMax", "zones", "meta", "blocks", "rumours", "plate", "live", "table", "refs", "shelf", "pinned", "added", "updated", "retired", "reason", "successor", "art"]
 # the claims the pages rest on, by claim id: AHSync's own sentence and the sources (channel, date, link)
-rumour = ["claim", "kind", "subject", "sources"]
+# `sources`: the three newest travellers; `more`: how many others tell it (10.11.2026)
+rumour = ["claim", "kind", "subject", "sources", "more"]
 # What's new, newest first: book.toml's entries and the ones the build writes (book_news.py);
 # an entry links its page or its chapter's Rumour mill (`mill` = the chapter id); the build's own
 # carry `kind` (travellers, mill, more) and `n` (how many), so the suite's What's new can fold a day
@@ -133,7 +148,6 @@ mill = ["chapter", "rank", "zone", "where", "channels", "claims"]
 [packs.text]
 addon = "Bastians_Data_Text_enUS"
 file = "Text_enUS.lua"
-budget_kb = 4096
 indexes = []
 
 [packs.text.schema]
@@ -152,10 +166,8 @@ addon = "Bastians_Data_Text_deDE"
 file = "Text_deDE.lua"
 # with CMaNGOS' long quest texts: measured 29.10.2026 deDE 6.5 MB, zhCN 5.2 MB
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-budget_kb = 8192  # was 7168
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
-budget_kb_retail = 6144
 optional = true
 locales = ["deDE"]
 
@@ -169,12 +181,9 @@ object_deDE = ["name"]
 addon = "Bastians_Data_Text_frFR"
 file = "Text_frFR.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): the long-text
-# budget, as German and the Asian languages
-budget_kb = 8192  # was 5120
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md)
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
-budget_kb_retail = 6144
 optional = true
 locales = ["frFR"]
 
@@ -188,12 +197,9 @@ object_frFR = ["name"]
 addon = "Bastians_Data_Text_esES"
 file = "Text_esES.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): the long-text
-# budget, as German and the Asian languages
-budget_kb = 8192  # was 5120
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md)
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
-budget_kb_retail = 6144
 optional = true
 locales = ["esES", "esMX"]
 
@@ -207,12 +213,9 @@ object_esES = ["name"]
 addon = "Bastians_Data_Text_koKR"
 file = "Text_koKR.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): measured 5.0 MB;
-# the long-text budget, as German and Simplified Chinese
-budget_kb = 8192  # was 5120
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): measured 5.0 MB
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
-budget_kb_retail = 6144
 optional = true
 locales = ["koKR"]
 
@@ -227,10 +230,8 @@ addon = "Bastians_Data_Text_zhCN"
 file = "Text_zhCN.lua"
 # with CMaNGOS' long quest texts: measured 29.10.2026 deDE 6.5 MB, zhCN 5.2 MB
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-budget_kb = 8192  # was 7168
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
-budget_kb_retail = 6144
 optional = true
 locales = ["zhCN"]
 
@@ -244,12 +245,9 @@ object_zhCN = ["name"]
 addon = "Bastians_Data_Text_zhTW"
 file = "Text_zhTW.lua"
 # 29.10.2026 with the client's own item, spell and profession names in every language (ADR 0035): measured deDE 7.2 MB, zhCN 5.8 MB, frFR 4.2, esES 4.3, koKR 4.4, zhTW 4.4 MB
-# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): measured 6.0 MB;
-# the long-text budget, as German and Simplified Chinese
-budget_kb = 8192  # was 5120
+# 02.11.2026 with TDB's long quest texts where its English is ours (data.md): measured 6.0 MB
 indexes = []
 # retail: names only (TDB), measured 29.10.2026 5.0 to 5.6 MB
-budget_kb_retail = 6144
 optional = true
 locales = ["zhTW"]
 

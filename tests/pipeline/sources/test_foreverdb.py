@@ -187,10 +187,44 @@ def test_quest_rejects_a_short_record_in_the_ten_column_layout():
         fdb.parse_quests(quests_file(TEN_COLUMNS, "T|3|1|do a|n5|n6|2|1"))
 
 
-def test_quest_layout_the_reader_does_not_know_is_named():
-    header = '-- [quest] = "title|level|min level|objective text|starts|ends|seen|new|a|b|c"\n'
-    with pytest.raises(ValueError, match="11 columns"):
-        fdb.parse_quests(quests_file(header, "T|3|1|do a|n5|n6|2|1|0|7|9"))
+ELEVEN_COLUMNS = (
+    TEN_COLUMNS[:-2] + '|side (a/h, from its NPCs and the quest before it; empty: unknown)"\n'
+)
+
+
+def test_quests_in_the_eleven_column_layout_of_foreverdb_0_57_24():
+    """11.11.2026: the eleventh column held ForeverDB 0.57.24 for a day (the notebook's alarm)."""
+    rows = fdb.parse_quests(
+        quests_file(
+            ELEVEN_COLUMNS,
+            "T|3|1|do a|b|n5|o6|7|1|18|5|a",
+            "U|2|0|||n12696|1|0|0|26|",
+            "V|2|0|x|n1|n2|1|0|0|0|h",
+        )
+    )
+    assert rows[0] == fdb.QuestRow(
+        1, "T", 3, 1, "do a|b", ("npc:5",), ("object:6",), 7, True, 18, 5, "A"
+    )
+    assert rows[1].side is None and rows[1].lowest_level_seen == 26  # empty: unknown
+    assert rows[1].starts == () and rows[1].ends == ("npc:12696",)
+    assert rows[2].side == "H"
+
+
+def test_a_column_added_behind_the_known_ones_is_left_unread():
+    """ForeverDB adds columns at the end; a new one no longer holds the source."""
+    header = ELEVEN_COLUMNS[:-2] + '|something new"\n'
+    rows = fdb.parse_quests(quests_file(header, "T|3|1|do a|b|n5|n6|2|1|0|7|h|new"))
+    assert rows[0].objective_text == "do a|b"
+    assert rows[0].starts == ("npc:5",) and rows[0].ends == ("npc:6",)
+    assert rows[0].lowest_level_seen == 7 and rows[0].side == "H"
+
+
+def test_a_known_column_that_moved_stops_the_read_and_is_named():
+    header = '-- [quest] = "title|level|min level|objective text|starts|ends|a new one|saw|new"\n'
+    with pytest.raises(ValueError, match="column 7 is 'a new one', the reader expects 'saw'"):
+        fdb.parse_quests(quests_file(header, "T|3|1|do a|n5|n6|x|2|1"))
+    with pytest.raises(ValueError, match="has 3 columns"):
+        fdb.parse_quests(quests_file('-- [quest] = "title|level|min level"\n', "T|3|1"))
 
 
 def test_items():

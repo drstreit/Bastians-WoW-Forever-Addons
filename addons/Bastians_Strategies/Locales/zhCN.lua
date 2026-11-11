@@ -76,6 +76,8 @@ ns.L:Register("zhCN", {
   ["From the back shelf"] = "来自后架",
   ["The rumours on this page"] = "此页上的传闻",
   ["at %s"] = "在%s",
+  ["and 1 more traveller tells it"] = "还有 1 位旅人也这么说",
+  ["and %d more travellers tell it"] = "还有 %d 位旅人也这么说",
   ["copy the link"] = "复制链接",
   ["Read it on the web"] = "在网页上阅读",
   ["Puts the link into the chat input: copy it with Ctrl+C."] = "把链接放入聊天输入框: 用Ctrl+C复制。",

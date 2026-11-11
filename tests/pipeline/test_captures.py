@@ -38,6 +38,10 @@ BastiansDataDB = {
           ["points"] = { { 100.04, 300 }, { 150, 175.55 }, { 100, 50 } } },
         { ["map"] = 0, ["points"] = { { 1, 2 } } },
       },
+      ["steps"] = {
+        ["1861:1"] = { { 1429, 0.2857, 0.6139 }, { 1453, 0.5, 1 } },
+        ["176:2"] = { { 1429, 0.4, 0.7 } },
+      },
     },
   },
 }
@@ -70,6 +74,10 @@ def test_the_capture_holds_positions_and_times_without_names(tmp_path: Path):
             "points": [[100.0, 300.0], [150.0, 175.6], [100.0, 50.0]],
         }
     ]  # the one-point walk is dropped
+    assert cap["steps"] == {  # where a quest step's count rose (package QK1)
+        "176:2": [[1429, 0.4, 0.7]],
+        "1861:1": [[1429, 0.2857, 0.6139], [1453, 0.5, 1.0]],
+    }
     tag = capture_import.account_hash(sv)
     assert len(tag) == 8 and "NEMO" not in tag
     target, changed = capture_import.write_capture(cap, tmp_path / "captures", tag)

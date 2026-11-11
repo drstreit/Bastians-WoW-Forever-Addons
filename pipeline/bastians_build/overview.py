@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from bastians_build.config import MapArtConfig
-from bastians_build.emit import emit_call
+from bastians_build.emit import HEADER, emit_call
 from bastians_build.files import write_text
 from bastians_build.mapart import CONTINENTS, GRID, MapArtError
 
@@ -304,6 +304,30 @@ def _copy_if_changed(src: Path, dst: Path) -> bool:
     return True
 
 
+# The City & dungeon map's files in Map Art's TOC (ADR 0065). tools/city_sheet.py and
+# tools/city_houses.py write them into a checkout; no build does, and nothing of them ships yet.
+CITY_FILES = ("Cities.lua", "Houses.lua")
+
+
+def write_city_stubs(client: str, addon_dir: Path) -> list[Path]:
+    """A stub for each city file the build root lacks, so the client finds what the TOC lists
+    (found 11.11.2026 before the release of 2.2.0: the cut ended with "listed file missing",
+    and a player's client would have reported the two files at every login). A stub registers
+    nothing: without the art the Map has no city button. A file that is there is left alone:
+    in a checkout it is the real one. -> the stubs written."""
+    written = []
+    for name in CITY_FILES:
+        path = addon_dir / OUTPUT.parent / name
+        if not path.exists():
+            stub = (
+                f"{HEADER}\n-- {name}: no city sheets in this {client} build "
+                "(tools/city_sheet.py and tools/city_houses.py write them)\n"
+            )
+            write_text(path, stub)
+            written.append(path)
+    return written
+
+
 def install_overview(
     client: str,
     overview_dir: Path,
@@ -344,6 +368,7 @@ def install_overview(
                         stale.unlink()
                         removed += 1
         changed = write_text(addon_dir / OUTPUT, emit_overview(client, config, tables, build))
+        write_city_stubs(client, addon_dir)
     return OverviewResult(
         path=addon_dir / OUTPUT,
         changed=changed or copied > 0 or removed > 0,

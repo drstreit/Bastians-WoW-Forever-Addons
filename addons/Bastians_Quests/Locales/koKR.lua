@@ -350,6 +350,7 @@ ns.L:Register("koKR", {
   ["Next"] = "다음",
   ["Open the quest sheet"] = "퀘스트 시트 열기",
   ["Right here"] = "바로 여기",
+  ["Where this is done is not known"] = "어디서 하는지 알려지지 않았습니다",
   ["Sheet"] = "시트",
   ["Show the quest chain"] = "퀘스트 연계 보기",
   ["Still ahead: %s."] = "앞으로: %s.",

@@ -50,9 +50,35 @@ local function autoTrack(self, diff)
   end
 end
 
+-- Step places a player learns (quests.md, package QK1; record from the next
+-- release, use later): where the count of an objective rose, the character's place on its map
+-- goes to the graph, which keeps a few per step for the captures. Nothing reads them yet. No
+-- place (an instance), no graph (Bastian's Data is not there): nothing. Not in the first
+-- seconds after a loading screen: *assumed* that the client may list a log's counts late, and
+-- a count that only arrived is no step done where the character logged in.
+local SETTLE = 5 -- seconds after PLAYER_ENTERING_WORLD without a record
+local settledAt = 0
+
+local function recordSteps(rose)
+  local g = B:GetService("graph")
+  if not (g and g.Learn) or GetTime() < settledAt then
+    return
+  end
+  local _, _, _, map, x, y = B.Coords.Player()
+  if not (map and x and y) then
+    return
+  end
+  for _, r in ipairs(rose) do
+    g:Learn({ kind = "step", quest = r[1], n = r[2], map = map, x = x, y = y })
+  end
+end
+
 -- One refresh per burst of quest events: diff the log, tell the suite which quests changed.
 local function refresh(self)
-  local diff = ns.State.Refresh()
+  local diff, rose = ns.State.Refresh()
+  if rose then
+    recordSteps(rose)
+  end
   ns.Rewards.ReadLog() -- quests not asked yet; cheap once they all are
   if self.db.profile.autoTrack ~= false then
     autoTrack(self, diff)
@@ -62,6 +88,8 @@ local function refresh(self)
   if diff then
     ns.Chains.FollowTick() -- a followed chain tracks its next step (ADR 0055)
     self:Fire("BASTIANS_QUESTS_CHANGED", diff.ids, diff)
+  else
+    ns.Registrations.CheckWaypoints(self) -- the client's place for a quest may have arrived
   end
 end
 
@@ -216,6 +244,7 @@ local mod = B:NewModule("Quests", {
     end)
     self:RegisterEvent("QUEST_REMOVED", scheduleRefresh)
     self:RegisterEvent("PLAYER_ENTERING_WORLD", function(mod) -- retail delivers the completed list late
+      settledAt = GetTime() + SETTLE -- no step place is recorded until the log has settled
       ns.Journey.OnEnteringWorld()
       scheduleRefresh(mod)
     end)

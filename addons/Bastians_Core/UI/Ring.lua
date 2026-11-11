@@ -186,9 +186,10 @@ local function newOverlay(ring, i)
   local parent = ring.frame:GetParent() or UIParent
   local o = CreateFrame("Button", nil, parent, "SecureActionButtonTemplate")
   o.index = i
-  -- a real mouse press acts on its release whatever ActionButtonUseKeyDown says
-  -- (SecureActionButton_OnClick, Forever FrameXML: `isSecureMousePress`), so the up it is
+  -- acts on the release, as told: an addon's button never gets `isSecureMousePress`, so it follows
+  -- ActionButtonUseKeyDown unless the attribute says (SecureActionButton_OnClick, Forever FrameXML)
   o:RegisterForClicks("AnyUp")
+  o:SetAttribute("useOnKeyDown", false)
   o:SetFrameStrata("FULLSCREEN") -- above the ring's DIALOG strata, so the click lands here
   o:EnableMouseWheel(true)
   -- the wedge's tooltip and light, the wheel's cycling: forwarded (none of them is secure)
@@ -432,6 +433,11 @@ function Ring.New(name, opts)
     end
   end)
   frame:SetScript("OnUpdate", onUpdate)
+  -- hidden and shown again with its parent (the interface off and on, a cinematic): the overlays
+  -- OnHide took away are laid again, a ring left open keeps its secure wedges
+  frame:SetScript("OnShow", function()
+    self:PlaceSecure()
+  end)
   frame:SetScript("OnHide", function()
     if GameTooltip then
       GameTooltip:Hide()

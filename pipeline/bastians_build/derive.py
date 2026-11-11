@@ -1,12 +1,14 @@
-"""Derived indexes (data.md): by zone, quests by giver, ender and item, the quest graph for the
-Quests logic (start and turn-in map, followers, chain components). Pure over the World."""
+"""Derived indexes (data.md): by zone, quests by item, the quest graph for the Quests logic
+(start and turn-in map, followers, chain components). The index that serves an edge's other
+direction (quests by giver and ender, the quests a chain names, the vendors of an item, every
+`edge.*`) is made from the edge's row in links.py. Pure over the World."""
 
 from __future__ import annotations
 
 import re
 from collections.abc import Callable, Iterable
 
-from bastians_build import book, market, mill
+from bastians_build import book, links, market, mill
 from bastians_build.model import World
 
 Index = dict[object, list[int]]
@@ -28,17 +30,6 @@ def by_zone(world: World, record_type: str) -> Index:
                 yield rec["zone"], record_id
             for spawn in rec.get("spawns") or []:
                 yield spawn[0], record_id
-
-    return _grouped(pairs())
-
-
-def quests_by(world: World, field_name: str) -> Index:
-    """Quest IDs per entity ref listed in `starts` or `ends`."""
-
-    def pairs():
-        for quest_id, rec in world.records.get("quest", {}).items():
-            for ref in rec.get(field_name) or []:
-                yield ref, quest_id
 
     return _grouped(pairs())
 
@@ -72,19 +63,6 @@ def quests_by_item(world: World) -> Index:
                 ref = objective[1] if len(objective) > 1 else None
                 if isinstance(ref, str) and ref.startswith("item:"):
                     yield int(ref[5:]), quest_id
-
-    return _grouped(pairs())
-
-
-def npcs_by_sold_item(world: World) -> Index:
-    """NPC IDs per item ID they sell (`vendor` rows [item, price, stack, ...]): Helpers' hint at a
-    cheaper vendor for a restocked item (helpers.md, 04.11.2026)."""
-
-    def pairs():
-        for npc_id, rec in world.records.get("npc", {}).items():
-            for row in rec.get("vendor") or []:
-                if row and row[0] is not None:
-                    yield int(row[0]), npc_id
 
     return _grouped(pairs())
 
@@ -200,15 +178,6 @@ def chain_members(world: World) -> Index:
     return _grouped((root, q) for q, root in chain_components(world).items())
 
 
-def chain_from(world: World) -> Index:
-    """Quest id -> the quests whose `chain` names it (the predecessors a chain edge adds)."""
-    return _grouped(
-        (int(rec["chain"]), quest_id)
-        for quest_id, rec in world.records.get("quest", {}).items()
-        if rec.get("chain") is not None
-    )
-
-
 def attunements_by_faction(world: World) -> dict[object, list[str]]:
     """Attunement IDs per faction; "both" lists under Alliance and Horde."""
     out: dict[str, list[str]] = {}
@@ -243,7 +212,6 @@ def node_objects(world: World) -> dict[object, str]:
 BUILDERS: dict[str, Callable[[World], Index]] = {
     "area.toMap": area_to_map,
     "npc.byZone": lambda w: by_zone(w, "npc"),
-    "npc.bySoldItem": npcs_by_sold_item,
     "object.byZone": lambda w: by_zone(w, "object"),
     "node.byZone": lambda w: by_zone(w, "node"),
     "node.objects": node_objects,
@@ -252,14 +220,11 @@ BUILDERS: dict[str, Callable[[World], Index]] = {
     "quest.byDungeon": quests_by_dungeon,
     "area.byZone": lambda w: by_zone(w, "area"),
     "quest.byZone": lambda w: by_zone(w, "quest"),
-    "quest.byGiver": lambda w: quests_by(w, "starts"),
-    "quest.byEnder": lambda w: quests_by(w, "ends"),
     "quest.byItem": quests_by_item,
     "quest.byStart": quests_by_start,
     "quest.byTurnIn": quests_by_turn_in,
     "quest.followers": quest_followers,
     "quest.chainMembers": chain_members,
-    "quest.chainFrom": chain_from,
     "attunement.byFaction": attunements_by_faction,
     "market.list": lambda w: market.market_list(w),
     "signal.byMarket": lambda w: market.signals_by_market(w),
@@ -272,8 +237,11 @@ BUILDERS: dict[str, Callable[[World], Index]] = {
 
 
 def build_index(world: World, name: str) -> Index:
+    if name in links.BY_INDEX:  # an edge's other direction: from its row in the registry
+        return links.index(world, name)
     try:
         builder = BUILDERS[name]
     except KeyError as exc:
-        raise KeyError(f"no builder for index {name!r}; known: {sorted(BUILDERS)}") from exc
+        known = sorted([*BUILDERS, *links.BY_INDEX])
+        raise KeyError(f"no builder for index {name!r}; known: {known}") from exc
     return builder(world)

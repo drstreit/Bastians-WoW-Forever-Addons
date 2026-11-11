@@ -1,13 +1,16 @@
 name: Share your captures
-description: The walks, flight times and ride waits your game learned, for everyone's routes.
+description: The walks, flight times, ride waits and quest step places your game learned, for everyone's routes and quests.
 labels: ["captures"]
 body:
   - type: markdown
     attributes:
       value: |
         In the game: Settings > Bastian's Data > **Copy my captures**, press Ctrl+C, paste the text
-        below. It holds positions and times only, never a name. A walk two players captured becomes
-        a route for everyone in the next Data edition; the build credits "n captures".
+        below. It holds positions and times only, never a name: the walks off the roads, flight
+        times, ride waits, and where on the map your quest steps counted (the quest's number, the
+        step's number, the place). A walk two players captured becomes a route for everyone in the
+        next Data edition; the build credits "n captures". The quest step places are collected
+        now and used later, for quests no source can place.
   - type: textarea
     id: capture
     attributes:

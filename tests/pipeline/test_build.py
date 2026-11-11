@@ -55,7 +55,8 @@ def test_committed_golden_pack_matches_a_fresh_build(tmp_path):
         "--fixture tests/fixtures/world-mini --export tests/fixtures/export-mini "
         "--l10n tests/fixtures/questie-l10n --cmangos tests/fixtures/cmangos-locales "
         "--out tests/fixtures/addons, then restore "
-        "Bastians_Data_Strategies/Generated/Book.lua and Bastians_Data_Market/Generated/Market.lua"
+        "Bastians_Data_Strategies/Generated/Book.lua and Bastians_Data_Market/Generated/Market.lua "
+        "and delete the folder tests/fixtures/addons/Bastians_Data the build adds"
     )
     for p in result.packs:
         golden = GOLDEN.parents[2] / p.pack.addon / "Generated" / p.pack.file
@@ -115,25 +116,43 @@ def test_validation_reports_bad_refs_and_unknown_types():
     assert not result.ok and result.packs == []
 
 
-def test_report_lists_sizes_budgets_and_dropped_rows(tmp_path):
+def test_report_lists_sizes_the_ceiling_and_dropped_rows(tmp_path):
     world = read_fixture(FIXTURE, "forever")
     world.drop("npc", 999, "no spawn fits a Forever map")
     build(world, load_config(), tmp_path)
     text = (tmp_path / "report.md").read_text(encoding="utf-8")
-    assert "| world | Bastians_Data_World |" in text and "12288 KB" in text
+    assert "| world | Bastians_Data_World |" in text and "| 102400 KB |" in text
+    assert "| Pack | Addon | Size | Ceiling | Records | Indexes |" in text  # data_update reads it
     assert "npc 11" in text and "quest.byGiver 3" in text
     assert "- no spawn fits a Forever map: 1 rows: npc 999" in text
     assert "20" not in text.split("Client")[0]  # no date in the header
 
 
-def test_budget_breach_is_flagged(tmp_path):
+def test_a_packs_size_stops_no_build_below_the_one_ceiling(tmp_path):
+    """ "we do not have any fixed budget, outside of not crushing the machine of
+    a user" (ADR 0072). No pack has a budget; one ceiling, far above every pack, stops a build
+    gone wrong, and without it nothing stops for its size."""
     config = load_config()
-    packs = dict(config.packs)
-    packs["world"] = dataclasses.replace(packs["world"], budget_kb=0)
-    config = dataclasses.replace(config, packs=packs)
-    result = build(read_fixture(FIXTURE, "forever"), config, tmp_path)
-    assert result.packs[0].over_budget and not result.ok
-    assert "**OVER**" in (tmp_path / "report.md").read_text(encoding="utf-8")
+    assert config.pack_ceiling_kb == 102400
+    assert not hasattr(config.packs["world"], "budget_kb")
+    result = build(read_fixture(FIXTURE, "forever"), config, tmp_path / "a")
+    assert result.ok and not any(p.over_ceiling for p in result.packs)
+    tiny = dataclasses.replace(config, pack_ceiling_kb=0)
+    result = build(read_fixture(FIXTURE, "forever"), tiny, tmp_path / "b")
+    assert result.packs[0].over_ceiling and not result.ok
+    assert "**ABOVE THE CEILING**" in (tmp_path / "b" / "report.md").read_text(encoding="utf-8")
+    free = dataclasses.replace(config, pack_ceiling_kb=None)
+    result = build(read_fixture(FIXTURE, "forever"), free, tmp_path / "c")
+    assert result.ok and "| - |" in (tmp_path / "c" / "report.md").read_text(encoding="utf-8")
+
+
+def test_a_budget_left_in_the_configuration_is_refused(tmp_path):
+    text = (ROOT / "pipeline" / "config" / "build.toml").read_text(encoding="utf-8")
+    assert "budget_kb" not in text.split("[mapart]")[0]
+    bad = tmp_path / "build.toml"
+    bad.write_text(text.replace("[packs.world]\n", "[packs.world]\nbudget_kb = 12288\n"), "utf-8")
+    with pytest.raises(ConfigError, match="pack world: `budget_kb` is gone"):
+        load_config(bad)
 
 
 def test_atomic_write_leaves_no_temp_file(tmp_path):

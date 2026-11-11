@@ -12,6 +12,7 @@ from bastians_build.sources import (
     clientdump,
     cmangos,
     foreverdb,
+    foreverdb_api,
     probe,
     questie,
     questiedb,
@@ -55,6 +56,9 @@ class SourcePaths:
     floor_art: Path | None = None
     floor_art_prefix: str = "retail"
     listfile: Path | None = None
+    # ForeverDB's API rows as AHSync stored them (quests.json, vendors.json; Forever only):
+    # places players saw, for gaps (sources/foreverdb_api.py)
+    foreverdb_api: Path | None = None
 
 
 def load_areas(s: Sources, client: str, paths: SourcePaths) -> None:
@@ -188,6 +192,7 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.fdb_names = foreverdb.read_search_names(fdb / "SearchNames.lua")
             s.fdb_seen = foreverdb.read_quest_seen(fdb / "QuestForever.lua")
             s.fdb_npc_names = foreverdb.read_npc_names(fdb / "QuestForever.lua")
+            s.fdb_triggers = foreverdb.read_triggers(fdb / "QuestForever.lua")
             s.fdb_sold = foreverdb.read_sold(fdb / "NPCs.lua")
             s.fdb_trainers = foreverdb.read_trainers(fdb / "NPCs.lua")
             if (fdb / "QuestXP.lua").is_file():
@@ -226,6 +231,12 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.source_names.append(f"ItemDB {s.idb.version or '?'} ({s.idb.flavor})")
             if s.build == "unknown" and s.idb.build:
                 s.build = s.idb.build
+    if client == "forever" and paths.foreverdb_api and paths.foreverdb_api.is_dir():
+        s.fdb_api = foreverdb_api.read_api(paths.foreverdb_api)
+        s.source_names.append(
+            f"ForeverDB API ({len(s.fdb_api.quest_places)} seen quest places, "
+            f"{len(s.fdb_api.vendors)} seen vendors)"
+        )
     if not s.fdb_dungeons and paths.dungeons and paths.dungeons.is_file():
         s.fdb_dungeons = foreverdb.read_dungeons(paths.dungeons)
         s.source_names.append(
@@ -257,6 +268,7 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
         s.cm_loot = cmangos.loot_rows(tables)
         s.cm_items = cmangos.item_rows(tables)
         s.cm_disenchant = cmangos.disenchant_lists(tables)
+        s.cm_links = cmangos.links(tables)
         s.cm_spell_names = {
             int(r["Id"]): str(r["SpellName"])
             for r in tables.get("spell_template", [])

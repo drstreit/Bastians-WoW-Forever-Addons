@@ -19,7 +19,20 @@ local COLOR = {
   complete = S.C.gold,
   incomplete = S.C.dim,
 }
-local SPOT_ICON = { loot = "mob", kill = "mob", object = "treasure", item = "item", event = "zone" }
+-- A spot's icon by its kind: the pack's spot kinds (`slay`, `loot`, `object`, `area`) and the
+-- steps' (`slay`, `use`, `get`, `reach`, `cast`). An item is got where who has it stands: the
+-- monster glyph. (The table named `kill`, `item` and `event`, kinds the data never had: S1.)
+local SPOT_ICON = {
+  slay = "mob",
+  loot = "mob",
+  get = "mob",
+  cast = "mob",
+  object = "treasure",
+  use = "treasure",
+  area = "zone",
+  reach = "zone",
+}
+Reg.SPOT_ICON = SPOT_ICON
 local LAYERS = { "quests.available", "quests.soon", "quests.turnin", "quests.objectives" }
 
 local function data()
@@ -262,7 +275,7 @@ function Reg.FocusQuest()
   for _, qid in ipairs(State.order) do
     local e = State.log[qid]
     if not e.isComplete then
-      local place = ns.Views.PlaceOf(e, Logic.quest(qid), map, px, py)
+      local place = ns.Views.PlaceOf(e, map, px, py)
       local here = place.map == map and place.target == "objective"
       if here and (nearest == nil or place.d < nearest) then
         best, nearest = qid, place.d
@@ -449,99 +462,139 @@ function Reg.SyncTracked(mod)
   end
 end
 
--- Quest places by status: the places of a quest that matter now.
--- Not in the log: the giver. In the log and open: the targets (the pack's objective spots, else
--- the client's waypoint on the player's map, D2). Complete: the hand-in. Without a place of that
--- kind every place stays, so "Show on map" never goes blind.
-local function clientStep(id)
-  local map = B.Coords.PlayerMap()
-  if not map then
-    return nil
+-- ---------------------------------------------------------------------------------------------
+-- Where a quest sends you (ADR 0069, quests.md): the facet `steps` and its readers
+-- ---------------------------------------------------------------------------------------------
+
+-- What the client says of a running quest's place (D2), asked for the player's map and the
+-- quest's zone: its next waypoint, else its quest POI there. `kind` is the place's kind.
+local function clientWaypoint(id, kind)
+  local q = Logic.quest(id)
+  local player, zone = B.Coords.PlayerMap(), q and q.zone
+  local maps = { player }
+  if zone and zone ~= player then
+    maps[#maps + 1] = zone
   end
-  local x, y = B.Compat.GetQuestWaypoint(id, map)
-  if x and y then
-    return { map = map, x = x, y = y, kind = "objective", src = "client" }
+  for _, map in ipairs(maps) do
+    local x, y = B.Compat.GetQuestWaypoint(id, map)
+    if x and y then
+      return { map = map, x = x, y = y, kind = kind, src = "client" }
+    end
+  end
+  for _, map in ipairs(maps) do
+    for _, poi in ipairs(B.Compat.GetQuestsOnMap(map)) do
+      if poi.questID == id then
+        return { map = map, x = poi.x, y = poi.y, kind = kind, src = "client" }
+      end
+    end
   end
   return nil
 end
 
-local function placesOfKind(points, kind)
-  local out = {}
-  for _, p in ipairs(points) do
-    if p.kind == kind then
-      out[#out + 1] = p
-    end
-  end
-  return out
+-- The quests whose facet asked the client, and what it said ("map:x:y", false for nothing).
+local asked = {}
+
+local function placeKey(p)
+  return p and (p.map .. ":" .. p.x .. ":" .. p.y) or false
 end
 
--- The kind the quest's status asks for: "giver", "objective" or "turnin".
-local function nextKind(id)
-  local entry = State.log[id]
-  if not entry then
-    return "giver"
-  elseif entry.isComplete or entry.readyForTurnIn then
-    return "turnin"
+-- The facet `steps` of a quest: Data's steps with the log's state (Logic.QuestSteps). Core makes
+-- a quest's Locations() from it: the places of the open steps, and nothing when none of them has
+-- a place. The client is asked only then, and only for a quest of the log.
+local function questSteps(ref)
+  local id = questID(ref)
+  if not id then
+    return nil
   end
-  return "objective"
+  local steps = Logic.QuestSteps(id, State.log[id], State.ForLogic())
+  asked[id] = nil
+  if steps and (steps.state == "active" or steps.state == "complete") then
+    local placed = false
+    for _, step in ipairs(steps) do
+      placed = placed or (step.open and step.places and #step.places > 0) or false
+    end
+    if not placed then
+      steps.waypoint = clientWaypoint(id, steps.state == "complete" and "turnin" or "objective")
+      asked[id] = placeKey(steps.waypoint)
+    end
+  end
+  return steps
+end
+Reg.QuestSteps = questSteps
+
+-- Asks the client again for the quests that wait for its place, once per burst of quest events
+-- without a change of the log (Quests.lua): the client learns its places after the log (at
+-- login, after a step), and no message of ours says so. An answer that differs drops the facet
+-- (BASTIANS_QUESTS_CHANGED with { places = true }); the zone change does it by `invalidateOn`.
+function Reg.CheckWaypoints(mod)
+  local changed = false
+  for id, was in pairs(asked) do
+    local entry = State.log[id]
+    if not entry then
+      asked[id] = nil
+    else
+      local ready = entry.isComplete or entry.readyForTurnIn
+      local now = placeKey(clientWaypoint(id, ready and "turnin" or "objective"))
+      asked[id] = now -- said once: nobody may read the facet before the next burst
+      changed = changed or now ~= was
+    end
+  end
+  if changed then
+    mod:Fire("BASTIANS_QUESTS_CHANGED", nil, { places = true })
+  end
+  return changed
 end
 
--- The places of a kind for the quest, the client's step filling in for missing targets.
--- The places without the objective spots already done. Only a log
--- quest in progress has any; a spot nobody can tell stays (Logic.OpenSpots).
-local function withoutFinished(id, points)
-  local entry, q = State.log[id], Logic.quest(id)
-  if not (entry and q and q.spots) or entry.isComplete or entry.readyForTurnIn then
-    return points
-  end
-  local open, out = Logic.OpenSpots(entry, q), {}
-  for _, p in ipairs(points) do
-    local keep = p.kind ~= "objective"
-    for _, s in ipairs(not keep and open[p.map] or {}) do
-      keep = keep or (s[1] == p.x and s[2] == p.y)
-    end
-    if keep then
-      out[#out + 1] = p
-    end
-  end
-  return out
+-- The facet as every reader of Quests asks for it: Core's cached answer (the same one Route, the
+-- Map and the public API see), nil for a quest nobody knows.
+local function stepsOf(id)
+  return id and B:Entity("quest:" .. id):Facet("steps") or nil
 end
+Reg.StepsOf = stepsOf
+
+-- The band's Giver, Targets and Hand-in buttons: the places of
+-- one kind of step, whatever the quest's status: `giver` where it is taken, `turnin` where it is
+-- handed in, `objective` the things to do that are not finished (the client's place fills in
+-- for a quest of the log none of them places). Each { map, x, y, kind, ref, step, src }.
+local STEP_KIND = { take = "giver", handin = "turnin" }
 
 local function questPlaces(ref, kind)
   local id = questID(ref)
-  if not id then
-    return {}
-  end
-  local out = placesOfKind(withoutFinished(id, B:Entity(ref):AllLocations()), kind)
-  if #out == 0 and kind == "objective" and State.log[id] then
-    local step = clientStep(id)
-    if step then
-      out[1] = step
+  local steps = stepsOf(id)
+  local out, seen = {}, {}
+  for i, step in ipairs(steps or {}) do
+    if (STEP_KIND[step.step] or "objective") == kind and not (kind == "objective" and step.done) then
+      for _, p in ipairs(step.places or {}) do
+        local key = p.map .. ":" .. p.x .. ":" .. p.y
+        if not seen[key] then
+          seen[key] = true
+          out[#out + 1] = {
+            map = p.map,
+            x = p.x,
+            y = p.y,
+            kind = kind,
+            ref = p.ref or step.ref,
+            step = i,
+            src = p.src or step.src,
+          }
+        end
+      end
     end
+  end
+  if #out == 0 and kind == "objective" and State.log[id] then
+    out[1] = clientWaypoint(id, "objective")
   end
   return out
 end
 
 local function registerPlaces(mod)
-  B:RegisterLocationFilter(mod, {
-    id = "quests.next",
+  B:RegisterFacet(mod, {
+    facet = "steps",
     types = { "quest" },
-    filter = function(ref, points)
-      local id = questID(ref)
-      if not id then
-        return points
-      end
-      points = withoutFinished(id, points)
-      local wanted = placesOfKind(points, nextKind(id))
-      local entry = State.log[id]
-      if #wanted == 0 and entry and not (entry.isComplete or entry.readyForTurnIn) then
-        local step = clientStep(id)
-        if step then
-          return { step }
-        end
-      end
-      return #wanted > 0 and wanted or points
-    end,
+    priority = 150,
+    -- the zone: the client's place is asked for the player's map
+    invalidateOn = { "BASTIANS_QUESTS_CHANGED", "BASTIANS_DATA_LOADED", "BASTIANS_PLAYER_MOVED_ZONE" },
+    rule = questSteps,
   })
   for i, def in ipairs({
     { "quests.giver", "giver", "Giver", "Show the quest giver on the map" },
@@ -573,7 +626,6 @@ local function registerPlaces(mod)
   end
 end
 Reg.QuestPlaces = questPlaces
-Reg.NextKind = nextKind
 
 local function registerActions(mod)
   registerPlaces(mod)
@@ -962,34 +1014,30 @@ local function unlocksRows(id)
   return #rows > 0 and rows or nil
 end
 
--- The "needs" link (C2): the items a quest asks for, each with where it comes from and how long
--- the way there is now (so the rows are not cached: the time moves with the player).
+-- The "needs" link (C2): the items a quest asks for (its `get` steps), each with who has it and
+-- how long the way there is now (so the rows are not cached: the time moves with the player).
+-- (It matched the kind `item`, which the data never had: plan-quest-links.md S2.)
 local function needsRows(id)
-  local q = Logic.quest(id)
-  if not (q and q.objectives) then
-    return nil
-  end
   local rows = {}
-  for i, o in ipairs(q.objectives) do
-    local kind, ref, count, source = o[1], o[2], o[3], o[4]
-    if kind == "item" and ref then
+  for i, step in ipairs(stepsOf(id) or {}) do
+    local ref = step.step == "get" and step.ref or nil
+    if ref then
       local text = B:Entity(ref):Name() or ref
-      if type(count) == "number" and count > 1 then
-        text = text .. " x" .. count
+      if type(step.count) == "number" and step.count > 1 then
+        text = text .. " x" .. step.count
       end
-      if source then
-        local from = B:Entity(source):Name()
-        if from then
-          local dist = B.UI.Away(source)
-          text = text
-            .. "  "
-            .. R.COLOR.grey
-            .. L["from"]
-            .. " "
-            .. from
-            .. (dist and (", " .. dist) or "")
-            .. "|r"
-        end
+      local source = step.via and step.via[1]
+      local from = source and B:Entity(source):Name()
+      if from then
+        local dist = B.UI.Away(source)
+        text = text
+          .. "  "
+          .. R.COLOR.grey
+          .. L["from"]
+          .. " "
+          .. from
+          .. (dist and (", " .. dist) or "")
+          .. "|r"
       end
       rows[#rows + 1] =
         { id = "needs:" .. id .. ":" .. i, text = text, ref = ref, icon = B:Entity(ref):Icon() }
@@ -1320,51 +1368,56 @@ local function textRows(id)
 end
 
 -- "Target of" (guide gaps, 23.10.2026: AHSyncGuide's monster tooltip, so it can be uninstalled):
--- the log quests whose objectives need this NPC: a slay target, the source of a loot objective,
--- or a dropper of a required item. Pure: log = { [questID] = entry }, quest(id) -> record,
--- item(id) -> record. Rows by quest title, each with the objective's progress or "done".
-function Reg.TargetOf(npcRef, log, quest, item)
+-- the log quests with a thing to do that needs this NPC: the step's subject, one of several that
+-- count, who has its item (the step's way, a place's own ref, the item's loot record). Pure:
+-- log = { [questID] = entry }, steps(questID) -> the quest's `steps` facet, item(id) -> record.
+-- Rows by quest title, each with that step's own progress or "done"; a step the client's list
+-- does not show has no progress (it read another objective's count: plan-quest-links.md S3).
+local function stepNeeds(step, npcRef, item)
+  if step.ref == npcRef then
+    return true
+  end
+  for _, list in ipairs({ step.refs or {}, step.via or {} }) do
+    for _, ref in ipairs(list) do
+      if ref == npcRef then
+        return true
+      end
+    end
+  end
+  for _, p in ipairs(step.places or {}) do
+    if p.ref == npcRef then
+      return true
+    end
+  end
+  local itemID = type(step.ref) == "string" and tonumber(string.match(step.ref, "^item:(%d+)$"))
+  local rec = itemID and item(itemID)
+  for _, d in ipairs(rec and rec.drops or {}) do
+    if d[1] == npcRef then
+      return true
+    end
+  end
+  return false
+end
+
+function Reg.TargetOf(npcRef, log, steps, item)
   local rows = {}
   for qid, entry in pairs(log) do
-    local q = quest(qid)
     local hit
-    for _, o in ipairs(q and q.objectives or {}) do
-      local target, source = o[2], o[4]
-      local match = target == npcRef or source == npcRef
-      if not match and type(target) == "string" and string.sub(target, 1, 5) == "item:" then
-        local rec = item(tonumber(string.sub(target, 6)))
-        for _, d in ipairs(rec and rec.drops or {}) do
-          if d[1] == npcRef then
-            match = true
-            break
-          end
-        end
-      end
-      if match then
-        hit = o
-        break
+    for _, step in ipairs(steps(qid) or {}) do
+      local todo = step.step ~= "take" and step.step ~= "handin"
+      if todo and (not hit or hit.done) and stepNeeds(step, npcRef, item) then
+        hit = step -- the first that is still to do, else one that is done
       end
     end
     if hit then
-      local objectives = entry.objectives or {}
-      local o = objectives[(tonumber(hit[3]) or 0) + 1]
-      if not o then
-        for _, x in ipairs(objectives) do
-          if not x.finished then
-            o = x
-            break
-          end
-        end
-      end
-      local done = entry.isComplete or (o and o.finished)
       local progress
-      if done then
+      if entry.isComplete or hit.done then
         progress = L["done"]
-      elseif o and o.required and o.required > 0 then
-        progress = (o.fulfilled or 0) .. "/" .. o.required
+      elseif hit.have and hit.count and hit.count > 0 then
+        progress = hit.have .. "/" .. hit.count
       end
       rows[#rows + 1] = {
-        text = entry.title or (q and q.name) or ("quest " .. qid),
+        text = entry.title or B:Entity("quest:" .. qid):Name() or ("quest " .. qid),
         ref = "quest:" .. qid,
         icon = B.UI.IconTexture("questActive"),
         value = progress,
@@ -1383,7 +1436,7 @@ local function targetOfRows(ref)
   if not d then
     return nil
   end
-  local rows = Reg.TargetOf(ref, State.log, Logic.quest, function(id)
+  local rows = Reg.TargetOf(ref, State.log, stepsOf, function(id)
     return id and d:Get("item", id) or nil
   end)
   return #rows > 0 and rows or nil
@@ -2383,8 +2436,9 @@ function Reg.QuestActivity(ref)
   local entry = State.log[qid]
   local ctx = ns.Window.RecommendContext(nil)
   local hard = q.level and state.level and q.level - state.level >= 3
-  local minutes =
-    Rec.workMinutes(q, entry, ns.Window.PlayerPlace(), ctx, ctx.objectiveTime, hard and 1.5 or 1)
+  local map, px, py = ns.Window.PlayerPlace()
+  ctx.px, ctx.py = px, py
+  local minutes = Rec.workMinutes(qid, entry, map, ctx, ctx.objectiveTime, hard and 1.5 or 1)
   local gives = { { kind = "xp", amount = (Rec.questXP(qid, q, state.level)) } }
   local rw = Logic.rewards(qid) or {}
   if rw.money and rw.money > 0 then
@@ -2398,6 +2452,7 @@ function Reg.QuestActivity(ref)
   end
   return {
     kind = "quest",
+    places = B:Entity(ref):Places(), -- where it is done now: the open steps' (S7: it had none)
     takes = minutes * 60,
     gives = gives,
     status = entry and "log" or Logic.status(qid, state),

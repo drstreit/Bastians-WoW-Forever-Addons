@@ -351,6 +351,7 @@ ns.L:Register("deDE", {
   ["Next"] = "Nächster Schritt",
   ["Open the quest sheet"] = "Questblatt öffnen",
   ["Right here"] = "Genau hier",
+  ["Where this is done is not known"] = "Wo das zu erledigen ist, ist nicht bekannt",
   ["Sheet"] = "Blatt",
   ["Show the quest chain"] = "Questkette anzeigen",
   ["Still ahead: %s."] = "Noch zu holen: %s.",

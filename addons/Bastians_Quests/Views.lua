@@ -30,13 +30,6 @@ local CATEGORIES = {
   { "single", "Single quests" },
 }
 
-local function dist2(px, py, x, y)
-  if not (px and x) then
-    return math.huge
-  end
-  return (px - x) ^ 2 + (py - y) ^ 2
-end
-
 -- ---------------------------------------------------------------------------------------------
 -- Zone view
 -- ---------------------------------------------------------------------------------------------
@@ -215,69 +208,32 @@ end
 -- Active view: the quest log, sorted by what to do on the viewed map
 -- ---------------------------------------------------------------------------------------------
 
--- Where a log entry sends the player: the hand-in when complete, else the nearest objective spot
--- on the viewed map, else the first map with spots, else the hand-in. Sets map, x, y, target, d.
-local function placeEntry(row, e, q, map, px, py)
-  local function turnIn()
-    local p = q and q.endPlaces and q.endPlaces[1]
-    row.map = q and Logic.turnInMap(q) or nil
-    row.x, row.y = p and p[2] or nil, p and p[3] or nil
-    row.target = "turnin"
-  end
-  if e.isComplete then
-    turnIn()
+-- Where a log entry sends the player now (ADR 0069, quests.md "Where a quest sends you"): the
+-- nearest place of the quest's open steps, as Core derives its Locations() from the facet
+-- `steps`: on the viewed map before any other, else the nearest by straight line, else the
+-- lowest map id. The same place the Map, Route and the distance read. Sets map, x, y, target
+-- ("turnin" or "objective"), src ("client" for the client's own place) and d. No place: map nil.
+local function placeEntry(row, e, map, px, py)
+  local yards = px
+    and function(toMap, toX, toY)
+      return ns.Window.Yards(map, px, py, toMap, toX, toY)
+    end
+  local where = { map = map, x = px, y = py, yards = yards or nil }
+  local p, d = Logic.NearestPlace(B:Entity("quest:" .. e.questID):Locations(), where)
+  row.map, row.x, row.y = p and p.map or nil, p and p.x or nil, p and p.y or nil
+  row.src = p and p.src == "client" and "client" or nil
+  if p then
+    row.target = p.kind == "turnin" and "turnin" or "objective"
   else
-    local spots = q and q.spots and Logic.OpenSpots(e, q)
-    local list = spots and spots[map]
-    local cx, cy
-    if not (list and #list > 0) then
-      -- no spot in the pack (retail, D2): the client's next step on this map
-      cx, cy = B.Compat.GetQuestWaypoint(e.questID, map)
-    end
-    if cx then
-      row.map, row.x, row.y, row.target = map, cx, cy, "objective"
-      row.src = "client"
-    elseif list and #list > 0 then
-      local best, bd
-      for _, s in ipairs(list) do
-        local d = dist2(px, py, s[1], s[2])
-        if not bd or d < bd then
-          best, bd = s, d
-        end
-      end
-      row.map, row.x, row.y, row.target = map, best[1], best[2], "objective"
-    elseif spots and next(spots) then
-      local first
-      for m in pairs(spots) do
-        if not first or m < first then
-          first = m
-        end
-      end
-      local s = spots[first][1]
-      row.map, row.x, row.y, row.target = first, s[1], s[2], "objective"
-    elseif q then
-      turnIn()
-    else
-      row.map, row.x, row.y, row.target = nil, nil, nil, "objective" -- not in the pack: unknown
-    end
+    row.target = e.isComplete and "turnin" or "objective"
   end
-  row.d = (row.map == map) and dist2(px, py, row.x, row.y) or math.huge
+  row.d = (p and p.map == map) and d or math.huge
 end
 
--- Where a log quest sends the player now: { map, x, y, target, d }, as on its row. A quest with no
--- objective spot takes the client's quest POI on `map` (Forever's own quests, ADR 0053).
-function V.PlaceOf(e, q, map, px, py)
+-- Where a log quest sends the player now: { map, x, y, target, src, d }, as on its row.
+function V.PlaceOf(e, map, px, py)
   local place = {}
-  placeEntry(place, e, q, map, px, py)
-  if not e.isComplete and place.target ~= "objective" or place.map == nil then
-    for _, poi in ipairs(B.Compat.GetQuestsOnMap(map)) do
-      if poi.questID == e.questID then
-        place.map, place.x, place.y, place.target = map, poi.x, poi.y, "objective"
-        place.d = dist2(px, py, poi.x, poi.y)
-        break
-      end
-    end
-  end
+  placeEntry(place, e, map, px, py)
   return place
 end
 
@@ -296,7 +252,7 @@ function V.activeRow(e, state, map, px, py, opts)
   row.id = "a:" .. e.questID
   row.entry = e
   row.block = true -- the row lights as one under the mouse
-  placeEntry(row, e, q, map, px, py)
+  placeEntry(row, e, map, px, py)
   local level = (q and q.level) or e.level
   local title = R.levelColor(level, state.level)
     .. (level and ("[" .. level .. "] ") or "")

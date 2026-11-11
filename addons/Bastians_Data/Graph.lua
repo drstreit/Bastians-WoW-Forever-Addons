@@ -11,7 +11,7 @@ local Graph = {}
 Data.Graph = Graph
 
 local ipairs, pairs, type, next = ipairs, pairs, type, next
-local sqrt, floor, abs = math.sqrt, math.floor, math.abs
+local sqrt, floor, abs, huge = math.sqrt, math.floor, math.abs, math.huge
 
 local service = {}
 Graph.service = service
@@ -48,9 +48,160 @@ end
 Graph.PlaceOf = placeOf
 
 -- ---------------------------------------------------------------------------------------------
--- The named edges (world-graph.md §4.5) over the records' fields and the generated indexes.
--- out(rec, ref) and into(rec, ref) answer { { ref, props } }; rec is {} when the record is not
--- loaded; a direction no field or index gives is absent.
+-- The edges the packs declare (ADR 0070, data.md "The edge registry"). A pack's header carries the
+-- rows of the build's registry (links.py) for its record types as `edges`: where a link is stored
+-- (`parts`: the record type, the field, its form, which end of the edge the record is, where the
+-- far end and each property sit) and the index that serves the direction no field stores. One
+-- reader answers every row from either end with the same properties; a new edge needs no code.
+
+local declared -- name -> { from = { type = true }, to = { type = true }, index, key, parts }
+
+-- The rows of every loaded pack, joined by edge: `drops` is stored in two packs.
+local function declaredEdges()
+  if declared then
+    return declared
+  end
+  declared = {}
+  for _, pack in pairs(Data.packs) do
+    for name, row in pairs(type(pack.edges) == "table" and pack.edges or {}) do
+      local def = declared[name]
+      if not def then
+        def = { from = {}, to = {}, parts = {} }
+        declared[name] = def
+      end
+      for _, t in ipairs(row.from or {}) do
+        def.from[t] = true
+      end
+      for _, t in ipairs(row.to or {}) do
+        def.to[t] = true
+      end
+      def.index, def.key = row.index or def.index, row.key or def.key
+      for _, part in ipairs(row.parts or {}) do
+        def.parts[#def.parts + 1] = part
+      end
+    end
+  end
+  return declared
+end
+
+-- New packs: the rows are read again.
+function Graph.ResetEdges()
+  declared = nil
+end
+
+-- A field of a record; "rewards.items" names a table inside a field.
+local function fieldOf(rec, path)
+  local value = rec
+  for name in string.gmatch(path, "[^.]+") do
+    if type(value) ~= "table" then
+      return nil
+    end
+    value = value[name]
+  end
+  return value
+end
+
+-- The far end as a ref: a ref as stored, or an id of the part's far type.
+local function farRef(value, far)
+  if type(value) == "string" then
+    return string.find(value, ":", 1, true) and value or nil
+  elseif type(value) == "number" and far then
+    return far .. ":" .. value
+  end
+  return nil
+end
+
+-- The links a record stores in one part, appended to `out` as { ref, props }; with `only`, those
+-- to that ref alone. `props` is a table of its own for every link, empty without any. `ends` are
+-- the types the far end may have: a ref of another type is no link of the edge (a step's `via`
+-- names a quest or a recipe beside who has the item).
+local function partLinks(rec, part, out, only, ends)
+  local value = fieldOf(rec, part.field)
+  if value == nil then
+    return
+  end
+  local function add(ref, row)
+    if not ref or (only and ref ~= only) then
+      return
+    end
+    if ends and not ends[string.match(ref, "^[^:]+")] then
+      return
+    end
+    local props = {}
+    for prop, v in pairs(part.const or {}) do
+      props[prop] = v
+    end
+    for prop, field in pairs(part.also or {}) do
+      props[prop] = rec[field]
+    end
+    for prop, at in pairs(row and part.props or {}) do
+      props[prop] = row[at]
+    end
+    out[#out + 1] = { ref = ref, props = props }
+  end
+  if part.form == "id" then
+    add(farRef(value, part.far))
+  elseif type(value) == "table" then
+    local when = part.when
+    for _, item in ipairs(value) do
+      if part.form ~= "rows" then
+        add(farRef(item, part.far))
+      elseif type(item) == "table" and (not when or item[when[1]] == when[2]) then
+        -- `when`: the rows of a field that are this edge (item.ways holds several kinds of way);
+        -- `many`: a position with further far ends that share the row (a step's other creatures)
+        if part.ref ~= 0 then -- 0: the row has no far end of its own, only those of `many`
+          add(farRef(item[part.ref or 1], part.far), item)
+        end
+        local first = part.ref ~= 0 and farRef(item[part.ref or 1], part.far) or nil
+        local more = part.many and item[part.many]
+        for _, other in ipairs(type(more) == "table" and more or {}) do
+          local ref = farRef(other, part.far)
+          if ref ~= first then
+            add(ref, item)
+          end
+        end
+      end
+    end
+  end
+end
+
+-- The links of a declared edge at `ref`: from the record's own fields where the record stores
+-- them; else through the index, with each storing record's row for this ref, so both
+-- directions carry the same properties. A type that is no such end of the edge: empty.
+local function readDeclared(def, typ, id, ref, dir)
+  local near = dir == "in" and "to" or "from"
+  local out = {}
+  if not def[near][typ] then
+    return out
+  end
+  local d = data()
+  local across
+  for _, part in ipairs(def.parts) do
+    if part.side ~= near then
+      across = across or {}
+      across[#across + 1] = part
+    elseif part.on == typ then
+      partLinks(d and d:Get(typ, id) or {}, part, out, nil, def[dir == "in" and "from" or "to"])
+    end
+  end
+  local ids = across and def.index and d and d:Index(def.index, def.key == "id" and id or ref)
+  for _, storing in ipairs(ids or {}) do
+    for _, part in ipairs(across) do
+      local found = {}
+      partLinks(d:Get(part.on, storing) or {}, part, found, ref)
+      for _, link in ipairs(found) do
+        out[#out + 1] = { ref = part.on .. ":" .. storing, props = link.props }
+      end
+    end
+  end
+  return out
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- The named edges of a pack without `edges` (an edition from before the registry), over the
+-- records' fields and the indexes of that time. out(rec, ref) and into(rec, ref) answer
+-- { { ref, props } }; rec is {} when the record is not loaded; a direction no field or index
+-- gives is absent.
 
 local function refsOf(list, props)
   local out = {}
@@ -1658,9 +1809,15 @@ function service:Session(minutes, filter, callback)
 end
 
 -- { { ref, props } } along the named edge; dir "out" (default) or "in"; nil for an unknown edge.
+-- An edge the loaded packs declare is read from their rows, in both directions; one they do not
+-- (a pack without `edges`) from the table above.
 function service:Edges(ref, edge, dir)
-  local def = EDGES[edge]
   local typ, id = parse(ref or "")
+  local row = typ and declaredEdges()[edge]
+  if row then
+    return readDeclared(row, typ, id, ref, dir)
+  end
+  local def = EDGES[edge]
   if not (def and typ) then
     return nil
   end
@@ -1709,9 +1866,55 @@ end
 -- pair, in the direction flown (from and to are taxi node ids or `taxinode:<id>` refs);
 -- { kind = "taxinode", id, account } marks a flight master known to the character and the account
 -- (`account = true`: the account only); { kind = "ride", ref, wait } and { kind = "walk", points }
--- are kept for the build's captures (W11). Returns true when the fact was stored.
-local LEARNED_KINDS = { taxi = true, taxinode = true, ride = true, walk = true }
+-- are kept for the build's captures (W11); { kind = "step", quest, n, map, x, y } is the place
+-- where the count of a quest's n-th objective rose (data.md "Step places from play", package
+-- QK1), kept for the captures too: nothing reads it yet. Returns true when the fact was stored.
+local LEARNED_KINDS = { taxi = true, taxinode = true, ride = true, walk = true, step = true }
 Graph.WALKS_KEPT = 200
+Graph.STEP_PLACES = 8 -- places kept for one step
+Graph.STEP_NEAR = 0.01 -- a place this near to one kept (map fractions, one map) is that one
+
+local function wholeAbove0(v)
+  return type(v) == "number" and v > 0 and v == floor(v)
+end
+
+local function fraction(v)
+  return type(v) == "number" and v >= 0 and v <= 1
+end
+
+-- How far two step places { map, x, y } lie apart in map fractions; on two maps: as far as can be.
+local function stepGap(a, b)
+  if a[1] ~= b[1] then
+    return huge
+  end
+  return sqrt((a[2] - b[2]) ^ 2 + (a[3] - b[3]) ^ 2)
+end
+
+-- One more place for a step; true when the list changed. A place near one kept adds nothing.
+-- Above STEP_PLACES the list stays spread: of the two places that lie nearest to each other the
+-- newer one goes, so a camp is one place and a far one is never lost to it. Pure.
+function Graph.AddStepPlace(list, place)
+  for _, kept in ipairs(list) do
+    if stepGap(kept, place) < Graph.STEP_NEAR then
+      return false
+    end
+  end
+  list[#list + 1] = place
+  if #list <= Graph.STEP_PLACES then
+    return true
+  end
+  local drop, least = #list, huge
+  for i = 1, #list do
+    for j = i + 1, #list do
+      local gap = stepGap(list[i], list[j])
+      if gap < least then
+        drop, least = j, gap
+      end
+    end
+  end
+  table.remove(list, drop)
+  return drop ~= #list + 1
+end
 
 -- 2, "2" or "taxinode:2" -> 2; nil for anything else.
 local function taxiID(v)
@@ -1755,6 +1958,21 @@ function service:Learn(fact)
     local list = learned.ride[fact.ref] or {}
     learned.ride[fact.ref] = list
     list[#list + 1] = fact.wait
+  elseif fact.kind == "step" then
+    if
+      not (wholeAbove0(fact.quest) and wholeAbove0(fact.n) and type(fact.map) == "number")
+      or not (fraction(fact.x) and fraction(fact.y))
+    then
+      return false
+    end
+    local key = fact.quest .. ":" .. fact.n
+    local list = learned.steps[key] or {}
+    local place = { fact.map, floor(fact.x * 10000 + 0.5) / 10000, floor(fact.y * 10000 + 0.5) / 10000 }
+    if not Graph.AddStepPlace(list, place) then
+      return false
+    end
+    learned.steps[key] = list
+    return true -- no message: a step's place changes no way and no time, and nothing reads it yet
   else
     if type(fact.points) ~= "table" or #fact.points < 2 or type(fact.map) ~= "number" then
       return false
@@ -1900,7 +2118,8 @@ function Graph.StopSampling()
   Graph.CloseWalk(nil)
 end
 
--- The learned facts, read only: { taxi = { ["taxinode:a>taxinode:b"] = seconds }, ride, walk }.
+-- The learned facts, read only: { taxi = { ["taxinode:a>taxinode:b"] = seconds }, ride, walk,
+-- steps = { ["<quest>:<n>"] = { { uiMapID, x, y } } } }.
 function service:Learned()
   return Graph.learned
 end
@@ -1955,7 +2174,7 @@ function Graph.Attach(module)
     db.global.learned = {}
   end
   local learned = db.global.learned
-  for _, k in ipairs({ "taxi", "ride", "walk" }) do
+  for _, k in ipairs({ "taxi", "ride", "walk", "steps" }) do
     if type(learned[k]) ~= "table" then
       learned[k] = {}
     end
@@ -1988,6 +2207,7 @@ function Graph.Attach(module)
   end)
   module:On("BASTIANS_DATA_LOADED", function(_, _, pack)
     nameToTaxi = nil
+    Graph.ResetEdges()
     if pack == "nav" then
       Graph.RefreshTimes(true)
     end

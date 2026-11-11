@@ -550,13 +550,165 @@ def test_an_edition_whose_rows_fell_by_a_tenth_is_held(tmp_path: Path, capsys):
         **common,
     )
     assert third["records"]["world"]["npc"] == 8000
-    # a build without a report says so and is not checked (the fake build leaves the last
-    # report where a real one rewrites it: take it away)
+    # a build without a report is refused once a sent edition carried counts: the check must
+    # not fall silent (10.11.2026: it had never run, the report lay in another folder)
     capsys.readouterr()
 
     def build_without_report(inputs_, packs: Path) -> None:
         fake_build({"Bastians_Data_Market": ["x"]})(inputs_, packs)
         (packs / "report.md").unlink(missing_ok=True)
 
-    data_update.update(inputs(tmp_path), out, build=build_without_report, **common)
+    with pytest.raises(data_update.DataUpdateError, match="no build report"):
+        data_update.update(inputs(tmp_path), out, build=build_without_report, **common)
+    data_update.update(
+        inputs(tmp_path), out, build=build_without_report, allow_drift=True, **common
+    )
     assert "drift: no build report" in capsys.readouterr().out
+
+
+def test_the_builds_report_is_put_beside_the_packs(tmp_path: Path):
+    """The build writes build/report.md; the drift check reads the packs folder. A report older
+    than the build belongs to another build and stays out."""
+    report = tmp_path / "build" / "report.md"
+    report.parent.mkdir()
+    report.write_text("## Packs\n", encoding="utf-8")
+    packs = tmp_path / "packs"
+    packs.mkdir()
+    data_update.place_report(report, packs, report.stat().st_mtime + 60)
+    assert not (packs / "report.md").exists()
+    data_update.place_report(report, packs, report.stat().st_mtime - 5)
+    assert (packs / "report.md").read_text(encoding="utf-8") == "## Packs\n"
+    data_update.place_report(tmp_path / "none.md", packs, 0)  # no report: nothing happens
+
+
+def build_with_links(tag: str, links: dict | None):
+    """The fixture packs with the build's quest step numbers beside them (None: no file); the
+    tag makes each run a new edition."""
+    base = fake_build({"Bastians_Data_Market": [tag]})
+
+    def build(inputs: build_client.BuildInputs, packs: Path) -> None:
+        base(inputs, packs)
+        path = packs / data_update.LINKS.name
+        path.unlink(missing_ok=True)
+        if links is not None:
+            path.write_text(json.dumps(links), encoding="utf-8")
+
+    return build
+
+
+def test_an_edition_whose_quest_steps_jumped_by_a_tenth_is_held(tmp_path: Path, capsys):
+    """data.md "The count and the watch": the build's numbers ride
+    with the edition. A rise of the steps without a place or of the Classic debt is the watch's
+    alarm and ships; only a jump of more than a tenth (the resolver or a source gone wrong)
+    holds the edition, unless --allow-drift."""
+    drift = data_update.links_drift
+    before = {"steps": 6697, "unplaced": 775, "classic": 512}
+    assert drift(before, {"steps": 6700, "unplaced": 780, "classic": 512}) == (
+        [],
+        ["quest steps 6697 -> 6700", "steps without a place 775 -> 780"],
+    )
+    assert drift(before, {"steps": 6697, "unplaced": 775, "classic": 564})[0] == [
+        "Classic-only steps 512 -> 564"
+    ]
+    assert drift(before, {"steps": 6000, "unplaced": 775, "classic": 512})[0] == [
+        "quest steps 6697 -> 6000"
+    ]
+    # falling debt and more steps are good news; a small number says nothing; no number before
+    assert drift(before, {"steps": 9000, "unplaced": 10, "classic": 0})[0] == []
+    assert drift({"classic": 10}, {"classic": 40})[0] == []
+    assert drift(None, before) == ([], []) and drift(before, {}) == ([], [])
+    ledger = tmp_path / "editions.json"
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    common = {
+        "ledger_path": ledger,
+        "book_toml": book_toml,
+        "today": "2026-11-11",
+        "book_states": tmp_path / "states",
+        "boot": False,
+    }
+    out = tmp_path / "out"
+    # the last edition was sent before the build counted its steps: nothing to hold against
+    old, _ = data_update.update(inputs(tmp_path), out, build=build_with_links("a", None), **common)
+    assert "links" not in old
+    data_update.mark_sent(ledger, old, 1)
+    first, _ = data_update.update(
+        inputs(tmp_path), out, build=build_with_links("b", {**before, "given": 806}), **common
+    )
+    assert first["links"] == before  # the three numbers, nothing else of the file
+    data_update.mark_sent(ledger, first, 2)
+    with pytest.raises(
+        data_update.DataUpdateError,
+        match=r"quest steps jumped by more than a tenth.*steps without a place 775 -> 900",
+    ):
+        data_update.update(
+            inputs(tmp_path),
+            out,
+            build=build_with_links("c", {**before, "unplaced": 900}),
+            **common,
+        )
+    # a rise below a tenth ships, each change a line: the watch alarms, the edition goes out
+    capsys.readouterr()
+    risen = {"steps": 6697, "unplaced": 770, "classic": 530}
+    second, _ = data_update.update(
+        inputs(tmp_path), out, build=build_with_links("d", risen), **common
+    )
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.startswith("steps:")]
+    assert lines == [
+        "steps: steps without a place 775 -> 770",
+        "steps: Classic-only steps 512 -> 530",
+    ]
+    assert second["links"] == risen
+    # the jump that is right ships with --allow-drift
+    third, _ = data_update.update(
+        inputs(tmp_path),
+        out,
+        build=build_with_links("e", {**before, "unplaced": 900}),
+        allow_drift=True,
+        **common,
+    )
+    assert third["links"]["unplaced"] == 900
+    # a build without the file is refused once a sent edition carried the numbers
+    with pytest.raises(data_update.DataUpdateError, match=r"no links-forever\.json"):
+        data_update.update(inputs(tmp_path), out, build=build_with_links("f", None), **common)
+
+
+def test_the_builds_step_numbers_are_put_beside_the_packs(tmp_path: Path):
+    links = tmp_path / "build" / "links-forever.json"
+    links.parent.mkdir()
+    links.write_text('{"steps": 7, "unplaced": 2, "classic": 3, "given": true}', encoding="utf-8")
+    packs = tmp_path / "packs"
+    packs.mkdir()
+    assert data_update.link_counts(packs) == {}
+    data_update.place_report(links, packs, links.stat().st_mtime - 5)
+    assert data_update.link_counts(packs) == {"steps": 7, "unplaced": 2, "classic": 3}
+    (packs / "links-forever.json").write_text("not json", encoding="utf-8")
+    assert data_update.link_counts(packs) == {}
+
+
+def test_a_file_this_machine_did_not_send_is_named(capsys):
+    """plan-nightly-content.md F2: two machines with --send and two ledgers. CurseForge's file
+    list is the one place both show up."""
+    config = {"projects": {"Bastians_Data": {"id": 2}}}
+    ledger = {"editions": [{"file_id": 100}, {"file_id": 120}, {"date": "x"}]}
+    asked = []
+
+    def transport(request):
+        asked.append(request.full_url)
+        files = [
+            {"id": 120, "displayName": "ours"},
+            {"id": 131, "displayName": "Bastian's Data 2.1.0+data.20261110.1 (WoW Forever)"},
+            {"id": 90, "displayName": "old"},
+        ]
+        return json.dumps({"data": files}).encode()
+
+    (line,) = data_update.foreign_files(config, ledger, transport, key="k")
+    assert "Data file 131 (Bastian's Data 2.1.0+data.20261110.1 (WoW Forever))" in line
+    assert asked[0].endswith("/v1/mods/2/files?pageSize=20")
+    assert data_update.foreign_files(config, {"editions": []}, transport, key="k") == []
+
+    def down(request):
+        raise OSError("no route")
+
+    assert data_update.foreign_files(config, ledger, down, key="k") == []
+    assert "file list was not read" in capsys.readouterr().out

@@ -251,10 +251,13 @@ class Valuer:
     def per_kill(self, nid: int) -> float | None:
         npc = self.world.get("npc", nid) or {}
         total, known = 0.0, False
-        for item, chance in npc.get("loot") or []:
-            p = self.ah.get(item)
-            if p:
-                total += p * (chance or 0) / 100 * CUT
+        for row in npc.get("loot") or []:
+            # a row without a chance (what ForeverDB's players saw drop, QuestieDB's droppers:
+            # `[item]`) says the item drops, not how often: it adds no worth, and it is not zero
+            chance = row[1] if len(row) > 1 else None
+            p = self.ah.get(row[0])
+            if p and chance:
+                total += p * chance / 100 * CUT
                 known = True
         return total if known else None
 
@@ -417,15 +420,80 @@ def candidates(
     return out
 
 
-def report(found: dict[str, list[Strategy]], top: int = 8) -> str:
-    """The candidate report as Markdown: per chapter the best `top`, the five that would be the
-    chapter's pages marked, the parts of every score, the claims with their channels."""
+PAGES = 5  # a chapter's active pages (strategies-design.md section 7)
+
+
+def _facts(s: Strategy) -> str:
+    return f"{s.score:g}; {len(s.claims)} claims, {len(s.channels)} channels"
+
+
+def _line(s: Strategy) -> str:
+    return f"{s.title}: {_facts(s)}"
+
+
+def changes(found: dict[str, list[Strategy]], previous: dict | None) -> list[str]:
+    """What moved since the last build's report (its JSON twin): per chapter the strategies that
+    entered or left the first five. Without a last report there is nothing to compare."""
+    if not previous:
+        return []
+    out: list[str] = []
+    for chapter, items in found.items():
+        if chapter not in previous:
+            continue
+        before = [str(e.get("title")) for e in previous[chapter][:PAGES]]
+        now = [s.title for s in items[:PAGES]]
+        out += [f"- {chapter}: **entered** the first five: {_line(s)}"
+                for s in items[:PAGES] if s.title not in before]  # fmt: skip
+        out += [f"- {chapter}: left the first five: {t}" for t in before if t not in now]
+    return out
+
+
+def to_decide(found: dict[str, list[Strategy]]) -> list[str]:
+    """Per chapter the strategies among the first five that no page tells: the pages to write, or
+    to decline. With their first claims, so the list can be judged without the appendix."""
+    out: list[str] = []
+    for chapter, items in found.items():
+        for i, s in enumerate(items[:PAGES], 1):
+            if s.page or s.low_value:
+                continue
+            out.append(f"- {chapter} #{i}: **{s.title}**: {_facts(s)}")
+            for c in s.claims[:3]:
+                out.append(f"   - `{c['claim_id']}` {c.get('claim') or c.get('subject')}")
+    return out
+
+
+def report(found: dict[str, list[Strategy]], top: int = 8, previous: dict | None = None) -> str:
+    """The candidate report as Markdown. First what a person has to read (the
+    claims grow every night, the report must not): what changed since the last build, then the
+    strategies among a chapter's first five that no page tells. After that the appendix, as
+    before: per chapter the best `top`, the five that would be the chapter's pages marked, the
+    parts of every score, the claims."""
+    moved = changes(found, previous)
+    open_ = to_decide(found)
+    total = sum(len(items) for items in found.values())
     lines = [
         "# The book's candidates",
         "",
         "Strategies grouped from the export's claims and scored (bastians_build/candidates.py);",
         "the first five of a chapter would be its pages. `page` names the book page that tells",
-        "it.",
+        f"it. {total} strategies in {len(found)} chapters.",
+        "",
+        "## What changed since the last build",
+        "",
+        *(
+            moved
+            or [
+                "Nothing entered or left a chapter's first five."
+                if previous
+                else "No earlier report to compare with."
+            ]
+        ),
+        "",
+        "## To decide: among the first five, told by no page",
+        "",
+        *(open_ or ["Every strategy among the first five has its page."]),
+        "",
+        "# Appendix: every chapter",
         "",
     ]
     for chapter, items in found.items():
@@ -477,8 +545,14 @@ def write_report(found: dict[str, list[Strategy]], report_dir: Path) -> Path:
     """build/book-candidates.md and its twin book-candidates.json, written atomically."""
     report_dir.mkdir(parents=True, exist_ok=True)
     path = report_dir / "book-candidates.md"
+    twin_path = report_dir / "book-candidates.json"
+    try:  # the last build's twin: what the report compares with
+        previous = json.loads(twin_path.read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        previous = None
     twin = json.dumps(as_json(found), indent=1, sort_keys=True)
-    for target, text in ((path, report(found)), (report_dir / "book-candidates.json", twin)):
+    words = report(found, previous=previous if isinstance(previous, dict) else None)
+    for target, text in ((path, words), (twin_path, twin)):
         tmp = target.with_suffix(target.suffix + ".tmp")
         tmp.write_text(text, encoding="utf-8", newline="\n")
         tmp.replace(target)

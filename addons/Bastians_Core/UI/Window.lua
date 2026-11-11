@@ -28,8 +28,8 @@ Window.__index = Window
 -- Every window by frame name (ADR 0013 E: the dock needs to find its partner), and the dock pair:
 -- the map left, the Browser right. `B.UI.DOCK_MODULES` names the module that opens each window.
 B.UI.Windows = {}
-B.UI.DOCK = { left = "BastiansMapFrame", right = "BastiansBrowserFrame" }
-B.UI.DOCK_MODULES = { BastiansMapFrame = "Map", BastiansBrowserFrame = "Browser" }
+B.UI.DOCK = { left = "BastiansMapFrame", right = "BastiansBrowserFrame", city = "BastiansCityFrame" }
+B.UI.DOCK_MODULES = { BastiansMapFrame = "Map", BastiansBrowserFrame = "Browser", BastiansCityFrame = "Map" }
 local DOCK_GAP = 2
 local RESIZE_COALESCE = 0.1 -- seconds between content refreshes while the grip is held
 local GRIP_LEVEL = 100 -- frame levels above the window: no content frame reaches it
@@ -523,14 +523,31 @@ end
 -- opening what is missing through its module; a second press undocks. Returns the new state.
 -- A pair still docked but with one window closed by hand docks again with both shown (owner,
 -- Forever 07.11.2026: "I close it by hand, the next Dock does nothing - it still thinks it's open").
-function B.UI.ToggleDock()
+-- `leader` (a window name, ADR 0065): the window on the left, the map or the City & dungeon map;
+-- without one the window the Browser is docked to, else the city window while shown, else the map.
+local function dockLeader()
   local rightWin = B.UI.Windows[B.UI.DOCK.right]
-  local leftWin = B.UI.Windows[B.UI.DOCK.left]
-  if rightWin and rightWin.dock and rightWin:IsShown() and leftWin and leftWin:IsShown() then
-    rightWin:Undock(true)
-    return false
+  if rightWin and rightWin.dock then
+    return rightWin.dock.with.name
   end
-  for _, name in ipairs({ B.UI.DOCK.left, B.UI.DOCK.right }) do
+  local city = B.UI.Windows[B.UI.DOCK.city]
+  return city and city:IsShown() and B.UI.DOCK.city or B.UI.DOCK.left
+end
+
+function B.UI.ToggleDock(leader)
+  leader = leader or dockLeader()
+  local rightWin = B.UI.Windows[B.UI.DOCK.right]
+  local leftWin = B.UI.Windows[leader]
+  if rightWin and rightWin.dock then
+    local same = rightWin.dock.with == leftWin
+    if same and rightWin:IsShown() and leftWin:IsShown() then
+      rightWin:Undock(true)
+      return false
+    elseif not same then
+      rightWin:Undock(true) -- from the other leader to this one
+    end
+  end
+  for _, name in ipairs({ leader, B.UI.DOCK.right }) do
     local win = B.UI.Windows[name]
     if not (win and win:IsShown()) then
       local mod = B:GetModule(B.UI.DOCK_MODULES[name])
@@ -545,7 +562,7 @@ function B.UI.ToggleDock()
       end
     end
   end
-  leftWin = B.UI.Windows[B.UI.DOCK.left]
+  leftWin = B.UI.Windows[leader]
   rightWin = B.UI.Windows[B.UI.DOCK.right]
   if not (leftWin and rightWin) then
     return false
@@ -553,9 +570,10 @@ function B.UI.ToggleDock()
   return rightWin:DockWith(leftWin, "right")
 end
 
-function B.UI.IsDocked()
+function B.UI.IsDocked(leader)
   local rightWin = B.UI.Windows[B.UI.DOCK.right]
-  return rightWin ~= nil and rightWin.dock ~= nil
+  local d = rightWin and rightWin.dock
+  return d ~= nil and d ~= false and (leader == nil or d.with.name == leader)
 end
 
 -- Position as TOPLEFT offset from UIParent's TOPLEFT and the size, into the window's db.

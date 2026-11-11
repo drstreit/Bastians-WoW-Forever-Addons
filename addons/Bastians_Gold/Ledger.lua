@@ -185,6 +185,10 @@ end
 function Ledger.Register(self)
   mod = self
   self:RegisterEvent("MAIL_INBOX_UPDATE", function()
-    self:Coalesce("ledger", Ledger.DELAY, Ledger.Scan)
+    -- the timer hands its module to the function: Scan would take it for the time
+    -- (Forever 11.11.2026: "arithmetic on local 'now' (a table value)" with an invoice in the mail)
+    self:Coalesce("ledger", Ledger.DELAY, function()
+      Ledger.Scan()
+    end)
   end)
 end

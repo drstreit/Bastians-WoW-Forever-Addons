@@ -191,10 +191,17 @@ function Sheet.Model(qid, opts)
   end
   if e then
     local map, px, py = ns.Window.PlayerPlace()
-    local place = V.PlaceOf(e, q, map, px, py)
+    local place = V.PlaceOf(e, map, px, py)
     local yards = place.x and px and ns.Window.Yards(map, px, py, place.map, place.x, place.y) or nil
-    local where = Sheet.WhereWords({ map = map, x = px, y = py }, place, yards)
-    model.where = where
+    model.where = Sheet.WhereWords({ map = map, x = px, y = py }, place, yards)
+    if not place.map then
+      -- in the log and nobody knows where (ADR 0069: no place, no guess): the sheet says so and
+      -- greys Map and Route
+      model.unplaced = true
+      if not model.ready then -- a done quest says who takes it (the line above the task)
+        model.where = L["Where this is done is not known"]
+      end
+    end
     if model.ready then
       model.handIn = R.handInWords(q, map)
     end
@@ -564,9 +571,9 @@ local function rewards(rw)
 end
 
 -- The registered actions among `ids` that apply to the quest now, in that order.
-local function actionsOf(ref, ids)
+local function actionsOf(ref, ids, ctx)
   local out = {}
-  local all = B:GetActions(ref, C.ctx)
+  local all = B:GetActions(ref, ctx or C.ctx)
   for _, id in ipairs(ids) do
     for _, def in ipairs(all) do
       if def.id == id then
@@ -592,6 +599,23 @@ local function nextButton(key)
   return b
 end
 
+-- A button of the pool dressed and sized: { key, label, icon, tip, run }.
+local function dressedButton(spec)
+  local b = nextButton(spec.key)
+  b.spec.label = spec.label
+  b.spec.icon = spec.icon
+  b.tip = spec.tip
+  b.run = spec.run
+  b:SetEnabledFlat(not spec.disabled) -- greyed: listed, nothing to run (a place nobody knows)
+  if b.SetLabel then
+    b:SetLabel(spec.label)
+  end
+  if b.Fit then
+    b:Fit()
+  end
+  return b
+end
+
 -- A row of buttons: { key, label, icon, run }. Nothing on a hover: the mouse cannot reach them.
 local function buttonRow(list)
   if #list == 0 or C.preview then
@@ -599,17 +623,7 @@ local function buttonRow(list)
   end
   local x = PAD
   for _, spec in ipairs(list) do
-    local b = nextButton(spec.key)
-    b.spec.label = spec.label
-    b.spec.icon = spec.icon
-    b.tip = spec.tip
-    b.run = spec.run
-    if b.SetLabel then
-      b:SetLabel(spec.label)
-    end
-    if b.Fit then
-      b:Fit()
-    end
+    local b = dressedButton(spec)
     local w = b:GetWidth() or 60
     if x > PAD and x + w > C.width - PAD then
       x, y = PAD, y + BUTTON_H + 3
@@ -822,6 +836,86 @@ local function drawStrip(m)
   y = y + STRIP_H + GAP
 end
 
+-- The buttons of `ids` whose app is there, greyed, with one tip: what the sheet shows in place
+-- of Map and Route while nobody knows where the quest is done (ADR 0069).
+local function greyedButtons(ids, tip)
+  local list = {}
+  for _, id in ipairs(ids) do
+    local def = B:GetAction(id)
+    if def then
+      list[#list + 1] = { key = id, label = def.short or def.label, tip = tip, disabled = true }
+    end
+  end
+  return list
+end
+
+-- The i-th objective of a log quest: where it is done, on one map, and what is there (ref). The
+-- step of the quest's `steps` facet with the client's number i; nil when no step is that
+-- objective or it has no place.
+function Sheet.ObjectivePlaces(qid, i)
+  local steps = B:Entity("quest:" .. qid):Facet("steps")
+  local step
+  for k = 2, #(steps or {}) - 1 do
+    if steps[k].n == i then
+      step = steps[k]
+    end
+  end
+  if not step then
+    return nil
+  end
+  local map, px, py = ns.Window.PlayerPlace()
+  local home = {}
+  for _, at in ipairs({ steps[1], steps[#steps] }) do
+    home[#home + 1] = at.places and at.places[1] and at.places[1].map or nil
+  end
+  local places = Logic.StepPlaces(step, {
+    map = map,
+    yards = px and function(toMap, toX, toY)
+      return ns.Window.Yards(map, px, py, toMap, toX, toY)
+    end or nil,
+  }, home)
+  return places, places and (step.ref or ("quest:" .. qid)) or nil
+end
+
+-- A line of What to do, with its own Map button at the end while the places are known and the Map
+-- app is there. None on a hover: the mouse cannot reach it, and the
+-- item's droppers need not be read for a glance.
+local function objectiveRow(m, o, i)
+  local count = (o.need and o.need > 0) and ((o.have or 0) .. "/" .. o.need .. " ") or ""
+  local button
+  if not C.preview then
+    local places, ref = Sheet.ObjectivePlaces(m.qid, i)
+    local ctx = places and { source = C.ctx.source, points = places }
+    local def = ctx and actionsOf(ref, { "map.show" }, ctx)[1]
+    if def then
+      button = dressedButton({
+        key = "objective.map." .. i,
+        label = def.short or def.label,
+        tip = def.label,
+        run = function()
+          B:RunAction(def.id, ref, ctx)
+        end,
+      })
+    end
+  end
+  if not button then
+    line(count .. o.text, { color = o.done and "good" or "ink", indent = 8, gap = 2 })
+    return
+  end
+  local top = y
+  y = top + 3 -- the words at the height of the button's
+  line(count .. o.text, {
+    color = o.done and "good" or "ink",
+    indent = 8,
+    gap = 2,
+    right = (button:GetWidth() or 60) + 6,
+  })
+  button:ClearAllPoints()
+  button:SetPoint("TOPRIGHT", C.frame, "TOPLEFT", C.width - PAD, -top)
+  button:Show()
+  y = math.max(y, top + BUTTON_H + 2)
+end
+
 local function drawQuest(m)
   local ref = "quest:" .. m.qid
   line(m.title, { size = 20, serif = true, color = "title", right = 30, gap = 2 })
@@ -852,15 +946,18 @@ local function drawQuest(m)
   elseif #m.objectives == 0 then
     line(L["The giver tells you when you speak to them."], { color = "dim" })
   end
-  for _, o in ipairs(m.objectives) do
-    local count = (o.need and o.need > 0) and ((o.have or 0) .. "/" .. o.need .. " ") or ""
-    line(count .. o.text, { color = o.done and "good" or "ink", indent = 8, gap = 2 })
+  for i, o in ipairs(m.objectives) do
+    objectiveRow(m, o, i)
   end
   if m.where then
     y = y + 3
-    line(m.where, { size = 13 })
+    line(m.where, { size = 13, color = m.unplaced and "dim" or nil })
   end
-  buttonRow(actionButtons(ref, WHERE_ACTIONS))
+  if m.unplaced then
+    buttonRow(greyedButtons(WHERE_ACTIONS, L["Where this is done is not known"]))
+  else
+    buttonRow(actionButtons(ref, WHERE_ACTIONS))
+  end
   local story = R.paragraphs(m.story)
   if #story > 0 then
     heading(L["The story"])

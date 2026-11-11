@@ -725,6 +725,11 @@ local function rumourLines(target, p)
         addText(target, why, 11, S.C.dim, 10, 2)
       end
       sourceRows(target, rumour.sources)
+      if (rumour.more or 0) > 0 then -- the pack names the three newest; the rest is a number
+        local words = rumour.more == 1 and L["and 1 more traveller tells it"]
+          or string.format(L["and %d more travellers tell it"], rumour.more)
+        addText(target, words, 11, S.C.dim, 10, 2)
+      end
     end
   end
 end

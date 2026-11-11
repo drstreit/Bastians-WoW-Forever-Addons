@@ -117,28 +117,44 @@ end
 -- Time
 -- ---------------------------------------------------------------------------------------------
 
-local function place(list)
-  local p = list and list[1]
-  if p and p[1] then
-    return p[1], p[2], p[3]
+-- A quest's `steps` facet (ADR 0069): where it is taken, done and handed in, with the log's
+-- state. Core's cached answer, the one every other reader sees.
+local function stepsOf(qid)
+  return qid and B:Entity("quest:" .. qid):Facet("steps") or nil
+end
+
+-- The nearest of `places` ({ map, x, y }) to a point, as map, x, y; nil without a place.
+local function nearestOf(places, ctx, map, x, y)
+  local p = Logic.NearestPlace(places, {
+    map = map,
+    x = x,
+    y = y,
+    yards = ctx.distance and x and function(toMap, toX, toY)
+      return ctx.distance(map, x, y, toMap, toX, toY)
+    end or nil,
+  })
+  if p then
+    return p.map, p.x, p.y
   end
   return nil
 end
 
--- Nearest spot of the quest on `map` to a point (map fractions); nil without spots there.
-local function nearestSpot(spots, map, x, y)
-  local list = spots and map and spots[map]
-  if not list then
-    return nil
-  end
-  local best, bd
-  for _, s in ipairs(list) do
-    local d = (x and s[1]) and ((x - s[1]) ^ 2 + (y - s[2]) ^ 2) or 0
-    if not bd or d < bd then
-      best, bd = s, d
+-- The places of the things still to do: of a quest in the log its open steps' (else the client's
+-- place for the quest), of any other every thing to do.
+local function todoPlaces(steps, entry)
+  local out = {}
+  for i = 2, #steps - 1 do
+    local step = steps[i]
+    if not entry or step.open then
+      for _, p in ipairs(step.places or {}) do
+        out[#out + 1] = p
+      end
     end
   end
-  return map, best[1], best[2]
+  if entry and #out == 0 and type(steps.waypoint) == "table" then
+    out[1] = steps.waypoint
+  end
+  return out
 end
 
 -- Minutes for one leg: the travel service, else a straight line at run speed, else the default.
@@ -163,8 +179,14 @@ local function legMinutes(ctx, m1, x1, y1, m2, x2, y2)
   return Rec.UNKNOWN_LEG_MINUTES, true
 end
 
--- Minutes of objective work from the live log entry (remaining counts) or the data's objectives.
-function Rec.objectiveMinutes(q, entry, times, levelMod)
+-- The time kind of a step: what `times` and DEFAULT_COUNTS are keyed by.
+local STEP_TIME = { slay = "slay", get = "loot", use = "object" }
+
+-- Minutes of work: from the live log entry (the counts still missing), else from the quest's
+-- things to do (`steps`; a step is one objective, however many creatures count for it: the pack's
+-- rows counted twelve wolves as twelve objectives), each by its count or the default of its
+-- kind. Nothing to do: a delivery.
+function Rec.objectiveMinutes(entry, times, levelMod, steps)
   local total = 0
   if entry and #(entry.objectives or {}) > 0 then
     for _, o in ipairs(entry.objectives) do
@@ -177,13 +199,10 @@ function Rec.objectiveMinutes(q, entry, times, levelMod)
         total = total + (times[kind] or 1) * math.max(1, left)
       end
     end
-  elseif q and q.objectives and #q.objectives > 0 then
-    for _, o in ipairs(q.objectives) do
-      local kind = o[1] == "slay" and "slay"
-        or o[1] == "loot" and "loot"
-        or o[1] == "object" and "object"
-        or "event"
-      total = total + (times[kind] or 1) * (Rec.DEFAULT_COUNTS[kind] or 1)
+  elseif steps and #steps > 2 then
+    for i = 2, #steps - 1 do
+      local kind = STEP_TIME[steps[i].step] or "event"
+      total = total + (times[kind] or 1) * (steps[i].count or Rec.DEFAULT_COUNTS[kind] or 1)
     end
   else
     total = times.delivery or 1
@@ -191,8 +210,12 @@ function Rec.objectiveMinutes(q, entry, times, levelMod)
   return total * (levelMod or 1)
 end
 
--- Travel and work in minutes for a quest from the player's place. Returns minutes, unknownLegs.
-function Rec.minutes(q, entry, map, ctx, times, levelMod)
+-- Travel and work in minutes for a quest from the player's place: to where it is taken (a quest
+-- not in the log), to the nearest thing still to do, the work, to the hand-in. A place nobody
+-- knows is an unknown leg; things to do without a place add no leg (the work stands for them).
+-- `steps` = the quest's facet (asked for a log entry when not given). Returns minutes, unknownLegs.
+function Rec.minutes(entry, map, ctx, times, levelMod, steps)
+  steps = steps or stepsOf(entry and entry.questID) or {}
   local unknown = 0
   local minutes = 0
   local cm, cx, cy = map, ctx.px, ctx.py
@@ -206,56 +229,29 @@ function Rec.minutes(q, entry, map, ctx, times, levelMod)
       cm, cx, cy = m, x, y
     end
   end
+  local take, handin = steps[1], steps[#steps]
   local complete = entry and entry.isComplete
   if not entry then
-    leg(place(q and q.startPlaces))
+    leg(nearestOf(take and take.places, ctx, cm, cx, cy))
   end
   if not complete then
-    local spots = entry and Logic.OpenSpots(entry, q) or (q and q.spots)
-    local sm, sx, sy = nearestSpot(spots, cm, cx, cy)
-    if not sm then
-      sm, sx, sy = nearestSpot(spots, map, ctx.px, ctx.py)
+    local m, x, y = nearestOf(todoPlaces(steps, entry), ctx, cm, cx, cy)
+    if m then
+      leg(m, x, y)
     end
-    if sm then
-      leg(sm, sx, sy)
-    end
-    minutes = minutes + Rec.objectiveMinutes(q, entry, times, levelMod)
+    minutes = minutes + Rec.objectiveMinutes(entry, times, levelMod, steps)
   end
-  leg(place(q and q.endPlaces))
+  leg(nearestOf(handin and handin.places, ctx, cm, cx, cy))
   return minutes, unknown
 end
 
--- The quest's next place: the giver before it is taken, an objective spot while it has work (on
--- `map` when it has one there, else on the lowest map id), the hand-in when complete.
-local function nextPlace(q, entry, map)
-  if not entry then
-    return place(q.startPlaces)
-  end
-  local spots = not entry.isComplete and q.spots and Logic.OpenSpots(entry, q)
-  if spots then
-    local m = map and spots[map] and map or nil
-    if not m then
-      for sm in pairs(spots) do
-        if not m or sm < m then
-          m = sm
-        end
-      end
-    end
-    local s = m and spots[m][1]
-    if s then
-      return m, s[1], s[2]
-    end
-  end
-  return place(q.endPlaces)
-end
-
 -- Minutes from the quest's next place on (R26.11, route.md "Explore": the way there is the
--- graph's): from the giver over the work to the hand-in, the work by `times`. Returns minutes,
--- unknownLegs.
-function Rec.workMinutes(q, entry, map, ctx, times, levelMod)
-  local m, x, y = nextPlace(q, entry, map)
+-- graph's): from where it sends the player now (the nearest place of its open steps, Core's
+-- Locations()) over the work to the hand-in, the work by `times`. Returns minutes, unknownLegs.
+function Rec.workMinutes(qid, entry, map, ctx, times, levelMod)
+  local m, x, y = nearestOf(B:Entity("quest:" .. qid):Locations(), ctx, map, ctx.px, ctx.py)
   local from = setmetatable({ px = x, py = y }, { __index = ctx })
-  return Rec.minutes(q, entry, m or map, from, times, levelMod)
+  return Rec.minutes(entry, m or map, from, times, levelMod, stepsOf(qid))
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -316,7 +312,7 @@ function Rec.score(qid, entry, map, state, ctx)
     parts[#parts + 1] = L["leads to the next area"]
   end
   local hard = isHard(q.level, state.level)
-  local minutes, unknownLegs = Rec.minutes(q, entry, map, ctx, times, hard and 1.5 or 1)
+  local minutes, unknownLegs = Rec.minutes(entry, map, ctx, times, hard and 1.5 or 1, stepsOf(qid))
   parts[#parts + 1] = string.format("%d %s", math.max(1, math.floor(minutes + 0.5)), L["min"])
   if unknownLegs > 0 then
     flags[#flags + 1] = L["distance unknown"]
@@ -361,8 +357,10 @@ function Rec.candidates(map, state, ctx)
   for qid, entry in pairs(ctx.log or {}) do
     local q = Logic.quest(qid)
     if q then
-      local here = (not entry.isComplete and q.spots and Logic.OpenSpots(entry, q)[map] ~= nil)
-        or Logic.turnInMap(q) == map
+      local here = Logic.turnInMap(q) == map
+      for _, p in ipairs(not here and B:Entity("quest:" .. qid):Locations() or {}) do
+        here = here or p.map == map -- a place of an open step is here
+      end
       if here then
         add(qid, entry)
       end

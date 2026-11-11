@@ -1,5 +1,5 @@
--- Bastian's Quests: the quest round (R26.4, route.md "Several stops"): the open quests and the
--- hand-ins of the log as the stops of one route, planned by the `route` service (Route).
+-- Bastian's Quests: the quest round (R26.4, route.md "Several stops"): the open steps and the
+-- hand-ins of the log's quests as the stops of one route, planned by the `route` service (Route).
 local _, ns = ...
 local B = Bastians
 local L = ns.L
@@ -9,15 +9,21 @@ local Round = {}
 ns.Round = Round
 
 Round.MAX = 12 -- stops of a round at most (graph:Tour's own limit), the nearest kept
-
-local function data()
-  return B:GetService("data")
-end
+Round.SHARE_YARDS = 100 -- steps whose nearest places lie this close share a stop (ADR 0069)
 
 -- The world place of a map point (fractions), or nil.
 local function world(map, x, y)
   local c, wx, wy = B.Coords.ToWorld(map, x, y)
   return c and { map = c, wx = wx, wy = wy } or nil
+end
+
+-- The world places of a step's map places; one no transform holds is left out.
+local function worldPlaces(places)
+  local out = {}
+  for _, p in ipairs(places or {}) do
+    out[#out + 1] = world(p.map, p.x, p.y)
+  end
+  return out
 end
 
 -- The place nearest to the character on its continent (squared yards), else the first one.
@@ -32,75 +38,85 @@ local function nearest(places, pc, px, py)
   return best, bd
 end
 
--- Where a quest is done: its objective spots; without them (retail has none in the pack) the
--- client's next step on the character's map.
-local function doPlaces(id, q, map)
-  local out = {}
-  for spotMap, list in pairs(ns.Logic.OpenSpots(State.log[id], q)) do
-    for _, s in ipairs(list) do
-      out[#out + 1] = world(spotMap, s[1], s[2])
+-- The stops of one quest from its `steps` facet:
+-- one per open thing to do at its place nearest to the character, steps whose nearest places lie
+-- within SHARE_YARDS sharing one; without a placed step the client's place for the quest; then
+-- the hand-in, after them. Complete: the hand-in alone. Returns the stops (nil when the quest has
+-- no place to go to: it is left out). `at` = the character's continent and world position. Pure
+-- over the facet and Coords.
+function Round.QuestStops(id, name, steps, at)
+  local pc, px, py = at.continent, at.wx, at.wy
+  local stops, doing = {}, {}
+  local handin = steps[#steps]
+  if steps.state ~= "complete" then
+    for i = 2, #steps - 1 do
+      local step = steps[i]
+      local p, dist = nearest(worldPlaces(step.open and step.places or nil), pc, px, py)
+      local shared
+      for _, st in ipairs(p and doing or {}) do
+        local near = st.place.map == p.map
+          and (st.place.wx - p.wx) ^ 2 + (st.place.wy - p.wy) ^ 2 <= Round.SHARE_YARDS ^ 2
+        shared = shared or near
+      end
+      if p and not shared then
+        doing[#doing + 1] = {
+          id = id .. ":" .. i,
+          name = step.text and (name .. ": " .. step.text) or name,
+          ref = "quest:" .. id,
+          place = p,
+          dist = dist,
+        }
+      end
+    end
+    local w = #doing == 0 and steps.waypoint
+    local p, dist = nearest(worldPlaces(w and { w } or nil), pc, px, py)
+    if p then
+      doing[1] = { id = id .. ":do", name = name, ref = "quest:" .. id, place = p, dist = dist }
+    end
+    if #doing == 0 and not (handin and handin.open) then
+      return nil -- things to do, and nobody knows where
     end
   end
-  if #out == 0 and map then
-    local x, y = B.Compat.GetQuestWaypoint(id, map)
-    out[#out + 1] = x and world(map, x, y) or nil
+  local after = {}
+  for _, st in ipairs(doing) do
+    stops[#stops + 1] = st
+    after[#after + 1] = st.id
   end
-  return out
-end
-
--- Where a quest is handed in: its taker's places, else the turn-in places.
-local function handInPlaces(q)
-  local out = {}
-  local ref = q and q.ends and q.ends[1]
-  for _, p in ipairs(ref and B:Entity(ref):Places() or {}) do
-    if p.wx then
-      out[#out + 1] = { map = p.map, wx = p.wx, wy = p.wy, wz = p.wz }
-    end
+  local p, dist = nearest(worldPlaces(handin and handin.places), pc, px, py)
+  if p then
+    stops[#stops + 1] = {
+      id = id .. ":in",
+      name = string.format(L["%s (hand in)"], name),
+      ref = handin.ref or ("quest:" .. id),
+      place = p,
+      dist = dist,
+      after = #after > 0 and after or nil,
+    }
+  elseif #doing == 0 then
+    return nil -- complete or a delivery, and no place for the hand-in
   end
-  if #out == 0 then
-    for _, p in ipairs(q and q.endPlaces or {}) do
-      out[#out + 1] = world(p[1], p[2], p[3])
-    end
-  end
-  return out, ref
+  return stops
 end
 
 -- The stops of the log: { { id, name, ref, place, after } } and the number of quests left out
--- (no place known). A quest still to do gives a stop where it is done and its hand-in after it;
--- a complete one its hand-in. More than MAX: the nearest by straight line, a hand-in only with
--- its quest's stop.
+-- (no place known). More than MAX: the nearest by straight line, a hand-in only with all of its
+-- quest's stops.
 function Round.Stops()
-  local d = data()
   local pc, px, py = B.Coords.Player()
-  local map = B.Coords.PlayerMap()
+  local at = { continent = pc, wx = px, wy = py }
   local stops, left = {}, 0
   for _, id in ipairs(State.order or {}) do
     local e = State.log[id]
     if e then -- the log holds quests only (`header` names the zone heading a quest stands under)
-      local q = d and d:Get("quest", id)
-      local name = e.title or (q and q.name) or tostring(id)
-      local ready = e.isComplete or e.readyForTurnIn
-      local doing
-      if not ready then
-        local p, dist = nearest(doPlaces(id, q, map), pc, px, py)
-        doing = p and { id = id .. ":do", name = name, ref = "quest:" .. id, place = p, dist = dist }
-      end
-      local places, taker = handInPlaces(q)
-      local p, dist = nearest(places, pc, px, py)
-      local handIn = p
-        and {
-          id = id .. ":in",
-          name = string.format(L["%s (hand in)"], name),
-          ref = taker or ("quest:" .. id),
-          place = p,
-          dist = dist,
-          after = doing and { doing.id } or nil,
-        }
-      if (not ready and not doing) or (ready and not handIn) then
-        left = left + 1
+      local steps = B:Entity("quest:" .. id):Facet("steps")
+      local name = e.title or B:Entity("quest:" .. id):Name() or tostring(id)
+      local own = steps and Round.QuestStops(id, name, steps, at)
+      if own then
+        for _, st in ipairs(own) do
+          stops[#stops + 1] = st
+        end
       else
-        stops[#stops + 1] = doing
-        stops[#stops + 1] = handIn
+        left = left + 1
       end
     end
   end
@@ -110,19 +126,30 @@ function Round.Stops()
     end
     return a.id < b.id
   end)
-  -- nearest first; a hand-in nearer than its quest's stop waits for that stop
+  -- nearest first; a hand-in nearer than its quest's stops waits for the last of them, and is
+  -- left out when the limit cut one of them
   local kept, taken, waiting = {}, {}, {}
+  local function ready(st)
+    for _, need in ipairs(st.after or {}) do
+      if not taken[need] then
+        return false
+      end
+    end
+    return true
+  end
   for _, st in ipairs(stops) do
-    local needs = st.after and st.after[1]
     if #kept >= Round.MAX then
       break
-    elseif needs and not taken[needs] then
-      waiting[needs] = st
+    elseif not ready(st) then
+      waiting[#waiting + 1] = st
     else
       kept[#kept + 1], taken[st.id] = st, true
-      local w = waiting[st.id]
-      if w and #kept < Round.MAX then
-        kept[#kept + 1], taken[w.id], waiting[st.id] = w, true, nil
+      for i = #waiting, 1, -1 do
+        local w = waiting[i]
+        if #kept < Round.MAX and ready(w) then
+          kept[#kept + 1], taken[w.id] = w, true
+          table.remove(waiting, i)
+        end
       end
     end
   end

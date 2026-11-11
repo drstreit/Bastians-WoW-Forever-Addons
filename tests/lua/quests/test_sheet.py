@@ -5,6 +5,7 @@ symbol opens the chain's page; the map gives one quest its targets."""
 import re
 
 from harness import WowRuntime
+from test_steps import MIRROR_LAKE
 
 CORE, DATA, QUESTS = "Bastians_Core", "Bastians_Data", "Bastians_Quests"
 MOD = "Bastians:GetModule('Quests')"
@@ -547,4 +548,216 @@ def test_the_giver_has_a_way_there(wow: WowRuntime):
     assert wow.eval(f"{button}.label:GetText()") == "Route to the giver"
     wow.execute(f"{button}:Click()")
     assert wow.eval("Ran") == "npc:240"
+    assert wow.errors == []
+
+
+SPIDER_MEAT = """
+STEP = { step = "get", ref = "item:1080", places = {
+  { map = 1433, x = 0.1, y = 0.1 }, { map = 1433, x = 0.2, y = 0.2, ref = "npc:547" },
+  { map = 1436, x = 0.4, y = 0.4 }, { map = 1424, x = 0.5, y = 0.5 },
+} }
+function XS(where, home)
+  local places, map = Bastians:GetModule('Quests').Logic.StepPlaces(STEP, where, home)
+  if not places then return nil end
+  local out = {}
+  for _, p in ipairs(places) do out[#out + 1] = p.map .. ":" .. p.x end
+  return table.concat(out, " ") .. " on " .. map
+end
+"""
+
+
+def test_a_steps_places_show_on_one_map(wow: WowRuntime):
+    """ "for all parts of the quest a map link to open the map with that
+    monster spawn visible. Or if I collect an items, then that." Spider meat drops in twelve
+    zones: the map must not fly to the wrong one. The player's map, where the quest lives, the
+    nearest, else the lowest id."""
+    boot(wow)
+    wow.execute(SPIDER_MEAT)
+    assert wow.eval("XS({ map = 1436 })") == "1436:0.4 on 1436"  # where the player is
+    assert wow.eval("XS({ map = 1 }, { 1433 })") == "1433:0.1 1433:0.2 on 1433"  # the quest's own
+    assert wow.eval("XS({ map = 1 }, { 9, 1424 })") == "1424:0.5 on 1424"  # its hand-in's
+    wow.execute(
+        "NEAR = { map = 1, yards = function(map) return ({ [1433] = 900, [1436] = 300 })[map] end }"
+    )
+    assert wow.eval("XS(NEAR)") == "1436:0.4 on 1436"  # a measured one before an unmeasured
+    # an unknown distance is no distance: the lowest map, so the same every time
+    assert wow.eval("XS({ map = 1 })") == "1424:0.5 on 1424"
+    # a step without a place has none: a wrong map is worse than no link
+    logic = f"{MOD}.Logic.StepPlaces"
+    assert wow.eval(f"{logic}({{ step = 'get', places = {{}} }}, {{ map = 1433 }})") is None
+    assert wow.eval(f"{logic}(nil, {{}})") is None
+    assert wow.errors == []
+
+
+def test_the_nearest_place_is_on_the_viewed_map_before_any_other(wow: WowRuntime):
+    """What every reader of Quests takes of a quest's places (ADR 0069): one rule, so the log's
+    row, the sheet's line and the map's quest agree."""
+    boot(wow)
+    wow.execute(
+        """
+        PLACES = { { map = 1436, x = 0.5, y = 0.5 }, { map = 1429, x = 0.9, y = 0.9 },
+          { map = 1429, x = 0.3, y = 0.3 }, { map = 1424, x = 0.1, y = 0.1 } }
+        function NP(where)
+          local p, d = Bastians:GetModule('Quests').Logic.NearestPlace(PLACES, where)
+          return p and (p.map .. ":" .. p.x) or nil, d
+        end
+        """
+    )
+    near, d = wow.eval("NP({ map = 1429, x = 0.2, y = 0.3 })")
+    assert near == "1429:0.3" and abs(d - 0.01) < 1e-9  # squared map fractions, for sorting
+    # on the viewed map without a position: the first there
+    assert wow.eval("NP({ map = 1429 })") == ("1429:0.9", float("inf"))
+    # not on the viewed map: by yards, where they are known
+    wow.execute("YARDS = function(map) return ({ [1436] = 800, [1424] = 200 })[map] end")
+    assert wow.eval("(NP({ map = 1, x = 0.5, y = 0.5, yards = YARDS }))") == "1424:0.1"
+    wow.execute("YARDS = function(map) return ({ [1436] = 800 })[map] end")
+    assert wow.eval("(NP({ map = 1, yards = YARDS }))") == "1436:0.5"  # a measured one first
+    assert wow.eval("(NP({ map = 1 }))") == "1424:0.1"  # nothing measured: the lowest map id
+    assert wow.eval(f"{MOD}.Logic.NearestPlace({{}}, {{ map = 1 }})") is None
+    assert wow.eval(f"{MOD}.Logic.NearestPlace(nil)") is None
+    assert wow.errors == []
+
+
+def show_on_map_stand_in(wow: WowRuntime) -> None:
+    wow.execute(
+        """Ran = nil
+        Bastians:RegisterAction(Bastians:GetModule('Quests'), { id = 'map.show', label = 'Show on map',
+          short = 'Map', types = '*', order = 10,
+          when = function(ref, ctx)
+            return (ctx and ctx.points ~= nil) or #Bastians:Entity(ref):Locations() > 0
+          end,
+          run = function(ref, ctx) Ran = { ref = ref, points = ctx.points } end })"""
+    )
+
+
+def route_to_stand_in(wow: WowRuntime) -> None:
+    wow.execute(
+        """Routed = nil
+        Bastians:RegisterAction(Bastians:GetModule('Quests'), { id = 'route.to', label = 'Route to',
+          types = '*', order = 15,
+          when = function(ref) return #Bastians:Entity(ref):Locations() > 0 end,
+          run = function(ref) Routed = ref end })"""
+    )
+
+
+LINEN = """Mock.questLog[2].objectives = {
+  { text = "Linen Cloth: 2/5", type = "item", finished = false, numFulfilled = 2, numRequired = 5 },
+}"""
+
+
+def test_every_objective_line_has_its_map_button(wow: WowRuntime):
+    boot(wow)
+    wow.execute(LINEN)
+    wow.execute(
+        """table.insert(Mock.questLog[2].objectives,
+          { text = "Find the cave", type = "event", finished = false })"""
+    )
+    settle(wow)
+    show_on_map_stand_in(wow)
+    wow.execute(f"{SHEET}.Open(176) ; BST_CANVAS = {SHEET}.Canvas(BastiansQuestSheet)")
+    button = "BST_CANVAS.buttons['objective.map.1']"
+    assert wow.eval(f"{button}.label:GetText()") == "Map"
+    assert wow.eval(f"{button}.tip") == "Show on map"
+    assert wow.eval("BST_CANVAS.buttons['objective.map.2']") is None  # nothing to show: no button
+    wow.execute(f"{button}:Click()")
+    # the step with the client's number: the item it asks for, at the places of the step
+    assert wow.eval("Ran.ref") == "item:1931"
+    assert wow.eval("#Ran.points") == 2 and wow.eval("Ran.points[1].map") == 1429
+    places, ref = wow.eval(f"{SHEET}.ObjectivePlaces(176, 1)")
+    assert ref == "item:1931" and len(list(places.values())) == 2
+    # the exploration is a step the data does not know: no place
+    assert wow.eval(f"({SHEET}.ObjectivePlaces(176, 2))") is None
+    assert wow.eval(f"({SHEET}.ObjectivePlaces(176, 3))") is None  # no step is that objective
+    assert wow.eval(f"({SHEET}.ObjectivePlaces(424242, 1))") is None
+    assert "2/5 Linen Cloth" in drawn(wow)
+    assert wow.errors == []
+
+
+def test_no_map_button_on_a_hover_or_without_the_map(wow: WowRuntime):
+    boot(wow)
+    wow.execute(LINEN)
+    settle(wow)
+    wow.execute(f"{SHEET}.Open(176) ; BST_CANVAS = {SHEET}.Canvas(BastiansQuestSheet)")
+    assert wow.eval("BST_CANVAS.buttons['objective.map.1']") is None  # no Map addon, no button
+    show_on_map_stand_in(wow)
+    wow.execute(f"{SHEET}.Close() ; {SHEET}.Preview(176, {{}})")
+    assert wow.eval("BST_CANVAS.buttons['objective.map.1']") is None  # the mouse cannot reach it
+    assert "2/5 Linen Cloth" in drawn(wow)
+    assert wow.errors == []
+
+
+def test_a_place_nobody_knows_is_said_and_map_and_route_are_greyed(wow: WowRuntime):
+    """("Mirror Lake": Map and Route led back to the giver): "no place
+    and grayed buttons". The sheet says so in one line; "Route to the giver" stays."""
+    boot(wow)
+    show_on_map_stand_in(wow)
+    route_to_stand_in(wow)
+    wow.execute(MIRROR_LAKE)
+    settle(wow)
+    wow.execute(f"{SHEET}.Open(76) ; BST_CANVAS = {SHEET}.Canvas(BastiansQuestSheet)")
+    assert "Where this is done is not known" in drawn(wow)
+    for key in ("map.show", "route.to"):
+        button = f"BST_CANVAS.buttons['{key}']"
+        assert wow.eval(f"{button}:IsShown()") is True
+        assert wow.eval(f"{button}.enabledFlat") is False and wow.eval(f"{button}:GetAlpha()") < 1
+        assert wow.eval(f"{button}.tip") == "Where this is done is not known"
+        wow.execute(f"{button}:Click()")
+    assert wow.eval("Ran") is None and wow.eval("Routed") is None  # nothing to run
+    giver = "BST_CANVAS.buttons['route.giver']"
+    assert wow.eval(f"{giver}.enabledFlat") is not False
+    wow.execute(f"{giver}:Click()")
+    assert wow.eval("Routed") == "npc:240"
+    model = wow.eval(f"{SHEET}.Model(76)")
+    assert model.unplaced is True and model.where == "Where this is done is not known"
+    # the client knows the place: the line is a direction again, the buttons run
+    wow.execute("Mock.waypoints[76] = { map = 1429, x = 0.29, y = 0.61 }")
+    settle(wow)
+    wow.execute(f"{SHEET}.Close() ; {SHEET}.Open(76)")
+    model = wow.eval(f"{SHEET}.Model(76)")
+    assert model.unplaced is None and "yards" in model.where
+    assert "Where this is done is not known" not in drawn(wow)
+    wow.execute("BST_CANVAS.buttons['route.to']:Click()")
+    assert wow.eval("BST_CANVAS.buttons['route.to'].enabledFlat") is True
+    assert wow.eval("Routed") == "quest:76"
+    assert wow.errors == []
+
+
+def test_no_greyed_button_without_the_apps(wow: WowRuntime):
+    boot(wow)
+    wow.execute(MIRROR_LAKE)
+    settle(wow)
+    wow.execute(f"{SHEET}.Open(76) ; BST_CANVAS = {SHEET}.Canvas(BastiansQuestSheet)")
+    assert "Where this is done is not known" in drawn(wow)  # the line needs no app
+    assert wow.eval("BST_CANVAS.buttons['map.show']") is None
+    assert wow.eval("BST_CANVAS.buttons['route.to']") is None
+    assert wow.errors == []
+
+
+def test_a_done_quest_nobody_can_place_keeps_its_done_line(wow: WowRuntime):
+    """Complete, in no source, and the client names no place: Map and Route are greyed, and the
+    sheet does not say "where this is done" of a quest that is done."""
+    boot(wow)
+    wow.execute(
+        "Mock.questLog[#Mock.questLog + 1] = { questID = 99999, title = 'A Song for Our Future', "
+        "level = 10, complete = true, objectives = {} }"
+    )
+    settle(wow)
+    model = wow.eval(f"{SHEET}.Model(99999)")
+    assert (model.ready, model.unplaced, model.where) == (True, True, None)
+    wow.execute(f"{SHEET}.Open(99999)")
+    assert "Where this is done is not known" not in drawn(wow)
+    assert wow.errors == []
+
+
+def test_the_map_shows_what_has_no_place_of_its_own_at_the_places_named(wow: WowRuntime):
+    """An item has no spawns: "Show on map" of a collect objective lives on the places it is given."""
+    boot(wow, CORE, DATA, "Bastians_Map", QUESTS)
+    ctx = "{ source = 'sheet', points = { { map = 1429, x = 0.4, y = 0.7 } } }"
+    assert wow.eval(f"Bastians:GetAction('map.show').when('item:2589', {ctx})") is True
+    wow.execute(f"Bastians:RunAction('map.show', 'item:2589', {ctx})")
+    assert wow.eval("Bastians:Focused()") == "item:2589"
+    # without places an item stays what it was: not offered
+    assert (
+        wow.eval("Bastians:GetAction('map.show').when('item:2589', { source = 'sheet' })") is False
+    )
     assert wow.errors == []

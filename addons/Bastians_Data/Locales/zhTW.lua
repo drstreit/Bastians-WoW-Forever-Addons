@@ -7,6 +7,7 @@ ns.L:Register("zhTW", {
   ["Packs built for another client"] = "為其他用戶端建置的資料包",
   ["Their ids and places belong to that client; install the packs for this one."] = "它們的編號與地點屬於該用戶端；請安裝適用於此用戶端的資料包。",
   ["Packs are built for this client."] = "資料包是為此用戶端建置的。",
+  ["This Data edition needs a newer Bastian's suite"] = "此資料版本需要更新的 Bastian's Suite",
   ["World database"] = "世界資料庫",
   ["Data"] = "資料",
 
@@ -79,6 +80,7 @@ ns.L:Register("zhTW", {
   -- the words of a record's kind (KINDS, PLACE_GROUPS)
   ["Other"] = "其他",
   ["Quest object"] = "任務物件",
+  ["Quest place"] = "任務地點",
   ["Chest"] = "寶箱",
   ["Signpost"] = "路標",
   ["Fire and forge"] = "火堆與熔爐",
@@ -212,7 +214,7 @@ ns.L:Register("zhTW", {
   ["No page of the book names this dungeon yet."] = "書中還沒有提到這個地下城的頁面。",
   -- Export.lua: the captures as a text (catalog review B5, 07.11.2026)
   ["Copy my captures"] = "複製我的記錄",
-  ["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "你學到的路線、飛行時間和乘船等待時間，作為 GitHub issue 的文字（Share your captures）。只有位置和時間，沒有名字。",
+  ["Your learned walks, flight times, ride waits and the places where your quest steps counted, as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "你學到的路線、飛行時間、乘船等待時間以及任務步驟計數的位置，作為 GitHub issue 的文字（Share your captures）。只有位置和時間，沒有名字。",
   ["Your captures"] = "你的記錄",
   ["The text is selected: press Ctrl+C, then paste it into a GitHub issue (Share your captures). Positions and times only, no names."] = "文字已選取：按 Ctrl+C，然後貼到 GitHub issue（Share your captures）。只有位置和時間，沒有名字。",
   ["Nothing learned yet: walk off the roads, fly, ride a boat; then come back here."] = "還沒有學到任何東西：離開道路走走、飛行、乘船；然後回到這裡。",

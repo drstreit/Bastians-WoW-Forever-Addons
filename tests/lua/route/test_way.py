@@ -247,6 +247,39 @@ def test_add_to_route_is_offered_while_a_route_runs(wow: WowRuntime):
     assert wow.errors == []
 
 
+def test_adding_a_thing_makes_route_tos_pick_from_where_the_route_ends(wow: WowRuntime):
+    """ADR 0069 (plan-quest-links.md S6): Route.To took the fastest place, AddRef the one nearest
+    to the goal by straight line. Both plan the nearest ten and keep the fastest; the leg to an
+    added stop starts at the last stop ahead, so it is measured from there: the place beside the
+    goal, though the other is nearer to the player."""
+    boot(wow)
+    wow.execute(
+        """
+        local m = Bastians:NewModule("TwoPlaces", { addon = "Bastians_Route" })
+        Bastians:RegisterEntityType(m, { type = "testplace", priority = 100,
+          name = function() return "Two places" end,
+          places = function()
+            return { { map = 0, wx = 60, wy = 40 }, { map = 0, wx = 100, wy = -150 } }
+          end })
+        """
+    )
+    assert wow.eval("#Bastians:Entity('testplace:1'):Locations()") == 2
+    player = wow.eval("{ Bastians.Coords.Player() }")
+    near = [(player[2] - wx) ** 2 + (player[3] - wy) ** 2 for wx, wy in ((60, 40), (100, -150))]
+    assert near[0] < near[1]  # the first is the player's nearest
+    wow.eval(f"{R}.ToPoint(0, 100, -300, 'Goal')")
+    wow.run_frames(30)
+    assert wow.eval(f"{R}.AddRef('testplace:1')") is True
+    wow.run_frames(30)
+    stops = list(wow.eval(f"{R}.Active().tour.stops").values())
+    assert [s.name for s in stops] == ["Goal", "Two places"] and stops[1].ref == "testplace:1"
+    assert (round(stops[1].place.wx), round(stops[1].place.wy)) == (100, -150)
+    # a thing without a place: said, nothing added
+    assert wow.eval(f"{R}.AddRef('item:2589')") is False
+    assert any("No route to" in line for line in wow.chat)
+    assert wow.errors == []
+
+
 def test_the_windows_buttons_follow_who_answers(wow: WowRuntime):
     boot(wow, TOMTOM)
     wow.execute(f"{WIN}.Open()")

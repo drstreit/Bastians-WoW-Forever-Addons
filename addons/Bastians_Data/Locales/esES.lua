@@ -7,6 +7,7 @@ local strings = {
   ["Packs built for another client"] = "Paquetes creados para otro cliente",
   ["Their ids and places belong to that client; install the packs for this one."] = "Sus ids y lugares pertenecen a ese cliente; instala los paquetes para este.",
   ["Packs are built for this client."] = "Los paquetes están creados para este cliente.",
+  ["This Data edition needs a newer Bastian's suite"] = "Esta edición de datos necesita un Bastian's Suite más reciente",
   ["World database"] = "Base de datos del mundo",
   ["Data"] = "Datos",
 
@@ -79,6 +80,7 @@ local strings = {
   -- the words of a record's kind (KINDS, PLACE_GROUPS)
   ["Other"] = "Otros",
   ["Quest object"] = "Objeto de misión",
+  ["Quest place"] = "Lugar de misión",
   ["Chest"] = "Cofre",
   ["Signpost"] = "Señal",
   ["Fire and forge"] = "Fuego y forja",
@@ -212,7 +214,7 @@ local strings = {
   ["No page of the book names this dungeon yet."] = "Ninguna página del libro menciona esta mazmorra todavía.",
   -- Export.lua: the captures as a text (catalog review B5, 07.11.2026)
   ["Copy my captures"] = "Copiar mis capturas",
-  ["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Tus caminos aprendidos, tiempos de vuelo y esperas de barco como texto para una incidencia de GitHub (Share your captures). Solo posiciones y tiempos, sin nombres.",
+  ["Your learned walks, flight times, ride waits and the places where your quest steps counted, as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Tus caminos aprendidos, tiempos de vuelo, esperas de barco y los lugares donde contaron los pasos de tus misiones, como texto para una incidencia de GitHub (Share your captures). Solo posiciones y tiempos, sin nombres.",
   ["Your captures"] = "Tus capturas",
   ["The text is selected: press Ctrl+C, then paste it into a GitHub issue (Share your captures). Positions and times only, no names."] = "El texto está seleccionado: pulsa Ctrl+C y pégalo en una incidencia de GitHub (Share your captures). Solo posiciones y tiempos, sin nombres.",
   ["Nothing learned yet: walk off the roads, fly, ride a boat; then come back here."] = "Nada aprendido aún: camina fuera de los caminos, vuela, toma un barco; luego vuelve aquí.",

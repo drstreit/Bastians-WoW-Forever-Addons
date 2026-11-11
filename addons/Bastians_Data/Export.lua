@@ -1,7 +1,8 @@
 -- Bastian's Data: your captures as a text to share (catalog review B5, 07.11.2026): the walks the
--- mesh missed, the flight times and the ride waits the graph learned, as lines a player copies
--- into a GitHub issue ("Share your captures"); tools/capture_import.py reads them and the build
--- credits "n captures". Positions and times only: no name, no character, no account.
+-- mesh missed, the flight times, the ride waits and (version 2, 10.11.2026) the places where a
+-- quest step's count rose, as lines a player copies into a GitHub issue ("Share your captures");
+-- tools/capture_import.py reads them and the build credits "n captures". Positions and times
+-- only: no name, no character, no account.
 local _, ns = ...
 local B = Bastians
 local Data = ns.Data
@@ -11,11 +12,17 @@ local S = B.UI.Style
 local Export = {}
 Data.Export = Export
 
-Export.VERSION = 1
+Export.VERSION = 2 -- 2: the `step` lines (data.md "Step places from play")
 Export.FRAME = "BastiansDataExport"
 
 local function fmt1(n)
   return string.format("%.1f", n)
+end
+
+-- "<quest>:<n>" -> quest, n; nil for a key that is none.
+local function stepKey(key)
+  local quest, n = tostring(key):match("^(%d+):(%d+)$")
+  return tonumber(quest), tonumber(n)
 end
 
 -- The checksum both sides agree on: the bytes of the body (the lines joined with newlines),
@@ -29,8 +36,9 @@ function Export.Sum(body)
 end
 
 -- The text, pure over the learned table (world-graph.md section 9): the header, one line per
--- walk, flight time and ride, then END with the line count and the checksum, so a cut or a
--- changed paste shows. nil when nothing was learned.
+-- walk, flight time, ride and quest step (`step <quest> <n> <uiMapID> <x,y;...>`, one line per
+-- map, map fractions with four decimals), then END with the line count and the checksum, so a
+-- cut or a changed paste shows. nil when nothing was learned.
 function Export.Text(learned, client, build, at)
   local lines = {}
   for _, w in ipairs(learned and learned.walk or {}) do
@@ -71,6 +79,42 @@ function Export.Text(learned, client, build, at)
       waits[i] = fmt1(w)
     end
     lines[#lines + 1] = string.format("ride %s %s", k, table.concat(waits, ","))
+  end
+  keys = {}
+  for k, v in pairs(learned and learned.steps or {}) do
+    if type(v) == "table" and stepKey(k) then
+      keys[#keys + 1] = k
+    end
+  end
+  table.sort(keys, function(a, b)
+    local qa, na = stepKey(a)
+    local qb, nb = stepKey(b)
+    if qa ~= qb then
+      return qa < qb
+    end
+    return na < nb
+  end)
+  for _, k in ipairs(keys) do
+    local quest, n = stepKey(k)
+    local byMap, maps = {}, {}
+    for _, p in ipairs(learned.steps[k]) do
+      if
+        type(p) == "table"
+        and type(p[1]) == "number"
+        and type(p[2]) == "number"
+        and type(p[3]) == "number"
+      then
+        if not byMap[p[1]] then
+          byMap[p[1]] = {}
+          maps[#maps + 1] = p[1]
+        end
+        table.insert(byMap[p[1]], string.format("%.4f,%.4f", p[2], p[3]))
+      end
+    end
+    table.sort(maps)
+    for _, map in ipairs(maps) do
+      lines[#lines + 1] = string.format("step %d %d %d %s", quest, n, map, table.concat(byMap[map], ";"))
+    end
   end
   if #lines == 0 then
     return nil

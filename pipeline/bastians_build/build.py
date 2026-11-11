@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from bastians_build import links, steps
 from bastians_build.config import BuildConfig, PackConfig
-from bastians_build.emit import HEADER, emit_pack, emit_transforms, locale_guard
+from bastians_build.emit import (
+    HEADER,
+    emit_pack,
+    emit_transforms,
+    lazy_index,
+    locale_guard,
+    lua_value,
+)
 from bastians_build.files import write_text
 from bastians_build.groundtruth import Check, render_section
 from bastians_build.model import World, parse_ref
@@ -22,11 +31,14 @@ class PackResult:
     counts: dict[str, int]
     index_counts: dict[str, int]
     changed: bool
-    budget_kb: int | None = None  # the budget of the built client (build.toml, per client)
+    index_bytes: dict[str, int] = field(default_factory=dict)  # each index's bytes in the file
+    # build.toml [limits] pack_kb (ADR 0072): no budget, the size above which a pack is a build
+    # gone wrong
+    ceiling_kb: int | None = None
 
     @property
-    def over_budget(self) -> bool:
-        return self.budget_kb is not None and self.size > self.budget_kb * 1024
+    def over_ceiling(self) -> bool:
+        return self.ceiling_kb is not None and self.size > self.ceiling_kb * 1024
 
 
 @dataclass
@@ -38,14 +50,16 @@ class BuildResult:
     skipped: list[str] = field(default_factory=list)  # optional packs without records
     ground_truth: list[Check] | None = None  # groundtruth.compare, when a CSV was given
     probe_truth: ProbeTruth | None = None  # probetruth.check_probe, when a probe dump was given
+    steps: steps.Report | None = None  # the quests' steps as the build resolved them
     report: str = ""
     report_path: Path | None = None
+    links_path: Path | None = None  # links-<client>.json, the counts the edition keeps
     transforms_path: Path | None = None
     transforms_changed: bool = False
 
     @property
     def ok(self) -> bool:
-        return not self.problems and not any(p.over_budget for p in self.packs)
+        return not self.problems and not any(p.over_ceiling for p in self.packs)
 
 
 # ForeverDB's licence (GPL-3.0 section 7(b)): the line that starts "-- Data: ForeverDB.net
@@ -100,6 +114,9 @@ def build(
 ) -> BuildResult:
     result = BuildResult(world=world, ground_truth=ground_truth, probe_truth=probe_truth)
     result.problems = validate(world, config)
+    # every quest's steps, resolved on the finished world (steps.py): the entrances and whatever
+    # else joined the world after the sources were merged are in it by now
+    result.steps = steps.resolve(world)
     result.notes = list(world.notes)
     if result.problems:
         return result
@@ -138,7 +155,9 @@ def build(
                 write_text(out_dir / cfg.addon / "Generated" / cfg.file, stub)
             continue
         table = pack_table(world, cfg)
-        text = emit_pack(name, table, comment=pack_comment(name, world, bool(cfg.locales)))
+        text = emit_pack(
+            name, table, comment=pack_comment(name, world, bool(cfg.locales)), lazy=links.LAZY
+        )
         if cfg.locales:
             text = locale_guard(text, cfg.locales)
         path = out_dir / cfg.addon / "Generated" / cfg.file
@@ -151,19 +170,147 @@ def build(
                 counts=record_counts(world, cfg),
                 index_counts={k: len(v) for k, v in table["index"].items()},
                 changed=changed,
-                budget_kb=cfg.budget_for(world.client),
+                index_bytes={
+                    k: len(lua_value(lazy_index(v) if k in links.LAZY else v, 3).encode("utf-8"))
+                    for k, v in table["index"].items()
+                },
+                ceiling_kb=config.pack_ceiling_kb,
             )
         )
     report = render_report(result)
     result.report = report
     if write:
-        result.report_path = (report_dir or out_dir) / "report.md"
+        folder = report_dir or out_dir
+        result.report_path = folder / "report.md"
         write_text(result.report_path, report)
+        # the count and the lists (data.md "The count and the watch"): what the edition keeps,
+        # the watch compares and a player with a low character can go and check
+        client = world.client
+        result.links_path = folder / f"links-{client}.json"
+        counts = json.dumps(links_counts(result), indent=1, sort_keys=True)
+        write_text(result.links_path, counts + "\n")
+        write_text(folder / f"links-classic-{client}.tsv", steps.listing(result.steps.classic))
+        write_text(
+            folder / f"links-unplaced-{client}.tsv",
+            steps.listing(result.steps.open, reasons=True),
+        )
     return result
 
 
+def edge_sizes(result: BuildResult) -> dict[str, tuple[int, int]]:
+    """Each `edge.*` index a pack of this build carries: (its keys, its bytes in the file)."""
+    return {
+        name: (p.index_counts[name], p.index_bytes.get(name, 0))
+        for p in result.packs
+        for name in p.index_counts
+        if name in links.BY_INDEX
+    }
+
+
+def links_counts(result: BuildResult) -> dict:
+    """`links-<client>.json`: the steps' numbers and the edge indexes' sizes. No time in it: the
+    same inputs give the same file."""
+    world = result.world
+    return {
+        "client": world.client,
+        "build": world.build,
+        **result.steps.counts(),
+        "edges": {
+            name: {"keys": keys, "bytes": size}
+            for name, (keys, size) in sorted(edge_sizes(result).items())
+        },
+    }
+
+
+def render_links(result: BuildResult) -> list[str]:
+    """The edge registry in the report (data.md "The edge registry"): how many links each edge
+    stores and what the index of its other direction costs in its pack."""
+    counts = links.counts(result.world)
+    sizes = edge_sizes(result)
+    lines = [
+        "## Links",
+        "",
+        "| Edge | From | To | Links stored | The other direction | Keys | Size |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for e in links.EDGES:
+        if e.index is None:
+            other, keys, size = e.why or "-", "-", "-"
+        elif e.index in sizes:
+            other = e.index
+            keys, size = str(sizes[e.index][0]), f"{sizes[e.index][1] / 1024:.1f} KB"
+        else:
+            other, keys, size = f"{e.index} (its pack is not built)", "-", "-"
+        lines.append(
+            f"| {e.name} | {', '.join(e.src)} | {', '.join(e.dst)} | {counts[e.name]} "
+            f"| {other} | {keys} | {size} |"
+        )
+    return [*lines, ""]
+
+
+def _named(counts: dict[str, int]) -> str:
+    return ", ".join(f"{name} {n}" for name, n in counts.items()) or "none"
+
+
+def render_steps(result: BuildResult) -> list[str]:
+    """The quests' steps as the resolver placed them (data.md "The count and the watch"): by
+    kind, what places them, what is known of the ones without a place, and the Classic debt by
+    zone. The lists themselves are the two files beside the report."""
+    c = result.steps.counts()
+    client = result.world.client
+    lines = [
+        "## Quest steps",
+        "",
+        f"{c['steps']} steps in {c['quests'] - c['quests_without_steps']} of {c['quests']} quests.",
+        "",
+        "| Kind | Steps | With a place |",
+        "|---|---|---|",
+    ]
+    lines += [
+        f"| {kind} | {row['steps']} | {row['placed']} |" for kind, row in c["steps_by_kind"].items()
+    ]
+    lines += [
+        "",
+        f"- With a place: {c['placed']} ({_named(c['placed_by_src'])}; `subject` is the "
+        "subject's own places).",
+        f"- No place needed: {c['given']} (the item the giver hands over).",
+        f"- Without a place: {c['unplaced']} ({_named(c['unplaced_by_reason'])}). "
+        f"The list: `links-unplaced-{client}.tsv`.",
+        f"- **The Classic debt**: {c['classic']} steps placed by Classic knowledge alone. "
+        f"The list, the lowest quest level first: `links-classic-{client}.tsv`.",
+        "",
+    ]
+    if c["classic_by_zone"]:
+        by_zone = sorted(c["classic_by_zone"].items(), key=lambda pair: (-pair[1], pair[0]))
+        lines += ["| Zone | Classic-only steps |", "|---|---|"]
+        lines += [f"| {zone} | {n} |" for zone, n in by_zone]
+        lines.append("")
+    if result.steps.assumed:
+        # our own table's rows without `verified` (data.md "Our authored table"): listed in
+        # every report until somebody checked them in game
+        lines += [
+            f"**Authored places to check in game** ({_count(len(result.steps.assumed), 'step')}; "
+            f"`quest_places_{client}.toml`, the rows without `verified`):",
+            "",
+            "| Quest | Step | Subject | Zone | Level |",
+            "|---|---|---|---|---|",
+        ]
+        for row in result.steps.assumed:
+            name = f"{row.quest} {row.name}" if row.name else str(row.quest)
+            subject = row.subject or row.ref or "-"
+            level = "-" if row.level is None else row.level
+            lines.append(f"| {name} | {row.step} | {subject} | {row.zone or '-'} | {level} |")
+        lines.append("")
+    return lines
+
+
+def _count(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
 def render_report(result: BuildResult) -> str:
-    """build/report.md: sizes against budgets, counts, dropped rows; no timestamps."""
+    """build/report.md: sizes, counts, dropped rows; no timestamps. A pack has no size budget
+    (ADR 0072): the table names the one ceiling and marks a pack above it."""
     world = result.world
     lines = [
         "# Build report",
@@ -178,12 +325,12 @@ def render_report(result: BuildResult) -> str:
     lines += [
         "## Packs",
         "",
-        "| Pack | Addon | Size | Budget | Records | Indexes |",
+        "| Pack | Addon | Size | Ceiling | Records | Indexes |",
         "|---|---|---|---|---|---|",
     ]
     for p in result.packs:
-        budget = f"{p.budget_kb} KB" if p.budget_kb else "-"
-        flag = " **OVER**" if p.over_budget else ""
+        budget = f"{p.ceiling_kb} KB" if p.ceiling_kb else "-"
+        flag = " **ABOVE THE CEILING**" if p.over_ceiling else ""
         records = ", ".join(f"{t} {n}" for t, n in sorted(p.counts.items()))
         indexes = ", ".join(f"{k} {n}" for k, n in sorted(p.index_counts.items())) or "-"
         lines.append(
@@ -191,6 +338,9 @@ def render_report(result: BuildResult) -> str:
             f"| {records} | {indexes} |"
         )
     lines.append("")
+    lines += render_links(result)
+    if result.steps is not None:
+        lines += render_steps(result)
     if result.notes:
         lines += ["## Notes", ""] + [f"- {n}" for n in result.notes] + [""]
     if result.ground_truth is not None:

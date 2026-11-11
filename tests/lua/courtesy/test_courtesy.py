@@ -564,15 +564,66 @@ def test_a_buff_in_a_short_fight_asks_afterwards(wow: WowRuntime):
     assert errors(wow) == []
 
 
-def test_after_a_long_fight_nobody_knows_when_it_landed(wow: WowRuntime):
+def trace(wow: WowRuntime) -> list[tuple]:
+    rows = wow.eval("Bastians:GetModule('Courtesy').db.global.trace").values()
+    return [(r.word, r.spell, r.how) for r in rows]
+
+
+def test_after_a_long_fight_a_buff_without_a_landing_time_gets_no_ring(wow: WowRuntime):
     boot(wow)
     wow.fire("PLAYER_REGEN_DISABLED")
     wow.execute("Mock.combat = true")
-    buff(wow, "nameplate3", "Thalendra")
+    buff(wow, "nameplate3", "Thalendra")  # an end, no duration: when it landed is not known
     wow.advance(61)
     wow.execute("Mock.combat = false")
     wow.fire("PLAYER_REGEN_ENABLED")
     assert wow.eval(f"{C}.IsShown()") is False
+    assert trace(wow)[0] == ("long fight", "Mark of the Wild", None)  # and the trace says so
+    assert errors(wow) == []
+
+
+def long_fight(wow: WowRuntime, seconds: int) -> None:
+    """A stranger's buff lands at the start of a fight of `seconds`; the aura says when."""
+    wow.fire("PLAYER_REGEN_DISABLED")
+    wow.execute(
+        """Mock.combat = true
+        Mock.unitNames = { nameplate3 = 'Thalendra' }; Mock.guids = { nameplate3 = 'Player-1-Thalendra' }
+        Mock.auras = { { name = 'Power Word: Fortitude', spellId = 1243, sourceUnit = 'nameplate3',
+          duration = 1800, expirationTime = GetTime() + 1800 } }
+        Mock.Fire('UNIT_AURA', 'player', {})"""
+    )
+    wow.advance(seconds)
+    wow.execute("Mock.combat = false")
+    wow.fire("PLAYER_REGEN_ENABLED")
+
+
+def test_a_buff_of_a_long_fight_asks_afterwards_when_the_aura_says_when_it_landed(wow: WowRuntime):
+    """ "It really happens often that I get buffed from a player but
+    courtesy does not show up". Every buff of a fight longer than a minute was dropped."""
+    boot(wow)
+    long_fight(wow, 200)
+    assert wow.eval(f"{C}.Pending().who") == "Thalendra"
+    assert trace(wow)[0] == ("ask", "Power Word: Fortitude", "unit")
+    assert errors(wow) == []
+
+
+def test_a_buff_that_landed_long_ago_in_a_fight_gets_no_ring(wow: WowRuntime):
+    boot(wow)
+    long_fight(wow, 400)  # more than five minutes ago: the moment is over
+    assert wow.eval(f"{C}.IsShown()") is False
+    assert trace(wow)[0] == ("long fight", "Power Word: Fortitude", None)
+    assert errors(wow) == []
+
+
+def test_the_trace_leaves_out_my_own_casts_and_says_when_a_guid_has_no_name(wow: WowRuntime):
+    """The owner's saved trace, 10.11.2026: 25 of 30 lines were the player's own auras."""
+    boot(wow)
+    cast(wow, "name = 'Drink', spellId = 430, sourceUnit = 'player'")
+    wow.execute("Mock.guids = Mock.guids or {}; Mock.guids.player = 'Player-1-Me'")
+    cast(wow, "name = 'Frost Armor', spellId = 168, casterGUID = 'Player-1-Me'")
+    assert trace(wow) == []
+    cast(wow, "name = 'Well Fed', spellId = 19705, casterGUID = 'Player-9-Unnamed'")
+    assert trace(wow) == [("not from a player", "Well Fed", "guid without a name")]
     assert errors(wow) == []
 
 
@@ -600,15 +651,93 @@ def test_the_trace_is_kept_without_a_name(wow: WowRuntime):
 def test_a_spoken_line_goes_through_the_games_secure_macro(wow: WowRuntime):
     """ "I clicked, nothing in chat"; the client refuses the addon's call."""
     boot(wow)
-    buff(wow, "nameplate3", "Thalendra")
+    unseen(wow)  # no name to whisper to: the line is said aloud
     button = f"{R}.Secure(1)"
     assert wow.eval(f"{button}:GetAttribute('type')") == "macro"
+    # , clicking and nothing in chat: an addon's secure button follows
+    # ActionButtonUseKeyDown, and a button that hears only the release must be told to act on it
+    assert list(wow.eval(f"{button}.clicks").values()) == ["AnyUp"]
+    assert wow.eval(f"{button}:GetAttribute('useOnKeyDown')") is False
     text = wow.eval(f"{button}:GetAttribute('macrotext')")
     assert text[:3] in ("/s ", "/e ") and len(text) <= 255
     wow.execute("Mock.sentChat = {}")
     wow.execute(f"local b = {button} ; b:GetScript('PostClick')(b, 'LeftButton')")
     assert wow.eval(f"{C}.IsShown()") is False  # sent by the game, the ring goes
     assert list(wow.eval("Mock.sentChat").values()) == []  # never by the addon
+    assert errors(wow) == []
+
+
+def test_the_person_gets_a_whisper_by_the_whole_name(wow: WowRuntime):
+    """ "directly address the person who buffed or invited me, without
+    losing my current target". A whisper needs no target; on Forever it needs the surname."""
+    boot(wow)
+    wow.execute(
+        """local real = UnitName
+        UnitName = function(u)
+          if u == "nameplate3" then return "Thalendra", "Moonbrook" end
+          return real(u)
+        end"""
+    )
+    buff(wow, "nameplate3", "Thalendra")
+    sep = " " if wow.eval("Bastians.Client") == "forever" else "-"
+    whole = f"Thalendra{sep}Moonbrook"
+    assert wow.eval(f"{C}.Pending().full") == whole
+    assert wow.eval(f"{R}.Item(1).secure") is None  # a whisper needs no secure button
+    assert wow.eval(f"{R}.Item(1).tip").startswith("/w Thalendra ")
+    wow.execute(f"Mock.sentChat = {{}}; Mock.emotes = {{}}; {C}.Fire(1, {R}.Item(1))")
+    text, channel, _ = sent(wow)[-1]
+    assert channel == "WHISPER" and text
+    assert wow.eval("Mock.sentChat[1].target") == whole
+    assert emotes(wow) == []  # nothing public goes with it
+    assert wow.eval(f"{C}.IsShown()") is False
+    assert errors(wow) == []
+
+
+def test_a_guid_gives_the_whole_name_or_the_line_is_said_aloud(wow: WowRuntime):
+    """, a buff from another realm: "No player named 'First Surname
+    REALM' is currently playing". The GUID's seventh value is the realm, never a surname; Forever's
+    sixth holds first name and surname, and its whisper takes no realm."""
+    boot(wow)
+    forever = wow.eval("Bastians.Client") == "forever"
+    zara = "Zara Moonbrook" if forever else "Zara"  # the sixth value, as each client gives it
+    wow.execute(
+        f"""Mock.players = {{
+          ['Player-2-Zara'] = {{ name = '{zara}', realm = 'OtherRealm', class = 'Mage', file = 'MAGE' }},
+          ['Player-1-Ulf'] = {{ name = 'Ulf', realm = '', class = 'Mage', file = 'MAGE' }},
+          ['Player-2-Odo'] = {{ name = 'Odo', realm = 'OtherRealm', class = 'Mage', file = 'MAGE' }},
+        }}"""
+    )
+    whole = "Zara Moonbrook" if forever else "Zara-OtherRealm"
+    cast(wow, "name = 'Arcane Intellect', spellId = 11, casterGUID = 'Player-2-Zara'")
+    assert wow.eval(f"{C}.Pending().full") == whole
+    assert wow.eval(f"{C}.Pending().who") == "Zara"  # the first name, as a unit gives it
+    assert wow.eval(f"{R}.Item(1).tip").startswith("/w Zara ")
+    wow.execute(f"Mock.sentChat = {{}}; {C}.Fire(1, {R}.Item(1))")
+    assert wow.eval("Mock.sentChat[1].target") == whole
+    # no surname: on Forever a whisper to the first name alone finds nobody (forever-api.md)
+    cast(wow, "name = 'Thorns', spellId = 13, casterGUID = 'Player-1-Ulf'")
+    assert wow.eval(f"{C}.Pending().full") == (None if forever else "Ulf")
+    assert (wow.eval(f"{R}.Item(1).secure") is None) is (not forever)
+    wow.execute(f"{C}.Hide()")
+    # a first name and a realm: never "First Realm" as a whole name
+    cast(wow, "name = 'Renew', spellId = 17, casterGUID = 'Player-2-Odo'")
+    assert wow.eval(f"{C}.Pending().full") == (None if forever else "Odo-OtherRealm")
+    assert errors(wow) == []
+
+
+def test_a_unit_whose_first_value_holds_both_names_gets_no_realm(wow: WowRuntime):
+    """Blizzard's NameUtil.GetUnitFirstName (1.60.1.70862): "name can be both name + surname"."""
+    boot(wow)
+    if wow.eval("Bastians.Client") != "forever":
+        return  # retail's names hold no space
+    wow.execute(
+        """local real = UnitName
+        UnitName = function(u)
+          if u == "nameplate3" then return "Thalendra Moonbrook", "OtherRealm" end
+          return real(u)
+        end"""
+    )
+    assert wow.eval("Bastians.Compat.FullName('nameplate3')") == "Thalendra Moonbrook"
     assert errors(wow) == []
 
 

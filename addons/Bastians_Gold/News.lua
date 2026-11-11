@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.2.0:1",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "Gold's ledger now books your auction house sales and purchases when you open the mailbox; it raised an error instead.",
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",

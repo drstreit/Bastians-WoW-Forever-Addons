@@ -44,7 +44,9 @@ def test_a_monster_tooltip_says_target_of_and_its_best_drops(wow: WowRuntime):
     boot(wow)
     got = lines(wow, "Unit", 448)  # Hogger: quest 176 in the log needs his claw
     target = [line for line in got if line.startswith("Target of:")]
-    assert target == ["Target of: The Fargodeep Mine  =  0/1"]  # the log's title and progress
+    # the log's title; no progress: the mock's log lists an exploration and no item, so the claw's
+    # count is not known (it read the exploration's 0/1: plan-quest-links.md S3)
+    assert target == ["Target of: The Fargodeep Mine"]
     drops = [line for line in got if "%" in line]
     if wow.made_for(GOLD):
         # chance x price: Blood Saber (3.2 % of 50s) before Linen Cloth (45.5 % of 38c)
@@ -60,31 +62,40 @@ def test_target_of_matches_slay_loot_sources_and_item_droppers(wow: WowRuntime):
     wow.execute(
         """
         local Reg = Bastians:GetModule('Quests').Registrations
-        local quests = {
-          [1] = { objectives = { { "slay", "npc:7", 0 } } },
-          [2] = { objectives = { { "loot", "item:5", 0, "npc:8" } } },
-          [3] = { objectives = { { "loot", "item:6", 1 } } },
-          [4] = { objectives = { { "slay", "npc:99", 0 } } },
+        local quests = { -- each quest's `steps` facet: the things to do with the log's counts
+          [1] = { { step = "take" }, { step = "slay", ref = "npc:7", n = 1, have = 3, count = 8 },
+            { step = "handin" } },
+          [2] = { { step = "take" }, { step = "get", ref = "item:5", via = { "npc:8" }, n = 1,
+            have = 1, count = 1, done = true }, { step = "handin" } },
+          -- two things to do: the first is another's, the second the item this creature drops
+          [3] = { { step = "take" }, { step = "slay", ref = "npc:99", n = 1, have = 0, count = 1 },
+            { step = "get", ref = "item:6", n = 2, have = 2, count = 5 }, { step = "handin" } },
+          [4] = { { step = "take" }, { step = "slay", refs = { "npc:99", "npc:10" } },
+            { step = "get", ref = "item:7", places = { { map = 1, x = 0.1, y = 0.1, ref = "npc:11" } } },
+            { step = "handin", ref = "npc:12" } },
         }
         local items = { [6] = { drops = { { "npc:9", 20 } } } }
-        local log = {
-          [1] = { title = "Wolves", objectives = { { fulfilled = 3, required = 8 } } },
-          [2] = { title = "Claws", objectives = { { finished = true, fulfilled = 1, required = 1 } } },
-          [3] = { title = "Pelts", objectives = { { fulfilled = 0, required = 1 }, { fulfilled = 2, required = 5 } } },
-          [4] = { title = "Other", objectives = {} },
-        }
+        local log = { [1] = { title = "Wolves" }, [2] = { title = "Claws" }, [3] = { title = "Pelts" },
+          [4] = { title = "Other" } }
         local function q(id) return quests[id] end
         local function it(id) return items[id] end
         hit7 = Reg.TargetOf("npc:7", log, q, it)
         hit8 = Reg.TargetOf("npc:8", log, q, it)
         hit9 = Reg.TargetOf("npc:9", log, q, it)
+        hit10 = Reg.TargetOf("npc:10", log, q, it)
+        hit11 = Reg.TargetOf("npc:11", log, q, it)
         miss = Reg.TargetOf("npc:1", log, q, it)
+        taker = Reg.TargetOf("npc:12", log, q, it)
         """
     )
     assert [(r.text, r.value) for r in wow.eval("hit7").values()] == [("Wolves", "3/8")]
     assert [(r.text, r.value) for r in wow.eval("hit8").values()] == [("Claws", "done")]
+    # its own step's count, not the first objective's (S3)
     assert [(r.text, r.value) for r in wow.eval("hit9").values()] == [("Pelts", "2/5")]
-    assert len(wow.eval("miss")) == 0
+    # one of several that count, and who stands at a step's place; no count known: none shown
+    assert [(r.text, r.value) for r in wow.eval("hit10").values()] == [("Other", None)]
+    assert [(r.text, r.value) for r in wow.eval("hit11").values()] == [("Other", None)]
+    assert len(wow.eval("miss")) == 0 and len(wow.eval("taker")) == 0  # the hand-in is no target
     assert wow.errors == []
 
 

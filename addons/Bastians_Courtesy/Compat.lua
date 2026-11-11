@@ -20,10 +20,12 @@ function Compat.Readable(t)
   return not can or can(t) == true
 end
 
--- The player's helpful auras, what Courtesy asks of each: `{ key, name, ends, source, instance,
--- fromPlayer }` (fromPlayer: `isFromPlayerOrPlayerPet`, in neither the docs nor the FrameXML of
--- Forever's client, so usually nil). nil when the client hides them or one cannot be read: then
--- nothing is known, not "no buffs" (GetAuraDataByIndex raises while hidden, BugGrabber 08.11.2026).
+-- The player's helpful auras, what Courtesy asks of each: `{ key, name, ends, landed, source,
+-- instance, fromPlayer }` (landed: the end minus the client's `duration`, on the client's clock, nil
+-- for an aura without both; `duration` assumed on Forever. fromPlayer: `isFromPlayerOrPlayerPet`, in
+-- neither the docs nor the FrameXML of Forever's client, so usually nil). nil when the client hides
+-- them or one cannot be read: then nothing is known, not "no buffs" (GetAuraDataByIndex raises while
+-- hidden, BugGrabber 08.11.2026).
 function Compat.HelpfulAuras()
   local api = rawget(_G, "C_UnitAuras")
   if not (api and type(api.GetAuraDataByIndex) == "function") or Bastians.Compat.AurasSecret() then
@@ -41,11 +43,13 @@ function Compat.HelpfulAuras()
     if key == nil then
       return nil
     end
-    local ends = plain(a.expirationTime)
+    local ends, lasts = plain(a.expirationTime), plain(a.duration)
+    local timed = type(ends) == "number" and ends > 0
     out[#out + 1] = {
       key = key,
       name = plain(a.name),
-      ends = type(ends) == "number" and ends > 0 and ends or true,
+      ends = timed and ends or true,
+      landed = timed and type(lasts) == "number" and lasts > 0 and (ends - lasts) or nil,
       source = plain(a.sourceUnit),
       instance = plain(a.auraInstanceID),
       fromPlayer = plain(a.isFromPlayerOrPlayerPet),
@@ -65,11 +69,34 @@ function Compat.CasterGUID(instance)
   return type(guid) == "string" and guid ~= "" and guid or nil
 end
 
--- A player's name from a GUID, or nil.
+-- A player's name from a GUID as a unit gives it, or nil: the first name, where the client's sixth
+-- value holds first name and surname (Forever, WholeNameOfGUID).
 function Compat.NameOfGUID(guid)
   local name = select(6, Compat.Call("GetPlayerInfoByGUID", guid))
   name = Bastians.Compat.Plain(name)
-  return type(name) == "string" and name ~= "" and name or nil
+  if type(name) ~= "string" or name == "" then
+    return nil
+  end
+  return string.match(name, "^(%S+)") or name
+end
+
+-- The whole name a whisper needs, from a GUID. The client's sixth value is the name, its seventh the
+-- realm ("" on the player's own; Blizzard's UnitUtil.lua, 1.60.1.70862), never a surname: joined as
+-- one, a whisper went to "First Surname REALM" and found nobody. Forever's
+-- names are unique in the region and its own whisper takes "First Surname" without a realm
+-- (UnitPopupSharedUtil.GetFullPlayerName), so there the sixth value when it holds both names, else
+-- nil (the first name alone finds nobody). Elsewhere "Name-Realm" or the name.
+function Compat.WholeNameOfGUID(guid)
+  local name, realm = select(6, Compat.Call("GetPlayerInfoByGUID", guid))
+  name, realm = Bastians.Compat.Plain(name), Bastians.Compat.Plain(realm)
+  if type(name) ~= "string" or name == "" then
+    return nil
+  elseif Bastians.Client == "forever" then
+    return string.find(name, " ", 1, true) and name or nil
+  elseif type(realm) ~= "string" or realm == "" then
+    return name
+  end
+  return name .. "-" .. realm
 end
 
 -- The weather where the player is: "clear", "rain", "snow", "sandstorm" or "other", and its
@@ -124,6 +151,12 @@ function Compat.UnitPlayerName(unit)
   end
   local n = Bastians.Compat.Plain((name(unit)))
   return type(n) == "string" and n ~= "" and n or nil
+end
+
+-- Whether the unit is the player.
+function Compat.IsMe(unit)
+  local isUnit = fnOf("UnitIsUnit")
+  return (unit and isUnit and Bastians.Compat.Plain(isUnit(unit, "player"))) and true or false
 end
 
 -- Whether the unit is the player or in the player's group (no courtesy to those).

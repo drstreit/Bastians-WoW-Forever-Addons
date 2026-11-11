@@ -3272,7 +3272,7 @@ C_QuestLog.GetAbandonQuest = function()
   return Mock.abandonQuest
 end
 C_QuestLog.GetAbandonQuestItems = function()
-  return {}
+  return Mock.abandonItems or {} -- item ids (the API documentation: itemIDs, numbers)
 end
 C_QuestLog.AbandonQuest = function()
   local id = Mock.abandonQuest
@@ -3328,7 +3328,7 @@ C_TaxiMap.GetAllTaxiNodes = function(uiMapID)
       name = n.name,
       position = CreateVector2D(n.x, n.y),
       state = n.state,
-      slotIndex = i,
+      slotIndex = n.slot or i, -- the real list is not in slot order (Forever dump of 23.10.2026)
       textureKit = "FlightMaster",
       useSpecialIcon = false,
     }

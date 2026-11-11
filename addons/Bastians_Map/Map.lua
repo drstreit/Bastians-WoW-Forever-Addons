@@ -716,6 +716,12 @@ function Map.LayoutToolbar()
       end
     end
   end
+  if bar.city then -- the City & dungeon map, only with its art (ADR 0065)
+    bar.city:SetShown(ns.City.Available())
+    if bar.city:IsShown() then
+      group[#group + 1] = { bar.city, 6 }
+    end
+  end
   local rightW = 0
   for _, g in ipairs(group) do
     rightW = rightW + g[2] + (g[1]:GetWidth() or 0)
@@ -942,6 +948,7 @@ mod = B:NewModule("Map", {
   defaults = {
     profile = {
       window = {},
+      city = { window = {}, layers = {} }, -- the City & dungeon map (ADR 0065): its own filters
       cameras = {},
       layers = {},
       continent = 0,

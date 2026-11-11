@@ -495,13 +495,23 @@ def plain(text: str | None) -> str | None:
     return re.sub(r"\s+", " ", text).strip()
 
 
+SOURCES_SHOWN = 3  # travellers named per rumour; the rest is a number
+
+
 def rumour_record(row: Mapping) -> dict:
-    """A claim of the export as the book shows it: AHSync's own sentence and the sources."""
+    """A claim of the export as the book shows it: AHSync's own sentence and its travellers, the
+    `SOURCES_SHOWN` newest by name and link, the others as the number `more` (
+    "not listing dozens of videos for the same strategy, only the 3 newest ones": the deposit
+    rule had thirteen). `allChannels` is the build's own (no pack field): the book's What's new
+    counts new travellers over every channel, shown or not."""
+    sources = sorted(_sources(row), key=lambda s: (str(s[1] or ""), str(s[2])), reverse=True)
     return {
         "claim": plain(row.get("claim") or row.get("subject")),
         "kind": row["kind"],
         "subject": plain(row.get("subject")),
-        "sources": _sources(row),
+        "sources": sources[:SOURCES_SHOWN],
+        "more": len(sources) - SOURCES_SHOWN if len(sources) > SOURCES_SHOWN else None,
+        "allChannels": sorted({str(s[0]) for s in sources if s[0]}),
     }
 
 

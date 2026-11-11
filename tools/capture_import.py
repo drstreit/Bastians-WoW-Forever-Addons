@@ -1,6 +1,8 @@
 """Export the learned facts of Bastian's Data (the walks the mesh missed, the flight times, the
-ride waits) from a client's saved variables into data/captures/<client>/ (world-graph.md §9,
-W11). Positions and times only: the account folder becomes a short hash, no name is written.
+ride waits, the places where a quest step's count rose) from a client's saved variables into
+data/captures/<client>/ (world-graph.md §9, W11; the step places: data.md "Step places from
+play", package QK1). Positions and times only: the account folder becomes a short hash, no name
+is written.
 
 Usage: python tools/capture_import.py --client forever|retail [--wow <client folder>]
        [--file <Bastians_Data.lua>] [--out data/captures]
@@ -10,9 +12,11 @@ The build reads the folder (`bastians_build nav --captures`): a walk held by two
 captures becomes a link for everyone (corrections.captured_links).
 
 A player's text comes from the settings hub, Data > "Copy my captures" (Export.lua): a header
-`BASTIANS CAPTURE 1 <client> <build> <at>`, one line per walk, flight time and ride, and
-`END <lines> <checksum>`; a cut or changed paste is refused. The text may sit inside an issue's
-other words: the first header and the END after it are taken."""
+`BASTIANS CAPTURE <version> <client> <build> <at>`, one line per walk, flight time and ride, and
+`END <lines> <checksum>`; a cut or changed paste is refused. Version 2 adds one line per quest
+step and map, `step <quest> <n> <uiMapID> <x,y;...>` (map fractions); version 1 is still read.
+The text may sit inside an issue's other words: the first header and the END after it are taken.
+Nothing in the build reads the step places yet (packages QK2 and QK3)."""
 
 from __future__ import annotations
 
@@ -29,6 +33,8 @@ from install import CONFIG_PATH, ROOT, InstallError, resolve_client_dir
 
 OUT_DIR = ROOT / "data" / "captures"
 HEADER = re.compile(r"^BASTIANS CAPTURE (\d+) (\S+) (\S+) (\S+)\s*$")
+VERSIONS = ("1", "2")  # 2: the `step` lines
+STEP_KEY = re.compile(r"^[1-9]\d*:[1-9]\d*$")  # "<quest>:<n>"
 
 
 class CaptureError(InstallError):
@@ -71,8 +77,31 @@ def read_learned(path: Path) -> dict:
     return plain(learned)
 
 
+def step_places(steps) -> dict[str, list[list]]:
+    """The places where a step's count rose, `{ "<quest>:<n>": [[uiMapID, x, y]] }` with map
+    fractions of four decimals; a key or a place that is none is left out."""
+    out: dict[str, list[list]] = {}
+    if not isinstance(steps, dict):
+        return out
+    for key in sorted(
+        steps, key=lambda k: [int(part) if part.isdigit() else 0 for part in k.split(":")]
+    ):
+        places = []
+        for p in steps[key] if isinstance(steps[key], list) else []:
+            if (
+                isinstance(p, list)
+                and len(p) == 3
+                and isinstance(p[0], int)
+                and all(isinstance(v, int | float) and 0 <= v <= 1 for v in p[1:])
+            ):
+                places.append([p[0], round(float(p[1]), 4), round(float(p[2]), 4)])
+        if STEP_KEY.match(key) and places:
+            out[key] = places
+    return out
+
+
 def capture(learned: dict, client: str, exported: str) -> dict:
-    """The capture: taxi times, ride waits and walks; nothing else, no names."""
+    """The capture: taxi times, ride waits, walks and step places; nothing else, no names."""
     walks = []
     for w in learned.get("walk") or []:
         if (
@@ -90,7 +119,14 @@ def capture(learned: dict, client: str, exported: str) -> dict:
             )
     taxi = {k: v for k, v in (learned.get("taxi") or {}).items() if isinstance(v, int | float)}
     ride = {k: v for k, v in (learned.get("ride") or {}).items() if isinstance(v, list)}
-    return {"client": client, "exported": exported, "taxi": taxi, "ride": ride, "walk": walks}
+    return {
+        "client": client,
+        "exported": exported,
+        "taxi": taxi,
+        "ride": ride,
+        "walk": walks,
+        "steps": step_places(learned.get("steps")),
+    }
 
 
 def checksum(body: list[str]) -> int:
@@ -104,7 +140,7 @@ def _number(word: str) -> float | None:
 
 def parse_text(text: str) -> dict:
     """A player's pasted text -> { client, build, exported, learned } with the learned table in
-    the saved variables' shape (walk, taxi, ride), checked whole."""
+    the saved variables' shape (walk, taxi, ride, steps), checked whole."""
     lines = [line.rstrip("\r") for line in text.splitlines()]
     start = next((i for i, line in enumerate(lines) if line.startswith("BASTIANS CAPTURE ")), None)
     if start is None:
@@ -112,8 +148,9 @@ def parse_text(text: str) -> dict:
     m = HEADER.match(lines[start].strip())
     if not m:
         raise CaptureError(f"a header this tool cannot read: {lines[start][:60]}")
-    if m.group(1) != "1":
-        raise CaptureError(f"a capture of version {m.group(1)}; this tool reads version 1")
+    version = m.group(1)
+    if version not in VERSIONS:
+        raise CaptureError(f"a capture of version {version}; this tool reads versions 1 and 2")
     end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("END ")), None)
     if end is None:
         raise CaptureError("the END line is missing: the text was cut")
@@ -127,7 +164,7 @@ def parse_text(text: str) -> dict:
         )
     if int(parts[2]) != checksum(body):
         raise CaptureError("the checksum does not match: the text changed on the way")
-    learned: dict = {"walk": [], "taxi": {}, "ride": {}}
+    learned: dict = {"walk": [], "taxi": {}, "ride": {}, "steps": {}}
     for line in body:
         kind, _, rest = line.partition(" ")
         try:
@@ -150,6 +187,18 @@ def parse_text(text: str) -> dict:
             elif kind == "ride":
                 ref, waits = rest.rsplit(" ", 1)
                 learned["ride"][ref] = [float(w) for w in waits.split(",")]
+            elif kind == "step" and version != "1":
+                quest, n, map_, points = rest.split(" ", 3)
+                key = f"{int(quest)}:{int(n)}"
+                if not STEP_KEY.match(key):
+                    raise ValueError(key)
+                places = [
+                    [int(map_), float(x), float(y)]
+                    for x, y in (p.split(",") for p in points.split(";"))
+                ]
+                if not all(0 <= v <= 1 for p in places for v in p[1:]):
+                    raise ValueError(points)
+                learned["steps"].setdefault(key, []).extend(places)
             else:
                 raise ValueError(kind)
         except ValueError as err:
@@ -225,7 +274,8 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"{'written' if changed else 'unchanged'}: {shown} "
                 f"({len(cap['walk'])} walks, {len(cap['taxi'])} flight times, "
-                f"{len(cap['ride'])} rides; build {parsed['build']})"
+                f"{len(cap['ride'])} rides, {len(cap['steps'])} quest steps; "
+                f"build {parsed['build']})"
             )
             return 0
         if not args.client:
@@ -239,9 +289,11 @@ def main(argv: list[str] | None = None) -> int:
         for path in files:
             cap = capture(read_learned(path), args.client, today)
             target, changed = write_capture(cap, args.out, account_hash(path))
+            shown = target.relative_to(ROOT) if ROOT in target.parents else target
             print(
-                f"{'written' if changed else 'unchanged'}: {target.relative_to(ROOT)} "
-                f"({len(cap['walk'])} walks, {len(cap['taxi'])} flight times)"
+                f"{'written' if changed else 'unchanged'}: {shown} "
+                f"({len(cap['walk'])} walks, {len(cap['taxi'])} flight times, "
+                f"{len(cap['steps'])} quest steps)"
             )
     except InstallError as err:
         print(f"error: {err}", file=sys.stderr)

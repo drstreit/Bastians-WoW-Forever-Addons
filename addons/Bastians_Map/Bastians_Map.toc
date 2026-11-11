@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.1.0
+## Version: 2.2.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Map_Art
@@ -49,6 +49,8 @@ Minimap.lua
 Waypoints.lua
 Feed.lua
 Focus.lua
+City.lua
+Houses.lua
 Tiles.lua
 Overview.lua
 Styles.lua

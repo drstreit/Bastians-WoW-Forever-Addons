@@ -102,3 +102,27 @@ def test_a_quest_reads_its_positional_groups_as_array_or_map():
     assert (q.level, q.min_level, q.rep) == (3, 2, ((2778, 50),))
     assert store.quests[93459].items == (258771,)  # the map form: groups 1 and 2 are empty
     assert store.quests[93459].creatures == ()
+
+
+def test_an_item_row_names_who_drops_holds_and_sells_it():
+    """Package QD1 (plan-quest-links.md G1): the field numbers of the addon's itemMeta.lua.
+    Mirror Lake's water sample is the store's own row, 1.0.13: object 174794 in a field of its
+    own."""
+    store = parse_store(
+        [
+            "## X-Item-7206-3: gRoAAqrK\n",
+            "## X-Item-7206-15: gRkHRA==\n",
+            "## X-Item-7206-S: pAFYGE1pcnJvciBMYWtlIFdhdGVyIFNhbXBsZQkBDAxBcBlABA==\n",
+            line("Item-10-S", {1: "Pelt", 2: [5, 6], 4: [77], 14: [8], 9: 12}),
+            line("Item-11-S", {1: "Sword", 9: 30}),  # an item nobody is known to have
+            line("Item-12-2", {1: 9, 2: 4}),  # an id list kept as a map: in the order of its keys
+        ]
+    )
+    water = store.items[7206]
+    assert water.object_drops == (174794,)
+    assert (water.npc_drops, water.item_drops, water.vendors) == ((), (), ())
+    pelt = store.items[10]
+    assert (pelt.npc_drops, pelt.item_drops, pelt.vendors) == ((5, 6), (77,), (8,))
+    assert 11 not in store.items
+    assert store.items[12].npc_drops == (9, 4)
+    assert store.npcs == {} and store.quests == {}

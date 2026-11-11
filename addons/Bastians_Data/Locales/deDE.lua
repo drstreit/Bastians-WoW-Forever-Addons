@@ -8,6 +8,7 @@ ns.L:Register("deDE", {
   ["Packs built for another client"] = "Pakete für einen anderen Client",
   ["Their ids and places belong to that client; install the packs for this one."] = "Ihre IDs und Orte gehören zu jenem Client; installiere die Pakete für diesen.",
   ["Packs are built for this client."] = "Die Pakete sind für diesen Client erstellt.",
+  ["This Data edition needs a newer Bastian's suite"] = "Diese Datenausgabe braucht eine neuere Bastian's Suite",
   ["World database"] = "Weltdatenbank",
   ["Data"] = "Daten",
 
@@ -80,6 +81,7 @@ ns.L:Register("deDE", {
   -- the words of a record's kind (KINDS, PLACE_GROUPS)
   ["Other"] = "Sonstige",
   ["Quest object"] = "Questobjekt",
+  ["Quest place"] = "Questort",
   ["Chest"] = "Truhe",
   ["Signpost"] = "Wegweiser",
   ["Fire and forge"] = "Feuer und Schmiede",
@@ -212,7 +214,7 @@ ns.L:Register("deDE", {
   ["No page of the book names this dungeon yet."] = "Noch keine Seite des Buches nennt diesen Dungeon.",
   -- Export.lua: the captures as a text (catalog review B5, 07.11.2026)
   ["Copy my captures"] = "Meine Aufzeichnungen kopieren",
-  ["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Deine gelernten Wege, Flugzeiten und Wartezeiten als Text für ein GitHub-Issue (Share your captures). Nur Positionen und Zeiten, keine Namen.",
+  ["Your learned walks, flight times, ride waits and the places where your quest steps counted, as a text for a GitHub issue (Share your captures). Positions and times only, no names."] = "Deine gelernten Wege, Flugzeiten, Wartezeiten und die Orte, an denen deine Questschritte gezählt haben, als Text für ein GitHub-Issue (Share your captures). Nur Positionen und Zeiten, keine Namen.",
   ["Your captures"] = "Deine Aufzeichnungen",
   ["The text is selected: press Ctrl+C, then paste it into a GitHub issue (Share your captures). Positions and times only, no names."] = "Der Text ist markiert: Strg+C drücken, dann in ein GitHub-Issue einfügen (Share your captures). Nur Positionen und Zeiten, keine Namen.",
   ["Nothing learned yet: walk off the roads, fly, ride a boat; then come back here."] = "Noch nichts gelernt: geh abseits der Straßen, flieg, nimm ein Schiff; dann komm hierher zurück.",

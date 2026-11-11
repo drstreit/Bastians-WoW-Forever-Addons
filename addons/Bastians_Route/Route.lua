@@ -609,6 +609,66 @@ function Route.HomeRef()
   return nil
 end
 
+-- The places worth planning (route.md "To(ref) plans the ten nearest places", ADR 0069): of a
+-- thing's map places { map, x, y } the `max` nearest to `from` = { continent, wx, wy } by straight
+-- line, those on its continent first, as goals { continent, wx, wy, map, x, y }. A place no
+-- transform holds is left out. The provider's order decides between equals. Pure over Coords.
+function Route.Nearest(locations, from, max)
+  local goals = {}
+  for i, loc in ipairs(locations or {}) do
+    local c, wx, wy = B.Coords.ToWorld(loc.map, loc.x, loc.y)
+    if c then
+      local here = from ~= nil and c == from.continent
+      goals[#goals + 1] = {
+        continent = c,
+        wx = wx,
+        wy = wy,
+        map = loc.map,
+        x = loc.x,
+        y = loc.y,
+        order = i,
+        yards = here and Graph.Distance(from.wx, from.wy, wx, wy) or math.huge,
+      }
+    end
+  end
+  table.sort(goals, function(a, b)
+    if a.yards ~= b.yards then
+      return a.yards < b.yards
+    end
+    return a.order < b.order
+  end)
+  for i = #goals, (max or Route.MAX_LOCATIONS) + 1, -1 do
+    goals[i] = nil
+  end
+  return goals
+end
+
+-- The fastest way from `start` to one of a thing's places: plans the nearest of them
+-- (Route.Nearest) and calls `done(route or nil)` once, when every plan has answered. Returns
+-- true when it answered at once (Route's planner), false while the graph still plans.
+function Route.Fastest(ref, name, start, done)
+  local goals = Route.Nearest(B:Entity(ref):Locations(), start, Route.MAX_LOCATIONS)
+  local best, waiting, answered = nil, #goals, false
+  if waiting == 0 then
+    done(nil)
+    return true
+  end
+  for _, goal in ipairs(goals) do
+    goal.name, goal.ref = name, ref
+    Route.PlanAsync(start, goal, function(route)
+      if route and (not best or route.seconds < best.seconds) then
+        best = route
+      end
+      waiting = waiting - 1
+      if waiting == 0 and not answered then
+        answered = true
+        done(best)
+      end
+    end)
+  end
+  return answered
+end
+
 function Route.To(ref)
   local start = playerPos()
   if not start then
@@ -617,19 +677,7 @@ function Route.To(ref)
   end
   local e = B:Entity(ref)
   local name = e:Name() or ref
-  local goals = {}
-  for i, loc in ipairs(e:Locations()) do
-    if i > Route.MAX_LOCATIONS then
-      break
-    end
-    local c, wx, wy = B.Coords.ToWorld(loc.map, loc.x, loc.y)
-    if c then
-      goals[#goals + 1] =
-        { continent = c, wx = wx, wy = wy, name = name, ref = ref, map = loc.map, x = loc.x, y = loc.y }
-    end
-  end
-  local best, waiting, answered = nil, #goals, false
-  local function finish()
+  local function finish(best)
     if not best then
       B:Say(L["No route to %s"], name)
       return false
@@ -654,22 +702,10 @@ function Route.To(ref)
     end
     return true
   end
-  if waiting == 0 then
-    return finish()
-  end
   local result
-  for _, goal in ipairs(goals) do
-    Route.PlanAsync(start, goal, function(route)
-      if route and (not best or route.seconds < best.seconds) then
-        best = route
-      end
-      waiting = waiting - 1
-      if waiting == 0 and not answered then
-        answered = true
-        result = finish()
-      end
-    end)
-  end
+  local answered = Route.Fastest(ref, name, start, function(best)
+    result = finish(best)
+  end)
   -- planned at once (Route's planner): the answer is known; over the graph it comes later
   if answered then
     return result
@@ -866,27 +902,36 @@ function Route.AddStops(new, keep)
   return Route.Tour(all, keep and active and active.tour and active.tour.name or L["Waypoints"])
 end
 
--- An entity behind the stops ahead: its place nearest the route's goal.
+-- An entity behind the stops ahead: the same pick as Route.To (ADR 0069), from where the last
+-- stop ahead is (the leg to the new stop starts there): of the ten places nearest to it the
+-- fastest. Without a stop ahead, from the character.
 function Route.AddRef(ref)
-  local e, g, best, bestYards = B:Entity(ref), active and active.goal, nil, math.huge
-  for _, loc in ipairs(e:Locations()) do
-    local c, wx, wy = B.Coords.ToWorld(loc.map, loc.x, loc.y)
-    if c then
-      local yards = g and c == g.continent and Graph.Distance(g.wx, g.wy, wx, wy) or math.huge
-      if not best or yards < bestYards then
-        best, bestYards = { map = c, wx = wx, wy = wy }, yards
-      end
+  local e = B:Entity(ref)
+  local name = e:Name() or ref
+  local ahead = Route.StopsAhead()
+  local last = ahead[#ahead] and ahead[#ahead].place
+  local from = last and { continent = last.map, wx = last.wx, wy = last.wy } or playerPos()
+  local result
+  local function finish(best)
+    if not best then
+      B:Say(L["No route to %s"], name)
+      return false
     end
+    addCount = addCount + 1
+    local g = best.goal
+    local place = { map = g.continent, wx = g.wx, wy = g.wy }
+    return Route.AddStops({ { id = "add:" .. addCount, name = name, ref = ref, place = place } }, true)
   end
-  if not best then
-    B:Say(L["No route to %s"], e:Name() or ref)
-    return false
+  if not from then
+    return finish(nil)
   end
-  addCount = addCount + 1
-  return Route.AddStops(
-    { { id = "add:" .. addCount, name = e:Name() or ref, ref = ref, place = best } },
-    true
-  )
+  local answered = Route.Fastest(ref, name, from, function(best)
+    result = finish(best)
+  end)
+  if answered then
+    return result
+  end
+  return true
 end
 
 -- A point of the map behind the stops ahead.
@@ -1288,18 +1333,37 @@ local function nearestFlight(pos)
   return best
 end
 
+-- The landing. Forever has no event for it (forever-api.md, P7, 21.10.2026: PLAYER_CONTROL_GAINED
+-- "does not end a flight"; Forever 11.11.2026: the flight bar never went away and no flight time
+-- was ever learned), so while a flight is in progress, and only then, a ticker asks whether the
+-- character is still on the taxi. Retail's event ends the flight too, whichever comes first.
+Route.TAXI_TICK = 0.5
+Route.TAXI_START = 15 -- seconds a flight may take to begin; after them it was never taken
+
+local taxiTicker
+local function stopTaxiWatch()
+  if taxiTicker then
+    taxiTicker:Cancel()
+    taxiTicker = nil
+  end
+end
+
+local function dropFlight()
+  taxiFlight = nil
+  stopTaxiWatch()
+  ns.Flight.End()
+end
+
 local function onLanded()
   local flight = taxiFlight
-  taxiFlight = nil
   if not flight then
     return
   end
   local _, _, onTaxi = B.Compat.GetMoveSpeed()
   if onTaxi then
-    taxiFlight = flight -- a stop on a multi-hop flight; wait for the real landing
-    return
+    return -- a stop on a multi-hop flight, or the event while still flying: wait for the landing
   end
-  ns.Flight.End()
+  dropFlight()
   local seconds = GetTime() - flight.startedAt
   local to = flight.to or nearestFlight(playerPos())
   local g = graph()
@@ -1309,6 +1373,28 @@ local function onLanded()
     g:Learn({ kind = "taxi", from = flight.from, to = to, seconds = math.floor(seconds + 0.5) })
     B:Fire("BASTIANS_ROUTE_CHANGED", active)
   end
+end
+
+local function watchTaxi()
+  local flight = taxiFlight
+  if not flight then
+    stopTaxiWatch()
+    return
+  end
+  local _, _, onTaxi = B.Compat.GetMoveSpeed()
+  if onTaxi then
+    flight.flying = true
+  elseif flight.flying then
+    onLanded()
+  elseif GetTime() - flight.startedAt > Route.TAXI_START then
+    dropFlight() -- the flight never began (no money, the map closed): nothing to time
+  end
+end
+
+-- The module is switched off: the flight in progress is forgotten with its ticker.
+function Route.StopTaxiWatch()
+  taxiFlight = nil
+  stopTaxiWatch()
 end
 
 local taxiHooked = false
@@ -1321,13 +1407,20 @@ local function hookTaxi()
     if not (mod and mod:IsEnabled()) then
       return
     end
-    local target = taxiShown and taxiShown[index]
+    local target -- by slot: the list is not in the order of TakeTaxiNode's index (forever-api.md)
+    for _, n in ipairs(taxiShown or {}) do
+      if n.slot == index then
+        target = n
+      end
+    end
     taxiFlight = {
       from = flightIDFor(taxiCurrent),
       to = flightIDFor(target),
       startedAt = GetTime(),
     }
     ns.Flight.Begin(taxiFlight) -- the flight bar (A4.1)
+    stopTaxiWatch()
+    taxiTicker = C_Timer.NewTicker(Route.TAXI_TICK, watchTaxi)
   end)
 end
 
@@ -1666,6 +1759,7 @@ mod = B:NewModule("Route", {
     ns.Death.Unregister()
     ns.Way.Unregister()
     ns.Arrow.Unregister()
+    Route.StopTaxiWatch() -- no ticker on a disabled module; the flight in progress is not timed
     ns.Flight.Unregister()
   end,
 })

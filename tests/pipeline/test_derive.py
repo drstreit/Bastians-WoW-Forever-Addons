@@ -4,7 +4,6 @@ Quests' Logic.lua derives them when a pack lacks them. A synthetic world, so eve
 from bastians_build.derive import (
     BUILDERS,
     build_index,
-    chain_from,
     chain_members,
     quest_followers,
     quests_by_start,
@@ -44,7 +43,8 @@ def test_followers_list_who_needs_a_quest_and_what_it_chains_into():
 def test_chain_components_join_known_quests_only_and_root_at_the_smallest_id():
     w = world()
     assert chain_members(w) == {1: [1, 2, 3, 4], 6: [6, 7]}  # 5's only edge leads nowhere
-    assert chain_from(w) == {4: [3], 7: [6]}
+    # the edge `chains` in reverse: made from its row in the registry (links.py)
+    assert build_index(w, "quest.chainFrom") == {4: [3], 7: [6]}
 
 
 def test_the_indexes_are_registered():
@@ -53,9 +53,9 @@ def test_the_indexes_are_registered():
         "quest.byTurnIn",
         "quest.followers",
         "quest.chainMembers",
-        "quest.chainFrom",
     ):
         assert name in BUILDERS
+    assert build_index(World(client="forever"), "quest.chainFrom") == {}  # the registry's
 
 
 def test_entrances_by_instance_and_quests_by_dungeon():

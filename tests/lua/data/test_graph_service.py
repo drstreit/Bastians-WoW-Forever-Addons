@@ -100,6 +100,77 @@ def test_learned_facts_are_kept_and_announced(wow: WowRuntime):
     assert wow.eval("g:Character().taxi ~= nil") is True
 
 
+def step_places(wow: WowRuntime, key: str) -> list[tuple]:
+    kept = wow.eval(f"BastiansDataDB.global.learned.steps['{key}']")
+    return [tuple(p.values()) for p in kept.values()] if kept else []
+
+
+def test_a_steps_place_is_kept_a_few_per_step_and_spread(wow: WowRuntime):
+    """Package QK1 (data.md "Step places from play"): where the count of a quest's n-th
+    objective rose. Per account, a few per step, a camp counted once; no message, because a
+    step's place changes no way and nothing reads it yet."""
+    boot(wow)
+    wow.execute(
+        """parts = {}
+        Bastians:NewModule("Listener", { addon = "Bastians_TestApp" }):On("BASTIANS_GRAPH_CHANGED",
+          function(_, _, part) parts[#parts + 1] = part end)
+        function step(x, y, map, n)
+          return g:Learn({ kind = "step", quest = 1861, n = n or 1, map = map or 1429, x = x, y = y })
+        end"""
+    )
+    assert wow.eval("step(0.28574, 0.61386)") is True
+    assert step_places(wow, "1861:1") == [(1429, 0.2857, 0.6139)]
+    assert wow.eval("step(0.2901, 0.6102)") is False  # the same camp: nothing new
+    assert wow.eval("step(0.2901, 0.6102, 1453)") is True  # another map is another place
+    assert wow.eval("step(0.5, 0.5, 1429, 2)") is True  # another objective keeps its own
+    assert step_places(wow, "1861:2") == [(1429, 0.5, 0.5)]
+    assert wow.eval("#parts") == 0
+    # what is no step's place is not kept: unknown is not zero
+    for bad in (
+        "{ kind = 'step', quest = 1861, n = 1, map = 1429, x = 0.5 }",
+        "{ kind = 'step', quest = 1861, n = 1, x = 0.5, y = 0.5 }",
+        "{ kind = 'step', quest = 1861, n = 0, map = 1429, x = 0.5, y = 0.5 }",
+        "{ kind = 'step', quest = 1861, n = 1.5, map = 1429, x = 0.5, y = 0.5 }",
+        "{ kind = 'step', quest = '1861', n = 1, map = 1429, x = 0.5, y = 0.5 }",
+        "{ kind = 'step', quest = 1861, n = 1, map = 1429, x = 1.2, y = 0.5 }",
+        "{ kind = 'step', n = 1, map = 1429, x = 0.5, y = 0.5 }",
+    ):
+        assert wow.eval(f"g:Learn({bad})") is False
+    assert wow.eval("BastiansDataDB.global.learned.steps['1861:0']") is None
+    assert wow.eval("g:Learned().steps ~= nil") is True
+
+
+def test_the_ninth_place_of_a_step_replaces_by_spread(wow: WowRuntime):
+    """Of the two places that lie nearest to each other the newer one goes: a far place is
+    never lost to a camp."""
+    boot(wow)
+    wow.execute(
+        """function step(x, y, map)
+          return g:Learn({ kind = "step", quest = 7, n = 2, map = map or 1429, x = x, y = y })
+        end"""
+    )
+    xs = [0.1, 0.14, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]  # 0.1 and 0.14 lie nearest to each other
+    for x in xs:
+        assert wow.eval(f"step({x}, 0.5)") is True
+    # nearer to a kept one than any two kept: it is the newer of the nearest pair, and stays out
+    assert wow.eval("step(0.115, 0.5)") is False
+    assert [p[1] for p in step_places(wow, "7:2")] == xs
+    # far from all: of the nearest two kept the newer one (0.14) goes
+    assert wow.eval("step(0.5, 0.05)") is True
+    kept = step_places(wow, "7:2")
+    assert [p[1] for p in kept] == [0.1, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.5]
+    assert kept[-1] == (1429, 0.5, 0.05)
+    # another map is as far as can be
+    assert wow.eval("step(0.3, 0.5, 1453)") is True
+    assert len(step_places(wow, "7:2")) == 8 and step_places(wow, "7:2")[-1][0] == 1453
+    # the pure rule, on a list of its own
+    assert wow.eval(
+        "(function() local list = {} "
+        "return Bastians.Data.Graph.AddStepPlace(list, { 1, 0.5, 0.5 }) "
+        "and not Bastians.Data.Graph.AddStepPlace(list, { 1, 0.505, 0.5 }) and #list == 1 end)()"
+    )
+
+
 def test_profiles_include_the_extensions(wow: WowRuntime):
     boot(wow)
     assert list(wow.eval("g:Profiles()").values()) == ["fastest", "noswim", "safe", "nocost"]

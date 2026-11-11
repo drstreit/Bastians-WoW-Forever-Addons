@@ -350,6 +350,7 @@ ns.L:Register("ruRU", {
   ["Next"] = "Далее",
   ["Open the quest sheet"] = "Открыть лист задания",
   ["Right here"] = "Прямо здесь",
+  ["Where this is done is not known"] = "Неизвестно, где это выполняется",
   ["Sheet"] = "Лист",
   ["Show the quest chain"] = "Показать цепочку заданий",
   ["Still ahead: %s."] = "Впереди: %s.",

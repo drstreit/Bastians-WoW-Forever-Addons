@@ -52,8 +52,18 @@ WANTED: dict[str, tuple[str, ...]] = {
         "RewOrReqMoney",
         "RewMoneyMaxLevel",
         "SrcItemId",
+        "SrcItemCount",
         *(f"ReqItemId{i}" for i in range(1, 5)),
         *(f"ReqItemCount{i}" for i in range(1, 5)),
+        # the creatures and objects a quest counts (negative: an object), and the spell to cast on
+        # one instead of killing or using it (data.md "A quest's `steps`", package QD3)
+        *(f"ReqCreatureOrGOId{i}" for i in range(1, 5)),
+        *(f"ReqCreatureOrGOCount{i}" for i in range(1, 5)),
+        *(f"ReqSpellCast{i}" for i in range(1, 5)),
+        "SpecialFlags",
+        "PointMapId",
+        "PointX",
+        "PointY",
         *(f"RewItemId{i}" for i in range(1, 5)),
         *(f"RewItemCount{i}" for i in range(1, 5)),
         *(f"RewChoiceItemId{i}" for i in range(1, 7)),
@@ -78,9 +88,13 @@ WANTED: dict[str, tuple[str, ...]] = {
         "Rank",
         "Faction",  # a FactionTemplate id: the client's table says side and hostility
         "UnitFlags",  # not selectable: a helper creature (internal.py, data.md "Internal records")
+        "PickpocketLootId",  # the list in pickpocketing_loot_template
+        "SkinningLootId",  # the list in skinning_loot_template
     ),
     "creature": ("guid", "id", "map", "position_x", "position_y", "position_z", "spawndist"),
-    "gameobject_template": ("entry", "type", "name"),
+    # data0: a spell focus object's (type 8) focus id; data1: a chest's (3) or a fishing hole's
+    # (25) list in gameobject_loot_template
+    "gameobject_template": ("entry", "type", "name", "data0", "data1"),
     "gameobject": ("guid", "id", "map", "position_x", "position_y", "position_z"),
     # a spawn with id 0 takes one of these entries at random (06.11.2026)
     "creature_spawn_entry": ("guid", "entry"),
@@ -105,6 +119,8 @@ WANTED: dict[str, tuple[str, ...]] = {
         "SellPrice",
         "stackable",
         "DisenchantID",
+        *(f"spellid_{i}" for i in range(1, 6)),
+        *(f"spelltrigger_{i}" for i in range(1, 6)),
     ),
     "spell_template": (
         "Id",
@@ -113,7 +129,19 @@ WANTED: dict[str, tuple[str, ...]] = {
         *(f"Effect{i}" for i in range(1, 4)),
         *(f"EffectTriggerSpell{i}" for i in range(1, 4)),
         *(f"EffectItemType{i}" for i in range(1, 4)),
+        "RequiresSpellFocus",
     ),
+    # where an item comes from besides a kill and a chest (plan-quest-links.md G7)
+    "item_loot_template": _LOOT_COLUMNS,
+    "skinning_loot_template": _LOOT_COLUMNS,
+    "pickpocketing_loot_template": _LOOT_COLUMNS,
+    "fishing_loot_template": _LOOT_COLUMNS,
+    # the creature or object a spell is cast on (type 0 an object, 1 a creature, 2 a dead one)
+    "spell_script_target": ("entry", "type", "targetEntry"),
+    # the quest log's map points of a later client, carried back to 1.12 quests (G5)
+    "quest_poi": ("questId", "poiId", "objIndex", "mapId"),
+    "quest_poi_points": ("questId", "poiId", "x", "y"),
+    "areatrigger_involvedrelation": ("id", "quest"),
 }
 
 # creature_template.NpcFlags bits -> service flags (data.md npc record). These are the **Classic
@@ -183,7 +211,25 @@ def parse_values(text: str) -> Iterator[list[Any]]:
 
 
 # Columns a dump may lack (an older or a cut-down dump): their value is None then.
-OPTIONAL: dict[str, tuple[str, ...]] = {"creature_template": ("UnitFlags",)}
+OPTIONAL: dict[str, tuple[str, ...]] = {
+    "creature_template": ("UnitFlags", "PickpocketLootId", "SkinningLootId"),
+    "gameobject_template": ("data0", "data1"),
+    "item_template": (
+        *(f"spellid_{i}" for i in range(1, 6)),
+        *(f"spelltrigger_{i}" for i in range(1, 6)),
+    ),
+    "spell_template": ("RequiresSpellFocus",),
+    "quest_template": (
+        "SrcItemCount",
+        *(f"ReqCreatureOrGOId{i}" for i in range(1, 5)),
+        *(f"ReqCreatureOrGOCount{i}" for i in range(1, 5)),
+        *(f"ReqSpellCast{i}" for i in range(1, 5)),
+        "SpecialFlags",
+        "PointMapId",
+        "PointX",
+        "PointY",
+    ),
+}
 
 
 def read_lines(
@@ -239,6 +285,17 @@ def npc_services(npc_flags: int | None) -> list[str]:
 
 
 @dataclass(frozen=True)
+class QuestGoal:
+    """One creature or object a quest counts (a ``ReqCreatureOrGOId`` column)."""
+
+    kind: str  # "npc" | "object"
+    entry: int
+    count: int | None  # None when the column has none (unknown is not 1)
+    spell: int | None  # ReqSpellCast: the spell to cast on it instead of killing or using it
+    column: int = 1  # which of the four columns, from 1: the Classic points name it (minus one)
+
+
+@dataclass(frozen=True)
 class QuestRow:
     id: int
     title: str | None
@@ -269,6 +326,11 @@ class QuestRow:
         tuple[int, int], ...
     ] = ()  # (faction id, reputation) gained, value may be < 0
     reward_spell: int | None = None  # the spell the quest teaches or casts at hand-in
+    src_item_count: int | None = None  # how many of `src_item_id` the giver hands over
+    goals: tuple[QuestGoal, ...] = ()  # the creature and object columns, in their order
+    # PointMapId, PointX, PointY: a place the quest names itself (CMaNGOS map, world yards)
+    point: tuple[int, float, float] | None = None
+    exploration: bool = False  # SpecialFlags bit 2: finished by going somewhere or by an event
 
 
 @dataclass(frozen=True)
@@ -392,9 +454,32 @@ def quest_rows(tables: dict[str, list[dict[str, Any]]]) -> list[QuestRow]:
                 next_quest_id=_nz(r.get("NextQuestId")),
                 exclusive_group=_nz(r.get("ExclusiveGroup")),
                 next_quest_in_chain=_nz(r.get("NextQuestInChain")),
+                src_item_count=_nz(r.get("SrcItemCount")),
+                goals=_goals(r),
+                point=(int(r.get("PointMapId") or 0), float(r["PointX"]), float(r["PointY"]))
+                if r.get("PointX") or r.get("PointY")
+                else None,
+                exploration=bool(int(r.get("SpecialFlags") or 0) & 2),
             )
         )
     return out
+
+
+def _goals(row: dict[str, Any]) -> tuple[QuestGoal, ...]:
+    out = []
+    for i in range(1, 5):
+        entry = int(row.get(f"ReqCreatureOrGOId{i}") or 0)
+        if entry:
+            out.append(
+                QuestGoal(
+                    kind="npc" if entry > 0 else "object",
+                    entry=abs(entry),
+                    count=_nz(row.get(f"ReqCreatureOrGOCount{i}")),
+                    spell=_nz(row.get(f"ReqSpellCast{i}")),
+                    column=i,
+                )
+            )
+    return tuple(out)
 
 
 def _spell_effect(spell: dict[str, Any], effect: int, field: str) -> int | None:
@@ -482,33 +567,60 @@ def _group_chances(rows: list[dict[str, Any]]) -> list[tuple[dict[str, Any], flo
     return out
 
 
+GO_CHEST, GO_SPELL_FOCUS, GO_FISHING_HOLE = 3, 8, 25
+
+
+def object_loot_owners(tables: dict[str, list[dict[str, Any]]]) -> dict[int, list[int]] | None:
+    """``gameobject_loot_template`` is keyed by the list a chest or a fishing hole names in
+    ``data1``, not by the object: list -> the objects that open it, ascending. None when the dump
+    has no ``data1`` (a cut-down dump): the list id then stands for the object, as before.
+
+    Measured 11.11.2026 on ClassicDB_1_12_1_z2815: all 573 lists are some chest's ``data1``, 90 of
+    them are also an object's entry and only 2 of those the same object, so until that day an
+    item from a chest named an object that does not hold it, or none."""
+    owners: dict[int, list[int]] = {}
+    known = False
+    for r in tables.get("gameobject_template", []):
+        known = known or r.get("data1") is not None
+        if r.get("type") in (GO_CHEST, GO_FISHING_HOLE) and r.get("data1"):
+            owners.setdefault(int(r["data1"]), []).append(int(r["entry"]))
+    return {k: sorted(v) for k, v in owners.items()} if known else None
+
+
 def loot_rows(tables: dict[str, list[dict[str, Any]]]) -> list[LootRow]:
     """Loot rows of creatures, objects and reference lists; references are not expanded.
 
-    A row with ``mincountOrRef < 0`` points at ``reference_loot_template`` entry ``-value``.
+    A row with ``mincountOrRef < 0`` points at ``reference_loot_template`` entry ``-value``. An
+    object's rows are those of the list it names (``object_loot_owners``), once per object.
     """
     out: list[LootRow] = []
+    owners = object_loot_owners(tables)
     for table, kind in LOOT_TABLES.items():
         by_entry: dict[int, list[dict[str, Any]]] = {}
         for r in tables.get(table, []):
             by_entry.setdefault(int(r["entry"]), []).append(r)
+        rows: list[LootRow] = []
         for entry in sorted(by_entry):
+            entries = [entry] if kind != "object" or owners is None else owners.get(entry, [])
             for r, chance in _group_chances(by_entry[entry]):
                 minc = int(r["mincountOrRef"] or 0)
                 is_ref = minc < 0
-                out.append(
-                    LootRow(
-                        kind=kind,
-                        entry=entry,
-                        item_id=None if is_ref else int(r["item"]),
-                        chance_pct=round(chance, 4),
-                        quest_drop=float(r["ChanceOrQuestChance"] or 0) < 0,
-                        group_id=_nz(r.get("groupid")),
-                        min_count=None if is_ref else minc,
-                        max_count=None if is_ref else _nz(r.get("maxcount")),
-                        reference_id=-minc if is_ref else None,
+                for owner in entries:
+                    rows.append(
+                        LootRow(
+                            kind=kind,
+                            entry=owner,
+                            item_id=None if is_ref else int(r["item"]),
+                            chance_pct=round(chance, 4),
+                            quest_drop=float(r["ChanceOrQuestChance"] or 0) < 0,
+                            group_id=_nz(r.get("groupid")),
+                            min_count=None if is_ref else minc,
+                            max_count=None if is_ref else _nz(r.get("maxcount")),
+                            reference_id=-minc if is_ref else None,
+                        )
                     )
-                )
+        rows.sort(key=lambda row: row.entry)  # stable: a list's rows keep their order
+        out += rows
     return out
 
 
@@ -575,3 +687,133 @@ def disenchant_lists(tables: dict[str, list[dict[str, Any]]]) -> dict[int, list[
         rows.sort(key=lambda x: (-x[1], x[0]))
         out[entry] = rows
     return out
+
+
+# ---------------------------------------------------------------- links (package QD3)
+
+
+@dataclass(frozen=True)
+class Made:
+    """Using an item needs a place, and may make another item (``item_template.spellid`` -> the
+    spell's focus, its script targets and its effect 24)."""
+
+    item_id: int  # the item that is used
+    spell_id: int
+    focus: int | None  # RequiresSpellFocus: the kind of object it is used at
+    targets: tuple[tuple[str, int], ...]  # spell_script_target: ("npc" | "object", entry)
+
+
+@dataclass
+class Links:
+    """What the dump says about where things come from and where quests are done, beyond kills,
+    chests and vendors (plan-quest-links.md G3 to G7). All of it is Classic knowledge."""
+
+    made: dict[int, list[Made]]  # the product -> the ways it is made
+    uses: dict[int, list[Made]]  # an item -> where its use spells are cast, product or not
+    spells: dict[int, tuple[int, ...]]  # an item -> its use spells
+    focus_objects: dict[int, list[int]]  # a spell focus id -> the objects that are one
+    held: dict[int, list[tuple[int, float]]]  # item -> (the item that holds it, percent)
+    skinned: dict[int, list[tuple[int, float]]]  # item -> (creature, percent)
+    picked: dict[int, list[tuple[int, float]]]  # item -> (creature, percent)
+    fished: dict[int, list[tuple[int, float]]]  # item -> (AreaTable id, percent)
+    # quest -> (objective index, CMaNGOS map, the area's corner points in world yards). Index
+    # -1 is the hand-in, 0..3 the creature and object columns, 4..7 the item columns, 16 an
+    # event or a place to reach (measured 11.11.2026: 9,947 / 3,596 / 3,924 / 455 of 18,486)
+    points: dict[int, list[tuple[int, int, tuple[tuple[float, float], ...]]]]
+    triggers: dict[int, list[int]]  # quest -> the area triggers that finish it
+
+
+USE_TRIGGERS = (0, 5)  # item_template.spelltrigger: on use, on use without a delay
+
+
+def _lists(
+    tables: dict[str, list[dict[str, Any]]], table: str, owners: dict[int, list[int]] | None
+) -> dict[int, list[tuple[int, float]]]:
+    """item -> (who has it, percent) from one loot table, the likeliest first. Only the rows a
+    list names itself: a shared list (a lockbox rolls the world's green items) is no source."""
+    out: dict[int, dict[int, float]] = {}
+    by_entry: dict[int, list[dict[str, Any]]] = {}
+    for r in tables.get(table, []):
+        by_entry.setdefault(int(r["entry"]), []).append(r)
+    for entry in sorted(by_entry):
+        for r, chance in _group_chances(by_entry[entry]):
+            if int(r["mincountOrRef"] or 0) < 0:
+                continue
+            for owner in [entry] if owners is None else owners.get(entry, []):
+                found = out.setdefault(int(r["item"]), {})
+                found[owner] = max(found.get(owner, 0.0), round(chance, 2))
+    return {
+        item: sorted(found.items(), key=lambda pair: (-pair[1], pair[0]))
+        for item, found in sorted(out.items())
+    }
+
+
+def links(tables: dict[str, list[dict[str, Any]]]) -> Links:
+    spells = {int(s["Id"]): s for s in tables.get("spell_template", [])}
+    targets: dict[int, list[tuple[str, int]]] = {}
+    for r in tables.get("spell_script_target", []):
+        kind = "object" if int(r["type"] or 0) == 0 else "npc"
+        targets.setdefault(int(r["entry"]), []).append((kind, int(r["targetEntry"])))
+    made: dict[int, list[Made]] = {}
+    uses: dict[int, list[Made]] = {}
+    item_spells: dict[int, list[int]] = {}
+    for r in tables.get("item_template", []):
+        for i in range(1, 6):
+            spell_id = _nz(r.get(f"spellid_{i}"))
+            if not spell_id or int(r.get(f"spelltrigger_{i}") or 0) not in USE_TRIGGERS:
+                continue
+            item_spells.setdefault(int(r["entry"]), []).append(spell_id)
+            spell = spells.get(spell_id)
+            if spell is None:
+                continue
+            way = Made(
+                item_id=int(r["entry"]),
+                spell_id=spell_id,
+                focus=_nz(spell.get("RequiresSpellFocus")),
+                targets=tuple(sorted(set(targets.get(spell_id, [])))),
+            )
+            if way.focus or way.targets:
+                uses.setdefault(way.item_id, []).append(way)
+            for k in (1, 2, 3):
+                product = _nz(spell.get(f"EffectItemType{k}"))
+                creates = spell.get(f"Effect{k}") == EFFECT_CREATE_ITEM and product
+                if creates and product != way.item_id and way not in made.get(product, ()):
+                    made.setdefault(product, []).append(way)
+    focus_objects: dict[int, list[int]] = {}
+    skin: dict[int, list[int]] = {}
+    pick: dict[int, list[int]] = {}
+    for r in tables.get("gameobject_template", []):
+        if r.get("type") == GO_SPELL_FOCUS and r.get("data0"):
+            focus_objects.setdefault(int(r["data0"]), []).append(int(r["entry"]))
+    for r in tables.get("creature_template", []):
+        if r.get("SkinningLootId"):
+            skin.setdefault(int(r["SkinningLootId"]), []).append(int(r["Entry"]))
+        if r.get("PickpocketLootId"):
+            pick.setdefault(int(r["PickpocketLootId"]), []).append(int(r["Entry"]))
+    areas: dict[tuple[int, int], list[tuple[float, float]]] = {}
+    for r in tables.get("quest_poi_points", []):
+        areas.setdefault((int(r["questId"]), int(r["poiId"])), []).append(
+            (float(r["x"]), float(r["y"]))
+        )
+    points: dict[int, list[tuple[int, int, tuple[tuple[float, float], ...]]]] = {}
+    for r in tables.get("quest_poi", []):
+        corners = areas.get((int(r["questId"]), int(r["poiId"])))
+        if corners:
+            points.setdefault(int(r["questId"]), []).append(
+                (int(r["objIndex"]), int(r["mapId"]), tuple(corners))
+            )
+    triggers: dict[int, list[int]] = {}
+    for r in tables.get("areatrigger_involvedrelation", []):
+        triggers.setdefault(int(r["quest"]), []).append(int(r["id"]))
+    return Links(
+        made={k: v for k, v in sorted(made.items()) if v},
+        uses=dict(sorted(uses.items())),
+        spells={k: tuple(v) for k, v in sorted(item_spells.items())},
+        focus_objects={k: sorted(v) for k, v in sorted(focus_objects.items())},
+        held=_lists(tables, "item_loot_template", None),
+        skinned=_lists(tables, "skinning_loot_template", skin),
+        picked=_lists(tables, "pickpocketing_loot_template", pick),
+        fished=_lists(tables, "fishing_loot_template", None),
+        points=dict(sorted(points.items())),
+        triggers={k: sorted(v) for k, v in sorted(triggers.items())},
+    )

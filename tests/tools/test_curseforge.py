@@ -67,10 +67,14 @@ def test_the_relations_cover_every_toc_dependency():
                     assert owner[dep] in related, f"{folder}: optional {dep} has no relation"
 
 
-def test_two_projects_the_suite_requires_its_data():
+def test_three_projects_the_suite_requires_its_data_and_its_maps():
     cfg = config()
-    assert set(cfg["projects"]) == {"Bastians_Suite", "Bastians_Data"}
-    assert cfg["projects"]["Bastians_Suite"]["required"] == ["Bastians_Data"]
+    assert set(cfg["projects"]) == {"Bastians_Suite", "Bastians_Maps", "Bastians_Data"}
+    assert cfg["projects"]["Bastians_Suite"]["required"] == ["Bastians_Data", "Bastians_Maps"]
+    # ADR 0068: no picture rides a code release
+    suite = cfg["projects"]["Bastians_Suite"]["folders"]
+    assert not any(f.startswith("Bastians_Map_") for f in suite) and "Bastians_Map" in suite
+    assert all(f.startswith("Bastians_Map_") for f in cfg["projects"]["Bastians_Maps"]["folders"])
     assert cfg["projects"]["Bastians_Suite"]["folders"][0] == "Bastians_Core"  # its version
     assert all(f.startswith("Bastians_Data") for f in cfg["projects"]["Bastians_Data"]["folders"])
 
@@ -78,7 +82,8 @@ def test_two_projects_the_suite_requires_its_data():
 def test_each_clients_file_relates_only_to_what_exists_there():
     cfg = config()
     for p in cfg["projects"].values():
-        p["approved"] = True  # as it will be once CurseForge has reviewed both projects
+        p["approved"] = True  # as it will be once CurseForge has reviewed the projects
+        p["id"] = p["id"] or 1  # and the owner entered the maps' project id (ADR 0068)
 
     def pairs(project: str, client: str) -> set[tuple[str, str]]:
         return {(r["slug"], r["type"]) for r in curseforge.relations(cfg, project, client)[0]}
@@ -90,7 +95,8 @@ def test_each_clients_file_relates_only_to_what_exists_there():
     assert all(s not in slug.values() for s, _ in retail)
     data = cfg["projects"]["Bastians_Data"]["slug"]
     # TomTom is no companion since 29.10.2026 (owner): the retail suite relates to its data only
-    assert retail == {(data, "requiredDependency")}
+    maps = cfg["projects"]["Bastians_Maps"]["slug"]
+    assert retail == {(data, "requiredDependency"), (maps, "requiredDependency")}
     suite = cfg["projects"]["Bastians_Suite"]["slug"]
     assert pairs("Bastians_Data", "retail") == {(suite, "optionalDependency")}
     # every relation names its project id too, for an exact match
@@ -103,6 +109,7 @@ def test_a_project_in_review_is_left_out_of_the_relations_and_noted():
     cfg["projects"]["Bastians_Data"]["approved"] = False
     rels, _ = curseforge.relations(cfg, "Bastians_Suite", "retail")
     assert all(r["slug"] != "bastians-data" for r in rels)
+    cfg["projects"]["Bastians_Maps"]["approved"] = True
     assert curseforge.pending(cfg, "Bastians_Suite") == ["requires Bastians_Data"]
     cfg["projects"]["Bastians_Data"]["approved"] = True
     assert curseforge.pending(cfg, "Bastians_Suite") == []

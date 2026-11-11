@@ -76,6 +76,8 @@ ns.L:Register("ruRU", {
   ["From the back shelf"] = "С дальней полки",
   ["The rumours on this page"] = "Слухи на этой странице",
   ["at %s"] = "в %s",
+  ["and 1 more traveller tells it"] = "и ещё 1 путник рассказывает об этом",
+  ["and %d more travellers tell it"] = "и ещё %d путников рассказывают об этом",
   ["copy the link"] = "копировать ссылку",
   ["Read it on the web"] = "Читать в интернете",
   ["Puts the link into the chat input: copy it with Ctrl+C."] = "Вставляет ссылку в строку чата: скопируйте ее с помощью Ctrl+C.",

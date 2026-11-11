@@ -429,6 +429,14 @@ function Ring.IsOpen()
   return kit ~= nil and kit:IsShown()
 end
 
+-- A ring the key toggles is permanent: kept from the press
+-- that opens it to the press that closes it, its centre in UIParent's units and the ring in front.
+local function remember()
+  if profile().toggle and Ring.IsOpen() and kit.cx then
+    profile().shown = { x = kit.cx, y = kit.cy, page = page }
+  end
+end
+
 function Ring.Open()
   if hiddenByKey or not mod:IsEnabled() then
     return false
@@ -436,14 +444,37 @@ function Ring.Open()
   stack = {}
   Ring.Refresh()
   kit:OpenAtCursor()
+  remember()
   return true
 end
 
-function Ring.Close()
+-- Brings a kept ring back where it was: after a reload, when the screen returns, when the addon is
+-- switched on again. A registered ring that is not there (yet) gives way to the first.
+function Ring.Restore()
+  local was = profile().toggle and profile().shown
+  if type(was) ~= "table" or not (tonumber(was.x) and tonumber(was.y)) then
+    return false
+  elseif hiddenByKey or Ring.IsOpen() or not mod:IsEnabled() then
+    return false
+  end
+  local kept = tonumber(was.page) or 1
+  page = (kept >= 1 and kept <= Ring.Pages()) and kept or 1
+  stack = {}
+  Ring.Refresh()
+  kit:OpenAt(was.x, was.y)
+  return true
+end
+
+-- Closes the ring. `keep`: it is only hidden (the clear-screen key, the addon switched off) and a
+-- kept ring returns; without it the ring is closed for good, as the key does.
+function Ring.Close(keep)
   if kit then
     kit:Close()
   end
   stack = {}
+  if mod and not keep then
+    profile().shown = nil
+  end
 end
 
 -- The wheel or the second key: the next ring to the right (delta > 0, wheel up; owner, retail
@@ -454,6 +485,7 @@ function Ring.Cycle(delta)
   stack = {}
   if Ring.IsOpen() then
     Ring.Refresh()
+    remember()
   end
   B:Fire("BASTIANS_GESTURES_CHANGED")
 end
@@ -463,6 +495,7 @@ function Ring.SetPage(n)
   stack = {}
   if Ring.IsOpen() then
     Ring.Refresh()
+    remember()
   end
 end
 
@@ -490,11 +523,14 @@ function Ring.Key(keystate)
   end
 end
 
--- The clear-screen key (BASTIANS_SUITE_HIDDEN): the ring closes and stays closed until it returns.
+-- The clear-screen key (BASTIANS_SUITE_HIDDEN): the ring goes with the screen and cannot be opened
+-- until the screen returns; a kept ring comes back with it.
 function Ring.HideByKey(hidden)
   hiddenByKey = hidden and true or false
   if hidden then
-    Ring.Close()
+    Ring.Close(true)
+  else
+    Ring.Restore()
   end
 end
 
@@ -509,6 +545,7 @@ function Ring.Attach(m)
   kit = kit
     or B.UI.Ring.New("BastiansGesturesRing", {
       wedges = Model.WEDGES,
+      escape = false, -- only its key closes it, not the game's close-all
       onFire = function(i, _, button)
         Ring.Fire(i, button)
       end,
@@ -523,11 +560,9 @@ function Ring.Attach(m)
         end
       end,
       onHub = function()
-        if #stack > 0 then
+        if #stack > 0 then -- back from a sub-ring; on the top ring the centre does nothing
           stack[#stack] = nil
           Ring.Refresh()
-        else
-          Ring.Close()
         end
       end,
     })
@@ -550,6 +585,7 @@ function Ring.Attach(m)
     end
   end)
   hiddenByKey = B.UI.Screen and B.UI.Screen.Hidden() and B.UI.Screen.Hides("Gestures") or false
+  Ring.Restore() -- a ring the key left open: back where it was (a reload, the addon on again)
 end
 
 -- Whether a screenshot without UI is under way (tests).
@@ -558,6 +594,6 @@ function Ring.Pending()
 end
 
 function Ring.Detach()
-  Ring.Close()
+  Ring.Close(true)
   hiddenByKey = false
 end

@@ -31,9 +31,11 @@ arrives after `PLAYER_LOGIN`: until then, and whenever an app is missing, the an
 
 ## The rules
 
-- **Versions.** `Bastians.API.VERSION` is `1`. It goes up only when a documented call or field
+- **Versions.** `Bastians.API.VERSION` is `2`. It goes up only when a documented call or field
   changes or goes away. New calls and new fields keep the version, so test for a call before using
-  it (`if api.Route then`).
+  it (`if api.Route then`). Version 2: `Where` of a quest answers the places of its next step
+  only, and `nil` while that step has no known place; version 1 answered the quest's giver and
+  hand-in then.
 - **Copies.** Every answer is a new table of strings, numbers and booleans, or a plain value. You
   may keep and change it; the suite never sees your changes.
 - **Unknown is `nil`.** An app that is not installed or switched off, data that is not loaded, an
@@ -62,7 +64,7 @@ arrives after `PLAYER_LOGIN`: until then, and whenever an app is missing, the an
 | `Speak(text)` | `true` when the Orbiter spoke the text in the player's chosen voice; `false` when it did not (another line plays, the voice is off); `nil` without the Orbiter | Bastian's Orbiter |
 | `Camp()` | `{ nearby, state, warmIn, left, buffs, readyIn, fires }`: whether a campfire is near the character, the state (`"away"`, `"near"`, `"warming"`, `"warm"`, `"fading"`), the seconds until warm and left of the camp's buffs (`nil` when unknown), how many camp buffs are on the character, the seconds until the character's camp features can be placed again (`nil` when unknown), how many fires shared by the group or guild (and the public channel when switched on) are on the map; or `nil` | Bastian's Campfire (Forever) |
 | `Entity(ref)` | `{ ref, type, id, name, summary }` for any thing of the suite by its ref: `"npc:299"`, `"quest:7"`, `"item:2589"`, `"zone:1429"`, `"node:herb:2"`. The name is in the client's language where the data has it; `nil` for a ref nothing knows | Core (names from Bastian's Data) |
-| `Where(ref, max)` | `{ { uiMapID, x, y } }` (`x`, `y` in 0..1): the places of the thing that matter now (an NPC's spawns, a quest's giver, a node's spots), at most `max` (10 by default); `nil` without a place | Core (places from Bastian's Data) |
+| `Where(ref, max)` | `{ { uiMapID, x, y } }` (`x`, `y` in 0..1): the places of the thing that matter now (an NPC's spawns, a node's spots; a quest's next step: its giver before it is taken, what is to do while it runs, its hand-in when it is complete), at most `max` (10 by default); `nil` without a place, also for a running quest whose next step has no known place | Core (places from Bastian's Data) |
 | `NotesNear(uiMapID, x, y, yards)` | `{ { title, text, yards } }`, nearest first: the player's notes on a spot within `yards` (40 by default, at most 500) of that point; an empty table when there are none; `nil` without Notes | Bastian's Notes |
 | `Income(days)` | `{ ah, loot, spent }` in copper over the last `days` days, today included (1 by default, at most 30): gold from the auction house, gold from everything else (loot, quests, vendor sales), and what was spent, for the whole account | Bastian's Gold |
 | `Waypoint()` | `{ uiMapID, x, y, label }` (`x`, `y` in 0..1): the player's own waypoint on Bastian's Map; `nil` when there is none | Bastian's Map |
@@ -83,7 +85,7 @@ arrives after `PLAYER_LOGIN`: until then, and whenever an app is missing, the an
 
 | Event | Arguments | Means |
 |---|---|---|
-| `BASTIANS_QUESTS_CHANGED` | none | the quest log changed: read `Quest` and `QuestLog` again |
+| `BASTIANS_QUESTS_CHANGED` | none | the quest log changed, or the place of a running quest became known: read `Quest`, `QuestLog` and a quest's `Where` again |
 | `BASTIANS_TRACKED_CHANGED` | `ref` (`"quest:123"`), `tracked` | a quest was tracked or untracked |
 | `BASTIANS_ROUTE_CHANGED` | none | a route started, moved on a step, was planned again or ended: read `Route` again |
 | `BASTIANS_PRICES_UPDATED` | `source` (`"scan"`, `"market"`, `"merchant"`) | prices changed: read `Price` again |

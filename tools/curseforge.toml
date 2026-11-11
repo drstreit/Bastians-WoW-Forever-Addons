@@ -26,7 +26,8 @@ release_clients = ["forever"]
 retail = ["12.1.5"]
 forever = ["1.60.1"]
 
-# ---- two projects: the apps in one file, the data in another that
+# ---- three projects: the apps
+# in one file, the map's pictures in a second, the data in a third that
 # the daily data edition (tools/data_update.py) updates. A project's version is its first folder's.
 
 [projects.Bastians_Suite]
@@ -40,11 +41,6 @@ folders = [
   "Bastians_Core",
   "Bastians_Quests",
   "Bastians_Map",
-  "Bastians_Map_Art",
-  "Bastians_Map_Blizzard",
-  "Bastians_Map_Modern",
-  "Bastians_Map_Pencil",
-  "Bastians_Map_Parchment",
   "Bastians_Browser",
   "Bastians_Gold",
   "Bastians_Route",
@@ -58,8 +54,30 @@ folders = [
   "Bastians_Courtesy",
   "Bastians_Campfire",
 ]
-required = ["Bastians_Data"]
+required = ["Bastians_Data", "Bastians_Maps"]
 optional = ["QuestieDB", "Spoken"]
+
+# the map's pictures: the four styles and the overview art were 247
+# of the Suite file's 258 MB and rode every code release. Their own project is sent only when a
+# picture changed (tools/suite_release.py compares with the last file sent). The Map works
+# without them (the client's own minimap tiles and the zone art), so a player who has only the
+# Suite loses the styles, not the map.
+[projects.Bastians_Maps]
+title = "Bastian's Maps"
+slug = "bastians-maps" # created by curseforge.com/wow/addons/bastians-maps
+id = 1795005 # ; the read API answers it: "Bastian's Maps", slug bastians-maps
+verified = true
+# the read API said status 1 (new, not yet approved) on 10.11.2026: the Suite's relation to it
+# stays out until CurseForge approved the project (error 1018), then this becomes true
+approved = false
+folders = [
+  "Bastians_Map_Art",
+  "Bastians_Map_Blizzard",
+  "Bastians_Map_Modern",
+  "Bastians_Map_Pencil",
+  "Bastians_Map_Parchment",
+]
+optional = ["Bastians_Suite"]
 
 # the loader with every pack, the book included: the packs and their reader ship together
 [projects.Bastians_Data]

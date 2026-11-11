@@ -113,7 +113,10 @@ def parse_notes(sha: str, subject: str, body: str) -> list[Note]:
 def track_paths(config: dict, track: str) -> list[str]:
     """git pathspecs of a track: its project's folders, and its part of the pipeline."""
     project = {"suite": "Bastians_Suite", "data": "Bastians_Data"}[track]
-    folders = [f"addons/{f}" for f in config["projects"][project]["folders"]]
+    names = list(config["projects"][project]["folders"])
+    if track == "suite":  # the map's pictures are released with the Suite's notes (ADR 0068)
+        names += config["projects"].get("Bastians_Maps", {}).get("folders", [])
+    folders = [f"addons/{f}" for f in names]
     if track == "suite":
         return [*folders, *SUITE_PIPELINE]
     return [*folders, "pipeline/bastians_build", "pipeline/config"] + [

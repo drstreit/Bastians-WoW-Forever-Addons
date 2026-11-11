@@ -280,3 +280,36 @@ def test_the_plates_box_puts_the_dots_back_on_their_map():
     _, px, py = plate["place"]
     # the farm's centre on the plate, through the box, is the farm's centre on the map
     assert abs(fx0 + cx * (fx1 - fx0) - px) < 1e-3 and abs(fy0 + cy * (fy1 - fy0) - py) < 1e-3
+
+
+def test_a_rumour_names_its_three_newest_travellers_and_counts_the_rest():
+    """ "not listing dozens of videos for the same strategy, only the 3 newest
+    ones". The others are a number; the build still knows every channel for the What's new."""
+    from bastians_build.book import rumour_record
+
+    def source(channel: str, day: str, link: str = "") -> dict:
+        return {
+            "channel": channel,
+            "published": day,
+            "link": link or f"https://y.example/{channel}",
+        }
+
+    row = {
+        "kind": "ah_rule",
+        "subject": "deposit",
+        "claim": "You pay a deposit.",
+        "sources": [
+            source("Old", "2026-09-20"),
+            source("Newest", "2026-11-09"),
+            source("Local", "2026-11-10", "file:///C:/guide.md"),  # no web link: never leaves
+            source("Mid", "2026-10-15"),
+            source("New", "2026-11-01"),
+            source("Older", "2026-10-01"),
+        ],
+    }
+    rec = rumour_record(row)
+    assert [s[0] for s in rec["sources"]] == ["Newest", "New", "Mid"]
+    assert rec["more"] == 2
+    assert rec["allChannels"] == ["Mid", "New", "Newest", "Old", "Older"]
+    few = rumour_record({**row, "sources": row["sources"][:2]})
+    assert [s[0] for s in few["sources"]] == ["Newest", "Old"] and few["more"] is None

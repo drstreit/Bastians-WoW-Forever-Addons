@@ -108,7 +108,7 @@ function Focus.UpdateDock()
   if not dock then
     return
   end
-  local on = B.UI.IsDocked()
+  local on = B.UI.IsDocked(B.UI.DOCK.left)
   local color = S.C[dock.token] or S.C.accent
   S.tint(dock.face, color, on and 0.75 or S.TILE_FACE_ALPHA) -- docked: the face lit
   S.setEdges(dock.edges, on and S.C.text or color, 0.9)
@@ -139,7 +139,7 @@ table.insert(Map.onBuild, function(clip)
   end
   dock:SetPoint("RIGHT", Map.toolbar.zoomOut, "LEFT", -8, 0)
   dock:SetScript("OnClick", function()
-    B.UI.ToggleDock()
+    B.UI.ToggleDock(B.UI.DOCK.left)
     Focus.UpdateDock()
   end)
   Map.toolbar.dock = dock

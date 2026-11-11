@@ -242,6 +242,9 @@ class QuestRow:
     new_in_forever: bool
     confirmed_previous: int | None = None  # the quest players were seen to need first; 0 is none
     lowest_level_seen: int | None = None  # the lowest level seen completing it; 0 is unknown
+    # "A" or "H" as ForeverDB works it out from the quest's NPCs and the quest before it (0.57.24);
+    # None is unknown. Read and not used yet: the quest's own `races` come from the other sources.
+    side: str | None = None
 
 
 _REF_KINDS = {"n": "npc", "o": "object"}
@@ -266,25 +269,51 @@ def _opt_int(s: str) -> int | None:
 
 
 _QUEST_HEADER = re.compile(r'^--\s*\[quest\]\s*=\s*"([^"]*)"', re.MULTILINE)
-# the layouts the file has had: 8 columns, and since ForeverDB 0.57.14 (measured 08.11.2026, build
-# 1.60.1.70862) two more at the end: confirmed previous quest, lowest player level seen completing
-# it (read since 09.11.2026, ForeverDB 0.57.15).
-_QUEST_COLUMNS = (8, 10)
+# The columns the reader reads, each by a word of its name in the file's own header. ForeverDB adds
+# columns at the end: two with 0.57.14 (measured 08.11.2026, build 1.60.1.70862: the confirmed
+# previous quest and the lowest level seen completing it), the side with 0.57.24 (11.11.2026).
+# Each of them held the source for a day, because the reader knew layouts by their length. Since
+# 11.11.2026 a column behind the ones named here is left unread (the sources step's shape check
+# names it), and a known column that is not where it was stops the read.
+_QUEST_COLUMNS = (
+    "title",
+    "level",
+    "min level",
+    "objective",
+    "starts",
+    "ends",
+    "saw",
+    "new in forever",
+    "previous",
+    "lowest",
+    "side",
+)
+_QUEST_BASE = 8  # the layout of a file without the header, and the fewest a header may name
+_SIDES = {"a": "A", "h": "H"}
 
 
 def _quest_columns(text: str) -> int:
     """The file's own header names its columns; a row's field count cannot, a "|" may be in the
     free text. A file without the header is the 8-column layout."""
     header = _QUEST_HEADER.search(text)
-    columns = header.group(1).count("|") + 1 if header else 8
-    if columns not in _QUEST_COLUMNS:
-        raise ValueError(f"QuestForever.lua has {columns} columns, the reader knows 8 and 10")
-    return columns
+    if not header:
+        return _QUEST_BASE
+    names = header.group(1).split("|")
+    if len(names) < _QUEST_BASE:
+        raise ValueError(
+            f"QuestForever.lua has {len(names)} columns, the reader needs the first {_QUEST_BASE}"
+        )
+    for i, (name, word) in enumerate(zip(names, _QUEST_COLUMNS, strict=False), 1):
+        if word not in name.lower():
+            raise ValueError(
+                f"QuestForever.lua: column {i} is {name.strip()!r}, the reader expects {word!r}"
+            )
+    return len(names)
 
 
 def parse_quests(text: str) -> list[QuestRow]:
-    """``ns.qfQuests = {[quest] = "title|level|min level|objective|starts|ends|seen|new"}``, since
-    ForeverDB 0.57.14 with two more columns at the end."""
+    """``ns.qfQuests = {[quest] = "title|level|min level|objective|starts|ends|seen|new"}``, with
+    more columns at the end since ForeverDB 0.57.14 (``_QUEST_COLUMNS``)."""
     columns = _quest_columns(text)
     after_objective = columns - 4
     out = []
@@ -295,8 +324,9 @@ def parse_quests(text: str) -> list[QuestRow]:
         # a stray "|" can only be in the free text: keep the first three and the last positions
         title, level, min_level = parts[0], parts[1], parts[2]
         objective = "|".join(parts[3:-after_objective])
-        starts, ends, seen, new = parts[-after_objective:][:4]
-        previous, lowest = parts[-2:] if columns == 10 else ("", "")
+        # starts, ends, seen, new, then what later versions added; absent is empty
+        tail = parts[-after_objective:] + [""] * 3
+        starts, ends, seen, new, previous, lowest, side = tail[:7]
         out.append(
             QuestRow(
                 id=qid,
@@ -310,6 +340,7 @@ def parse_quests(text: str) -> list[QuestRow]:
                 new_in_forever=new.strip() == "1",
                 confirmed_previous=_opt_int(previous) or None,
                 lowest_level_seen=_opt_int(lowest) or None,
+                side=_SIDES.get(side.strip().lower()),
             )
         )
     return out
@@ -741,6 +772,21 @@ def parse_quest_seen(text: str) -> dict[int, QuestSeen]:
 
 def read_quest_seen(path: Path) -> dict[int, QuestSeen]:
     return parse_quest_seen(path.read_text(encoding="utf-8"))
+
+
+def parse_triggers(text: str) -> dict[int, SeenPoint]:
+    """`qfArea`: where an area trigger is in the Forever client (ForeverDB 0.57.x; absent in
+    an older file). A quest that is finished by reaching one names it (CMaNGOS)."""
+    out = {}
+    for trigger, where in _items(run_text(text, "QuestForever.lua").qfArea):
+        points = parse_points(where)
+        if points:
+            out[int(trigger)] = points[0]
+    return out
+
+
+def read_triggers(path: Path) -> dict[int, SeenPoint]:
+    return parse_triggers(path.read_text(encoding="utf-8"))
 
 
 def parse_npc_names(text: str) -> dict[int, str]:

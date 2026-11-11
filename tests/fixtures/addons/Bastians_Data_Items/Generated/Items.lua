@@ -12,7 +12,142 @@ B.deferred[#B.deferred + 1] = {
     disenchant = {
       [21] = [=[{ { { 10938, 80, 1, 2 }, { 10940, 20, 1, 2 } }, "classic" }]=],
     },
-    index = {},
+    edges = {
+      drops = {
+        from = { "npc", "object" },
+        parts = {
+          {
+            field = "drops",
+            form = "rows",
+            on = "item",
+            props = {
+              chance = 2,
+            },
+            ref = 1,
+            side = "to",
+          },
+          {
+            const = {
+              how = "skin",
+            },
+            field = "ways",
+            form = "rows",
+            on = "item",
+            props = {
+              chance = 3,
+            },
+            ref = 2,
+            side = "to",
+            when = { 1, "skin" },
+          },
+          {
+            const = {
+              how = "pick",
+            },
+            field = "ways",
+            form = "rows",
+            on = "item",
+            props = {
+              chance = 3,
+            },
+            ref = 2,
+            side = "to",
+            when = { 1, "pick" },
+          },
+        },
+        to = { "item" },
+      },
+      fished = {
+        from = { "zone" },
+        index = "edge.fished",
+        key = "ref",
+        parts = {
+          {
+            field = "ways",
+            form = "rows",
+            on = "item",
+            props = {
+              chance = 3,
+            },
+            ref = 2,
+            side = "to",
+            when = { 1, "fish" },
+          },
+        },
+        to = { "item" },
+      },
+      holds = {
+        from = { "item" },
+        index = "edge.holds",
+        key = "ref",
+        parts = {
+          {
+            field = "ways",
+            form = "rows",
+            on = "item",
+            props = {
+              chance = 3,
+            },
+            ref = 2,
+            side = "to",
+            when = { 1, "container" },
+          },
+        },
+        to = { "item" },
+      },
+      makes = {
+        from = { "recipe" },
+        index = "edge.makes",
+        key = "ref",
+        parts = { { also = { count = "count" }, far = "item", field = "item", form = "id", on = "recipe", side = "from" } },
+        to = { "item" },
+      },
+      uses = {
+        from = { "recipe" },
+        index = "edge.uses",
+        key = "ref",
+        parts = {
+          {
+            far = "item",
+            field = "reagents",
+            form = "rows",
+            on = "recipe",
+            props = {
+              count = 2,
+            },
+            ref = 1,
+            side = "from",
+          },
+        },
+        to = { "item" },
+      },
+      yields = {
+        from = { "item" },
+        index = "edge.yields",
+        key = "ref",
+        parts = {
+          {
+            field = "ways",
+            form = "rows",
+            on = "item",
+            props = {
+              at = 4,
+            },
+            ref = 2,
+            side = "to",
+            when = { 1, "make" },
+          },
+        },
+        to = { "item" },
+      },
+    },
+    index = {
+      ["edge.fished"] = [=[{}]=],
+      ["edge.holds"] = [=[{}]=],
+      ["edge.makes"] = [=[{ ["item:2304"] = { 2152 } }]=],
+      ["edge.uses"] = [=[{ ["item:2318"] = { 2152 } }]=],
+      ["edge.yields"] = [=[{}]=],
+    },
     item = {
       [1185] = [=[{ "Blood Saber", 2, 7, 2, 2, 7, 200, 1000, 1, nil, nil, nil, nil, nil, nil, nil, "classic", 21 }]=],
       [1931] = [=[{ "Huge Gnoll Claw", 1, 1, nil, 12, 0 }]=],
@@ -38,9 +173,11 @@ B.deferred[#B.deferred + 1] = {
       item = {
         "name", "quality", "level", "reqLevel", "class", "subclass", "sell", "buy", "stack", "foreverNew",
         "foreverChanged", "madeBy", "questItem", "drops", "dropsSrc", "worldDrop", "src", "disenchant",
+        "ways",
       },
       recipe = { "name", "profession", "skill", "item", "count", "reagents", "source", "sourceItem", "foreverNew", "src" },
     },
+    shape = 2,
     sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
     version = "0.1.0",
   },

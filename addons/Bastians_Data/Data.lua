@@ -8,7 +8,11 @@ ns.L = ns.L or B.NewLocale()
 local L = ns.L
 local S = B.UI.Style
 
-local Data = { packs = {}, loaded = {}, typePack = {}, foreign = {}, noData = {} }
+local Data = { packs = {}, loaded = {}, typePack = {}, foreign = {}, noData = {}, newer = {} }
+-- The pack shapes this suite reads (data.md "Old and new packs"): 1 has `objectives` and `spots`,
+-- 2 adds `steps`, `edges` and `item.ways` beside them; a pack of a higher shape left something
+-- out that this suite reads, so it is not loaded.
+Data.SHAPE = 2
 B.Data = Data
 ns.Data = Data
 
@@ -65,6 +69,21 @@ function Data.RegisterPack(name, pack)
   if type(name) ~= "string" or type(pack) ~= "table" or type(pack.schema) ~= "table" then
     error("RegisterPack(name, pack): pack needs a schema table", 2)
   end
+  if type(pack.shape) == "number" and pack.shape > Data.SHAPE then
+    -- a Data edition from after this suite: wrong quests would be worse than none
+    Data.newer[name] = pack.shape
+    B:Log(mod, "warn", "pack %s has shape %d, this suite reads up to %d", name, pack.shape, Data.SHAPE)
+    if mod then -- once for all packs of a load burst (ADR 0015)
+      mod:Coalesce("newer", 0.5, function()
+        local note = Data.NewerNote()
+        if note then
+          B:Say(note)
+        end
+      end)
+    end
+    return
+  end
+  Data.newer[name] = nil
   Data.packs[name] = pack
   Data.loaded[name] = true
   -- A pack built for the other client still loads (its format is the same), but its ids and places
@@ -123,6 +142,9 @@ function Data.LoadPack(name)
   end
   local status, reason = B.Compat.LoadAddOn(addon)
   if status == "loaded" and not Data.loaded[name] then
+    if Data.newer[name] then
+      return "failed", "newer"
+    end
     if OPTIONAL[name] then
       if not Data.noData[name] then -- once, however often a consumer asks
         Data.noData[name] = true
@@ -246,9 +268,16 @@ local function record(typ, id)
 end
 Data.record = record
 
+-- An index of the loaded packs. One that came as text (an edge's index of the build's registry,
+-- data.md "The edge registry") is compiled when first asked for and kept as its table: nobody
+-- pays for a direction nobody asks about.
 local function index(name)
   for _, pack in pairs(Data.packs) do
     local idx = pack.index and pack.index[name]
+    if type(idx) == "string" then
+      idx = decodeRow(idx, "index " .. name) or {}
+      pack.index[name] = idx
+    end
     if idx then
       return idx
     end
@@ -527,6 +556,8 @@ end
 local KINDS = {
   object = {
     ["quest object"] = "Quest object",
+    -- an object a quest's item is used at (the Mirror Lake Waterwall; pipeline canon.QUEST_PLACE)
+    ["quest place"] = "Quest place",
     chest = "Chest",
     signpost = "Signpost",
     ["fire and forge"] = "Fire and forge",
@@ -605,6 +636,20 @@ function service:Meta()
     foreign[name] = client
   end
   return { client = B.Client, packs = packs, foreign = foreign, downloads = Data.downloads }
+end
+
+-- One line for the settings hub and the chat: the packs of a Data edition this suite is too old
+-- to read (their shape is above Data.SHAPE), or nil.
+function Data.NewerNote()
+  local names = {}
+  for name in pairs(Data.newer) do
+    names[#names + 1] = name
+  end
+  if #names == 0 then
+    return nil
+  end
+  table.sort(names)
+  return ("%s: %s."):format(L["This Data edition needs a newer Bastian's suite"], table.concat(names, ", "))
 end
 
 -- One line for the settings hub: which loaded packs were built for another client, or nil.
@@ -802,11 +847,10 @@ local LEAD = {
 
 -- The places of a quest:
 -- the giver places (else the givers' own first places), the objective spots per map, the
--- hand-in places (else the takers'); `kind` says which. Built once per record.
+-- hand-in places (else the takers'); `kind` says which. Not kept on the record: Core caches an
+-- entity's places until the entities are invalidated, so a giver's place that arrives later (a
+-- bridge, a capture) is picked up (plan-quest-links.md S4).
 local function questPlaces(r)
-  if r._places then
-    return r._places
-  end
   local out, seen = {}, {}
   local function add(map, x, y, kind, src)
     local key = map .. ":" .. math.floor(x * 1000) .. ":" .. math.floor(y * 1000)
@@ -815,10 +859,13 @@ local function questPlaces(r)
       out[#out + 1] = { map = map, x = x, y = y, kind = kind, src = src }
     end
   end
+  local most = Data.Steps and Data.Steps.ENDS or 8 -- as the steps' take and hand-in (Steps.lua)
   local function entities(refs, kind)
     for _, ref in ipairs(refs or {}) do
-      local loc = B:Entity(ref):Locations()[1]
-      if loc then
+      for i, loc in ipairs(B:Entity(ref):Locations()) do
+        if i > most then
+          break
+        end
         add(loc.map, loc.x, loc.y, kind, loc.src)
       end
     end
@@ -842,7 +889,6 @@ local function questPlaces(r)
   else
     entities(r.ends, "turnin")
   end
-  r._places = out
   return out
 end
 
@@ -2490,7 +2536,7 @@ mod = B:NewModule("Data", {
     {
       type = "note",
       text = function()
-        return Data.ForeignNote() or L["Packs are built for this client."]
+        return Data.NewerNote() or Data.ForeignNote() or L["Packs are built for this client."]
       end,
     },
     {
@@ -2498,7 +2544,7 @@ mod = B:NewModule("Data", {
       type = "execute",
       label = L["Copy my captures"],
       icon = "copy",
-      desc = L["Your learned walks, flight times and ride waits as a text for a GitHub issue (Share your captures). Positions and times only, no names."], -- luacheck: ignore 631 (a locale key stays one literal)
+      desc = L["Your learned walks, flight times, ride waits and the places where your quest steps counted, as a text for a GitHub issue (Share your captures). Positions and times only, no names."], -- luacheck: ignore 631 (a locale key stays one literal)
       func = function()
         Data.Export.Show()
       end,
@@ -2533,6 +2579,9 @@ mod = B:NewModule("Data", {
     end
     if Data.Activity then
       Data.Activity.Attach(self)
+    end
+    if Data.Steps then
+      Data.Steps.Attach(self)
     end
     if Data.Graph then
       Data.Graph.Attach(self)

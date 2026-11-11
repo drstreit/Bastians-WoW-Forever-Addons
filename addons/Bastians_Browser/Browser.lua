@@ -1123,6 +1123,7 @@ local KIND_GLYPH = {
   ["Fishing pool"] = "fish",
   ["Treasure"] = "treasure",
   ["Quest object"] = "quest",
+  ["Quest place"] = "quest",
 }
 Browser.KIND_GLYPH = KIND_GLYPH
 

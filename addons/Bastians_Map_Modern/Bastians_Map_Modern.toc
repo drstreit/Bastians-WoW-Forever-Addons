@@ -22,7 +22,7 @@
 ## Notes-ptBR: O estilo de mapa moderno do Bastian: cores claras, florestas, estradas brancas, cada casa (opcional, cerca de 100 MB).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 2.1.0
+## Version: 2.2.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

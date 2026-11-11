@@ -331,3 +331,49 @@ def test_a_step_click_shows_its_end_on_the_map(wow: WowRuntime):
     assert (round(wp.wx), round(wp.wy)) == (-120, 80)  # the nearer spawn: the step's end
     assert wp.label.startswith("Go 77 yd")
     assert wow.errors == []
+
+
+# A thing with twelve places, the two nearest the last: ten in the far corner of Elwynn (farther
+# with every one), then A at world (-100, -20) and B at (-20, 120). The player stands at (-60, 32).
+TWELVE = """
+local m = Bastians:NewModule("Twelve", { addon = "Bastians_Route" })
+Bastians:RegisterEntityType(m, { type = "testplace", priority = 100,
+  name = function() return "Twelve" end,
+  locations = function()
+    local out = {}
+    for i = 1, 10 do out[i] = { map = 1429, x = 0.9 + i * 0.005, y = 0.99 } end
+    out[11] = { map = 1429, x = 0.55, y = 0.75 }
+    out[12] = { map = 1429, x = 0.2, y = 0.55 }
+    out[13] = { map = 424242, x = 0.5, y = 0.5 } -- a map no transform holds
+    return out
+  end })
+"""
+
+
+def test_route_to_plans_the_ten_places_nearest_by_straight_line(wow: WowRuntime):
+    """ADR 0069 (plan-quest-links.md S5): the first ten in the provider's order were planned, so a
+    thing with places on several maps could plan ten of the wrong map."""
+    boot(wow)
+    wow.execute(TWELVE)
+    here = "{ continent = 0, wx = -60, wy = 32 }"
+    goals = list(
+        wow.eval(f"{R}.Nearest(Bastians:Entity('testplace:1'):Locations(), {here}, 10)").values()
+    )
+    assert len(goals) == 10  # the place without a transform is left out, the two farthest cut
+    assert [(g.x, g.y) for g in goals[:2]] == [(0.55, 0.75), (0.2, 0.55)]
+    assert [round(g.x, 3) for g in goals[2:]] == [round(0.9 + i * 0.005, 3) for i in range(1, 9)]
+    # from another continent nothing is measured: the provider's order
+    far = list(
+        wow.eval(
+            f"{R}.Nearest(Bastians:Entity('testplace:1'):Locations(), "
+            "{ continent = 1, wx = 0, wy = 0 }, 3)"
+        ).values()
+    )
+    assert [round(g.x, 3) for g in far] == [0.905, 0.91, 0.915]
+    assert wow.eval(f"#{R}.Nearest(nil, {here})") == 0
+    # the route goes to the nearest of them by time: A
+    assert wow.eval(f"{R}.To('testplace:1')") is True
+    wow.run_frames(30)
+    goal = wow.eval(f"{R}.Active().goal")
+    assert (round(goal.wx), round(goal.wy)) == (-100, -20)
+    assert wow.errors == []

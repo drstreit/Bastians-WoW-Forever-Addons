@@ -10,7 +10,9 @@ from bastians_build.canon import (
     merge_creatures,
     merge_fdb_quest_facts,
     merge_flightpaths,
+    merge_item_spots,
     merge_objective_texts,
+    merge_questie_items,
     merge_questie_quests,
     merge_questie_world,
     merge_vendors_and_trainers,
@@ -20,7 +22,13 @@ from bastians_build.sources import foreverdb
 from bastians_build.sources.clientdump import TaxiNode
 from bastians_build.sources.cmangos import SpawnRow
 from bastians_build.sources.probe import Transform
-from bastians_build.sources.questiedb_store import Store, StoreNpc, StoreObject, StoreQuest
+from bastians_build.sources.questiedb_store import (
+    Store,
+    StoreItem,
+    StoreNpc,
+    StoreObject,
+    StoreQuest,
+)
 
 ISLAND = Transform(2521, 2991, 4956.25, 0.0, -3708.333, 4231.25, -5562.5, 0.0, True)
 
@@ -284,3 +292,193 @@ def test_a_spots_bit_counts_within_its_kind_as_everything_quests_do():
         ("slay", 1),
         ("slay", 2),
     ]
+
+
+# ---------------------------------------------------------------------------------------------
+# QuestieDB's item rows (package QD1, plan-quest-links.md G1 and G2)
+# ---------------------------------------------------------------------------------------------
+
+WATERWALL = [[1429, 0.2857, 0.6139, "classic"]]
+
+
+def lake() -> World:
+    """Mirror Lake as the build finds it: the item and the object are there, nothing links them."""
+    w = world()
+    w.add("item", 7206, {"name": "Mirror Lake Water Sample", "src": "classic"})
+    w.add("object", 174794, {"name": "Mirror Lake Waterwall", "spawns": WATERWALL})
+    w.add("quest", 1861, {"name": "Mirror Lake", "requiredItems": [[7206, 1]]})
+    return w
+
+
+def test_an_item_no_loot_table_knows_gets_its_droppers_without_a_chance():
+    w = lake()
+    w.add("item", 50, {"name": "Forever's own"})
+    w.add("npc", 5, {"name": "No place"})
+    w.add("npc", 6, {"name": "Placed", "spawns": [[1429, 0.5, 0.5, "eq"]]})
+    w.add("object", 7, {"name": "Chest", "spawns": [[1429, 0.6, 0.6, "eq"]]})
+    store = Store(
+        items={
+            7206: StoreItem(7206, object_drops=(174794,)),
+            50: StoreItem(50, npc_drops=(5, 6, 99), object_drops=(7,), vendors=(8,)),
+            51: StoreItem(51, npc_drops=(6,)),  # no record: the store does not make an item
+        }
+    )
+    s = sources(store)
+    s.cm_items = [SimpleNamespace(id=7206)]
+    assert merge_questie_items(w, s) == 2
+    water = w.get("item", 7206)
+    assert water["drops"] == [["object:174794"]]  # unknown is not zero: no chance
+    assert water["dropsSrc"] == "classic"
+    own = w.get("item", 50)
+    # those with a place first, creatures before objects; 99 is not in the world
+    assert own["drops"] == [["npc:6"], ["object:7"], ["npc:5"]]
+    assert own["dropsSrc"] == "questie"
+    # the link is stored at both ends (the edge `drops`): the dropper lists the item, no chance
+    assert w.get("object", 174794)["loot"] == [[7206]]
+    assert w.get("object", 174794)["lootSrc"] == "classic"
+    assert w.get("npc", 6)["loot"] == [[50]] and w.get("npc", 6)["lootSrc"] == "questie"
+    assert w.get("item", 51) is None
+    assert "2 items" in w.notes[-1] and "1 droppers" in w.notes[-1]
+
+
+def test_an_item_with_drops_or_a_world_drop_keeps_them():
+    w = world()
+    w.add("npc", 6, {"spawns": [[1429, 0.5, 0.5, "eq"]]})
+    w.add("item", 1, {"drops": [["npc:9", 45.5, False]], "dropsSrc": "classic"})
+    w.add("item", 2, {"worldDrop": [10, 20, 40]})
+    w.add("item", 3, {})
+    store = Store(
+        items={
+            1: StoreItem(1, npc_drops=(6,)),
+            2: StoreItem(2, npc_drops=(6,)),
+            3: StoreItem(3, npc_drops=(77,), vendors=(6,)),  # nobody the world knows drops it
+        }
+    )
+    assert merge_questie_items(w, sources(store)) == 0
+    assert w.get("item", 1)["drops"] == [["npc:9", 45.5, False]]
+    assert "drops" not in w.get("item", 2) and "drops" not in w.get("item", 3)
+    assert "loot" not in w.get("npc", 6)
+    assert w.notes == []
+
+
+def test_a_droppers_own_loot_stays_and_a_full_list_takes_no_more():
+    w = world()
+    w.add("npc", 6, {"spawns": [[1429, 0.5, 0.5, "eq"]], "loot": [[9, 80.0]], "lootSrc": "classic"})
+    full = [[1000 + i, 1.0] for i in range(canon.MAX_LOOT_PER_NPC)]
+    w.add("npc", 7, {"spawns": [[1429, 0.6, 0.6, "eq"]], "loot": list(full)})
+    w.add("item", 1, {})
+    w.add("item", 9, {})
+    store = Store(items={1: StoreItem(1, npc_drops=(6, 7)), 9: StoreItem(9, npc_drops=(6,))})
+    assert merge_questie_items(w, sources(store)) == 2
+    assert w.get("npc", 6)["loot"] == [[9, 80.0], [1]]  # 9 was there: not twice; 1 goes last
+    assert w.get("npc", 6)["lootSrc"] == "classic"
+    assert w.get("npc", 7)["loot"] == full
+
+
+def test_many_droppers_are_cut_and_the_same_store_gives_the_same_rows():
+    def build() -> list:
+        w = world()
+        w.add("item", 1, {})
+        for i in range(30):
+            w.add("npc", 100 + i, {"spawns": [[1429, 0.5, 0.5, "eq"]]} if i % 2 else {})
+        ids = tuple(100 + i for i in reversed(range(30)))
+        merge_questie_items(w, sources(Store(items={1: StoreItem(1, npc_drops=ids + ids[:3])})))
+        return w.get("item", 1)["drops"]
+
+    rows = build()
+    assert len(rows) == canon.MAX_DROPS_PER_ITEM and rows == build()
+    assert [r[0] for r in rows[:3]] == ["npc:101", "npc:103", "npc:105"]  # the placed, by id
+    assert rows[15] == ["npc:100"]  # then those without a place
+
+
+def test_mirror_lake_gets_its_place():
+    """the quest's item has a dropper now, and the quest
+    a spot where it stands, so a suite that reads `spots` alone is sent to the lake too. The
+    spot says who stands there."""
+    w = lake()
+    store = Store(
+        items={7206: StoreItem(7206, object_drops=(174794,))},
+        quests={1861: quest(1861, items=(7206,))},
+    )
+    s = sources(store)
+    merge_questie_items(w, s)
+    merge_questie_quests(w, s)
+    rec = w.get("quest", 1861)
+    assert rec["objectives"] == [["loot", "item:7206"]] and rec.get("spots") is None
+    assert merge_item_spots(w) == 1
+    assert rec["spots"] == {1429: [[0.2857, 0.6139, "loot", 1, "object:174794"]]}
+    assert merge_item_spots(w) == 0  # it has spots now: running twice changes nothing
+
+
+def test_an_items_spot_bit_is_its_number_as_the_addon_counts():
+    w = world()
+    w.add("npc", 1, {"spawns": [[1429, 0.1, 0.1, "eq"]]})
+    w.add("npc", 2, {"spawns": [[1429, 0.2, 0.2, "eq"]]})
+    w.add("item", 10, {"drops": [["npc:1", 50.0, False]]})
+    w.add("item", 11, {"drops": [["npc:2", 50.0, False]]})
+    w.add("item", 12, {})  # nobody is known to have it: no spot
+    # Everything Quests' numbered rows: the addon takes the n-th required item
+    w.add(
+        "quest",
+        1,
+        {"objectives": [["loot", "npc:1", 0]], "requiredItems": [[11, 3], [10, 1]]},
+    )
+    # rows without a number (QuestieDB's): the item counts among the loot rows
+    w.add(
+        "quest",
+        2,
+        {
+            "objectives": [["slay", "npc:9"], ["loot", "item:12"], ["loot", "item:10"]],
+            "requiredItems": [[10, 1], [12, 1]],
+        },
+    )
+    # an item only the required items name is a step without a number: no spot nobody would read
+    w.add("quest", 3, {"requiredItems": [[10, 1]]})
+    assert merge_item_spots(w) == 2
+    assert w.get("quest", 1)["spots"] == {
+        1429: [[0.2, 0.2, "loot", 1, "npc:2"], [0.1, 0.1, "loot", 2, "npc:1"]],
+    }
+    assert w.get("quest", 2)["spots"] == {1429: [[0.1, 0.1, "loot", 2, "npc:1"]]}
+    assert w.get("quest", 3).get("spots") is None
+    assert "2 quests" in w.notes[-1]
+
+
+def test_a_quest_with_spots_of_any_source_keeps_them():
+    """The client's own areas and Everything Quests' spots were chosen for the quest; where the
+    droppers stand is only where the item may be."""
+    w = world()
+    w.add("npc", 1, {"spawns": [[1429, 0.1, 0.1, "classic"]]})
+    w.add("item", 10, {"drops": [["npc:1"]]})
+    area = {1436: [[0.4371, 0.6904, "area", 1]]}
+    w.add("quest", 1, {"objectives": [["loot", "item:10"]], "spots": dict(area)})
+    assert merge_item_spots(w) == 0
+    assert w.get("quest", 1)["spots"] == area and w.notes == []
+
+
+def test_an_items_spots_come_from_its_first_droppers_and_are_spread():
+    w = world()
+    drops = []
+    for i in range(canon.SPOT_DROPPERS + 3):
+        w.add("npc", 100 + i, {"spawns": [[1000 + i, 0.5, 0.5, "eq"]]})
+        drops.append([f"npc:{100 + i}", 90.0 - i, False])
+    crowd = [[1429, round(0.01 * i, 2), 0.5, "eq"] for i in range(40)]
+    w.add("npc", 7, {"spawns": crowd})
+    w.add("item", 10, {"drops": drops})
+    w.add("item", 11, {"drops": [["npc:7"], ["npc:404"], ["node:5"]]})  # 404: not in the world
+    w.add("quest", 1, {"objectives": [["loot", "item:10"]]})
+    w.add("quest", 2, {"objectives": [["loot", "item:11"]]})
+    merge_item_spots(w)
+    assert sorted(w.get("quest", 1)["spots"]) == [1000 + i for i in range(canon.SPOT_DROPPERS)]
+    spread = w.get("quest", 2)["spots"][1429]
+    assert len(spread) == canon.MAX_SPOTS_PER_MAP
+    assert spread[0] == [0.0, 0.5, "loot", 1, "npc:7"] and spread[1][0] == 0.39
+
+
+def test_only_a_forever_build_makes_item_spots(monkeypatch):
+    """Retail's pack has no objective spots by design: a running quest's place there is the
+    client's (data.md "Retail data")."""
+    ran = []
+    monkeypatch.setattr(canon, "merge_item_spots", lambda w: ran.append(w.client))
+    canon.build_world(Sources(client="retail"))
+    canon.build_world(Sources(client="forever"))
+    assert ran == ["forever"]

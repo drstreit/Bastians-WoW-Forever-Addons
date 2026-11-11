@@ -75,6 +75,8 @@ ns.L:Register("ptBR", {
   ["From the back shelf"] = "Da prateleira dos fundos",
   ["The rumours on this page"] = "Os rumores desta página",
   ["at %s"] = "em %s",
+  ["and 1 more traveller tells it"] = "e mais 1 viajante conta isso",
+  ["and %d more travellers tell it"] = "e mais %d viajantes contam isso",
   ["copy the link"] = "copiar o link",
   ["Read it on the web"] = "Ler na web",
   ["Puts the link into the chat input: copy it with Ctrl+C."] = "Coloca o link no campo do chat: copie-o com Ctrl+C.",

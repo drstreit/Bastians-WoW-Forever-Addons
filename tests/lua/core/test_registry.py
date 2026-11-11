@@ -468,6 +468,83 @@ def test_places_are_cached_until_the_entities_are_invalidated(app: WowRuntime):
     assert app.eval("Bastians:Entity('npc:1'):Places()[1].wx") == 0
 
 
+STEPS = """
+  steps = {
+    { step = "take", ref = "npc:1", places = { { map = 1429, x = 0.1, y = 0.1, src = "eq" } } },
+    { step = "slay", ref = "npc:2", src = "classic",
+      places = { { map = 1429, x = 0.2, y = 0.2 }, { map = 1429, x = 0.3, y = 0.3, src = "fdb" } } },
+    { step = "get", ref = "item:9", places = { { map = 1429, x = 0.4, y = 0.4, ref = "object:5" } } },
+    { step = "handin", ref = "npc:1", places = { { map = 1429, x = 0.1, y = 0.1 } } },
+  }
+  Bastians:RegisterEntityType(m, { type = "quest", priority = 100,
+    locations = function(id) return { { map = 1429, x = 0.9, y = 0.9, kind = "giver" } } end })
+  Bastians:RegisterFacet(m, { facet = "steps", types = { "quest" }, priority = 100,
+    invalidateOn = { "TEST_STEPS" }, rule = function(ref) return steps end })
+"""
+
+
+def step_points(app: WowRuntime, call: str = "Locations") -> list[tuple]:
+    points = app.eval(f"Bastians:Entity('quest:1'):{call}()").values()
+    return [(p.x, p.kind, p.ref, p.step, p.src) for p in points]
+
+
+def test_a_thing_with_steps_has_the_places_of_its_open_steps(app: WowRuntime):
+    """ADR 0069: Locations() of a thing whose `steps` facet answers are the places of the steps
+    to do now, each with what stands there and its step; a facet without a state marks no step
+    open, so every step counts (the hand-in at the giver's place is the same place once)."""
+    app.execute(NEW_MODULE % "Steps" + STEPS)
+    assert step_points(app) == [
+        (0.1, "giver", "npc:1", 1, "eq"),
+        (0.2, "objective", "npc:2", 2, "classic"),
+        (0.3, "objective", "npc:2", 2, "fdb"),
+        (0.4, "objective", "object:5", 3, None),
+    ]
+    # with a state: only what is open, and the list follows the facet
+    app.execute("steps.state = 'active'; steps[3].open = true; Bastians:InvalidateFacet('steps')")
+    assert step_points(app) == [(0.4, "objective", "object:5", 3, None)]
+    place = app.eval("Bastians:Entity('quest:1'):Places()")[1]
+    assert (place.ui, place.x, place.ref, place.step) == (1429, 0.4, "object:5", 3)
+    app.execute("steps[3].open = nil; steps[4].open = true; Bastians:Fire('TEST_STEPS')")
+    assert step_points(app) == [(0.1, "turnin", "npc:1", 4, None)]
+    # every place of the providers stays what it was
+    assert [p.x for p in app.eval("Bastians:Entity('quest:1'):AllLocations()").values()] == [0.9]
+    assert (
+        app.eval("#Bastians:Entity('npc:1'):Locations()") == 0
+    )  # no facet for the type: as before
+    assert app.errors == []
+
+
+def test_an_open_step_without_a_place_gives_no_place(app: WowRuntime):
+    """ADR 0069: open steps and no place among
+    them is an empty list, never the giver; the facet's waypoint is the one thing that fills in;
+    a state and nothing open shows where the first step is."""
+    app.execute(NEW_MODULE % "Steps" + STEPS)
+    app.execute(
+        "steps.state = 'active'; steps[3].open = true; steps[3].places = {}; "
+        "Bastians:InvalidateFacet('steps')"
+    )
+    assert step_points(app) == []
+    assert app.eval("#Bastians:Entity('quest:1'):Places()") == 0
+    app.execute(
+        "steps.waypoint = { map = 1429, x = 0.7, y = 0.7, src = 'client' }; "
+        "Bastians:InvalidateFacet('steps')"
+    )
+    assert step_points(app) == [(0.7, "objective", None, None, "client")]
+    # the answering app may say what kind of place it is (a complete quest's: the hand-in)
+    app.execute("steps.waypoint.kind = 'turnin'; Bastians:InvalidateFacet('steps')")
+    assert step_points(app) == [(0.7, "turnin", None, None, "client")]
+    # a placed open step beside it: the waypoint is not asked for
+    app.execute("steps[2].open = true; Bastians:InvalidateFacet('steps')")
+    assert [p[0] for p in step_points(app)] == [0.2, 0.3]
+    # done: nothing is open, the quest shows where it began
+    app.execute(
+        "steps.state = 'done'; steps[2].open = nil; steps[3].open = nil; steps.waypoint = nil; "
+        "Bastians:InvalidateFacet('steps')"
+    )
+    assert step_points(app) == [(0.1, "giver", "npc:1", 1, "eq")]
+    assert app.errors == []
+
+
 def test_facets_answer_by_priority_and_type_and_cache_per_generation(app: WowRuntime):
     """ADR 0026: RegisterFacet; the first table answer by priority wins, nil passes on."""
     watch_registry(app)

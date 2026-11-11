@@ -94,7 +94,8 @@ Compat.CONTRACT = {
   GetCorpsePosition = "-> uiMapID, x, y (map fractions) of the player's corpse, or nil (alive, no"
     .. " answer, or the corpse on no map of the player's map chain)",
   GetTaxiNodes = "-> array of { id (nil on the legacy path), name, map (uiMapID), x, y (map fractions),"
-    .. " state = 'current' | 'reachable' | 'unreachable' } ; empty when no taxi map is open",
+    .. " state = 'current' | 'reachable' | 'unreachable', slot = the TakeTaxiNode index } in no slot"
+    .. " order; empty when no taxi map is open",
   GetItemInfo = "itemID or link -> { id, name, link, quality, level, minLevel, class, subclass, stack,"
     .. " equipLoc, icon, sellPrice, classID, subclassID } or nil (nil also while the item is not cached)",
   RequestItemData = "itemID -> bool (asked) ; asks the client to load the item, ITEM_DATA_LOAD_RESULT"

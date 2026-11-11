@@ -255,14 +255,73 @@ function Entity:AllLocations()
   return merged
 end
 
--- The places that matter now: every place, through the registered filters of the type.
+-- Facets (below) are declared here: the places of a thing with steps come from the facet `steps`.
+local facetDefs = {} -- facet -> array of defs, highest priority first
+local facetGeneration = {} -- facet -> generation, bumped by registrations and invalidateOn messages
+
+-- Steps (ADR 0069, core-contracts §4 "Steps"): the places of the steps to do now, each
+-- { map, x, y, kind, src, ref, step, label }. A facet without a `state` marks no step open: there
+-- every step counts. A state and no open step: where the first step is (a done quest shows where
+-- it began). Open steps and no place among them: the facet's waypoint, else nothing; no other
+-- place is added, unknown stays unknown.
+local STEP_KIND = { take = "giver", handin = "turnin" }
+
+local function stepLocations(steps)
+  local out, seen = {}, {}
+  local function add(i, step)
+    for _, p in ipairs(type(step.places) == "table" and step.places or {}) do
+      local key = p.map and p.x and p.y and (p.map .. ":" .. p.x .. ":" .. p.y)
+      if key and not seen[key] then
+        seen[key] = true
+        out[#out + 1] = {
+          map = p.map,
+          x = p.x,
+          y = p.y,
+          wz = p.wz,
+          r = p.r,
+          kind = STEP_KIND[step.step] or "objective",
+          src = p.src or step.src,
+          ref = p.ref or step.ref,
+          step = i,
+          label = p.label,
+        }
+      end
+    end
+  end
+  local stated, anyOpen = steps.state ~= nil, false
+  for i, step in ipairs(steps) do
+    if type(step) == "table" and (not stated or step.open) then
+      anyOpen = true
+      add(i, step)
+    end
+  end
+  if not anyOpen then
+    if type(steps[1]) == "table" then
+      add(1, steps[1])
+    end
+  elseif #out == 0 and type(steps.waypoint) == "table" then
+    local w = steps.waypoint
+    if w.map and w.x and w.y then
+      out[1] = { map = w.map, x = w.x, y = w.y, kind = w.kind or "objective", src = w.src }
+    end
+  end
+  return out
+end
+
+-- The places that matter now: of a thing with steps the open steps' places, of any other every
+-- place; then through the registered filters of the type.
 function Entity:Locations()
   local all = self:AllLocations()
+  local stepsGen = facetGeneration.steps or 0
   local cached = self.values.locations
-  if cached then
+  if cached and self.values.locationsGen == stepsGen then
     return cached
   end
   local points = all
+  local steps = facetDefs.steps and self:Facet("steps") or nil
+  if steps then
+    points = stepLocations(steps)
+  end
   for _, def in pairs(locationFilters) do
     if hasType(def, self.type) then
       local ok, filtered =
@@ -272,7 +331,8 @@ function Entity:Locations()
       end
     end
   end
-  self.values.locations = points
+  self.values.locations, self.values.locationsGen = points, stepsGen
+  self.values.places = nil -- Places() follows
   return points
 end
 
@@ -300,6 +360,9 @@ local function toPlaces(points)
       y = p.y,
       kind = p.kind,
       src = p.src,
+      ref = p.ref,
+      step = p.step,
+      label = p.label,
     }
   end
   return out
@@ -333,8 +396,7 @@ end
 -- Facets (§4, ADR 0026): computed views on any entity: poi, activity, worth, an extension's own
 -- ---------------------------------------------------------------------------------------------
 
-local facetDefs = {} -- facet -> array of defs, highest priority first
-local facetGeneration = {} -- facet -> generation, bumped by registrations and invalidateOn messages
+-- facetDefs and facetGeneration are declared above Entity:Locations(), which reads them.
 local facetInvalidators = {} -- message -> { [facet] = true }, subscribed once per message
 -- Facets put together from every rule of the type, field by field, the higher priority first
 -- (ADR 0056: a tile's facts come from the app that knows each); the others take the first answer.

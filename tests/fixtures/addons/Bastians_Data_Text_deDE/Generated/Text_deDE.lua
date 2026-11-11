@@ -51,6 +51,7 @@ B.deferred[#B.deferred + 1] = {
       object_deDE = { "name" },
       quest_deDE = { "name", "objectives", "details", "offer", "progress" },
     },
+    shape = 2,
     sources = { "hand-written fixture world-mini", "QuestieDB l10n fixture00000", "CMaNGOS quest locales" },
     version = "0.1.0",
   },

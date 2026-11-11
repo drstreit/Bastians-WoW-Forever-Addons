@@ -5,6 +5,66 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.2.0:1",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner.",
+  },
+  {
+    id = "2.2.0:2",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "A rumour in the gold book names its three newest travellers and counts the others.",
+  },
+  {
+    id = "2.2.0:3",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "A quest whose next step has no known place no longer routes you back to its giver.",
+  },
+  {
+    id = "2.2.0:4",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = 'A quest whose place nobody knows says so, with Map and Route greyed; the quest round stops once per open objective, and "Route to" picks among the nearest places.',
+  },
+  {
+    id = "2.2.0:5",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "Quests that ask for an item no loot table knew, like Mirror Lake's water sample, now lead to where the item is found.",
+  },
+  {
+    id = "2.2.0:6",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = 'The suite notes where your quest steps counted, and "Copy my captures" can share those places, so quests no source can place get one later.',
+  },
+  {
+    id = "2.2.0:7",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "The flight bar and the learned flight times name the flight you took; the game lists its flight points in another order than its buttons.",
+  },
+  {
+    id = "2.2.0:8",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "Abandoning a quest that takes items back no longer raises an error; the game's question names the items.",
+  },
+  {
+    id = "2.2.0:9",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "Ring wedges and the Campfire's foot icon act on a click whatever the game's key-down setting, and a ring opened by its toggle key stays until that key closes it, over a reload too.",
+  },
+  {
+    id = "2.2.0:10",
+    date = "2026-11-11",
+    version = "2.2.0",
+    text = "Courtesy whispers its line to the person who buffed or invited you when the game gives their whole name, and offers its ring for a buff that landed during a longer fight.",
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",
@@ -123,65 +183,5 @@ ns.NEWS = {
     date = "2026-11-06",
     version = "2.0.0",
     text = "Rewards come from the game itself, so quests no source knows show their real experience, money and items.",
-  },
-  {
-    id = "2.0.0:3",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "My quests shows each quest on two lines, a finished quest has its own mark and says who takes it, and the voice and chain buttons stay on the row.",
-  },
-  {
-    id = "2.0.0:4",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "The chain symbol shows a quest chain as a trail with every step, what it needs and what is still ahead.",
-  },
-  {
-    id = "2.0.0:5",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "The map shows the targets of one quest, the focused or the nearest, and finished quests' hand-ins as large signs.",
-  },
-  {
-    id = "2.0.0:6",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "A second click on a quest closes its sheet, and the sheet shows the quest giver and the target in 3D.",
-  },
-  {
-    id = "2.0.0:7",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "Show on map opens at the nearest group of a quest's targets, not between two far camps.",
-  },
-  {
-    id = "2.0.0:8",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "A page in the Browser reads like the quest sheet: the figure large at the left on a wide window, the name and what matters first, the main buttons with the rest under More, and chapters in one column instead of a grid of blocks.",
-  },
-  {
-    id = "2.0.0:9",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = 'Pages are sorted into chapters in a fixed reading order: a zone\'s quests under one heading, an item under "Where to get it", "What it is for", "Worth" and "Yours", a monster\'s drops first.',
-  },
-  {
-    id = "2.0.0:10",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "A page in the Browser is drawn on parchment like the quest sheet, its rows are calm (two lines, icons only under the mouse), and a zone's quest groups you cannot act on yet are folded until clicked.",
-  },
-  {
-    id = "2.0.0:11",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "A zone's page lists its people by what they do, vendors, trainers, zones and dungeons say in one sentence what they are, quests far above your level no longer lead \"To do here\", and pages on parchment keep the paper's colours under the mouse and switch without a reload.",
-  },
-  {
-    id = "2.0.0:12",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "Pages on parchment keep readable colours everywhere, a place's mini map opens the large map there, a dungeon's floor map no longer sticks to other pages, the quest sheet opens on the free side of the Orbiter, and a locked Orbiter says that it is locked.",
   },
 }

@@ -1193,12 +1193,16 @@ mod = B:NewModule("Alts", {
       Alts.RecordEquipped()
       changed()
     end)
-    for _, event in ipairs({ "PLAYER_MONEY", "PLAYER_LEVEL_UP", "ZONE_CHANGED_NEW_AREA", "PLAYER_LOGOUT" }) do
+    for _, event in ipairs({ "PLAYER_MONEY", "PLAYER_LEVEL_UP", "ZONE_CHANGED_NEW_AREA" }) do
       self:RegisterEvent(event, function()
         Alts.RecordFacts()
         changed()
       end)
     end
+    -- the facts only: nothing shows any more, and Core may have pruned the empty lists already
+    self:RegisterEvent("PLAYER_LOGOUT", function()
+      Alts.RecordFacts()
+    end)
     self:RegisterEvent("BANKFRAME_OPENED", function()
       Alts.bankOpen = true
       Alts.RecordBank()

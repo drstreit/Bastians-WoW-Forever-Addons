@@ -76,6 +76,8 @@ ns.L:Register("koKR", {
   ["From the back shelf"] = "뒤쪽 서가에서",
   ["The rumours on this page"] = "이 페이지의 소문",
   ["at %s"] = "%s에서",
+  ["and 1 more traveller tells it"] = "그리고 여행자 1명이 더 전합니다",
+  ["and %d more travellers tell it"] = "그리고 여행자 %d명이 더 전합니다",
   ["copy the link"] = "링크 복사",
   ["Read it on the web"] = "웹에서 읽기",
   ["Puts the link into the chat input: copy it with Ctrl+C."] = "링크를 대화 입력창에 넣습니다. Ctrl+C로 복사하세요.",

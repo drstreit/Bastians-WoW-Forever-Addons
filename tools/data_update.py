@@ -16,6 +16,10 @@ Usage: python tools/data_update.py [--export <dir>] [--out build/data] [--send]
    A pack whose rows fell by more than a tenth since the last sent edition holds the run
    (catalog review B2, 07.11.2026: a source that changed shape would ship a thin pack); the
    build report's counts ride with the edition, `--allow-drift` ships a fall that is right.
+   The quest steps' numbers ride with it too (the build's `links-forever.json`, data.md "The
+   count and the watch"): steps that fell by a tenth, or steps without a place or placed by
+   Classic knowledge alone that rose by a tenth, hold the run the same way. A smaller rise
+   holds nothing: the watch says it (tools/ops/health.py `links`).
 3. Zips the whole install, the suite and its data (tools/release.py into `<out>/release`), boots it
    on the WoW mock (with the Suite as it was last sent when `.local/released/forever/` keeps it:
    what players run), and writes the Data project's CurseForge file with the version
@@ -298,6 +302,40 @@ def stream(cmd: list[str], cwd: Path, env: dict | None = None) -> int:
     return proc.returncode
 
 
+def foreign_files(
+    config: dict,
+    ledger: dict,
+    transport: curseforge.Transport = curseforge._urlopen,
+    key: str | None = None,
+) -> list[str]:
+    """The Data project's files on CurseForge that are newer than every file this machine's
+    ledger knows: another machine uploaded too (plan-nightly-content.md F2: the desktop's task
+    beside the notebook's, or a Suite release, which sends Data from the desktop's ledger). One
+    line per file; [] without the read key, without a sent edition or when CurseForge does not
+    answer. The read API lists a file only once it is approved, so a file sent minutes ago is
+    not seen yet: this finds the second sender the next night, not the same minute."""
+    key = key or curseforge.core_key()
+    known = [int(e["file_id"]) for e in ledger.get("editions", []) if e.get("file_id")]
+    if not key or not known:
+        return []
+    project = config["projects"][PROJECT]["id"]
+    try:
+        files = curseforge.core_get(f"/v1/mods/{project}/files?pageSize=20", key, transport)["data"]
+        newer = sorted(
+            (int(f["id"]), str(f.get("displayName") or f.get("fileName") or ""))
+            for f in files
+            if int(f["id"]) > max(known)
+        )
+    except (urllib.error.URLError, OSError, KeyError, TypeError, ValueError) as err:
+        print(f"note: CurseForge's file list was not read: {err}")
+        return []
+    return [
+        f"CurseForge has Data file {fid} ({name}) that this machine did not send: another "
+        "machine uploads too, and its ledger and this one's now differ"
+        for fid, name in newer
+    ]
+
+
 def downloads(
     config: dict,
     transport: curseforge.Transport = curseforge._urlopen,
@@ -405,11 +443,29 @@ def run_build(inputs: build_client.BuildInputs, packs: Path) -> None:
     # the data packs and the walk network (the nav step): Bastian's Data ships both. 2.0.0 and
     # every release before went out without the network because only the first command ran
     # (06.11.2026); the stub the nav step writes without graphs is refused below
+    started = time.time()
+    for path in (REPORT, LINKS):
+        (packs / path.name).unlink(missing_ok=True)  # never the last build's
     for cmd in build_client.commands(inputs, packs, skip_mapart=True):
         print("> " + " ".join(cmd[3:]), flush=True)
         code = stream(cmd, ROOT)
         if code:
             raise DataUpdateError(f"the {cmd[3]} build exited with {code}")
+    place_report(REPORT, packs, started)
+    place_report(LINKS, packs, started)
+
+
+REPORT = ROOT / "build" / "report.md"  # where `bastians_build data` writes it (--report-dir)
+LINKS = ROOT / "build" / f"links-{CLIENT}.json"  # the quest steps' numbers, beside the report
+
+
+def place_report(report: Path, packs: Path, started: float) -> None:
+    """Puts this build's report beside the packs, where the drift check reads it. Until
+    10.11.2026 nothing did: the build wrote build/report.md, the check looked in the packs
+    folder, said "not checked" and shipped. A report older than the build is another build's
+    and is not taken."""
+    if report.is_file() and report.stat().st_mtime >= started - 1:
+        shutil.copyfile(report, packs / report.name)
 
 
 DROP = (
@@ -466,6 +522,11 @@ def check_drift(packs: Path, sent: dict | None, allow: bool) -> dict[str, dict[s
     would ship a thin pack otherwise). -> this build's counts, for the edition."""
     records = report_counts(packs)
     if not records:
+        if sent and sent.get("records") and not allow:
+            raise DataUpdateError(
+                "no build report beside the packs although the last sent edition had one: the "
+                "row counts cannot be checked (pass --allow-drift to ship without the check)"
+            )
         print("drift: no build report beside the packs, the row counts were not checked")
         return records
     held, lines = drift(sent.get("records") if sent else None, records)
@@ -478,6 +539,79 @@ def check_drift(packs: Path, sent: dict | None, allow: bool) -> dict[str, dict[s
             + " (a source changed shape? pass --allow-drift when the fall is right)"
         )
     return records
+
+
+# steps without a place, or placed by Classic knowledge alone, that rose by more than a tenth
+# hold the edition (ADR 0073)
+RISE = 0.10
+# the build's numbers the edition keeps, and what each is called in a line
+LINK_COUNTS = {
+    "steps": "quest steps",
+    "unplaced": "steps without a place",
+    "classic": "Classic-only steps",
+}
+
+
+def link_counts(packs: Path) -> dict[str, int]:
+    """The quest steps' numbers of this build (`links-forever.json` beside the packs): the
+    steps, those without a place and the Classic debt; {} without the file."""
+    try:
+        data = json.loads((packs / LINKS.name).read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        name: data[name]
+        for name in LINK_COUNTS
+        if isinstance(data.get(name), int) and not isinstance(data[name], bool)
+    }
+
+
+def links_drift(old: dict | None, new: dict) -> tuple[list[str], list[str]]:
+    """The quest steps' numbers against the last sent edition's: (the jumps that hold the
+    edition, every change as a line). A jump is the resolver or a source gone wrong: the steps
+    fell by more than a tenth, or the steps without a place or the Classic debt rose by more
+    than a tenth. A number under MIN_ROWS before never holds. A smaller rise is the watch's
+    alarm, not a stop (ADR 0073)."""
+    held: list[str] = []
+    lines: list[str] = []
+    for name, words in LINK_COUNTS.items():
+        before, now = (old or {}).get(name), new.get(name)
+        if before is None or now is None or now == before:
+            continue
+        line = f"{words} {before} -> {now}"
+        lines.append(line)
+        fell = name == "steps" and now < before * (1 - DROP)
+        rose = name != "steps" and now > before * (1 + RISE)
+        if before >= MIN_ROWS and (fell or rose):
+            held.append(line)
+    return held, lines
+
+
+def check_links(packs: Path, sent: dict | None, allow: bool) -> dict[str, int]:
+    """Says every change of the quest steps' numbers since the last sent edition and refuses a
+    jump unless `allow`. -> this build's numbers, for the edition and the watch."""
+    counts = link_counts(packs)
+    before = sent.get("links") if sent else None
+    if not counts:
+        if before and not allow:
+            raise DataUpdateError(
+                f"no {LINKS.name} beside the packs although the last sent edition had one: the "
+                "quest steps cannot be checked (pass --allow-drift to ship without the check)"
+            )
+        print(f"steps: no {LINKS.name} beside the packs, the quest steps were not checked")
+        return counts
+    held, lines = links_drift(before, counts)
+    for line in lines:
+        print(f"steps: {line}")
+    if held and not allow:
+        raise DataUpdateError(
+            "the quest steps jumped by more than a tenth since the last sent edition: "
+            + "; ".join(held)
+            + " (the resolver or a source broke? pass --allow-drift when the change is right)"
+        )
+    return counts
 
 
 def check_nav(packs: Path) -> None:
@@ -544,6 +678,7 @@ def update(
     data = config["projects"][PROJECT]["folders"]
     check_nav(packs)
     records = check_drift(packs, sent, allow_drift)
+    links = check_links(packs, sent, allow_drift)
     sha = data_hash(packs, data, addons_dir)
     write_downloads(packs, counts)  # after the hash: a new count is no new edition
     with book_toml.open("rb") as fh:
@@ -561,6 +696,8 @@ def update(
         edition["export"] = export_id(inputs.export)
         edition["export_sha"] = export_fingerprint(inputs.export) if inputs.export else None
         edition["records"] = records  # the row counts the next edition is held against (B2)
+        if links:  # the quest steps' numbers: held against too, and the watch's line
+            edition["links"] = links
         if state:
             name = f"{edition['date']}.{edition['n']}.json"
             book_states.mkdir(parents=True, exist_ok=True)
@@ -660,7 +797,8 @@ def main(
     parser.add_argument(
         "--allow-drift",
         action="store_true",
-        help="ship although a pack's rows fell by more than a tenth since the last sent edition",
+        help="ship although a pack's rows fell, or the quest steps' numbers jumped, by more "
+        "than a tenth since the last sent edition",
     )
     args = parser.parse_args(argv)
     try:

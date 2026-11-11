@@ -244,8 +244,9 @@ function Waypoints.Register(self)
     order = 10,
     when = function(ref, ctx)
       -- a point in the context needs no entity (a route step to a
-      -- spot raised "Entity: nil")
-      return (ctx ~= nil and ctx.point ~= nil) or firstLocation(ref) ~= nil
+      -- spot raised "Entity: nil"); places named by the caller need no place of its own (an item
+      -- a quest asks for: where its droppers are, Forever 09.11.2026)
+      return (ctx ~= nil and (ctx.point ~= nil or ctx.points ~= nil)) or firstLocation(ref) ~= nil
     end,
     run = function(ref, ctx)
       local point = ctx and ctx.point

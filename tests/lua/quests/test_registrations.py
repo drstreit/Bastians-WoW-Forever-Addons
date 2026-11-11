@@ -166,7 +166,11 @@ def test_quest_sections_status_chain_prerequisites_objectives_rewards_text(wow: 
         "quests.choice",  # two choices: the comparison (S7)
         "data.overview",
         "quests.text",
+        "quests.needs",  # the item it asks for (S2: the section never showed, it matched no kind)
         "data.zone",
+    ]
+    assert [(strip(r.text), r.ref) for r in hogger["quests.needs"].rows.values()] == [
+        ("Huge Gnoll Claw  from Hogger, 77 yd", "item:1931")
     ]
     # the dossier markers (C2): one-cell blocks, Chain and Quest text across the row, links
     assert hogger["quests.givers"]["def"].block.columns == 1
@@ -335,8 +339,6 @@ def test_quest_places_follow_the_status_and_the_band_shows_giver_targets_hand_in
     assert [p.kind for p in wow.eval("Bastians:Entity('quest:76'):Locations()").values()] == [
         "giver"
     ]
-    assert wow.eval(f"{REG}.NextKind(76)") == "giver"
-    assert wow.eval(f"{REG}.NextKind(176)") == "objective"
     assert all(
         p.kind == "objective" for p in wow.eval("Bastians:Entity('quest:176'):Locations()").values()
     )
@@ -358,7 +360,6 @@ def test_quest_places_follow_the_status_and_the_band_shows_giver_targets_hand_in
     wow.fire("QUEST_LOG_UPDATE")
     wow.advance(0.3)
     wow.run_frames(3)
-    assert wow.eval(f"{REG}.NextKind(176)") == "turnin"
     assert [p.kind for p in wow.eval("Bastians:Entity('quest:176'):Locations()").values()] == [
         "turnin"
     ]
@@ -434,7 +435,8 @@ def test_which_reward_compares_the_choices_against_the_gear_and_follows_loads(wo
     assert rows[0].icon == 135274  # the client's icon; the entity's fallback for the other
     assert strip(rows[0].text).startswith("Blood Saber  best value, upgrade  One-Handed")  # cards
     requests = list(wow.eval("Mock.itemLoadRequests").values())
-    assert set(requests) == {2318}  # asked (once by Quests, once by Data's icon provider)
+    # asked (once by Quests, once by Data's icon provider); the claw for the Needs row's icon
+    assert set(requests) == {1931, 2318}
     wow.eval("Bastians:GetDetailSections('quest:176')")  # a second build asks nothing new
     assert list(wow.eval("Mock.itemLoadRequests").values()) == requests
     # the load result arrives: the block says what the item is
@@ -478,6 +480,25 @@ def test_abandon_action_asks_the_game_then_the_quest_leaves_the_log(wow: WowRunt
     wow.run_frames(5)
     assert wow.eval("Bastians:GetModule('Quests').State.IsInLog(176)") is False
     assert "quests.abandon" not in actions(wow, "quest:176")
+    assert errors(wow) == []
+
+
+def test_abandon_names_the_items_the_quest_takes_back(wow: WowRuntime):
+    """ "bad argument #3 to 'SetFormattedText' (string expected, got
+    table)". The client answers item ids; the popup wants their names as one text."""
+    boot(wow)
+    wow.execute(
+        """Mock.items[9001] = { name = "Sealed Letter" }
+        Mock.items[9002] = { name = "Old Key" }
+        Mock.abandonItems = { 9001, 9003, 9002 }"""  # 9003: the client does not know it yet
+    )
+    wow.execute("Bastians:RunAction('quests.abandon', 'quest:176', { source = 'test' })")
+    popup = wow.g["Mock"].popup
+    assert popup.which == "ABANDON_QUEST_WITH_ITEMS" and popup[1] == "The Fargodeep Mine"
+    assert popup[2] == "Sealed Letter, Old Key"
+    wow.execute("Mock.abandonItems = { 9003 }")  # no name at all: the plain question, no empty list
+    wow.execute("Bastians:RunAction('quests.abandon', 'quest:176', { source = 'test' })")
+    assert wow.g["Mock"].popup.which == "ABANDON_QUEST"
     assert errors(wow) == []
 
 

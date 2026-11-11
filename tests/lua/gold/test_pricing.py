@@ -122,6 +122,22 @@ def test_an_invoice_is_booked_once_and_alike_sales_are_each_booked(wow: WowRunti
     assert wow.errors == []
 
 
+def test_the_mailbox_books_its_invoices_by_the_servers_time(wow: WowRuntime):
+    """Forever 11.11.2026: "Ledger.lua:37: attempt to perform arithmetic on local 'now' (a table
+    value)", ten times at the mailbox. The debounce timer hands its module to the function, and
+    Scan took it for the time. The tests had only called Scan themselves."""
+    expose(wow)
+    inbox(wow, SOLD, BOUGHT)
+    wow.fire("MAIL_INBOX_UPDATE")
+    wow.fire("MAIL_INBOX_UPDATE")  # the game fires it several times for one look
+    wow.advance(1)
+    assert wow.errors == []
+    it = next(iter(wow.eval(f"{LEDGER}.Items()").values()))
+    assert (it.figures.sold, it.figures.bought) == (20, 10)
+    book = wow.eval(f"{MOD}.db.global.ledger[{HISTORY}.Key()]")
+    assert all(isinstance(seen, (int, float)) for seen in book.seen.values())  # a time, no table
+
+
 def test_looted_goods_have_no_cost_of_zero(wow: WowRuntime):
     expose(wow)
     inbox(wow, SOLD)

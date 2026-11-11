@@ -214,8 +214,12 @@ def test_the_wheel_cycles_the_rings_and_a_wedge_opens_its_sub_ring(wow: WowRunti
     wow.execute(f"{R}.Fire(4)")
     wow.execute(f"{R}.kit.opts.onHub('LeftButton')")
     assert wow.eval(f"{R}.Current().id") == "gestures"
+    # "only closing on key press". The centre goes back, it never closes,
+    # and the game's close-all list (Escape) does not hold the ring
     wow.execute(f"{R}.kit.opts.onHub('LeftButton')")
-    assert wow.eval(f"{R}.IsOpen()") is False
+    assert wow.eval(f"{R}.IsOpen()") is True
+    assert wow.eval("tContains(UISpecialFrames, 'BastiansGesturesRing')") is not True
+    wow.execute(f"{R}.Close()")
     # the toggle setting: the key opens and closes, a click fires
     wow.execute(f"{MOD}.db.profile.toggle = true")
     wow.execute(f"{R}.Key('down')")
@@ -306,6 +310,86 @@ def test_the_editor_changes_a_slot_and_the_change_survives_a_reload(wow: WowRunt
     fresh.execute(f"{E}.Open(); {E}.Defaults()")
     assert fresh.eval(f"{MOD}.db.global.rings[1].slots[8].token") == "BYE"
     assert errors(fresh) == []
+
+
+def test_a_ring_the_key_toggles_is_permanent(wow: WowRuntime):
+    """ "It should be permanent, currently it gets destroyed on reload
+    and in many other context. Should be a toggle per key, but no way to automatically get hidden
+    again"."""
+    boot(wow)
+    wow.execute(f"{MOD}.db.profile.toggle = true")
+    wow.execute("Mock.cursorX, Mock.cursorY = 400, 300")
+    wow.execute(f"{R}.Key('down')")
+    wow.execute(f"{R}.Cycle(1)")
+    at = (wow.eval(f"{R}.kit.cx"), wow.eval(f"{R}.kit.cy"))
+
+    def there(w: WowRuntime) -> bool:
+        return (
+            w.eval(f"{R}.IsOpen()") is True
+            and w.eval(f"{R}.Page()") == 2
+            and (w.eval(f"{R}.kit.cx"), w.eval(f"{R}.kit.cy")) == at
+            and w.eval(f"{R}.kit.items")[1].label == "Well met"
+        )
+
+    assert there(wow)
+    wow.execute("Mock.cursorX, Mock.cursorY = 900, 600")  # it comes back where it was, not here
+    # the clear-screen key hides it with the screen and brings it back, as a window
+    wow.execute("Bastians.UI.Screen.Toggle()")
+    assert wow.eval(f"{R}.IsOpen()") is False
+    wow.execute("Bastians.UI.Screen.Toggle()")
+    assert there(wow)
+    # the addon off and on
+    wow.execute(f"{MOD}:Disable()")
+    assert wow.eval(f"{R}.IsOpen()") is False
+    wow.execute(f"{MOD}:Enable()")
+    assert there(wow)
+    # a reload
+    fresh = wow.reload()
+    fresh.run_frames(5)
+    assert there(fresh)
+    # only the key closes it, and then it stays closed
+    fresh.execute(f"{R}.Key('down')")
+    assert fresh.eval(f"{R}.IsOpen()") is False
+    assert fresh.eval(f"{MOD}.db.profile.shown") is None
+    again = fresh.reload()
+    again.run_frames(5)
+    assert again.eval(f"{R}.IsOpen()") is False
+    assert errors(wow) == [] and errors(fresh) == [] and errors(again) == []
+
+
+def test_a_ring_held_on_the_key_is_not_kept(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"{R}.Key('down')")
+    assert wow.eval(f"{R}.IsOpen()") is True
+    assert wow.eval(f"{MOD}.db.profile.shown") is None
+    # a ring left open by the toggle is forgotten once the setting is off and the key lets go
+    wow.execute(f"{R}.Close(); {MOD}.db.profile.toggle = true; {R}.Key('down')")
+    assert wow.eval(f"{MOD}.db.profile.shown") is not None
+    wow.execute(f"{MOD}.db.profile.toggle = false")
+    wow.execute("Mock.cursorX, Mock.cursorY = 10, 10")
+    wow.execute(f"{R}.Key('down'); {R}.Key('up')")
+    assert wow.eval(f"{R}.IsOpen()") is False
+    fresh = wow.reload()
+    fresh.run_frames(5)
+    assert fresh.eval(f"{R}.IsOpen()") is False
+    assert errors(wow) == [] and errors(fresh) == []
+
+
+def test_the_rings_secure_buttons_come_back_with_the_interface(wow: WowRuntime):
+    """The interface hidden and shown (Alt+Z, a cinematic) hides the ring's frame and shows it
+    again: the kit lays the secure buttons again, they used to stay away."""
+    boot(wow)
+    wow.execute(
+        f"""local kit = {R}.kit
+        kit:SetItems({{ {{ label = 'Macro', secure = {{ type = 'macro', macro = 'Mount up' }} }} }})
+        kit:OpenAt(500, 400)"""
+    )
+    assert wow.eval(f"{R}.kit:Secure(1):IsShown()") is True
+    wow.execute(f"{R}.kit.frame:Hide()")
+    assert wow.eval(f"{R}.kit:Secure(1):IsShown()") is False
+    wow.execute(f"{R}.kit.frame:Show()")
+    assert wow.eval(f"{R}.kit:Secure(1):IsShown()") is True
+    assert errors(wow) == []
 
 
 def test_the_clear_screen_key_closes_the_ring_and_the_feed_names_the_ring(wow: WowRuntime):
