@@ -141,14 +141,18 @@ def test_a_world_drop_shows_its_level_band(wow: WowRuntime):
     """ "World drop: creatures level 20-25" (the pack's `worldDrop`:
     lowest level, highest level, droppers); a plain hyphen, the game fonts lack the dash."""
     boot(wow)
-    wow.execute("Bastians:GetService('data'):Get('item', 1185).worldDrop = { 20, 25, 312 }")
+    wow.execute(
+        "Mock.Keep(Bastians:GetService('data'):Get('item', 1185)).worldDrop = { 20, 25, 312 }"
+    )
     wow.execute("Bastians:InvalidateEntities(nil)")
     rows = list(sections(wow, "item:1185")["data.sources"].rows.values())
     world = next(r for r in rows if strip(r.text).startswith("World drop"))
     assert strip(world.text) == "World drop: creatures level 20-25"
     assert world.note == "312 creatures"
     # without a band (only objects drop it): the words alone
-    wow.execute("Bastians:GetService('data'):Get('item', 1185).worldDrop = { nil, nil, 40 }")
+    wow.execute(
+        "Mock.Keep(Bastians:GetService('data'):Get('item', 1185)).worldDrop = { nil, nil, 40 }"
+    )
     wow.execute("Bastians:InvalidateEntities(nil)")
     rows = list(sections(wow, "item:1185")["data.sources"].rows.values())
     assert any(strip(r.text) == "World drop" for r in rows)

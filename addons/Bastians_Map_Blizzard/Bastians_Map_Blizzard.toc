@@ -22,7 +22,7 @@
 ## Notes-ptBR: As pinturas de zonas do próprio jogo como um único mapa contínuo, todas as zonas exploradas, nomes nítidos em qualquer zoom (opcional, WoW Forever).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 2.2.0
+## Version: 2.3.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

@@ -562,6 +562,7 @@ ns.L:Register("zhCN", {
   ["Click: its page, to switch it on."] = "点击：打开其页面以开启。",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = '暴风城有了一张手绘的城市与地下城地图，在独立窗口中显示：地图上的"城市地图"按钮可以打开它，其中有你的位置、地图的图层，以及每座房屋和屋内人物的标记。2.2.0 版本遗漏了它的图片。',
   ['Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.'] = '任务会显示你接取它的区域，收集目标上的"来自"只列出确实拥有该物品的生物。',
   ["Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner."] = "ForeverDB 玩家在游戏中见到的任务给予者和交付点会更快地填补地图上的空缺。",
   ["A rumour in the gold book names its three newest travellers and counts the others."] = "金币之书中的传闻会列出最新的三位旅行者，并统计其余的人数。",

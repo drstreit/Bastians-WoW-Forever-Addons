@@ -563,6 +563,7 @@ ns.L:Register("deDE", {
   ["Click: its page, to switch it on."] = "Klick: seine Seite, zum Einschalten.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = 'Sturmwind hat eine gemalte Stadt- & Dungeonkarte in einem eigenen Fenster: Die Schaltfläche "Stadtkarte" auf der Karte öffnet sie, mit deiner Position, den Ebenen der Karte und einem Marker für jedes Haus und die Leute darin. Version 2.2.0 hatte ihre Bilder ausgelassen.',
   ['Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.'] = 'Quests zeigen die Zone, in der du sie annimmst, und "von" bei einem Sammelziel nennt nur noch eine Kreatur, die den Gegenstand wirklich hat.',
   ["Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner."] = "Questgeber und Abgabeorte, die ForeverDB-Spieler im Spiel gesehen haben, füllen Lücken auf der Karte schneller.",
   ["A rumour in the gold book names its three newest travellers and counts the others."] = "Ein Gerücht im Goldbuch nennt seine drei neuesten Reisenden und zählt die übrigen.",

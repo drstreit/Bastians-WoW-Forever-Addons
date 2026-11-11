@@ -292,8 +292,8 @@ def test_the_data_fix_gives_the_step_its_place(wow: WowRuntime):
     wow.execute(MIRROR_LAKE)
     wow.execute(
         "local d = Bastians:GetService('data'); "
-        "d:Get('item', 2589).drops = { { 'object:1734' } }; "
-        "Bastians:GetModule('Quests').Logic.quest(76).objectives = { { 'loot', 'item:2589' } }"
+        "Mock.Keep(d:Get('item', 2589)).drops = { { 'object:1734' } }; "
+        "Mock.Keep(Bastians:GetModule('Quests').Logic.quest(76)).objectives = { { 'loot', 'item:2589' } }"
     )
     settle(wow)
     points = list(wow.eval("Bastians:Entity('quest:76'):Locations()").values())

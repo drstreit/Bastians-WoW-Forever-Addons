@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.3.0:1",
+    date = "2026-11-11",
+    version = "2.3.0",
+    text = 'Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.',
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",
@@ -177,11 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "An info sign on Bastian's minimap explains the game's minimap and Bastian's styles with their pros and cons.",
-  },
-  {
-    id = "1.0.0-beta.13:11",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "The minimap sizes and moves in the game style, shows travel and service places, and has a frame.",
   },
 }

@@ -561,6 +561,7 @@ ns.L:Register("ptBR", {
   ["%s is switched off. Its page has the switch to turn it on."] = "%s está desativado. A página dele tem o interruptor para ativá-lo.",
   ["Click: its page, to switch it on."] = "Clique: a página dele, para ativá-lo.",
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = 'Ventobravo tem um Mapa de cidades e masmorras pintado em sua própria janela: o botão "Mapa da cidade" no mapa o abre, com a sua posição, as camadas do mapa e um marcador para cada casa e as pessoas que estão nela. A versão 2.2.0 havia deixado suas imagens de fora.',
   ['Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.'] = 'As missões mostram a zona onde você as pega, e "de" em um objetivo de coleta só nomeia uma criatura que realmente tem o item.',
   ["Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner."] = "Quem entrega missões e os locais de entrega que os jogadores do ForeverDB viram no jogo preenchem mais cedo as lacunas do mapa.",
   ["A rumour in the gold book names its three newest travellers and counts the others."] = "Um rumor no livro do ouro nomeia seus três viajantes mais recentes e conta os demais.",

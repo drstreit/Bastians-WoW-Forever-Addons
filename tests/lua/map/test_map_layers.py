@@ -165,7 +165,7 @@ def test_a_roaming_creature_gets_a_soft_area_from_its_spawn_radius(wow: WowRunti
         rec._spawns = nil
         Bastians:GetService('data'):Get('npc', 8719).spawns[1][6] = 5"""
     )
-    wow.execute("Bastians:GetService('data'):Get('npc', 8719)._spawns = nil")
+    wow.execute("Mock.Keep(Bastians:GetService('data'):Get('npc', 8719))._spawns = nil")
     places = wow.eval("Bastians:Entity('npc:295'):Places()")
     assert places[1].r == 30
     pins = {

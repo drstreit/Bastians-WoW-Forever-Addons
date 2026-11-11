@@ -15,6 +15,17 @@ local Mock = {
 }
 _G.Mock = Mock
 
+-- A test that edits a data record holds it here: `Mock.Keep(data:Get("quest", 62)).rewards = ...`.
+-- Data keeps its decoded records in a weak table, so an edit on a record nobody else holds is gone
+-- with the next collection, and when that runs depends on how much the run allocated. The public
+-- snapshot of 2.3.0 failed on it (11.11.2026): one line more in each locale file moved a collection
+-- between a test's edit and its tooltip. A test in tests/lua forbids the edit without this.
+Mock.kept = {}
+function Mock.Keep(record)
+  Mock.kept[#Mock.kept + 1] = record
+  return record
+end
+
 -- ---------------------------------------------------------------------------------------------
 -- Lua globals WoW adds (verified: identical on every client since 2004; assumed harmless)
 -- ---------------------------------------------------------------------------------------------

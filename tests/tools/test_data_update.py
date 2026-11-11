@@ -581,6 +581,44 @@ def test_the_builds_report_is_put_beside_the_packs(tmp_path: Path):
     data_update.place_report(tmp_path / "none.md", packs, 0)  # no report: nothing happens
 
 
+def test_a_report_equal_to_the_last_builds_is_still_this_builds(tmp_path: Path):
+    """The release of 2.2.0 (11.11.2026) built the packs twice within minutes. The second build
+    found its report already there with the same content and left the file alone, as the build
+    does with every unchanged file; its old time made it "another build's", and the edition
+    went out with "the row counts were not checked". The last build's files are removed before
+    a build, so what lies there afterwards was written by it."""
+    import os
+    import time
+
+    from bastians_build.files import write_text
+
+    report = tmp_path / "build" / "report.md"
+    links = tmp_path / "build" / "links-forever.json"
+    packs = tmp_path / "packs"
+    packs.mkdir()
+    words, numbers = "## Packs\n", '{"steps": 7, "unplaced": 2, "classic": 3}\n'
+    write_text(report, words)
+    write_text(links, numbers)
+    hour_ago = time.time() - 3600
+    for path in (report, links):
+        os.utime(path, (hour_ago, hour_ago))  # the build before this one
+        (packs / path.name).write_text("stale", encoding="utf-8")
+    started = time.time()
+    # without the fix: the same content is not written again and keeps its old time
+    assert write_text(report, words) is False
+    data_update.place_report(report, packs, started)
+    assert (packs / "report.md").read_text(encoding="utf-8") == "stale"
+    # with it
+    data_update.forget_reports(packs, (report, links))
+    assert not report.exists() and not (packs / "report.md").exists()
+    write_text(report, words)
+    write_text(links, numbers)
+    data_update.place_report(report, packs, started)
+    data_update.place_report(links, packs, started)
+    assert (packs / "report.md").read_text(encoding="utf-8") == words
+    assert data_update.link_counts(packs) == {"steps": 7, "unplaced": 2, "classic": 3}
+
+
 def build_with_links(tag: str, links: dict | None):
     """The fixture packs with the build's quest step numbers beside them (None: no file); the
     tag makes each run a new edition."""

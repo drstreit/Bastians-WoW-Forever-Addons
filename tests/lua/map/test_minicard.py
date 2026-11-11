@@ -117,8 +117,8 @@ def test_a_quest_pins_card_lists_up_to_three_rewards(wow: WowRuntime):
     wow.execute(
         """
         local Logic = Bastians:GetModule('Quests').Logic
-        Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 }, { 54, -25 } } }
-        Logic.quest(76).rewards = nil
+        Mock.Keep(Logic.quest(62)).rewards = { money = 125, xp = 480, rep = { { 72, 150 }, { 54, -25 } } }
+        Mock.Keep(Logic.quest(76)).rewards = nil
         Bastians:InvalidateEntities("quest")
         """
     )
@@ -158,7 +158,7 @@ def test_a_quest_signs_card_names_the_quest_its_chain_and_every_reward(wow: WowR
     wow.execute(
         """
         local Logic = Bastians:GetModule('Quests').Logic
-        Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 } },
+        Mock.Keep(Logic.quest(62)).rewards = { money = 125, xp = 480, rep = { { 72, 150 } },
           items = { { 2589, 2 } }, choices = { { 1185, 1 } } }
         Bastians:InvalidateEntities("quest")
         """

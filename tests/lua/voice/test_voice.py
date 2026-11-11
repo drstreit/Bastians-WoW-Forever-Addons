@@ -789,8 +789,8 @@ def test_the_quest_marks_tooltips_show_the_chain_and_the_rewards(wow: WowRuntime
     wow.execute(
         """
         local Logic = Bastians:GetModule('Quests').Logic
-        Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 } }, items = { { 2589, 5 } } }
-        Logic.quest(76).rewards = { money = 40 }
+        Mock.Keep(Logic.quest(62)).rewards = { money = 125, xp = 480, rep = { { 72, 150 } }, items = { { 2589, 5 } } }
+        Mock.Keep(Logic.quest(76)).rewards = { money = 40 }
         Bastians:Fire("BASTIANS_QUESTS_CHANGED", {}, {})
         """
     )

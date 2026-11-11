@@ -561,6 +561,7 @@ ns.L:Register("ruRU", {
   ["%s is switched off. Its page has the switch to turn it on."] = "%s отключено. На его странице есть переключатель для включения.",
   ["Click: its page, to switch it on."] = "Щелчок: его страница, чтобы включить.",
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = 'У Штормграда появилась нарисованная Карта городов и подземелий в отдельном окне: кнопка "Карта города" на карте открывает ее, с вашим положением, слоями карты и меткой для каждого дома и людей в нем. В версии 2.2.0 ее изображения были пропущены.',
   ['Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.'] = 'Задания показывают зону, где вы их берете, а "от" у цели на сбор называет только существо, у которого этот предмет действительно есть.',
   ["Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner."] = "Те, кто выдает и принимает задания, которых игроки ForeverDB видели в игре, быстрее заполняют пробелы на карте.",
   ["A rumour in the gold book names its three newest travellers and counts the others."] = "Слух в книге о золоте называет трех последних путников и считает остальных.",

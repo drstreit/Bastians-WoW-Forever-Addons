@@ -444,8 +444,7 @@ def run_build(inputs: build_client.BuildInputs, packs: Path) -> None:
     # every release before went out without the network because only the first command ran
     # (06.11.2026); the stub the nav step writes without graphs is refused below
     started = time.time()
-    for path in (REPORT, LINKS):
-        (packs / path.name).unlink(missing_ok=True)  # never the last build's
+    forget_reports(packs)
     for cmd in build_client.commands(inputs, packs, skip_mapart=True):
         print("> " + " ".join(cmd[3:]), flush=True)
         code = stream(cmd, ROOT)
@@ -457,6 +456,19 @@ def run_build(inputs: build_client.BuildInputs, packs: Path) -> None:
 
 REPORT = ROOT / "build" / "report.md"  # where `bastians_build data` writes it (--report-dir)
 LINKS = ROOT / "build" / f"links-{CLIENT}.json"  # the quest steps' numbers, beside the report
+
+
+def forget_reports(packs: Path, reports: tuple[Path, ...] | None = None) -> None:
+    """Removes the last build's report and step numbers, beside the packs and where the build
+    writes them. The build leaves a file alone whose content did not change
+    (bastians_build.files), so a report equal to the one before kept its old time and was taken
+    for another build's: the release of 2.2.0 built twice within minutes, and its edition went
+    out with "the row counts were not checked" (11.11.2026); a second run on one export would
+    have been refused once the last sent edition carried counts. Gone before the build, what
+    lies there after it is this build's."""
+    for path in reports or (REPORT, LINKS):
+        (packs / path.name).unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
 
 
 def place_report(report: Path, packs: Path, started: float) -> None:

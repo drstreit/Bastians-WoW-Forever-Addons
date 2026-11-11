@@ -562,6 +562,7 @@ local strings = {
   ["Click: its page, to switch it on."] = "Clic: su página, para activarlo.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = 'Ventormenta tiene un Mapa de ciudades y mazmorras pintado en su propia ventana: el botón "Mapa de ciudad" del mapa lo abre, con tu posición, las capas del mapa y un marcador para cada casa y la gente que hay en ella. La versión 2.2.0 había dejado fuera sus imágenes.',
   ['Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.'] = 'Las misiones muestran la zona donde las recoges, y "de" en un objetivo de recolección solo nombra a una criatura que realmente tiene el objeto.',
   ["Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner."] = "Los que dan misiones y los lugares de entrega que los jugadores de ForeverDB vieron en el juego llenan antes los huecos del mapa.",
   ["A rumour in the gold book names its three newest travellers and counts the others."] = "Un rumor del libro del oro nombra a sus tres viajeros más recientes y cuenta a los demás.",

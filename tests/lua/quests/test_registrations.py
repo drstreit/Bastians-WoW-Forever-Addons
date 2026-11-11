@@ -280,7 +280,7 @@ def test_rewards_show_money_xp_reputation_items_and_spell_or_say_none(wow: WowRu
         local q = Logic.quest(62)
         q.rewards = { money = 125, xp = 480, rep = { { 72, 150 }, { 54, -25 } },
           spell = 13563, spellName = "Summon Chicken Egg", src = "classic" }
-        Logic.quest(176).rewards = nil
+        Mock.Keep(Logic.quest(176)).rewards = nil
         """
     )
     rows = list(sections(wow, "quest:62")["quests.rewards"].rows.values())
@@ -294,7 +294,7 @@ def test_rewards_show_money_xp_reputation_items_and_spell_or_say_none(wow: WowRu
     assert rows[3].color is not None  # a loss is red
     # the side factions name themselves (Forever 23.10.2026: "Reputation: Faction 67")
     wow.execute(
-        "Bastians:GetModule('Quests').Logic.quest(76).rewards = { rep = { { 67, 75 }, { 469, 75 } } }"
+        "Mock.Keep(Bastians:GetModule('Quests').Logic.quest(76)).rewards = { rep = { { 67, 75 }, { 469, 75 } } }"
     )
     sides = [strip(r.text) for r in sections(wow, "quest:76")["quests.rewards"].rows.values()]
     assert "Reputation: Horde" in sides and "Reputation: Alliance" in sides
@@ -456,7 +456,7 @@ def test_which_reward_compares_the_choices_against_the_gear_and_follows_loads(wo
     wow.execute(
         """
         local Logic = Bastians:GetModule('Quests').Logic
-        Logic.quest(76).rewards = { choices = { { 1185, 1 } } }
+        Mock.Keep(Logic.quest(76)).rewards = { choices = { { 1185, 1 } } }
         """
     )
     assert "quests.choice" not in sections(wow, "quest:76")
@@ -509,7 +509,7 @@ def test_quest_tooltip_rows_carry_the_chain_and_the_rewards_without_experience(w
     wow.execute(
         """
         local Logic = Bastians:GetModule('Quests').Logic
-        Logic.quest(62).rewards = { money = 125, xp = 480, rep = { { 72, 150 } }, items = { { 2589, 5 } } }
+        Mock.Keep(Logic.quest(62)).rewards = { money = 125, xp = 480, rep = { { 72, 150 } }, items = { { 2589, 5 } } }
         """
     )
     rows = [

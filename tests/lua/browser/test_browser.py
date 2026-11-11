@@ -426,8 +426,8 @@ def test_quests_without_a_title_in_the_pack_show_the_clients_title(wow: WowRunti
     boot(wow)
     wow.execute(
         """local d = Bastians:GetService('data')
-        d:Get('quest', 62).name = nil
-        d:Get('quest', 76).name = nil
+        Mock.Keep(d:Get('quest', 62)).name = nil
+        Mock.Keep(d:Get('quest', 76)).name = nil
         Bastians.Data.Names.Store('quest')[76] = 'The Jasperlode Mine'"""
     )
     assert wow.eval("Bastians:GetService('data'):KnownName('quest', 76)") == "The Jasperlode Mine"
