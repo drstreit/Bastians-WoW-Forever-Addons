@@ -53,7 +53,7 @@ ns.L:Register("koKR", {
   ["unknown mood: %s"] = "알 수 없는 분위기: %s",
   ["unknown situation: %s"] = "알 수 없는 상황: %s",
   ["unknown slot: %s"] = "알 수 없는 자리표시자: %s",
-  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [number] [ring]"] = "문구 시험: /bcourtesy try [상황] [분위기] [날씨] [시간] [종족] [직업] [m/f] [me:종족] [숫자] [ring]",
+  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [land] [higher/lower] [fight] [heavy] [hurt] [many] [number] [ring]"] = "문구 시험: /bcourtesy try [상황] [분위기] [날씨] [시간] [종족] [직업] [m/f] [me:종족] [지형] [higher/lower] [fight] [heavy] [hurt] [many] [숫자] [ring]",
   ["To install: copy Bastians_Courtesy/Template/Bastians_MyLines to Interface/AddOns, then restart the game."] = "설치: Bastians_Courtesy/Template/Bastians_MyLines를 Interface/AddOns로 복사한 뒤 게임을 다시 시작하세요.",
   ["Polite"] = "정중함",
   ["Roleplay"] = "역할극",

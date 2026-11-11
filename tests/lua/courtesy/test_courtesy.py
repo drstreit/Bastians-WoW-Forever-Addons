@@ -759,3 +759,87 @@ def test_the_own_wave_of_the_screenshot_opens_nothing(wow: WowRuntime):
     )
     assert wow.eval(f"{C}.IsShown()") is False
     assert errors(wow) == []
+
+
+# ---------------------------------------------------------------------------------------------
+# What exactly happened (courtesy.md "The matrix"): the spell, a fight, several buffs, the gesture.
+# ---------------------------------------------------------------------------------------------
+
+SPELLS = "Mock.spellNames[467] = 'Thorns'; Mock.spellNames[19740] = 'Blessing of Might'"
+
+
+def test_the_spell_decides_the_row_and_is_named(wow: WowRuntime):
+    boot(wow)
+    wow.execute(SPELLS)
+    buff(wow, "nameplate3", "Thalendra", "Thorns")
+    facts = wow.eval(f"{C}.PendingFacts()")
+    assert (facts.situation, facts.spell) == ("buff.nature.thorns", "Thorns")
+    assert (facts.fight, facts.many) == (False, False)  # read all along, one buff
+    assert (facts.zone, facts.near, facts.land) == ("Elwynn Forest", "Goldshire", "forest")
+    wow.execute(f"{C}.Hide()")
+    buff(wow, "nameplate4", "Borin", "Sprint")  # no line of its own: the general row, still named
+    facts = wow.eval(f"{C}.PendingFacts()")
+    assert (facts.situation, facts.spell) == ("buff", "Sprint")
+    assert errors(wow) == []
+
+
+def test_a_buff_that_landed_in_a_fight_says_so(wow: WowRuntime):
+    boot(wow)
+    wow.fire("PLAYER_REGEN_DISABLED")
+    wow.execute("Mock.combat = true")
+    buff(wow, "nameplate3", "Thalendra")
+    wow.advance(10)
+    wow.execute("Mock.combat = false")
+    wow.fire("PLAYER_REGEN_ENABLED")
+    assert wow.eval(f"{C}.PendingFacts().fight") is True
+    wow.execute(f"{C}.Hide()")
+    buff(wow, "nameplate4", "Borin")  # the next one, in peace
+    assert wow.eval(f"{C}.PendingFacts().fight") is False
+    assert errors(wow) == []
+
+
+def test_two_buffs_of_one_caster_are_one_answer_for_the_one_we_can_name(wow: WowRuntime):
+    boot(wow)
+    wow.execute(SPELLS)
+    wow.execute(
+        """Mock.unitNames = { nameplate3 = 'Thalendra' }; Mock.guids = { nameplate3 = 'Player-1-T' }
+        Mock.auras = {
+          { name = 'Sprint', spellId = 2983, sourceUnit = 'nameplate3', expirationTime = 9000 },
+          { name = 'Blessing of Might', spellId = 19740, sourceUnit = 'nameplate3',
+            expirationTime = 9000 },
+        }
+        Mock.Fire('UNIT_AURA', 'player', {})"""
+    )
+    wow.advance(0.3)
+    facts = wow.eval(f"{C}.PendingFacts()")
+    assert (facts.situation, facts.spell, facts.many) == (
+        "buff.blessing.might",
+        "Blessing of Might",
+        True,
+    )
+    words = [row[0] for row in trace(wow)[:2]]
+    assert sorted(words) == ["answered lately", "ask"]  # once per person
+    assert errors(wow) == []
+
+
+def test_what_the_gesture_was_decides_the_row(wow: WowRuntime):
+    boot(wow)
+    of = f"{M}.Situation"
+    for text, row in [
+        ("Zug thanks you.", "emote.friendly.thank"),
+        ("Zug hugs you.", "emote.friendly.love"),
+        ("Zug blows you a kiss.", "emote.friendly.love"),
+        ("Zug bows before you.", "emote.friendly.bow"),
+        ("Zug salutes you with respect.", "emote.friendly.bow"),
+        ("Zug cheers at you.", "emote.friendly.cheer"),
+        ("Zug applauds at you. Bravo!", "emote.friendly.cheer"),
+        ("Zug waves at you.", "emote.friendly"),
+        ("Zug smiles at you.", "emote.friendly"),
+        ("Zug spits on you.", "emote.rude"),
+    ]:
+        assert wow.eval(f"{of}({{ kind = 'emote', text = '{text}' }})") == row, text
+    wow.execute("Mock.Fire('CHAT_MSG_TEXT_EMOTE', 'Zug thanks you.', 'Zug-Realm')")
+    assert wow.eval(f"{C}.PendingFacts().situation") == "emote.friendly.thank"
+    lines = [wow.eval(f"{R}.Item({i}).line") for i in (1, 2, 3)]
+    assert all(line[1].startswith("emote.friendly") for line in lines)
+    assert errors(wow) == []

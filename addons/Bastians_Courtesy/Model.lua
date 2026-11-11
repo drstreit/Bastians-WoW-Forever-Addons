@@ -12,8 +12,15 @@ Model.SETTLE_SECONDS = 5 -- after a login or a loading screen every aura only ar
 Model.AFTER_FIGHT_SECONDS = 60 -- unread for longer (a fight): a buff must say when it landed
 Model.LATE_SECONDS = 300 -- then it still gets its ring when it landed this lately
 
--- The spells that have lines of their own: the base ranks, read as the client's own names, so that
--- every rank and every language matches (ids assumed on Forever, forever-api.md).
+Model.HEAVY = 0.5 -- weather of this intensity or more is heavy (the threshold is ours, assumed)
+Model.LEVEL_GAP = 5 -- levels above or below the player that make someone "higher" or "lower"
+Model.HURT = 0.5 -- below this share of health the player is hurt
+
+-- The spells that have lines of their own, and where they sit in the tree of situations
+-- ("buff." .. the value): the base ranks, read as the client's own names, so that every rank and
+-- every language matches. The ids are those of the Forever client's SpellName table (clientdump,
+-- 1.60.1.70790, read 11.11.2026; forever-api.md). That table has no Blessing of Salvation or
+-- Sanctuary and no Greater Blessing of Light: their ids were dropped.
 Model.BUFFS = {
   [1459] = "mind", -- Arcane Intellect
   [23028] = "mind", -- Arcane Brilliance
@@ -23,22 +30,82 @@ Model.BUFFS = {
   [21562] = "stamina", -- Prayer of Fortitude
   [1126] = "nature", -- Mark of the Wild
   [21849] = "nature", -- Gift of the Wild
-  [467] = "nature", -- Thorns
-  [19740] = "blessing", -- Might
-  [19742] = "blessing", -- Wisdom
-  [20217] = "blessing", -- Kings
-  [1038] = "blessing", -- Salvation
-  [19977] = "blessing", -- Light
-  [20911] = "blessing", -- Sanctuary
-  [25782] = "blessing", -- Greater Might
-  [25894] = "blessing", -- Greater Wisdom
-  [25898] = "blessing", -- Greater Kings
-  [25890] = "blessing", -- Greater Light
-  [25899] = "blessing", -- Greater Sanctuary
+  [467] = "nature.thorns", -- Thorns
+  [19740] = "blessing.might", -- Blessing of Might
+  [25782] = "blessing.might", -- Greater Blessing of Might
+  [19742] = "blessing.wisdom", -- Blessing of Wisdom
+  [25894] = "blessing.wisdom", -- Greater Blessing of Wisdom
+  [20217] = "blessing.kings", -- Blessing of Kings
+  [25898] = "blessing.kings", -- Greater Blessing of Kings
+  [26650] = "blessing", -- Blessing of Light
+  [17] = "shield", -- Power Word: Shield
+  [139] = "heal", -- Renew
+  [774] = "heal", -- Rejuvenation
+  [8936] = "heal", -- Regrowth
+}
+
+-- The kind of country of a zone, by its map (the client's UiMap table, clientdump 1.60.1.70862; the
+-- kinds are ours). A zone we do not know has none: Riverglades, Mount Hyjal, Shen'dralas, Zephras
+-- Isle and Azshara are left out on purpose, as is every map of the retail client.
+Model.LANDS = {
+  [1429] = "forest", -- Elwynn Forest
+  [1431] = "forest", -- Duskwood
+  [1421] = "forest", -- Silverpine Forest
+  [1420] = "forest", -- Tirisfal Glades
+  [1425] = "forest", -- The Hinterlands
+  [1440] = "forest", -- Ashenvale
+  [1439] = "forest", -- Darkshore
+  [1448] = "forest", -- Felwood
+  [1450] = "forest", -- Moonglade
+  [1438] = "forest", -- Teldrassil
+  [1434] = "jungle", -- Stranglethorn Vale
+  [1444] = "jungle", -- Feralas
+  [1449] = "jungle", -- Un'Goro Crater
+  [1435] = "swamp", -- Swamp of Sorrows
+  [1437] = "swamp", -- Wetlands
+  [1445] = "swamp", -- Dustwallow Marsh
+  [1417] = "plains", -- Arathi Highlands
+  [1424] = "plains", -- Hillsbrad Foothills
+  [1436] = "plains", -- Westfall
+  [1412] = "plains", -- Mulgore
+  [1413] = "plains", -- The Barrens
+  [1418] = "desert", -- Badlands
+  [1411] = "desert", -- Durotar
+  [1451] = "desert", -- Silithus
+  [1446] = "desert", -- Tanaris
+  [1441] = "desert", -- Thousand Needles
+  [1432] = "mountains", -- Loch Modan
+  [1433] = "mountains", -- Redridge Mountains
+  [1442] = "mountains", -- Stonetalon Mountains
+  [1416] = "frost", -- Alterac Mountains
+  [1426] = "frost", -- Dun Morogh
+  [1452] = "frost", -- Winterspring
+  [1419] = "waste", -- Blasted Lands
+  [1428] = "waste", -- Burning Steppes
+  [1430] = "waste", -- Deadwind Pass
+  [1423] = "waste", -- Eastern Plaguelands
+  [1422] = "waste", -- Western Plaguelands
+  [1427] = "waste", -- Searing Gorge
+  [1443] = "waste", -- Desolace
+  [1455] = "city", -- Ironforge
+  [1453] = "city", -- Stormwind City
+  [1458] = "city", -- Undercity
+  [1457] = "city", -- Darnassus
+  [1454] = "city", -- Orgrimmar
+  [1456] = "city", -- Thunder Bluff
 }
 
 -- Words of the game's English emote lines that are not friendly.
 Model.RUDE = { "rude", "spit", "insult", "taunt", "threaten", "chicken", "laughs at", "mock", "growl" }
+
+-- What a friendly emote was, by words of the game's English lines (their wording assumed on Forever):
+-- the first kind with a word in the line; none is a plain "emote.friendly" (a wave, a smile, a dance).
+Model.FRIENDLY = {
+  { "thank", { "thanks you" } },
+  { "love", { "hugs you", "a kiss", "kisses you", "loves you", "cuddles", "flirts with you" } },
+  { "bow", { "bows", "salutes you", "curtsies", "curtseys", "kneels" } },
+  { "cheer", { "cheers at you", "applauds", "claps", "congratulates you", "commends you" } },
+}
 
 -- The time of day's key from the game clock's hour; nil when the hour is unknown.
 function Model.DayKey(hour)
@@ -66,8 +133,50 @@ function Model.IsRude(text)
   return false
 end
 
+-- What a friendly emote line was: "thank", "love", "bow", "cheer", or nil for any other.
+function Model.FriendlyKind(text)
+  local lower = string.lower(text or "")
+  for _, kind in ipairs(Model.FRIENDLY) do
+    for _, word in ipairs(kind[2]) do
+      if string.find(lower, word, 1, true) then
+        return kind[1]
+      end
+    end
+  end
+  return nil
+end
+
+-- Whether the weather is heavy: nil when there is none to speak of or the client gives no intensity.
+function Model.Heavy(weather, intensity)
+  if weather == nil or weather == "clear" or type(intensity) ~= "number" then
+    return nil
+  end
+  return intensity >= Model.HEAVY
+end
+
+-- "higher", "lower" or "peer" for the other person's level against the player's; nil when either is
+-- unknown (the client says 0 or less for a level it does not give).
+function Model.LevelGap(theirs, mine)
+  if type(theirs) ~= "number" or type(mine) ~= "number" or theirs <= 0 or mine <= 0 then
+    return nil
+  elseif theirs - mine >= Model.LEVEL_GAP then
+    return "higher"
+  elseif mine - theirs >= Model.LEVEL_GAP then
+    return "lower"
+  end
+  return "peer"
+end
+
+-- Whether the player is hurt; nil when the client hides the health or the player is dead.
+function Model.Hurt(health, max)
+  if type(health) ~= "number" or type(max) ~= "number" or max <= 0 or health <= 0 then
+    return nil
+  end
+  return health / max < Model.HURT
+end
+
 -- The situation of the lines for `event`, nil when no line can have it (a declined trade).
--- `kindOf(spell name)` -> "mind", "stamina", "nature", "blessing" or nil.
+-- `kindOf(spell name)` -> the spell's place under "buff" ("mind", "blessing.might", ...) or nil.
 function Model.Situation(event, kindOf)
   local kind = event.kind
   if kind == "buff" then
@@ -76,7 +185,11 @@ function Model.Situation(event, kindOf)
   elseif kind == "rez" or kind == "camp" then
     return kind
   elseif kind == "emote" then
-    return Model.IsRude(event.text) and "emote.rude" or "emote.friendly"
+    if Model.IsRude(event.text) then
+      return "emote.rude"
+    end
+    local of = Model.FriendlyKind(event.text)
+    return of and ("emote.friendly." .. of) or "emote.friendly"
   elseif kind == "accepted" then
     return "invite.accepted"
   elseif kind == "duel" or kind == "invite" then

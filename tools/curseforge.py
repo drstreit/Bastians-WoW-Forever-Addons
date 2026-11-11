@@ -113,6 +113,31 @@ def download_count(project_id: int, key: str, transport: Transport) -> int:
     return int(core_get(f"/v1/mods/{project_id}", key, transport)["data"]["downloadCount"])
 
 
+# A project's own status in the read API (`data.status`). Measured 11.11.2026: Bastian's Suite,
+# approved since 24.10.2026, answers 4 with isAvailable true; Bastian's Maps answered 1 on
+# 10.11.2026 (new) and 2 with isAvailable false the day after. The names are CurseForge's
+# documented ones (assumed for the values not seen here).
+PROJECT_STATUS = {
+    1: "new",
+    2: "changes required",
+    3: "under soft review",
+    4: "approved",
+    5: "rejected",
+    6: "changes made",
+    7: "inactive",
+    8: "abandoned",
+    9: "deleted",
+    10: "under review",
+}
+PROJECT_LIVE = 4
+
+
+def project_state(project_id: int, key: str, transport: Transport) -> tuple[int, bool]:
+    """(status, isAvailable) of a project: whether a player can install it."""
+    data = core_get(f"/v1/mods/{project_id}", key, transport)["data"]
+    return int(data["status"]), bool(data.get("isAvailable"))
+
+
 @dataclass
 class Upload:
     project: str
@@ -187,6 +212,25 @@ def pending(config: dict, project: str) -> list[str]:
         for name in names
         if config["projects"].get(name, {}).get("approved", True) is False
     ]
+
+
+def carried_folders(config: dict, project: str) -> list[str]:
+    """The folders a project's file carries: its own, and those of every project of ours it
+    requires that CurseForge has not approved (`approved = false`).
+
+    A player cannot install a project in review, and CurseForge refuses a relation to it. When
+    the map's pictures became their own project (ADR 0068) the Suite's file dropped their five
+    folders at once, while Bastian's Maps was still in review: 2.2.0 and 2.3.0 (11.11.2026) went
+    out as a Suite without pictures and with no way for a player to get them. So until a
+    required project is approved its folders ride in the file that requires it; with
+    `approved = true` they leave and the relation takes their place (ADR 0074, decision 9)."""
+    p = config["projects"][project]
+    folders = list(p["folders"])
+    for name in p.get("required", []):
+        other = config["projects"].get(name)
+        if other is not None and other.get("approved", True) is False:
+            folders += [f for f in other["folders"] if f not in folders]
+    return folders
 
 
 def read_manifest(release_dir: Path, client: str) -> dict[str, dict]:
@@ -265,7 +309,8 @@ def plan(
             continue  # not in this release
         version = main["version"] + version_suffix
         target = release_dir / "curseforge" / f"{project}-v{version}-{client}.zip"
-        if not project_zip(release_dir, packages, p["folders"], target, version_suffix):
+        folders = carried_folders(config, project)
+        if not project_zip(release_dir, packages, folders, target, version_suffix):
             continue
         rels, unverified = relations(config, project, client)
         problems = [f"relation {u} is not verified" for u in unverified]

@@ -562,6 +562,8 @@ ns.L:Register("koKR", {
   ["Click: its page, to switch it on."] = "클릭: 켜려면 해당 페이지로.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The map styles and the overview pictures are back in the Suite's download. Releases 2.2.0 and 2.3.0 had moved them to a separate download that cannot be installed yet, so the map lost its pictures on an update."] = "지도 스타일과 개요 이미지가 다시 스위트 다운로드에 포함됩니다. 2.2.0과 2.3.0 버전은 이를 아직 설치할 수 없는 별도 다운로드로 옮겨서, 업데이트하면 지도의 이미지가 사라졌습니다.",
+  ["Courtesy's thank-yous now know what you were given, where you are, the weather and whether you were fighting, with 957 lines instead of 209."] = "예의의 감사 인사가 이제 무엇을 받았는지, 어디에 있는지, 날씨가 어떤지, 전투 중이었는지를 알며, 문장이 209개에서 957개로 늘었습니다.",
   ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = '스톰윈드에 별도 창으로 열리는 그림 도시 및 던전 지도가 생겼습니다. 지도의 "도시 지도" 버튼으로 열면 내 위치, 지도의 레이어, 그리고 모든 집과 그 안의 사람들을 나타내는 핀이 표시됩니다. 2.2.0 버전에는 이 그림들이 빠져 있었습니다.',
   ['Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.'] = '퀘스트는 받는 지역을 표시하며, 수집 목표의 "제공:"에는 실제로 그 아이템을 가진 생물만 표시됩니다.',
   ["Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner."] = "ForeverDB 플레이어들이 게임에서 확인한 퀘스트 제공자와 완료 장소가 지도의 빈 곳을 더 빨리 채웁니다.",

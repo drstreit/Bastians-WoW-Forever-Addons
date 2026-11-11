@@ -26,6 +26,7 @@ SUITE_PIPELINE = (
     "pipeline/bastians_build/themes.py",
     "pipeline/config/themes",
 )
+UPLOAD_CONFIG = "tools/curseforge.toml"  # the projects' folders: what each download holds
 # the subject's prefix names the app whose What's new gets the sentence (CLAUDE.md section 9)
 APPS = {
     "core": "Bastians_Core",
@@ -118,7 +119,10 @@ def track_paths(config: dict, track: str) -> list[str]:
         names += config["projects"].get("Bastians_Maps", {}).get("folders", [])
     folders = [f"addons/{f}" for f in names]
     if track == "suite":
-        return [*folders, *SUITE_PIPELINE]
+        # which folders a file a player downloads holds is decided in the upload configuration:
+        # a change there is a change for players (11.11.2026: the map's pictures back in the
+        # Suite's file, ADR 0074), so it carries a release note like a shipped path
+        return [*folders, *SUITE_PIPELINE, UPLOAD_CONFIG]
     return [*folders, "pipeline/bastians_build", "pipeline/config"] + [
         f":(exclude){p}" for p in SUITE_PIPELINE
     ]

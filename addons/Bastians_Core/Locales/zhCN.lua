@@ -562,6 +562,8 @@ ns.L:Register("zhCN", {
   ["Click: its page, to switch it on."] = "点击：打开其页面以开启。",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The map styles and the overview pictures are back in the Suite's download. Releases 2.2.0 and 2.3.0 had moved them to a separate download that cannot be installed yet, so the map lost its pictures on an update."] = "地图样式和概览图片重新包含在套件的下载中。2.2.0 和 2.3.0 版本把它们移到了一个尚无法安装的单独下载里，导致更新后地图失去了图片。",
+  ["Courtesy's thank-yous now know what you were given, where you are, the weather and whether you were fighting, with 957 lines instead of 209."] = "礼仪的致谢现在知道你得到了什么、你在哪里、天气如何以及你是否在战斗，语句从 209 条增加到 957 条。",
   ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = '暴风城有了一张手绘的城市与地下城地图，在独立窗口中显示：地图上的"城市地图"按钮可以打开它，其中有你的位置、地图的图层，以及每座房屋和屋内人物的标记。2.2.0 版本遗漏了它的图片。',
   ['Quests show the zone where you pick them up, and "from" on a collect objective only names a creature that really has the item.'] = '任务会显示你接取它的区域，收集目标上的"来自"只列出确实拥有该物品的生物。',
   ["Quest givers and hand-ins that ForeverDB players saw in the game fill gaps on the map sooner."] = "ForeverDB 玩家在游戏中见到的任务给予者和交付点会更快地填补地图上的空缺。",

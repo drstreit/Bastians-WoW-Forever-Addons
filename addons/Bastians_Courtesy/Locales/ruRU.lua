@@ -53,7 +53,7 @@ ns.L:Register("ruRU", {
   ["unknown mood: %s"] = "неизвестное настроение: %s",
   ["unknown situation: %s"] = "неизвестная ситуация: %s",
   ["unknown slot: %s"] = "неизвестный заполнитель: %s",
-  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [number] [ring]"] = "Проверить фразу: /bcourtesy try [ситуация] [настроение] [погода] [время] [раса] [класс] [m/f] [me:раса] [число] [ring]",
+  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [land] [higher/lower] [fight] [heavy] [hurt] [many] [number] [ring]"] = "Проверить фразу: /bcourtesy try [ситуация] [настроение] [погода] [время] [раса] [класс] [m/f] [me:раса] [местность] [higher/lower] [fight] [heavy] [hurt] [many] [число] [ring]",
   ["To install: copy Bastians_Courtesy/Template/Bastians_MyLines to Interface/AddOns, then restart the game."] = "Установка: скопируйте Bastians_Courtesy/Template/Bastians_MyLines в Interface/AddOns и перезапустите игру.",
   ["Polite"] = "Вежливо",
   ["Roleplay"] = "Отыгрыш",

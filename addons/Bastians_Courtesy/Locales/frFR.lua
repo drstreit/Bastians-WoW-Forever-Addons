@@ -53,7 +53,7 @@ ns.L:Register("frFR", {
   ["unknown mood: %s"] = "humeur inconnue : %s",
   ["unknown situation: %s"] = "situation inconnue : %s",
   ["unknown slot: %s"] = "espace réservé inconnu : %s",
-  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [number] [ring]"] = "Tester une ligne : /bcourtesy try [situation] [humeur] [météo] [heure] [race] [classe] [m/f] [me:race] [nombre] [ring]",
+  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [land] [higher/lower] [fight] [heavy] [hurt] [many] [number] [ring]"] = "Tester une ligne : /bcourtesy try [situation] [humeur] [météo] [heure] [race] [classe] [m/f] [me:race] [terrain] [higher/lower] [fight] [heavy] [hurt] [many] [nombre] [ring]",
   ["To install: copy Bastians_Courtesy/Template/Bastians_MyLines to Interface/AddOns, then restart the game."] = "Installation : copiez Bastians_Courtesy/Template/Bastians_MyLines dans Interface/AddOns, puis redémarrez le jeu.",
   ["Polite"] = "Poli",
   ["Roleplay"] = "Roleplay",

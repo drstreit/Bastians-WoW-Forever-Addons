@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.3.0
+## Version: 2.4.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Browser, Bastians_Quests, Bastians_Route, Spoken, Spoken_Quests, Spoken_Places, Spoken_Readables, Spoken_NPCs, SpokenPlacesAudio, SpokenZonesAudio, SpokenReadablesAudio, SpokenBooksAudio

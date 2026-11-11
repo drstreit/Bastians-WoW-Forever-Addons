@@ -53,7 +53,7 @@ ns.L:Register("zhTW", {
   ["unknown mood: %s"] = "未知語氣：%s",
   ["unknown situation: %s"] = "未知情境：%s",
   ["unknown slot: %s"] = "未知佔位符：%s",
-  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [number] [ring]"] = "試一句台詞：/bcourtesy try [情境] [語氣] [天氣] [時間] [種族] [職業] [m/f] [me:種族] [數量] [ring]",
+  ["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [land] [higher/lower] [fight] [heavy] [hurt] [many] [number] [ring]"] = "試一句台詞：/bcourtesy try [情境] [語氣] [天氣] [時間] [種族] [職業] [m/f] [me:種族] [地形] [higher/lower] [fight] [heavy] [hurt] [many] [數量] [ring]",
   ["To install: copy Bastians_Courtesy/Template/Bastians_MyLines to Interface/AddOns, then restart the game."] = "安裝：將 Bastians_Courtesy/Template/Bastians_MyLines 複製到 Interface/AddOns，然後重新啟動遊戲。",
   ["Polite"] = "禮貌",
   ["Roleplay"] = "角色扮演",

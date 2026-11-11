@@ -11,21 +11,32 @@
 --
 -- A LINE    { situation, mood, text, act = "...", when = { ... }, emote = "..." }
 --
---   situation  buff, buff.mind, buff.stamina, buff.nature, buff.blessing, rez, emote.friendly,
---              emote.rude, invite.accepted, invite.declined, duel.declined, trade.gift, camp
---              (a line for "buff" also serves buff.mind and the other kinds of buff)
+--   situation  buff, buff.mind, buff.stamina, buff.nature, buff.nature.thorns, buff.blessing,
+--              buff.blessing.might, buff.blessing.wisdom, buff.blessing.kings, buff.shield, buff.heal,
+--              rez, emote.friendly, emote.friendly.bow, emote.friendly.cheer, emote.friendly.love,
+--              emote.friendly.thank, emote.rude, invite.accepted, invite.declined, duel.declined,
+--              trade.gift, camp
+--              (a line serves everything below it: one for "buff" also answers buff.blessing.kings)
 --   mood       polite, roleplay, snarky, philosophic, cheerful, weary
 --   text       What your character says. false for a line without words; then it needs an act.
 --   act        Optional. What your character does, without the name: "bows to %t."
---   when       Optional. The line is used only then: race, class (in capitals: "MAGE"), sex ("m", "f"),
---              mine (your race), mysex, time (morning, afternoon, evening, night),
---              weather (clear, rain, snow, sandstorm), kin (true: same race as you).
---              A list works too: when = { time = { "evening", "night" } }.
+--   when       Optional. The line is used only then. A list works too:
+--              when = { time = { "evening", "night" } }.
+--              The other person: race, class (in capitals: "MAGE"), sex ("m", "f"), kin (true: same
+--              race as you), level ("higher", "lower", "peer": five levels or more apart, or not).
+--              You: mine (your race), mysex, hurt (true: under half your health).
+--              The place and the sky: land (forest, jungle, swamp, plains, desert, mountains, frost,
+--              waste, city), time (morning, afternoon, evening, night), weather (clear, rain, snow,
+--              sandstorm), heavy (true: the weather is heavy).
+--              A buff only: fight (true: it landed while you fought), many (true: they cast more
+--              than one).
 --              Races: Human, Dwarf, NightElf, Gnome, Orc, Troll, Scourge, Tauren.
 --   emote      Optional. A game emote played with the line: "BOW", "WAVE", "SALUTE", ...
 --
 -- IN A TEXT  %t name   %r race   %c class   %h time of day   %w the weather   %z zone   %n my name
 --            %m my race   %p my his/her   %o sir or my lady   %y lad or lass
+--            %s the spell (a buff only)   %a the nearest named place ("Goldshire")
+--            A line is used only when every fact it asks for is known.
 --
 -- Every line ends with a comma. A missing comma or quote stops the whole file: /bcourtesy mine then
 -- finds no lines at all. Keep a line under about 200 characters.

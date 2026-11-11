@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.4.0:1",
+    date = "2026-11-11",
+    version = "2.4.0",
+    text = "The map styles and the overview pictures are back in the Suite's download. Releases 2.2.0 and 2.3.0 had moved them to a separate download that cannot be installed yet, so the map lost its pictures on an update.",
+  },
+  {
     id = "2.3.0:1",
     date = "2026-11-11",
     version = "2.3.0",
@@ -177,11 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "Bastian's minimap: the game's minimap in a frame with a search bar, the map's styles and layers, zoom and dragging, and a box for all addon minimap buttons.",
-  },
-  {
-    id = "1.0.0-beta.13:10",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "An info sign on Bastian's minimap explains the game's minimap and Bastian's styles with their pros and cons.",
   },
 }

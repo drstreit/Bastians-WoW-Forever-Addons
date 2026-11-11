@@ -68,7 +68,11 @@ slug = "bastians-maps" # created by curseforge.com/wow/addons/bastians-maps
 id = 1795005 # ; the read API answers it: "Bastian's Maps", slug bastians-maps
 verified = true
 # the read API said status 1 (new, not yet approved) on 10.11.2026: the Suite's relation to it
-# stays out until CurseForge approved the project (error 1018), then this becomes true
+# stays out until CurseForge approved the project (error 1018), then this becomes true.
+# 11.11.2026: status 2 ("changes required"), not available, 0 downloads: a moderator waits for
+# the owner in the author pages. While this is false the five folders ride in the Suite's file
+# (curseforge.carried_folders, ADR 0074 decision 9): 2.2.0 and 2.3.0 went out without them.
+# tools/suite_release.py asks CurseForge on every release and says when this can become true.
 approved = false
 folders = [
   "Bastians_Map_Art",

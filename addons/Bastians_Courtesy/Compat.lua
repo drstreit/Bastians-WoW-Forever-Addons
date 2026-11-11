@@ -116,6 +116,37 @@ function Compat.Weather()
   return WEATHER[kind], Bastians.Compat.Plain(info.intensity)
 end
 
+-- The part of the zone the player stands in ("Goldshire"), nil where the client names none.
+function Compat.SubZone()
+  local name = Bastians.Compat.Plain((Compat.Call("GetSubZoneText")))
+  return type(name) == "string" and name ~= "" and name or nil
+end
+
+-- The map the player is on (`C_Map.GetBestMapForUnit`, verified on Forever), or nil.
+function Compat.PlayerMap()
+  local api = rawget(_G, "C_Map")
+  if not (api and type(api.GetBestMapForUnit) == "function") then
+    return nil
+  end
+  local id = Bastians.Compat.Plain(api.GetBestMapForUnit("player"))
+  return type(id) == "number" and id or nil
+end
+
+-- A unit's level, or nil: the client says 0 or less for one it does not give (assumed on Forever).
+function Compat.Level(unit)
+  local level = Bastians.Compat.Plain((Compat.Call("UnitLevel", unit)))
+  return type(level) == "number" and level > 0 and level or nil
+end
+
+-- The player's health and its most, or nil for what the client hides (secret at times on retail,
+-- forever-api.md "Retail 12.x").
+function Compat.Health()
+  local plain = Bastians.Compat.Plain
+  local health, max =
+    plain((Compat.Call("UnitHealth", "player"))), plain((Compat.Call("UnitHealthMax", "player")))
+  return type(health) == "number" and health or nil, type(max) == "number" and max or nil
+end
+
 -- Sends one chat message of at most 255 bytes. -> whether it was handed to the client. `SAY` and
 -- `EMOTE` go out only from the player's click (measured, Forever 08.11.2026).
 function Compat.SendChat(text, channel, target)

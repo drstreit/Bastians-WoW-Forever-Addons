@@ -75,7 +75,8 @@ def test_every_filled_line_fits_one_chat_message(wow: WowRuntime):
       local long = 'Thalendrianna-Silbermond'
       local facts = {V}.Complete({{ target = long, myName = long, myRace = 'Night Elf',
         race = 'Night Elf', class = 'Warlock', mySex = 'f', sex = 'f', time = 'afternoon',
-        weather = 'sandstorm', zone = 'The Barrens' }})
+        weather = 'sandstorm', zone = 'Stranglethorn Vale', subzone = "Nesingwary's Expedition",
+        spell = 'Greater Blessing of Wisdom' }})
       TOO_LONG = {{}}
       for _, line in ipairs({MOD}.CourtesyLines) do
         local words = {V}.Words(line, facts, 'emote')
@@ -398,3 +399,285 @@ def test_the_template_is_an_addon_of_its_own():
 def test_the_core_registry_refuses_what_is_not_a_table(wow: WowRuntime):
     boot(wow)
     assert wow.eval("(pcall(Bastians.AddCourtesyLines, Bastians, 'nope'))") is False
+
+
+# ---------------------------------------------------------------------------------------------
+# The matrix (courtesy.md "The matrix", ADR 0063's amendment of 11.11.2026): what happened as a
+# tree, the six moods, and the moment's own facts.
+# ---------------------------------------------------------------------------------------------
+
+LANDS = {"forest", "jungle", "swamp", "plains", "desert", "mountains", "frost", "waste", "city"}
+RACES = {"Human", "Dwarf", "NightElf", "Gnome", "Orc", "Troll", "Scourge", "Tauren"}
+VALUES = {
+    "land": LANDS,
+    "level": {"higher", "lower", "peer"},
+    "weather": {"clear", "rain", "snow", "sandstorm", "other"},
+    "time": {"morning", "afternoon", "evening", "night"},
+    "race": RACES,
+    "mine": RACES,
+    "class": {
+        "WARRIOR",
+        "PALADIN",
+        "HUNTER",
+        "ROGUE",
+        "PRIEST",
+        "SHAMAN",
+        "MAGE",
+        "WARLOCK",
+        "DRUID",
+    },
+    "sex": {"m", "f"},
+    "mysex": {"m", "f"},
+    "kin": {True, False},
+    "heavy": {True, False},
+    "fight": {True, False},
+    "hurt": {True, False},
+    "many": {True, False},
+}
+ROWS = {
+    "buff",
+    "buff.mind",
+    "buff.stamina",
+    "buff.nature",
+    "buff.nature.thorns",
+    "buff.blessing",
+    "buff.blessing.might",
+    "buff.blessing.wisdom",
+    "buff.blessing.kings",
+    "buff.shield",
+    "buff.heal",
+    "rez",
+    "emote.friendly",
+    "emote.friendly.bow",
+    "emote.friendly.cheer",
+    "emote.friendly.love",
+    "emote.friendly.thank",
+    "emote.rude",
+    "invite.accepted",
+    "invite.declined",
+    "duel.declined",
+    "trade.gift",
+    "camp",
+}
+BUFF_ONLY = {"fight", "many"}  # facts only a buff has
+
+
+def wanted(value) -> list:
+    return list(value.values()) if hasattr(value, "values") else [value]
+
+
+def test_the_matrix_has_its_rows_and_every_cell_its_lines(wow: WowRuntime):
+    boot(wow)
+    lines = lines_of(wow)
+    assert len(lines) >= 900
+    assert set(wow.eval(f"{V}.Situations({MOD}.CourtesyLines)").keys()) == ROWS
+    cells = {}
+    for line in lines:
+        cells[(line[1], line[2])] = cells.get((line[1], line[2]), 0) + 1
+    moods = set(wow.eval(f"{V}.MOODS").values())
+    thin = sorted((row, mood) for row in ROWS for mood in moods if cells.get((row, mood), 0) < 5)
+    assert thin == []
+    assert not set(wow.eval(f"{V}.CONDITIONS").keys()) ^ set(VALUES)
+
+
+def test_a_condition_asks_only_for_a_value_that_exists(wow: WowRuntime):
+    """A misspelt value would silently keep a line from ever being said."""
+    boot(wow)
+    for line in lines_of(wow):
+        for key, value in (line.when or {}).items():
+            for want in wanted(value):
+                assert want in VALUES[key], (line[3] or line.act, key, want)
+            if key in BUFF_ONLY:
+                assert line[1].startswith("buff"), line[3] or line.act
+        for part in (line[3], line.act):
+            if part and "%s" in part:
+                assert line[1].startswith("buff"), part  # only a buff has a spell
+
+
+def test_every_cell_answers_a_moment_that_knows_only_the_name(wow: WowRuntime):
+    """No race, class, place, hour or weather: a line is still there, and a stranger's buff whose
+    caster the client does not name finds one without a name."""
+    boot(wow)
+    moods = sorted(wow.eval(f"{V}.MOODS").values())
+    silent = []
+    for row in sorted(ROWS):
+        named = "" if row.startswith("buff") else "target = 'Mirelle', "
+        for mood in moods:
+            line = wow.eval(
+                f"{V}.Choose({MOD}.CourtesyLines, {V}.Complete({{ situation = '{row}', {named}"
+                f"myName = 'Bastian', mySex = 'f' }}), {{ moods = {{ {mood} = 1 }}, via = 'say' }})"
+            )
+            if line is None:
+                silent.append((row, mood))
+    assert silent == []
+
+
+def test_a_line_serves_every_situation_below_it_and_the_deeper_one_is_likelier(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"""
+      math.randomseed(7)
+      LINES = {{
+        {{ 'buff', 'polite', 'root' }},
+        {{ 'buff.blessing', 'polite', 'branch' }},
+        {{ 'buff.blessing.might', 'polite', 'leaf' }},
+        {{ 'buff.blessing.kings', 'polite', 'sibling' }},
+        {{ 'buff.mind', 'polite', 'cousin' }},
+      }}
+      COUNT = {{ root = 0, branch = 0, leaf = 0 }}
+      for i = 1, 1300 do
+        local line = {V}.Choose(LINES, {{ situation = 'buff.blessing.might' }})
+        COUNT[line[3]] = COUNT[line[3]] + 1
+      end
+      BRANCH = {{}}
+      for i = 1, 100 do
+        BRANCH[{V}.Choose(LINES, {{ situation = 'buff.blessing' }})[3]] = true
+      end
+    """)
+    root, branch, leaf = (wow.eval(f"COUNT.{k}") for k in ("root", "branch", "leaf"))
+    assert root + branch + leaf == 1300  # never the sibling, never the cousin
+    assert 0 < root < branch < leaf
+    assert set(wow.eval("BRANCH").keys()) == {"root", "branch"}
+
+
+def test_a_line_that_names_the_moment_is_likelier(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"""
+      math.randomseed(11)
+      LINES = {{ {{ 'buff', 'polite', 'plain' }}, {{ 'buff', 'polite', 'near %a with %s' }} }}
+      COUNT = {{ plain = 0, named = 0 }}
+      local facts = {V}.Complete({{ situation = 'buff', zone = 'Elwynn Forest', spell = 'Thorns' }})
+      for i = 1, 600 do
+        local line = {V}.Choose(LINES, facts)
+        local key = line[3] == 'plain' and 'plain' or 'named'
+        COUNT[key] = COUNT[key] + 1
+      end
+    """)
+    plain, named = wow.eval("COUNT.plain"), wow.eval("COUNT.named")
+    assert plain > 100 and named > plain * 1.5
+
+
+@pytest.mark.parametrize(
+    ("when", "fact"),
+    [
+        ("land = 'desert'", "land = 'desert'"),
+        ("land = { 'swamp', 'desert' }", "land = 'desert'"),
+        ("heavy = true", "heavy = true"),
+        ("fight = true", "fight = true"),
+        ("fight = false", "fight = false"),
+        ("level = 'higher'", "level = 'higher'"),
+        ("hurt = true", "hurt = true"),
+        ("many = true", "many = true"),
+    ],
+)
+def test_the_moments_facts_rule_a_line_in_and_out(wow: WowRuntime, when: str, fact: str):
+    boot(wow)
+    wow.execute(f"LINES = {{ {{ 'buff', 'polite', 'x', when = {{ {when} }} }} }}")
+    assert wow.eval(f"{V}.Choose(LINES, {{ situation = 'buff', {fact} }})") is not None
+    assert wow.eval(f"{V}.Choose(LINES, {{ situation = 'buff' }})") is None  # nobody knows
+    other = "land = 'city', heavy = false, fight = 7, level = 'peer', hurt = false, many = false"
+    assert wow.eval(f"{V}.Choose(LINES, {{ situation = 'buff', {other} }})") is None
+
+
+def test_the_spell_and_the_near_place_in_words(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"""
+      LINE = {{ 'buff', 'polite', '%s near %a, in %z.' }}
+      INSIDE = {V}.Complete({{ situation = 'buff', spell = 'Thorns', zone = 'Elwynn Forest',
+        subzone = 'Goldshire' }})
+      OPEN = {V}.Complete({{ situation = 'buff', spell = 'Thorns', zone = 'Elwynn Forest' }})
+    """)
+    assert wow.eval(f"{V}.Words(LINE, INSIDE, 'say')") == "Thorns near Goldshire, in Elwynn Forest."
+    # no named place around: the zone is the nearest name
+    said = wow.eval(f"{V}.Words(LINE, OPEN, 'say')")
+    assert said == "Thorns near Elwynn Forest, in Elwynn Forest."
+    # no spell, no place: the line is not a candidate
+    assert wow.eval(f"{V}.Choose({{ LINE }}, {V}.Complete({{ situation = 'buff' }}))") is None
+
+
+def test_heavy_weather_the_level_gap_and_being_hurt(wow: WowRuntime):
+    boot(wow)
+    m = f"{MOD}.Model"
+    assert wow.eval(f"{m}.Heavy('rain', 0.8)") is True
+    assert wow.eval(f"{m}.Heavy('rain', 0.2)") is False
+    assert wow.eval(f"{m}.Heavy('clear', 0.8)") is None  # no weather to be heavy
+    assert wow.eval(f"{m}.Heavy('rain', nil)") is None
+    assert wow.eval(f"{m}.Heavy(nil, 0.8)") is None
+    assert wow.eval(f"{m}.LevelGap(40, 12)") == "higher"
+    assert wow.eval(f"{m}.LevelGap(8, 30)") == "lower"
+    assert wow.eval(f"{m}.LevelGap(14, 12)") == "peer"
+    assert wow.eval(f"{m}.LevelGap(0, 12)") is None  # the client gives no level
+    assert wow.eval(f"{m}.LevelGap(nil, 12)") is None
+    assert wow.eval(f"{m}.Hurt(30, 100)") is True
+    assert wow.eval(f"{m}.Hurt(80, 100)") is False
+    assert wow.eval(f"{m}.Hurt(0, 100)") is None  # dead is not hurt
+    assert wow.eval(f"{m}.Hurt(nil, 100)") is None
+
+
+def test_every_kind_of_country_is_one_the_lines_and_the_try_know(wow: WowRuntime):
+    boot(wow)
+    assert set(wow.eval(f"{MOD}.Model.LANDS").values()) == LANDS
+    for land in LANDS:
+        w = wow.eval(f"{T}.Parse('{land}', {MOD}.CourtesyLines)")
+        assert w.land == land and list(w.unknown.values()) == []
+
+
+def test_the_spells_with_lines_of_their_own_sit_on_rows_of_the_matrix(wow: WowRuntime):
+    boot(wow)
+    for kind in set(wow.eval(f"{MOD}.Model.BUFFS").values()):
+        assert f"buff.{kind}" in ROWS, kind
+
+
+def test_the_surroundings_name_the_place_and_its_country(wow: WowRuntime):
+    boot(wow)
+    wow.execute("""
+      Mock.zoneText, Mock.subZoneText, Mock.playerMap = 'Tanaris', 'Gadgetzan', 1446
+      Mock.level, Mock.unitLevels = 12, { target = 40 }
+      Mock.unitHealth.player = { 30, 100 }
+      C_Weather = { GetCurrentWeather = function() return { type = 3, intensity = 0.9 } end }
+    """)
+    f = wow.eval(f"{V}.Complete({MOD}.Facts.Unit({MOD}.Facts.Surroundings({{}}), 'target'))")
+    assert (f.zone, f.subzone, f.near, f.land) == ("Tanaris", "Gadgetzan", "Gadgetzan", "desert")
+    assert (f.weather, f.heavy, f.hurt, f.level) == ("sandstorm", True, True, "higher")
+    # a zone we have no country for, no named place, a level the client does not give
+    wow.execute("""
+      Mock.zoneText, Mock.subZoneText, Mock.playerMap = 'Zephras Isle', 'Zephras Isle', 2521
+      Mock.unitLevels = {}
+      UnitHealth = function() return Mock.Secret() end
+    """)
+    f = wow.eval(f"{V}.Complete({MOD}.Facts.Unit({MOD}.Facts.Surroundings({{}}), 'target'))")
+    assert (f.zone, f.subzone, f.near, f.land) == ("Zephras Isle", None, "Zephras Isle", None)
+    assert f.hurt is None and f.level is None
+    assert errors(wow) == []
+
+
+def test_try_knows_the_new_words_and_says_them(wow: WowRuntime):
+    boot(wow)
+    w = wow.eval(
+        f"{T}.Parse('buff.shield weary desert higher fight heavy hurt many', {MOD}.CourtesyLines)"
+    )
+    assert (w.situation, w.mood, w.land, w.level) == ("buff.shield", "weary", "desert", "higher")
+    assert (w.fight, w.heavy, w.hurt, w.many) == (True, True, True, True)
+    assert list(w.unknown.values()) == []
+    wow.execute("SlashCmdList.BASTIANSCOURTESY('try 1 buff.shield snarky rain desert lower fight')")
+    last = chat(wow)[-1]
+    assert "buff" in last and "desert, lower, fight" in last
+    assert sent(wow) == [] and errors(wow) == []
+
+
+def test_an_invented_moment_keeps_the_place_and_its_country_together(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"""
+      math.randomseed(3)
+      BAD = {{}}
+      for i = 1, 60 do
+        local w = {T}.Parse('buff.heal', {MOD}.CourtesyLines)
+        local f = {T}.Invent(w, {MOD}.CourtesyLines, math.random)
+        if not (f.land and f.zone and f.near and f.spell and f.fight ~= nil and f.many ~= nil) then
+          BAD[#BAD + 1] = i
+        end
+        if f.weather == 'clear' and f.heavy ~= nil then BAD[#BAD + 1] = -i end
+      end
+      REZ = {T}.Invent({T}.Parse('rez', {MOD}.CourtesyLines), {MOD}.CourtesyLines, math.random)
+    """)
+    assert list(wow.eval("BAD").values()) == []
+    assert wow.eval("REZ.spell") is None and wow.eval("REZ.fight") is None  # only a buff has them

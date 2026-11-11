@@ -33,6 +33,7 @@ local refusal -- why the last Offer was not answered
 local known -- the last reading of the auras (Model.Reading), nil before the first
 local settleUntil = 0 -- readings before this only note what is there (a login, a loading screen)
 local blindSince -- since when the auras went unread (a fight, hidden auras); nil while they are read
+local fought = false -- a fight since the auras were last read: what is new landed in it
 Courtesy.TRACE = 30 -- kept; `/bcourtesy why` prints the newest ten
 
 local function now()
@@ -278,6 +279,11 @@ function Courtesy.Pending()
   return pending
 end
 
+-- The facts of the moment the ring shows (tests).
+function Courtesy.PendingFacts()
+  return pendingFacts
+end
+
 -- A moment arrived: the model decides, the ring asks or the gesture plays.
 function Courtesy.Offer(event)
   if not mod or not mod:IsEnabled() then
@@ -321,9 +327,15 @@ local function offerBuff(event, how)
   note(Courtesy.Offer(event) or refusal or "module off", event.what, how)
 end
 
+-- Who cast an aura, as far as the client says: the unit, else the caster's GUID, else nil.
+local function casterOf(a)
+  return a.source or Compat.CasterGUID(a.instance)
+end
+
 -- An aura someone has just cast on the player. Who: the unit, else the caster's GUID (the client has
 -- no unit for a stranger who is neither target nor nameplate), else only that a player cast it.
-local function onFresh(a)
+-- `fight`: it landed in a fight. `many`: the same caster cast more than this one.
+local function onFresh(a, fight, many)
   local spell, source = a.name, a.source
   if source then
     if Compat.IsMe(source) then
@@ -335,7 +347,10 @@ local function onFresh(a)
     if not who or plain(UnitIsPlayer(source)) == false then
       return note("not a player", spell, "unit")
     end
-    return offerBuff({ kind = "buff", who = who, unit = source, what = spell }, "unit")
+    return offerBuff(
+      { kind = "buff", who = who, unit = source, what = spell, fight = fight, many = many },
+      "unit"
+    )
   end
   local guid = Compat.CasterGUID(a.instance)
   if guid and guid == plain(UnitGUID("player")) then
@@ -348,11 +363,14 @@ local function onFresh(a)
     if Compat.IsMineOrGroup(who) then
       return note("own or group", spell, "guid")
     end
-    return offerBuff({ kind = "buff", who = who, guid = guid, what = spell }, "guid")
+    return offerBuff(
+      { kind = "buff", who = who, guid = guid, what = spell, fight = fight, many = many },
+      "guid"
+    )
   end
   local how = guid and "guid without a name" or "none"
   if a.fromPlayer == true or (a.fromPlayer == nil and Facts.BuffKind(spell)) then
-    return offerBuff({ kind = "buff", key = "unseen:" .. (spell or "?"), what = spell }, how)
+    return offerBuff({ kind = "buff", key = "unseen:" .. (spell or "?"), what = spell, fight = fight }, how)
   end
   return note("not from a player", spell, how)
 end
@@ -376,11 +394,25 @@ function Courtesy.ReadAuras()
   blindSince = nil
   local fresh = t >= settleUntil and Model.NewAuras(known, list) or {}
   known = Model.Reading(list)
+  local fight = fought
+  fought = false
+  local casts = {} -- how many of them each caster cast
   for _, a in ipairs(fresh) do
-    if Model.Timely(a.landed, t, blind) then
-      onFresh(a)
-    else
-      note("long fight", a.name) -- unread too long, and the aura does not say it landed lately
+    local by = casterOf(a)
+    if by then
+      casts[by] = (casts[by] or 0) + 1
+    end
+  end
+  -- the spells with lines of their own first: a person is answered once, for the one we can name
+  for pass = 1, 2 do
+    for _, a in ipairs(fresh) do
+      if (Facts.BuffKind(a.name) ~= nil) == (pass == 1) then
+        if Model.Timely(a.landed, t, blind) then
+          onFresh(a, fight, (casts[casterOf(a) or false] or 1) > 1)
+        else
+          note("long fight", a.name) -- unread too long, and the aura does not say it landed lately
+        end
+      end
     end
   end
 end
@@ -395,6 +427,7 @@ end
 -- ring, one of a longer fight when the aura says it landed lately (Model.Timely).
 function Courtesy.OnFight()
   blindSince = blindSince or now()
+  fought = true
   Courtesy.Hide()
 end
 
@@ -497,7 +530,7 @@ end
 
 function Courtesy.Attach(m)
   mod = m
-  state, invite, known, blindSince = { seen = {} }, nil, nil, nil
+  state, invite, known, blindSince, fought = { seen = {} }, nil, nil, nil, false
   m.db.global.trace = type(m.db.global.trace) == "table" and m.db.global.trace or {}
   trace = m.db.global.trace
   Courtesy.Settle()

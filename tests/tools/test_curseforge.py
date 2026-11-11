@@ -167,7 +167,7 @@ def test_the_plan_merges_datas_packs_and_names_what_blocks_an_upload(tmp_path: P
     suite = uploads["Bastians_Suite"]
     with zipfile.ZipFile(suite.zip_path) as zf:
         assert {n.split("/")[0] for n in zf.namelist()} == set(
-            config()["projects"]["Bastians_Suite"]["folders"]
+            curseforge.carried_folders(config(), "Bastians_Suite")
         )
     # Forever is listed as 1.60.1 (23.10.2026); an empty list still refuses the upload
     assert "no CurseForge game version known for WoW Forever" not in data.problems
@@ -187,6 +187,55 @@ def test_the_plan_merges_datas_packs_and_names_what_blocks_an_upload(tmp_path: P
     first = data.zip_path.read_bytes()
     curseforge.plan(config(), "forever", rel, {"Bastians_Data"}, "")
     assert data.zip_path.read_bytes() == first
+
+
+def test_a_required_project_in_review_rides_in_the_file_that_requires_it(tmp_path: Path):
+    """ADR 0074 decision 9 (11.11.2026). The map's pictures became their own project (ADR 0068)
+    while CurseForge had not approved it: 2.2.0 and 2.3.0 went out as a Suite without the five
+    picture folders, and no player could install the project that held them. Until a required
+    project of ours is approved, its folders are in the file that requires it."""
+    cfg = config()
+    suite, maps = cfg["projects"]["Bastians_Suite"], cfg["projects"]["Bastians_Maps"]
+    assert "Bastians_Maps" in suite["required"]
+    maps["approved"] = False
+    carried = curseforge.carried_folders(cfg, "Bastians_Suite")
+    assert carried == [*suite["folders"], *maps["folders"]]
+    assert curseforge.carried_folders(cfg, "Bastians_Maps") == maps["folders"]  # its own file too
+    assert (
+        curseforge.carried_folders(cfg, "Bastians_Data")
+        == cfg["projects"]["Bastians_Data"]["folders"]
+    )
+    rel = fake_release(tmp_path, "forever")
+    uploads = {u.project: u for u in curseforge.plan(cfg, "forever", rel, None, "")}
+    with zipfile.ZipFile(uploads["Bastians_Suite"].zip_path) as zf:
+        tops = {n.split("/")[0] for n in zf.namelist()}
+    assert set(maps["folders"]) <= tops and "Bastians_Core" in tops
+    assert not any(r["slug"] == maps["slug"] for r in suite_relations(uploads["Bastians_Suite"]))
+    # approved: the folders leave, and the relation takes their place
+    maps["approved"] = True
+    assert curseforge.carried_folders(cfg, "Bastians_Suite") == suite["folders"]
+    uploads = {u.project: u for u in curseforge.plan(cfg, "forever", rel, None, "")}
+    with zipfile.ZipFile(uploads["Bastians_Suite"].zip_path) as zf:
+        tops = {n.split("/")[0] for n in zf.namelist()}
+    assert not set(maps["folders"]) & tops
+    assert any(r["slug"] == maps["slug"] for r in suite_relations(uploads["Bastians_Suite"]))
+
+
+def suite_relations(upload: curseforge.Upload) -> list[dict]:
+    return (upload.metadata.get("relations") or {}).get("projects", [])
+
+
+def test_the_read_api_says_whether_players_can_install_a_project():
+    seen = []
+
+    def transport(request):
+        seen.append(request.full_url)
+        return json.dumps({"data": {"status": 2, "isAvailable": False}}).encode()
+
+    assert curseforge.project_state(1795005, "k", transport) == (2, False)
+    assert seen == ["https://api.curseforge.com/v1/mods/1795005"]
+    assert curseforge.PROJECT_STATUS[2] == "changes required"
+    assert curseforge.PROJECT_STATUS[curseforge.PROJECT_LIVE] == "approved"
 
 
 def test_a_dry_run_sends_nothing_and_send_refuses_while_not_ready(tmp_path: Path, capsys):

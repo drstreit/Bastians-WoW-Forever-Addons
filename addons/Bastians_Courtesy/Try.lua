@@ -5,7 +5,7 @@ local _, ns = ...
 local B = Bastians
 local L = ns.L
 local S = B.UI.Style
-local Voice, Mine, Facts = ns.Voice, ns.Mine, ns.Facts
+local Model, Voice, Mine, Facts = ns.Model, ns.Voice, ns.Mine, ns.Facts
 
 local Try = {}
 ns.Try = Try
@@ -38,6 +38,34 @@ local CLASSES = {
 local TIMES = { "morning", "afternoon", "evening", "night" }
 local WEATHERS = { "clear", "rain", "snow", "sandstorm" }
 local SEXES = { "m", "f" }
+local LEVELS = { "higher", "lower", "peer" }
+local FLAGS = { "fight", "heavy", "hurt", "many" } -- a word says it is so; unnamed, chance decides
+-- An example place for each kind of country: { zone, the place in it }, so that an invented moment
+-- does not put sand into Elwynn. English names: the real moment has the client's own.
+local PLACES = {
+  forest = { "Elwynn Forest", "Goldshire" },
+  jungle = { "Stranglethorn Vale", "Nesingwary's Expedition" },
+  swamp = { "Wetlands", "Menethil Harbor" },
+  plains = { "The Barrens", "The Crossroads" },
+  desert = { "Tanaris", "Gadgetzan" },
+  mountains = { "Redridge Mountains", "Lakeshire" },
+  frost = { "Dun Morogh", "Kharanos" },
+  waste = { "Western Plaguelands", "Andorhal" },
+  city = { "Stormwind City", "Trade District" },
+}
+-- An example spell for a buff situation when the client names none of the kind.
+local SPELLS = {
+  mind = "Arcane Intellect",
+  stamina = "Power Word: Fortitude",
+  nature = "Mark of the Wild",
+  ["nature.thorns"] = "Thorns",
+  blessing = "Blessing of Light",
+  ["blessing.might"] = "Blessing of Might",
+  ["blessing.wisdom"] = "Blessing of Wisdom",
+  ["blessing.kings"] = "Blessing of Kings",
+  shield = "Power Word: Shield",
+  heal = "Renew",
+}
 
 local function sortedKeys(map)
   local out = {}
@@ -61,8 +89,9 @@ local function pick(list, rand)
   return list[math.floor(rand() * #list) + 1]
 end
 
--- What a /bcourtesy try asks for: { situation, mood, weather, time, race, class, sex, myRace, mySex,
--- count, ring, unknown = { words } }. Any order; lower or upper case.
+-- What a /bcourtesy try asks for: { situation, mood, weather, time, land, level, fight, heavy, hurt,
+-- many, race, class, sex, myRace, mySex, count, ring, unknown = { words } }. Any order; lower or
+-- upper case.
 function Try.Parse(text, lines)
   local situations = Voice.Situations(lines)
   local w = { unknown = {} }
@@ -84,6 +113,12 @@ function Try.Parse(text, lines)
       w.weather = token
     elseif has(TIMES, token) then
       w.time = token
+    elseif PLACES[token] then
+      w.land = token
+    elseif has(LEVELS, token) then
+      w.level = token
+    elseif has(FLAGS, token) then
+      w[token] = true
     elseif RACES[token] then
       w.race = token
     elseif CLASSES[token] then
@@ -116,6 +151,38 @@ local function setClass(facts, key)
   facts.classKey, facts.class = string.upper(key), CLASSES[key]
 end
 
+-- The spell of a buff situation: the client's name of one of that kind, else an example's.
+local function spellOf(situation)
+  local kind = string.match(situation or "", "^buff%.(.+)$")
+  if not kind then
+    return situation == "buff" and SPELLS.nature or nil
+  end
+  local ids = {}
+  for id, of in pairs(Model.BUFFS) do
+    if of == kind then
+      ids[#ids + 1] = id
+    end
+  end
+  table.sort(ids)
+  return (ids[1] and B.Compat.GetSpellName(ids[1])) or SPELLS[kind]
+end
+
+-- What only a buff has: the spell, a fight, more than one; named by the words or, with `rand`, by
+-- chance. The words never take away what the moment has.
+local function buffFacts(facts, w, rand)
+  if not string.find(facts.situation or "", "^buff") then
+    return
+  end
+  facts.spell = facts.spell or spellOf(facts.situation)
+  for _, flag in ipairs({ "fight", "many" }) do
+    if w[flag] then
+      facts[flag] = true
+    elseif rand then
+      facts[flag] = rand() < 0.25
+    end
+  end
+end
+
 -- An invented moment: the words first, the rest by chance.
 function Try.Invent(w, lines, rand)
   local facts = Facts.Surroundings(speaker(w))
@@ -123,6 +190,15 @@ function Try.Invent(w, lines, rand)
   facts.target = Try.NAME
   facts.time = w.time or pick(TIMES, rand)
   facts.weather = w.weather or pick(WEATHERS, rand)
+  facts.heavy = nil
+  if facts.weather ~= "clear" then
+    facts.heavy = w.heavy or rand() < 0.25
+  end
+  facts.land = w.land or pick(sortedKeys(PLACES), rand)
+  facts.zone, facts.subzone = PLACES[facts.land][1], PLACES[facts.land][2]
+  facts.level = w.level or pick(LEVELS, rand)
+  facts.hurt = w.hurt or rand() < 0.25
+  buffFacts(facts, w, rand)
   facts.sex = w.sex or pick(SEXES, rand)
   setRace(facts, w.race or pick(sortedKeys(RACES), rand))
   setClass(facts, w.class or pick(sortedKeys(CLASSES), rand))
@@ -141,6 +217,11 @@ function Try.Real(w, lines, rand)
   end
   facts.time = w.time or facts.time
   facts.weather = w.weather or facts.weather
+  facts.land = w.land or facts.land
+  facts.level = w.level or facts.level
+  facts.heavy = w.heavy or facts.heavy
+  facts.hurt = w.hurt or facts.hurt
+  buffFacts(facts, w)
   facts.sex = w.sex or facts.sex
   if w.race then
     setRace(facts, w.race)
@@ -165,6 +246,16 @@ local function show(line, facts)
   end
   if facts.class then
     tag[#tag + 1] = facts.class
+  end
+  for _, fact in ipairs({ facts.land or false, facts.level or false }) do
+    if fact then
+      tag[#tag + 1] = fact
+    end
+  end
+  for _, flag in ipairs(FLAGS) do
+    if facts[flag] then
+      tag[#tag + 1] = flag
+    end
   end
   if line.emote then
     tag[#tag + 1] = "/" .. string.lower(line.emote)
@@ -211,7 +302,7 @@ function Try.Run(text, rand)
       B:Say(L["Unknown word: %s"], token)
     end
     B:Say(
-      L["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [number] [ring]"] -- luacheck: ignore 631 (a locale key stays one literal)
+      L["Try a line: /bcourtesy try [situation] [mood] [weather] [time] [race] [class] [m/f] [me:race] [land] [higher/lower] [fight] [heavy] [hurt] [many] [number] [ring]"] -- luacheck: ignore 631 (a locale key stays one literal)
     )
     return false
   end

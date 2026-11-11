@@ -25,12 +25,18 @@ function Facts.Speaker()
   }
 end
 
--- The clock, the weather and the zone, into `facts`.
+-- The clock, the weather, the place and how the player fares, into `facts`.
 function Facts.Surroundings(facts)
   local zone = plain((Compat.Call("GetZoneText")))
-  facts.zone = zone ~= "" and zone or nil
+  facts.zone = type(zone) == "string" and zone ~= "" and zone or nil
+  local subzone = Compat.SubZone()
+  facts.subzone = subzone ~= facts.zone and subzone or nil
+  facts.land = Model.LANDS[Compat.PlayerMap() or false]
   facts.time = Model.DayKey(plain((Compat.Call("GetGameTime"))))
-  facts.weather = Compat.Weather()
+  local weather, intensity = Compat.Weather()
+  facts.weather = weather
+  facts.heavy = Model.Heavy(weather, intensity)
+  facts.hurt = Model.Hurt(Compat.Health())
   return facts
 end
 
@@ -41,6 +47,7 @@ function Facts.Unit(facts, unit)
   local class, classKey = UnitClass(unit)
   facts.class, facts.classKey = plain(class), plain(classKey)
   facts.sex = sexWord((Compat.Call("UnitSex", unit)))
+  facts.level = Model.LevelGap(Compat.Level(unit), Compat.Level("player"))
   return facts
 end
 
@@ -59,7 +66,7 @@ end
 
 local kinds -- spell name -> kind, in the client's language; built on first use
 
--- "mind", "stamina", "nature", "blessing" for a spell's name, or nil.
+-- A spell's place under "buff" by its name ("mind", "nature.thorns", "blessing.might"), or nil.
 function Facts.BuffKind(name)
   name = plain(name)
   if type(name) ~= "string" then
@@ -82,6 +89,11 @@ function Facts.Moment(event)
   local facts = Facts.Surroundings(Facts.Speaker())
   facts.situation = Model.Situation(event, Facts.BuffKind)
   facts.target = event.who
+  if event.kind == "buff" then -- what was cast, whether in a fight, whether more came with it
+    local spell = plain(event.what)
+    facts.spell = type(spell) == "string" and spell ~= "" and spell or nil
+    facts.fight, facts.many = event.fight, event.many
+  end
   if event.guid then
     Facts.Guid(facts, event.guid)
   elseif event.unit and UnitExists(event.unit) then

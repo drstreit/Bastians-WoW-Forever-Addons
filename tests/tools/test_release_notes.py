@@ -49,6 +49,8 @@ def test_the_tracks_cover_every_shipped_folder_once():
     for p in rn.SUITE_PIPELINE:
         assert p in suite and f":(exclude){p}" in data
         assert (rn.ROOT / p).exists(), p
+    # what each download holds is a change for players too (ADR 0074): the upload configuration
+    assert rn.UPLOAD_CONFIG in suite and (rn.ROOT / rn.UPLOAD_CONFIG).is_file()
 
 
 def git(repo: Path, *args: str) -> str:

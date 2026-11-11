@@ -8,7 +8,9 @@ local Voice = {}
 ns.Voice = Voice
 
 Voice.MOODS = { "polite", "roleplay", "snarky", "philosophic", "cheerful", "weary" }
-Voice.SPECIFIC = 3 -- how much likelier a line is for each condition it meets
+-- how much likelier a line is for each condition it meets, for each level its situation lies deeper,
+-- and once when it names something of the moment (Voice.SCENE)
+Voice.SPECIFIC = 3
 Voice.RECENT = 40 -- lines not repeated while another candidate exists
 Voice.MAX_BYTES = 255 -- one chat message
 Voice.NAME_ROOM = 40 -- what a written line leaves free for the names its slots bring
@@ -23,6 +25,12 @@ Voice.CONDITIONS = {
   time = "time",
   weather = "weather",
   kin = "kin",
+  land = "land",
+  heavy = "heavy",
+  fight = "fight",
+  level = "level",
+  hurt = "hurt",
+  many = "many",
 }
 
 -- a slot of a line -> the fact it writes
@@ -38,7 +46,12 @@ Voice.SLOTS = {
   p = "myPossessive",
   o = "address",
   y = "folk",
+  s = "spell",
+  a = "near",
 }
+
+-- the slots that name something of the moment: the spell, the place, the zone, the weather, the hour
+Voice.SCENE = { s = true, a = true, z = true, w = true, h = true }
 
 local WEATHER_WORD = { rain = "rain", snow = "snow", sandstorm = "sand" }
 local POSSESSIVE = { m = "his", f = "her" }
@@ -60,6 +73,7 @@ function Voice.Complete(facts)
   facts.folk = word(FOLK, facts.sex)
   facts.weatherWord = word(WEATHER_WORD, facts.weather)
   facts.daytime = facts.time and L[facts.time] or nil
+  facts.near = facts.subzone or facts.zone -- the nearest place with a name
   return facts
 end
 
@@ -87,29 +101,44 @@ local function meets(want, have)
   return false
 end
 
+-- Whether every slot of `text` has its fact, and whether one of them names the moment.
 local function slotsKnown(text, facts)
+  local named = false
   if not text then
-    return true
+    return true, named
   end
   for key in string.gmatch(text, "%%(%a+)") do
     local field = Voice.SLOTS[key]
     if not field or facts[field] == nil then
-      return false
+      return false, named
     end
+    named = named or Voice.SCENE[key] == true
   end
-  return true
+  return true, named
 end
 
--- How well a line fits, nil when it does not: 1, the conditions and the exact situation add to it.
+-- Whether a line of `situation` serves the moment `of`: the same, or one above it in the tree
+-- ("buff" and "buff.blessing" serve "buff.blessing.might"; a sibling never does).
+local function serves(situation, of)
+  if type(situation) ~= "string" or type(of) ~= "string" then
+    return false
+  end
+  return situation == of or string.sub(of, 1, #situation + 1) == situation .. "."
+end
+
+-- How well a line fits, nil when it does not: 1, and more for each level its situation lies deeper,
+-- for each condition it meets, and once when it names something of the moment.
 local function score(line, facts)
-  local parent = string.match(facts.situation or "", "^([^.]+)%.")
-  if line[1] ~= facts.situation and line[1] ~= parent then
+  if not serves(line[1], facts.situation) then
     return nil
   end
-  if not (slotsKnown(line[3] or nil, facts) and slotsKnown(line.act, facts)) then
+  local textKnown, textNames = slotsKnown(line[3] or nil, facts)
+  local actKnown, actNames = slotsKnown(line.act, facts)
+  if not (textKnown and actKnown) then
     return nil
   end
-  local weight = line[1] == facts.situation and Voice.SPECIFIC or 1
+  local _, levels = string.gsub(line[1], "%.", "")
+  local weight = Voice.SPECIFIC ^ (levels + ((textNames or actNames) and 1 or 0))
   for key, want in pairs(line.when or {}) do
     local field = Voice.CONDITIONS[key]
     if not field or not meets(want, facts[field]) then
