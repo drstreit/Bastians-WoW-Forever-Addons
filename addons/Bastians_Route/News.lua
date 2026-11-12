@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.4.1:1",
+    date = "2026-11-12",
+    version = "2.4.1",
+    text = "Route no longer spends your hearthstone to save a few seconds: the stone or a teleport is only part of a route when it saves at least three minutes.",
+  },
+  {
     id = "2.2.0:1",
     date = "2026-11-11",
     version = "2.2.0",

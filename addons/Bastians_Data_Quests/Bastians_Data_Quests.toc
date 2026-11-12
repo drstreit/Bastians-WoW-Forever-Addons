@@ -22,7 +22,7 @@
 ## Notes-ptBR: Pacote de dados de missões gerado (carrega ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 2.4.0
+## Version: 2.4.1
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

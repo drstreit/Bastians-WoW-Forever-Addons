@@ -562,6 +562,8 @@ ns.L:Register("koKR", {
   ["Click: its page, to switch it on."] = "클릭: 켜려면 해당 페이지로.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Route no longer spends your hearthstone to save a few seconds: the stone or a teleport is only part of a route when it saves at least three minutes."] = "Route가 더 이상 몇 초를 아끼려고 귀환석을 쓰지 않습니다. 귀환석이나 순간이동은 최소 3분을 절약할 때만 경로에 포함됩니다.",
+  ["The map's pictures now come as their own download, Bastian's Maps, which the CurseForge app installs with the Suite, so Suite updates are small again."] = "지도 그림은 이제 별도 다운로드인 Bastian's Maps로 제공되며, CurseForge 앱이 Suite와 함께 설치합니다. Suite 업데이트가 다시 작아졌습니다.",
   ["The map styles and the overview pictures are back in the Suite's download. Releases 2.2.0 and 2.3.0 had moved them to a separate download that cannot be installed yet, so the map lost its pictures on an update."] = "지도 스타일과 개요 이미지가 다시 스위트 다운로드에 포함됩니다. 2.2.0과 2.3.0 버전은 이를 아직 설치할 수 없는 별도 다운로드로 옮겨서, 업데이트하면 지도의 이미지가 사라졌습니다.",
   ["Courtesy's thank-yous now know what you were given, where you are, the weather and whether you were fighting, with 957 lines instead of 209."] = "예의의 감사 인사가 이제 무엇을 받았는지, 어디에 있는지, 날씨가 어떤지, 전투 중이었는지를 알며, 문장이 209개에서 957개로 늘었습니다.",
   ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = '스톰윈드에 별도 창으로 열리는 그림 도시 및 던전 지도가 생겼습니다. 지도의 "도시 지도" 버튼으로 열면 내 위치, 지도의 레이어, 그리고 모든 집과 그 안의 사람들을 나타내는 핀이 표시됩니다. 2.2.0 버전에는 이 그림들이 빠져 있었습니다.',

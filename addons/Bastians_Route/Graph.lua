@@ -17,6 +17,7 @@ Graph.BOARDING = 8 -- seconds to talk to the flight master and lift off
 Graph.RIDE_SPEED = 12 -- yards per second for a boat or zeppelin when the ride time is unknown
 Graph.WAIT_DEFAULT = 90 -- expected wait at a dock when the loop time is unknown
 Graph.HEARTH_CAST = 10
+Graph.JUMP_WORTH = 180 -- seconds the stone must save to be taken (route.md "The hearthstone is not free")
 Graph.PORTAL_SECONDS = 3
 Graph.SWIM_SPEED = 4.7 -- yards per second in water (assumed; a mount does not swim faster)
 Graph.JOIN_YARDS = 600 -- a node off the walk network joins its nearest network nodes within this

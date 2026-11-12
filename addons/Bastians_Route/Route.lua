@@ -366,6 +366,20 @@ end
 function Route.Plan(start, goal)
   local g, notes = Route.Inputs(start, goal)
   local route = Graph.Plan(g)
+  local stone = false
+  for _, step in ipairs(route and g.hearth and route.steps or {}) do
+    stone = stone or step.mode == "hearth"
+  end
+  if stone then
+    -- the stone is not free (as the world graph's Graph.JUMP_WORTH): only when it saves enough
+    local hearth = g.hearth
+    g.hearth = nil
+    local plain = Graph.Plan(g)
+    g.hearth = hearth
+    if plain and plain.seconds - route.seconds < Graph.JUMP_WORTH then
+      route = plain
+    end
+  end
   if route then
     route.notes = notes
     route.index = 1
@@ -456,7 +470,10 @@ function Route.FromGraph(r, start, goal, notes)
   -- the network's first and last waypoints: where the straight joins from the start and to the
   -- goal meet the route; a route that begins or ends with a taxi or a ride gets a walk for them
   local first, last = steps[1], steps[#steps]
-  if not first or first.mode ~= "walk" then
+  -- a hearthstone or a teleport is cast where one stands: no walk to the network before it (Forever
+  -- 11.11.2026: "1. Go 3 yd E to the target (approx)" stood in front of "Hearth to the target")
+  local anywhere = first and (first.mode == "hearth" or first.mode == "teleport")
+  if not anywhere and (not first or first.mode ~= "walk") then
     local at = first and first.from or {}
     first = { mode = "walk", seconds = 0, yards = 0, legs = {}, approxYards = 0, from = at, to = at }
     table.insert(steps, 1, first)
@@ -468,7 +485,7 @@ function Route.FromGraph(r, start, goal, notes)
   end
   local firstAt, lastAt = first.from, last.to
   first.from = { continent = start.continent, wx = start.wx, wy = start.wy }
-  if firstAt and firstAt.wx then
+  if not anywhere and firstAt and firstAt.wx then
     join(first, start, firstAt, true)
   end
   last.to = { continent = goal.continent, wx = goal.wx, wy = goal.wy, name = goal.name, ref = goal.ref }
@@ -531,7 +548,7 @@ function Route.PlanAsync(start, goal, callback, kind)
   }, {
     known = known,
     faction = FACTION_NAME[playerFaction() or ""],
-    hearth = hearth and { map = hearth.continent, wx = hearth.wx, wy = hearth.wy } or nil,
+    hearth = hearth and { map = hearth.continent, wx = hearth.wx, wy = hearth.wy, name = hearth.name } or nil,
     teleports = not goal.onFoot and Route.Teleports() or nil,
     speeds = { ground = db().char.maxSpeed or Graph.WALK_SPEED },
     profile = kind ~= "fastest" and kind or nil,

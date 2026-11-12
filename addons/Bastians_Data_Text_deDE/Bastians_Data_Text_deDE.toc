@@ -22,7 +22,7 @@
 ## Notes-ptBR: Nomes e textos de missões em alemão gerados; só monta suas tabelas em um cliente em alemão.
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 2.4.0
+## Version: 2.4.1
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

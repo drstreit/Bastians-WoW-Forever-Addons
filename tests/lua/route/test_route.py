@@ -211,6 +211,11 @@ def test_hearth_is_learned_and_used_only_when_ready(wow: WowRuntime):
     route = wow.eval(f"{R}.Plan({far}, {near})")
     assert [s.mode for s in route.steps.values()] == ["hearth", "walk"]
     assert round(route.seconds, 1) == 11.1 and route.steps[1].to.name == "Goldshire"
+    # the stone is not free: 600 yards from home it would save a minute, and is left in the bag
+    #
+    close = "{ continent = 0, wx = 540, wy = 40 }"
+    route = wow.eval(f"{R}.Plan({close}, {near})")
+    assert [s.mode for s in route.steps.values()] == ["walk"]
     wow.execute("Mock.itemCooldowns[6948] = { start = GetTime(), duration = 1800 }")
     route = wow.eval(f"{R}.Plan({far}, {near})")
     assert [s.mode for s in route.steps.values()] == ["walk"]

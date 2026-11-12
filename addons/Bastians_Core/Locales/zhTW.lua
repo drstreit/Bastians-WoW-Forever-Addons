@@ -562,6 +562,8 @@ ns.L:Register("zhTW", {
   ["Click: its page, to switch it on."] = "點擊：打開其頁面以開啟。",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["Route no longer spends your hearthstone to save a few seconds: the stone or a teleport is only part of a route when it saves at least three minutes."] = "Route 不再為了節省幾秒鐘而使用你的爐石：只有能節省至少三分鐘時，爐石或傳送才會成為路線的一部分。",
+  ["The map's pictures now come as their own download, Bastian's Maps, which the CurseForge app installs with the Suite, so Suite updates are small again."] = "地圖圖片現在作為獨立下載 Bastian's Maps 提供，CurseForge 應用程式會隨 Suite 一起安裝；Suite 的更新又變小了。",
   ["The map styles and the overview pictures are back in the Suite's download. Releases 2.2.0 and 2.3.0 had moved them to a separate download that cannot be installed yet, so the map lost its pictures on an update."] = "地圖樣式和概覽圖片重新包含在套件的下載中。2.2.0 和 2.3.0 版本把它們移到了一個尚無法安裝的單獨下載裡，導致更新後地圖失去了圖片。",
   ["Courtesy's thank-yous now know what you were given, where you are, the weather and whether you were fighting, with 957 lines instead of 209."] = "禮儀的致謝現在知道你得到了什麼、你在哪裡、天氣如何以及你是否在戰鬥，語句從 209 條增加到 957 條。",
   ['Stormwind has a painted City & dungeon map in its own window: the "City map" button on the map opens it, with your position, the map\'s layers and a pin for every house and the people in it. Release 2.2.0 had left its pictures out.'] = '暴風城有了一張手繪的城市與地城地圖，在獨立視窗中顯示：地圖上的"城市地圖"按鈕可以打開它，其中有你的位置、地圖的圖層，以及每棟房屋和屋內人物的標記。2.2.0 版本遺漏了它的圖片。',

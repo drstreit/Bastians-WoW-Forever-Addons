@@ -643,7 +643,7 @@ local function jumpsOf(opts)
   local out = {}
   local h = opts and opts.hearth
   if h and h.wx then
-    out[#out + 1] = { place = h, seconds = Graph.HEARTH_SECONDS, mode = "hearth" }
+    out[#out + 1] = { place = h, seconds = Graph.HEARTH_SECONDS, mode = "hearth", name = h.name }
   end
   for _, t in ipairs(opts and opts.teleports or {}) do
     if t.map and t.wx then
@@ -652,6 +652,42 @@ local function jumpsOf(opts)
     end
   end
   return out
+end
+
+-- A jump from wherever the character stands is not free, though its cast is short: the stone is
+-- gone for its cooldown, a teleport costs its reagent or its own. The planner takes one only
+-- when it saves at least this many seconds against the best way without it; a place nothing
+-- else reaches keeps the jump. `opts.jumpWorth` overrides it. (
+-- standing on the road to Goldshire, 1:28 away, the route was the hearthstone, to save 70 s.)
+Graph.JUMP_WORTH = 180
+
+local JUMP_FROM_ANYWHERE = { hearth = true, teleport = true }
+
+local function usesJump(route)
+  for _, s in ipairs(route and route.steps or {}) do
+    if JUMP_FROM_ANYWHERE[s.mode] then
+      return true
+    end
+  end
+  return false
+end
+
+local function withoutJumps(opts)
+  local o = {}
+  for k, v in pairs(opts or {}) do
+    o[k] = v
+  end
+  o.hearth, o.teleports = nil, nil
+  return o
+end
+
+-- Of a route with a jump and the best route without one: the jump only when it is worth it.
+local function worthIt(route, plain, opts)
+  local worth = opts and opts.jumpWorth or Graph.JUMP_WORTH
+  if plain and plain.seconds - route.seconds < worth then
+    return plain
+  end
+  return route
 end
 
 -- The jumps landing on this continent as edges from wherever the character stands.
@@ -1057,6 +1093,10 @@ function service:Route(from, to, opts, callback)
   if netB then
     local cross = function(yield)
       local route, why = crossRoute(net, netB, a, b, opts, yield, goalName)
+      if route and usesJump(route) then
+        local plain = crossRoute(net, netB, a, b, withoutJumps(opts), yield, goalName)
+        route = worthIt(route, plain, opts)
+      end
       if callback then
         callback(route, why)
       end
@@ -1067,26 +1107,32 @@ function service:Route(from, to, opts, callback)
     cross(nil)
     return nil
   end
-  local run = function(yield)
+  local function plan(with, yield)
     local o = {}
-    for k, v in pairs(opts or {}) do
+    for k, v in pairs(with or {}) do
       o[k] = v
     end
-    o.extra, o.yield = extraFor(net, opts), yield
-    o.startEdges = startEdges(net, opts)
-    o.safe = safeOf(opts)
+    o.extra, o.yield = extraFor(net, with), yield
+    o.startEdges = startEdges(net, with)
+    o.safe = safeOf(with)
     local result, why = Data.Net.Route(
       net,
       { x = a.wx, y = a.wy, z = a.wz },
       { x = b.wx, y = b.wy, z = b.wz },
       o
     )
+    if not result then
+      return nil, why
+    end
+    return shape(net, result, with, goalName)
+  end
+  local run = function(yield)
+    local route, why = plan(opts, yield)
+    if route and usesJump(route) then
+      route = worthIt(route, (plan(withoutJumps(opts), yield)), opts)
+    end
     if callback then
-      if result then
-        callback(shape(net, result, opts, goalName))
-      else
-        callback(nil, why)
-      end
+      callback(route, why)
     end
   end
   if Graph.module then

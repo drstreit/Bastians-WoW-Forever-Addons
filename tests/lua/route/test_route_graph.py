@@ -205,3 +205,29 @@ def test_the_verdict_is_pure_and_unknown_is_not_safe(core: WowRuntime):
     assert core.eval(f"{g}.Verdict({route}, nil)") is None
     assert core.eval(f"{g}.Verdict(nil, 12)") is None
     assert core.errors == []
+
+
+def test_a_stone_is_cast_where_one_stands_and_its_step_names_the_inn(wow: WowRuntime):
+    """Forever 11.11.2026: "1. Go 3 yd E to the target (approx)",
+    "2. Hearth to the target", "3. Go 78 yd W to Marshal Dughan". The first line was the walk
+    to the network's nearest waypoint, which a hearthstone does not need, and the stone's step
+    had no name for where it lands."""
+    boot(wow)
+    wow.execute(
+        f"""
+        local hearth = {{ mode = "hearth", jump = true, seconds = 10, name = "Goldshire",
+          fromPlace = {{ map = 0, wx = 3, wy = 0 }}, toPlace = {{ map = 0, wx = 500, wy = 0 }},
+          points = {{}} }}
+        local walk = {{ mode = "walk", seconds = 11, yards = 78,
+          points = {{ {{ wx = 500, wy = 0 }}, {{ wx = 578, wy = 0 }} }} }}
+        route = {R}.FromGraph({{ seconds = 21, steps = {{ hearth, walk }} }},
+          {{ continent = 0, wx = 0, wy = 0 }},
+          {{ continent = 0, wx = 578, wy = 0, name = "Marshal Dughan" }})
+        """
+    )
+    steps = list(wow.eval("route.steps").values())
+    assert [s.mode for s in steps] == ["hearth", "walk"]  # no walk in front of the stone
+    G = "Bastians:GetModule('Route').Graph"
+    assert wow.eval(f"{G}.StepText(route.steps[1])") == "Hearth to Goldshire"
+    assert (steps[0]["from"].wx, steps[0]["from"].wy) == (0, 0)  # from where the character stands
+    assert wow.errors == []

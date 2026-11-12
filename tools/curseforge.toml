@@ -73,7 +73,9 @@ verified = true
 # the owner in the author pages. While this is false the five folders ride in the Suite's file
 # (curseforge.carried_folders, ADR 0074 decision 9): 2.2.0 and 2.3.0 went out without them.
 # tools/suite_release.py asks CurseForge on every release and says when this can become true.
-approved = false
+# 12.11.2026: approved and available (the release check asked the read API): the five folders
+# leave the Suite's file and the relation to this project takes their place.
+approved = true
 folders = [
   "Bastians_Map_Art",
   "Bastians_Map_Blizzard",

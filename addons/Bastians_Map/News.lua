@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.4.1:1",
+    date = "2026-11-12",
+    version = "2.4.1",
+    text = "The map's pictures now come as their own download, Bastian's Maps, which the CurseForge app installs with the Suite, so Suite updates are small again.",
+  },
+  {
     id = "2.4.0:1",
     date = "2026-11-11",
     version = "2.4.0",
@@ -177,11 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "The map can keep you in the middle while you move (the Centred button).",
-  },
-  {
-    id = "1.0.0-beta.13:9",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "Bastian's minimap: the game's minimap in a frame with a search bar, the map's styles and layers, zoom and dragging, and a box for all addon minimap buttons.",
   },
 }

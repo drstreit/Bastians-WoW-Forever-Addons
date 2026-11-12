@@ -196,10 +196,30 @@ def test_a_ride_takes_its_ride_and_half_a_cycle(wow: WowRuntime):
 
 
 def test_the_hearth_jumps_from_the_start(graph):
-    r = plan(graph, "{ hearth = { map = 0, wx = 100, wy = -300 } }")
+    r = plan(graph, "{ jumpWorth = 0, hearth = { map = 0, wx = 100, wy = -300, name = 'Inn' } }")
     assert r.seconds == 10
-    assert [s.mode for s in r.steps.values()] == ["hearth"]
+    steps = list(r.steps.values())
+    assert [s.mode for s in steps] == ["hearth"] and steps[0].name == "Inn"  # the step names it
     assert plan(graph, "{ hearth = { map = 1, wx = 0, wy = 0 } }").seconds > 10  # another continent
+
+
+def test_the_stone_is_taken_only_when_it_saves_three_minutes(graph):
+    """ "I am actually directly on the road to him. But the route
+    somehow puts me in the inn in goldshire". The stone was ready, its cast is 10 seconds and
+    the walk was 1:28, so the planner spent the hearthstone to save 70 seconds. A jump from
+    wherever one stands is not free: it is taken when it saves at least Graph.JUMP_WORTH."""
+    assert graph.eval("Bastians.Data.Graph.JUMP_WORTH") == 180
+    hearth = "hearth = { map = 0, wx = 100, wy = -300, name = 'Inn' }"
+    r = plan(graph, f"{{ {hearth} }}")  # the walk is 74 s: the stone would save 64
+    assert abs(r.seconds - FASTEST) < 0.05
+    assert "hearth" not in [s.mode for s in r.steps.values()]
+    # a teleport is the same kind of jump
+    tp = "teleports = { { map = 0, wx = 100, wy = -300, seconds = 10, name = 'Home' } }"
+    assert abs(plan(graph, f"{{ {tp} }}").seconds - FASTEST) < 0.05
+    # the threshold is the saving, not the walk: 64 s saved passes a worth of 60, not of 70
+    assert plan(graph, f"{{ jumpWorth = 60, {hearth} }}").seconds == 10
+    assert abs(plan(graph, f"{{ jumpWorth = 70, {hearth} }}").seconds - FASTEST) < 0.05
+    assert graph.errors == []
 
 
 def test_rows_show_the_graph_time_never_the_straight_line(graph):
@@ -323,7 +343,10 @@ def test_a_place_with_a_height_is_reached_on_its_own_floor(graph):
 
 def test_a_teleport_jumps_from_the_start_like_the_hearth(graph):
     """R26.7: a ready teleport to waypoint 5 (east road), 10 s to cast, then 250 yards east."""
-    tp = "{ teleports = { { map = 0, wx = 100, wy = -50, wz = 11, seconds = 10, name = 'Stormwind' } } }"
+    tp = (
+        "{ jumpWorth = 0, "
+        "teleports = { { map = 0, wx = 100, wy = -50, wz = 11, seconds = 10, name = 'Stormwind' } } }"
+    )
     r = plan(graph, tp)
     assert abs(r.seconds - (10 + 250 / RUN)) < 0.05 and r.seconds < FASTEST
     steps = list(r.steps.values())
