@@ -58,53 +58,21 @@ function W.Checkbox(parent, label, onChange)
 end
 
 -- Slider: label left, value right, a flat track. onChange(value) when the player moves it.
+-- Slider: a thin call of the look engine's (S.slider, plan-chat-one-window.md V34): the label as
+-- written, the value at the right; `label`, `value` and `slider` are its parts for the renderer.
 function W.Slider(parent, label, min, max, step, onChange)
-  local f = CreateFrame("Frame", nil, parent)
-  f:SetHeight(ROW + 14)
-  f.label = S.text(f, 12)
-  f.label:SetPoint("TOPLEFT", 0, 0)
-  f.label:SetText(label or "")
-  f.value = S.text(f, 12, S.C.dim)
-  f.value:SetPoint("TOPRIGHT", 0, 0)
-  f.value:SetJustifyH("RIGHT")
-  local slider = CreateFrame("Slider", nil, f)
-  slider:SetPoint("BOTTOMLEFT", 0, 2)
-  slider:SetPoint("BOTTOMRIGHT", 0, 2)
-  slider:SetHeight(10)
-  slider:SetOrientation("HORIZONTAL")
-  slider:SetMinMaxValues(min, max)
-  slider:SetValueStep(step or 1)
-  slider:SetObeyStepOnDrag(true)
-  S.fill(slider, S.C.track)
-  slider:SetThumbTexture(S.WHITE)
-  local thumb = slider:GetThumbTexture()
-  if thumb then
-    thumb:SetSize(8, 10)
-    thumb:SetVertexColor(S.C.accent[1], S.C.accent[2], S.C.accent[3], 1)
-  end
-  f.slider = slider
-  f.step = step or 1
-  local function fmt(v)
-    if f.step >= 1 then
-      return tostring(math.floor(v + 0.5))
-    end
-    return string.format("%.2f", v)
-  end
-  function f.SetValue(self, v, silent)
-    self.silent = silent
-    slider:SetValue(v)
-    self.value:SetText(fmt(v))
-    self.silent = nil
-  end
-  function f.GetValue()
-    return slider:GetValue()
-  end
-  slider:SetScript("OnValueChanged", function(_, v, user)
-    f.value:SetText(fmt(v))
-    if onChange and not f.silent and user ~= false then
+  local f = S.slider(parent, {
+    title = label or "",
+    plain = true,
+    min = min,
+    max = max,
+    step = step or 1,
+    onChange = onChange and function(_, v)
       onChange(v)
-    end
-  end)
+    end or nil,
+  })
+  f:SetHeight(ROW + 14)
+  f.label, f.value, f.step = f.title, f.number, step or 1
   return f
 end
 
@@ -148,6 +116,9 @@ function W.Select(parent, label, values, onChange)
       widest = math.max(widest, self.button.label:GetStringWidth() or 0)
     end
     local w = math.max(W.SELECT_MIN, math.min(W.SELECT_MAX, math.ceil(widest) + 28))
+    -- the button's own width, so the next SetLabel (which draws the button again) keeps it: it
+    -- drew the button at its first 160 and a long choice ran out
+    self.button.spec.width = w
     self.button:SetWidth(w)
     self.list:SetWidth(w)
     self.button.label:SetText(

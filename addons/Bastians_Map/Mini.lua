@@ -8,6 +8,9 @@
 -- combat (CLAUDE.md golden rule 6); everything goes back when the setting is off.
 -- The search on top finds only what the minimap shows and marks the place it jumps to (map.md
 -- "The minimap search", L4, ): a quest's mark is its giver.
+-- On our styles the game's minimap, its ground switched off, lies between our tiles and our pins
+-- as the dots layer (ADR 0078, map.md "The dots layer"): what the game's tracking finds shows on
+-- our map while our view follows the player at the game's scale.
 local _, ns = ...
 local B = Bastians
 local L = ns.L
@@ -66,6 +69,7 @@ Mini.HIDE = {
 }
 Mini.BADGE = 34 -- the Bastian's badge on the frame (the one button on the minimap)
 Mini.OPENER = 26 -- the button of the minimap buttons' box on the rim, bottom left
+Mini.RECENTRE = 26 -- "Recentre on you" on the view's lower edge, only while the view looks elsewhere
 Mini.ICON = "Interface\\AddOns\\Bastians_Core\\Icon"
 -- The entity types the minimap's search offers (map.md "The minimap search"); notes on a spot and
 -- the bookmarks come without an entity and are kept by their place.
@@ -73,6 +77,9 @@ Mini.SEARCH_SCOPE = { npc = true, quest = true, zone = true, area = true }
 Mini.SPOT_LAYER = "notes.spots" -- the layer whose pins are the player's notes on a spot (Notes)
 Mini.MARK_SECONDS = 120 -- the search's mark goes after this long
 Mini.FAR = 1e9 -- yards: a view that holds a whole continent
+-- The game's minimap this many frame levels above the view while it is the dots layer: over our
+-- tiles (the clip, 10), under the overlay's pins (15) and our buttons (ADR 0078, G1)
+Mini.DOTS_LEVEL = 12
 
 local mod
 local frame, bar, view, clip, catcher, arrow, foot, tools, recentre, warn
@@ -88,6 +95,9 @@ local hider -- a hidden frame that holds the game's cluster while ours shows
 local pending -- a take or give back waiting for the end of combat
 local markTimer -- the mark's timeout
 local hookMinimap -- defined with the takeover below
+local dots -- the dots layer shows (ADR 0078): { ground = what the client's switch said before }
+local dotsWait -- a change of the dots layer fell into a fight and waits for its end
+local hideDots -- defined with the dots layer below
 Mini.stats = { drawn = 0, indicators = 0 }
 
 local function layer(sublevel)
@@ -297,7 +307,9 @@ function Mini.PlaceMinimap()
 end
 
 -- Once: the game moving its minimap back (a layout of the cluster) is undone on the next frame;
--- Alt+drag on the game's minimap moves our frame, as on our styles.
+-- Alt+drag on the game's minimap moves our frame, as on our styles. On the dots layer a plain
+-- drag is our drag (the game's minimap has the mouse where no pin of ours is); its click stays
+-- the game's own, a ping, also at the end of a drag (ADR 0078 decision 5).
 local hooked = false
 hookMinimap = function()
   if hooked then
@@ -310,14 +322,23 @@ hookMinimap = function()
     end
   end)
   Minimap:HookScript("OnMouseDown", function(_, button)
-    if taken and button == "LeftButton" and IsAltKeyDown and IsAltKeyDown() then
+    if not (taken and button == "LeftButton") then
+      return
+    end
+    if IsAltKeyDown and IsAltKeyDown() then
       frame:StartMoving()
       frame.moving = true
+    elseif dots and not InCombatLockdown() then -- no drag in a fight: it would hide the layer
+      local x, y = GetCursorPosition()
+      drag = { x = x, y = y, game = true }
+      Mini.StartTicks()
     end
   end)
   Minimap:HookScript("OnMouseUp", function(_, button)
     if frame and frame.moving then
       Mini.StopMoving()
+    elseif drag and drag.game and button == "LeftButton" then
+      drag = nil
     elseif taken and button == "RightButton" then
       Mini.PointMenu()
     end
@@ -334,6 +355,7 @@ local function take()
   local st = stateOf(Minimap)
   st.sized = true
   taken.minimap = st
+  taken.minimapLevel = Minimap:GetFrameLevel()
   Minimap:SetParent(view)
   Minimap:SetFrameLevel((view:GetFrameLevel() or 1) + 1)
   if Minimap.SetScale then
@@ -370,6 +392,9 @@ local function giveBack()
   if not taken then
     return
   end
+  if dots then
+    hideDots("hidden") -- the ground on and the level back before the minimap leaves our view
+  end
   for _, st in ipairs(taken.indicators) do
     restore(st)
   end
@@ -383,6 +408,9 @@ local function giveBack()
     Minimap:SetMaskTexture(Mini.MASKS.ROUND)
   end
   restore(taken.minimap)
+  if taken.minimapLevel then
+    Minimap:SetFrameLevel(taken.minimapLevel)
+  end
   taken = nil
   Mini.stats.indicators = 0
 end
@@ -560,6 +588,120 @@ function Mini.Resize(delta)
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- The dots layer (ADR 0078, map.md "The dots layer"): the game's minimap with its ground off
+-- between our tiles and our pins; it draws the dots of the game's tracking, the group and the
+-- pings itself, around the player at its own scale, so our view follows the player at that scale
+-- ---------------------------------------------------------------------------------------------
+
+-- The client's ground switch and view radius (C_Minimap, verified on Forever 14.11.2026), or nil.
+local function groundApi()
+  local api = rawget(_G, "C_Minimap")
+  if api and type(api.SetDrawGroundTextures) == "function" and type(api.GetViewRadius) == "function" then
+    return api
+  end
+  return nil
+end
+
+function Mini.DotsClient()
+  return groundApi() ~= nil
+end
+
+function Mini.DotsShown()
+  return dots ~= nil
+end
+
+local function rotating()
+  local cvar = rawget(_G, "C_CVar")
+  return cvar ~= nil and cvar.GetCVar ~= nil and cvar.GetCVar("rotateMinimap") == "1"
+end
+
+-- The camera level at which `half` pixels show `radius` yards (pure): the game minimap's own
+-- scale, half its width for its view radius (measured 14.11.2026: 160 px for 166.7 yd is 4.94).
+function Mini.FitLevel(half, radius)
+  if not (type(half) == "number" and half > 0 and type(radius) == "number" and radius > 0) then
+    return nil
+  end
+  return math.log(half / radius / Camera.PX_PER_YARD_L0) / math.log(2)
+end
+
+-- Whether the layer shows now; else why: "hidden", "game", "setting", "client", "elsewhere" (the
+-- view was dragged, zoomed out past the game's widest zoom or jumped), "rotating" and "instance"
+-- (G4 and G3 are not measured), "nowhere" (no map position).
+function Mini.DotsWanted()
+  if not (taken and frame and frame:IsShown() and cam) then
+    return false, "hidden"
+  elseif Mini.Style() == "game" then
+    return false, "game"
+  elseif db().miniTracked == false then
+    return false, "setting"
+  elseif not groundApi() then
+    return false, "client"
+  elseif not following then
+    return false, "elsewhere"
+  elseif rotating() then
+    return false, "rotating"
+  elseif B.Compat.InstanceType() ~= "none" then
+    return false, "instance"
+  elseif not B.Coords.Player() then
+    return false, "nowhere"
+  end
+  return true
+end
+
+local function showDots()
+  local api = groundApi()
+  local get = api.GetDrawGroundTextures
+  dots = { ground = not (type(get) == "function" and get() == false) }
+  api.SetDrawGroundTextures(false)
+  Minimap:SetFrameLevel((view:GetFrameLevel() or 1) + Mini.DOTS_LEVEL)
+end
+
+-- The ground as it was and the minimap back under our tiles; our camera takes the level the
+-- player chose, unless the view only looks elsewhere (it keeps the scale it looks at).
+hideDots = function(why)
+  local api = groundApi()
+  if api then
+    api.SetDrawGroundTextures(dots.ground)
+  end
+  dots = nil
+  if taken then
+    Minimap:SetFrameLevel((view:GetFrameLevel() or 1) + 1)
+  end
+  if why ~= "elsewhere" and cam then
+    cam.level = tonumber(db().miniLevel) or cam.level
+  end
+end
+
+-- Takes the layer or puts it back as DotsWanted says, never in a fight (a change that falls into
+-- one waits for its end); while it shows, our camera draws at the game's scale.
+function Mini.SyncDots()
+  local want, why = Mini.DotsWanted()
+  if want ~= (dots ~= nil) then
+    if InCombatLockdown() then
+      dotsWait = true
+    elseif want then
+      showDots()
+    else
+      hideDots(why)
+    end
+  end
+  if not dots then
+    return
+  end
+  local api = groundApi()
+  local get = api.GetDrawGroundTextures
+  if not InCombatLockdown() and type(get) == "function" and get() == true then
+    api.SetDrawGroundTextures(false) -- switched on behind our back (the game's own hybrid map)
+  end
+  -- half the game's minimap in our view's pixels
+  local scale = (Minimap:GetEffectiveScale() or 1) / (view:GetEffectiveScale() or 1)
+  local level = Mini.FitLevel((Minimap:GetWidth() or 0) / 2 * scale, api.GetViewRadius())
+  if level then
+    cam.level = level
+  end
+end
+
+-- ---------------------------------------------------------------------------------------------
 -- Drawing our styles
 -- ---------------------------------------------------------------------------------------------
 
@@ -604,8 +746,13 @@ local function drawStyle(style)
 end
 
 -- The player's arrow where the player stands in the view, turned to the facing; hidden when the
--- view was dragged so far that the player is outside it.
+-- view was dragged so far that the player is outside it, and on the dots layer, whose own arrow
+-- is the player's mark.
 local function placeArrow()
+  if dots then
+    arrow:Hide()
+    return
+  end
   local c, px, py = B.Coords.Player()
   if not (c and c == cam.continent) then
     arrow:Hide()
@@ -662,6 +809,7 @@ function Mini.Render()
   local style = Mini.Style()
   Mini.SyncWatch()
   Mini.UpdateFoot()
+  Mini.SyncDots()
   if style == "game" then
     clip:Hide()
     catcher:Show()
@@ -673,9 +821,10 @@ function Mini.Render()
     ns.Tracked.Sync() -- stops: the game's minimap shows its own dots
     return
   end
-  catcher:Hide()
+  -- over the dots layer the game's minimap has the mouse; the wheel stays ours through the catcher
+  catcher:SetShown(dots ~= nil)
   clip:Show()
-  ns.Tracked.Sync() -- our tiles cover the game's dots: read them back (Tracked.lua)
+  ns.Tracked.Sync() -- our tiles cover the game's dots: the dots layer, or read them back (Tracked.lua)
   if following then
     local c, px, py = B.Coords.Player()
     if c then
@@ -715,10 +864,11 @@ end
 -- Moving: wheel, drag, Recentre, and the player's own movement
 -- ---------------------------------------------------------------------------------------------
 
--- Recentre is lit while the view looks elsewhere.
+-- Recentre shows only while the view looks elsewhere ("an easy button
+-- to center it on me and follow me again, only visible when I dragged it and am not centered").
 local function markRecentre()
   if recentre then
-    recentre:SetAlpha(following and 0.5 or 1)
+    recentre:SetShown(not following)
   end
 end
 
@@ -735,12 +885,28 @@ end
 
 -- Zooms by `delta` notches: at the cursor ("zoom exactly where my cursor
 -- is"), at the centre with `atCentre` (Shift + wheel). The game's minimap always centres on the
--- player: there the zoom has no point to keep.
+-- player: there the zoom has no point to keep. On the dots layer the wheel steps the game's six
+-- zooms and our tiles follow; one notch out at its widest zoom hides the layer, and from there
+-- our own zoom goes on (ADR 0078 decision 3).
 function Mini.Zoom(delta, atCentre)
-  if Mini.Style() == "game" then
+  if Mini.Style() == "game" or dots then
     local zoom = Minimap:GetZoom() or 0
     local levels = Minimap.GetZoomLevels and Minimap:GetZoomLevels() or 6
-    Minimap:SetZoom(math.max(0, math.min(levels - 1, zoom + delta)))
+    if not (dots and delta < 0 and zoom <= 0) then
+      Minimap:SetZoom(math.max(0, math.min(levels - 1, zoom + delta)))
+      if dots then
+        Mini.Render()
+      end
+      return
+    end
+    if InCombatLockdown() then
+      return -- the layer changes only out of a fight
+    end
+    following = false -- the layer hides, Recentre shows
+    markRecentre()
+    cam.level = math.max(Mini.LEVEL_MIN, cam.level + delta * Mini.LEVEL_STEP)
+    db().miniLevel = cam.level
+    Mini.Render()
     return
   end
   local level = math.max(Mini.LEVEL_MIN, math.min(Mini.LEVEL_MAX, cam.level + delta * Mini.LEVEL_STEP))
@@ -831,6 +997,9 @@ onUpdate = function(_, dt)
     following = true -- a zoom at the cursor or a drag during a walk: walking brings the view back
     markRecentre()
   end
+  if drag and drag.game and not IsMouseButtonDown("LeftButton") then
+    drag = nil -- begun on the game's minimap, which may not hear the button's release
+  end
   if drag then
     local x, y = GetCursorPosition()
     local s = frame:GetEffectiveScale() or 1
@@ -840,6 +1009,9 @@ onUpdate = function(_, dt)
         drag.moved = true
         following = false
         markRecentre() -- Recentre now has something to do
+        if dots then
+          Mini.Render() -- the dots layer goes at once: the game's dots stay on the player
+        end
       end
       cam:Pan(dx, -dy)
       drag.x, drag.y = x, y
@@ -906,8 +1078,7 @@ function Mini.CursorPoint()
   local s = Minimap:GetEffectiveScale() or 1
   local scale = ns.Minimap.Scale()
   local east, north = (x / s - mx) / scale, (y / s - my) / scale
-  local cvar = rawget(_G, "C_CVar")
-  if cvar and cvar.GetCVar and cvar.GetCVar("rotateMinimap") == "1" then
+  if rotating() then
     local f = B.Compat.GetPlayerFacing() or 0
     local cs, sn = math.cos(f), math.sin(f)
     east, north = east * cs - north * sn, east * sn + north * cs
@@ -1262,16 +1433,11 @@ local function build()
   frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", pos and pos[1] or -16, pos and pos[2] or -16)
   frame:Hide()
 
-  -- the search bar on top, Recentre at its end
+  -- the search bar on top
   bar = CreateFrame("Frame", nil, frame)
   bar:SetPoint("TOPLEFT", 0, 0)
   bar:SetPoint("TOPRIGHT", 0, 0)
   bar:SetHeight(Mini.BAR_H)
-  recentre = iconButton(bar, "waypoint", L["Recentre on you"], function()
-    Mini.Recentre()
-  end)
-  recentre:SetPoint("RIGHT", 0, 0)
-  markRecentre()
   -- what the minimap shows, and its mark (map.md "The minimap search")
   Mini.search = ns.Search.New({
     keep = Mini.KeepResult,
@@ -1281,7 +1447,7 @@ local function build()
     onEscape = Mini.ClearMark,
   }, bar, L["Search ..."], Mini.JumpTo)
   Mini.search.box:SetPoint("LEFT", bar, "LEFT", 0, 0)
-  Mini.search.box:SetPoint("RIGHT", recentre, "LEFT", -4, 0)
+  Mini.search.box:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
 
   -- the view: the game's minimap lives in it; our renderer's clip lies above it
   view = CreateFrame("Frame", nil, frame)
@@ -1411,6 +1577,30 @@ local function build()
   arrow = arrowLayer:CreateTexture(nil, "OVERLAY")
   arrow:SetTexture("Interface\\Minimap\\MinimapArrow")
   arrow:SetSize(24, 24)
+  -- Recentre: a round button on the view's lower edge, above the pins and the arrow, shown only
+  -- while the view looks elsewhere (a drag, a zoom at the cursor, a search jump); it is the clip's
+  -- child, so the game's style never shows it
+  recentre = iconButton(clip, "waypoint", L["Recentre on you"], function()
+    Mini.Recentre()
+  end)
+  recentre:SetSize(Mini.RECENTRE, Mini.RECENTRE)
+  recentre:SetFrameLevel((clip:GetFrameLevel() or 1) + 25)
+  recentre:SetPoint("BOTTOM", clip, "BOTTOM", 0, 8)
+  recentre.rim = S.fill(recentre, S.C.accent, "BACKGROUND")
+  recentre.face = S.fill(recentre, S.C.header, "BORDER")
+  recentre.face:ClearAllPoints()
+  recentre.face:SetPoint("TOPLEFT", 2, -2)
+  recentre.face:SetPoint("BOTTOMRIGHT", -2, 2)
+  recentre.icon:ClearAllPoints()
+  recentre.icon:SetPoint("TOPLEFT", 5, -5)
+  recentre.icon:SetPoint("BOTTOMRIGHT", -5, 5)
+  for _, t in ipairs({ recentre.rim, recentre.face }) do
+    local m = recentre:CreateMaskTexture()
+    m:SetTexture(Mini.MASKS.ROUND, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    m:SetAllPoints(t)
+    t:AddMaskTexture(m)
+  end
+  markRecentre()
   -- the game's minimap keeps its clicks (pings, tracked blips); only the wheel is ours
   catcher = CreateFrame("Frame", nil, view)
   catcher:SetAllPoints(view)
@@ -1485,6 +1675,7 @@ local function build()
     drag = nil
     drifting = false
     Mini.SyncWatch()
+    Mini.SyncDots() -- the ground on again (in a fight: at its end)
     ns.Tracked.Stop()
     -- what hung off the minimap goes with it
     ns.Pins.HideMiniCard()
@@ -1503,6 +1694,9 @@ local function build()
   frame:RegisterEvent("ZONE_CHANGED")
   frame:RegisterEvent("ZONE_CHANGED_INDOORS")
   frame:RegisterEvent("PLAYER_REGEN_ENABLED")
+  -- the dots layer: the game's zoom sets our scale; a turn shows a rotating minimap (G4)
+  frame:RegisterEvent("MINIMAP_UPDATE_ZOOM")
+  frame:RegisterEvent("PLAYER_STARTED_TURNING")
   frame:SetScript("OnEvent", function(_, event)
     if event == "PLAYER_STARTED_MOVING" or event == "PLAYER_CONTROL_LOST" then
       moving = event == "PLAYER_STARTED_MOVING" or moving
@@ -1511,6 +1705,7 @@ local function build()
       if not following and not drag then
         following = true
         markRecentre()
+        Mini.Render() -- at once: on the dots layer the dots come back with the view
       end
       Mini.StartTicks()
       ns.Tracked.Wake() -- new ground comes into the tracking's reach
@@ -1522,6 +1717,15 @@ local function build()
       if fn then
         fn()
       end
+      if dotsWait then
+        dotsWait = nil
+        Mini.SyncDots() -- also with the frame hidden, which draws nothing
+        Mini.Render()
+      end
+    elseif event == "MINIMAP_UPDATE_ZOOM" or event == "PLAYER_STARTED_TURNING" then
+      if dots then
+        Mini.Render()
+      end
     else
       Mini.Render()
     end
@@ -1531,6 +1735,7 @@ local function build()
   cam.level = tonumber(db().miniLevel) or 4
   Mini.view, Mini.clip, Mini.bar, Mini.foot, Mini.tools, Mini.catcher, Mini.arrow =
     view, clip, bar, foot, tools, catcher, arrow
+  Mini.recentre = recentre
 end
 
 -- The setting decides: on takes the game's minimap into ours, off gives it back.
@@ -1598,6 +1803,14 @@ table.insert(Map.onSetting, function(key, value)
     Mini.ApplyBorder()
   elseif key == "miniButtonBox" and ns.MiniButtons then
     ns.MiniButtons.Apply()
+  elseif key == "miniTracked" then
+    Mini.Render() -- the dots layer comes or goes
+  end
+end)
+-- logging out: the ground on again (it does not outlive a /reload, measured 14.11.2026)
+table.insert(Map.onLogout, function()
+  if dots and not InCombatLockdown() then
+    hideDots("hidden")
   end
 end)
 table.insert(Map.onDisable, function()

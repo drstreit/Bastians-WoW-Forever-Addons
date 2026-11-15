@@ -12,6 +12,7 @@ Voice.MOODS = { "polite", "roleplay", "snarky", "philosophic", "cheerful", "wear
 -- and once when it names something of the moment (Voice.SCENE)
 Voice.SPECIFIC = 3
 Voice.RECENT = 40 -- lines not repeated while another candidate exists
+Voice.SHOWN = 6 -- lines offered (two rings), kept out of the next offers while others exist
 Voice.MAX_BYTES = 255 -- one chat message
 Voice.NAME_ROOM = 40 -- what a written line leaves free for the names its slots bring
 
@@ -48,10 +49,27 @@ Voice.SLOTS = {
   y = "folk",
   s = "spell",
   a = "near",
+  k = "company", -- the other players at a fire (courtesy.md "Greeting the fire")
 }
 
--- the slots that name something of the moment: the spell, the place, the zone, the weather, the hour
-Voice.SCENE = { s = true, a = true, z = true, w = true, h = true }
+-- the slots that name something of the moment: the spell, the place, the zone, the weather, the hour,
+-- the company at a fire
+Voice.SCENE = { s = true, a = true, z = true, w = true, h = true, k = true }
+
+Voice.COMPANY_MAX = 4 -- names a line says at most; more are "everyone"
+
+-- The company at a fire in words (pure but for the language): "Alda", "Alda and Brann", "Alda,
+-- Brann and Cedric"; more than COMPANY_MAX "everyone"; nil for nobody (unknown, golden rule 2).
+function Voice.Company(names)
+  if type(names) ~= "table" or #names == 0 then
+    return nil
+  elseif #names > Voice.COMPANY_MAX then
+    return L["everyone"]
+  elseif #names == 1 then
+    return names[1]
+  end
+  return string.format(L["%s and %s"], table.concat(names, ", ", 1, #names - 1), names[#names])
+end
 
 local WEATHER_WORD = { rain = "rain", snow = "snow", sandstorm = "sand" }
 local POSSESSIVE = { m = "his", f = "her" }
@@ -72,7 +90,8 @@ function Voice.Complete(facts)
   facts.address = word(ADDRESS, facts.sex)
   facts.folk = word(FOLK, facts.sex)
   facts.weatherWord = word(WEATHER_WORD, facts.weather)
-  facts.daytime = facts.time and L[facts.time] or nil
+  local daytime = facts.dayWord or facts.time -- an invented moment (try) names only the time
+  facts.daytime = daytime and L[daytime] or nil
   facts.near = facts.subzone or facts.zone -- the nearest place with a name
   return facts
 end
@@ -149,14 +168,28 @@ local function score(line, facts)
   return weight
 end
 
+-- A line's key for the never-offered list: its words, or its action when it has none.
+function Voice.Key(line)
+  if type(line) ~= "table" then
+    return nil
+  elseif type(line[3]) == "string" and line[3] ~= "" then
+    return line[3]
+  elseif type(line.act) == "string" and line.act ~= "" then
+    return "act:" .. line.act
+  end
+  return nil
+end
+
 local function candidates(lines, facts, opts, useRecent)
   local byMood = {}
+  local never = opts.never
   for _, line in ipairs(lines) do
     local mood = line[2]
     local moodOn = opts.moods == nil or (opts.moods[mood] or 0) > 0
     local spoken = opts.via ~= "say" or line[3]
     local fresh = not (useRecent and opts.recent and opts.recent[line])
-    if moodOn and spoken and fresh then
+    local allowed = not (never and never[Voice.Key(line)])
+    if moodOn and spoken and fresh and allowed then
       local weight = score(line, facts)
       if weight then
         local bucket = byMood[mood]
@@ -220,12 +253,20 @@ function Voice.Choose(lines, facts, opts)
   return bucket[#bucket][1]
 end
 
--- Notes a line as said; the oldest is forgotten after RECENT.
-function Voice.Remember(recent, line)
+-- Notes a line as said (or offered); the oldest is forgotten after `limit` (default RECENT).
+function Voice.Remember(recent, line, limit)
   recent.order = recent.order or {}
+  if recent[line] then
+    for i, l in ipairs(recent.order) do
+      if l == line then
+        table.remove(recent.order, i) -- again: it moves to the newest place
+        break
+      end
+    end
+  end
   recent[line] = true
   table.insert(recent.order, line)
-  if #recent.order > Voice.RECENT then
+  if #recent.order > (limit or Voice.RECENT) then
     recent[table.remove(recent.order, 1)] = nil
   end
 end

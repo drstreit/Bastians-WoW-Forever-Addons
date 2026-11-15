@@ -724,29 +724,255 @@ def test_the_builds_step_numbers_are_put_beside_the_packs(tmp_path: Path):
     assert data_update.link_counts(packs) == {}
 
 
-def test_a_file_this_machine_did_not_send_is_named(capsys):
-    """plan-nightly-content.md F2: two machines with --send and two ledgers. CurseForge's file
-    list is the one place both show up."""
+def cf_name(version: str, client: str = "WoW Forever") -> str:
+    return f"Bastian's Data {version} ({client})"
+
+
+def test_curseforges_forever_files_are_listed_oldest_first(capsys):
+    """CurseForge's file list is the one place both machines' files show up
+    (plan-nightly-content.md F2); retail's Data files share the project and are left out."""
     config = {"projects": {"Bastians_Data": {"id": 2}}}
-    ledger = {"editions": [{"file_id": 100}, {"file_id": 120}, {"date": "x"}]}
     asked = []
 
     def transport(request):
         asked.append(request.full_url)
         files = [
-            {"id": 120, "displayName": "ours"},
-            {"id": 131, "displayName": "Bastian's Data 2.1.0+data.20261110.1 (WoW Forever)"},
-            {"id": 90, "displayName": "old"},
+            {
+                "id": 131,
+                "displayName": cf_name("2.1.0+data.20261110.1"),
+                "isAvailable": True,
+                "downloadUrl": "https://edge.forgecdn.net/files/131/x.zip",
+                "fileLength": 7,
+                "hashes": [{"value": "md5", "algo": 2}, {"value": "abc", "algo": 1}],
+            },
+            {"id": 132, "displayName": cf_name("2.1.0", "retail"), "isAvailable": True},
+            {"id": 120, "displayName": cf_name("2.0.0+data.20261109.1"), "fileDate": "x"},
         ]
         return json.dumps({"data": files}).encode()
 
-    (line,) = data_update.foreign_files(config, ledger, transport, key="k")
-    assert "Data file 131 (Bastian's Data 2.1.0+data.20261110.1 (WoW Forever))" in line
+    unknown = {"url": "", "length": 0, "sha1": ""}  # what CurseForge did not say
+    assert data_update.listed_files(config, transport, key="k") == [
+        {"id": 120, "name": cf_name("2.0.0+data.20261109.1"), "at": "x", "available": False}
+        | unknown,
+        {
+            "id": 131,
+            "name": cf_name("2.1.0+data.20261110.1"),
+            "at": "",
+            "available": True,
+            "url": "https://edge.forgecdn.net/files/131/x.zip",
+            "length": 7,
+            "sha1": "abc",  # algo 1 is SHA-1, the one the boot test's download is checked by
+        },
+    ]
     assert asked[0].endswith("/v1/mods/2/files?pageSize=20")
-    assert data_update.foreign_files(config, {"editions": []}, transport, key="k") == []
 
     def down(request):
         raise OSError("no route")
 
-    assert data_update.foreign_files(config, ledger, down, key="k") == []
+    assert data_update.listed_files(config, down, key="k") is None
     assert "file list was not read" in capsys.readouterr().out
+
+
+def test_a_file_another_machine_sent_is_taken_into_the_ledger():
+    """12.11.2026: the desktop's Suite release 2.4.1 sent Data as 2.4.1+data.20261112.1, and the
+    notebook's edition that evening went out under the same name, its ledger not knowing the
+    first. Both machines take the newer files in; a Suite release's is a line, any other an
+    alarm, once."""
+    ledger = {
+        "editions": [
+            {"date": "2026-11-11", "n": 1, "sha256": "a", "sent": True, "file_id": 100},
+            {"date": "2026-11-11", "n": 2, "sha256": "b", "sent": False},
+        ]
+    }
+    listed = [
+        {"id": 90, "name": cf_name("2.3.0+data.20261110.1"), "at": "", "available": True},
+        {"id": 100, "name": cf_name("2.3.0+data.20261111.1"), "at": "", "available": True},
+        {
+            "id": 110,
+            "name": cf_name("2.4.1+data.20261112.1"),
+            "at": "2026-11-12T11:20:39.993Z",
+            "available": True,
+        },
+        {"id": 120, "name": cf_name("2.4.1+data.20261112.2"), "at": "", "available": False},
+        {"id": 130, "name": "Bastian's Data (WoW Forever)", "at": "2026-11-13T09:00:00Z"},
+    ]
+    releases = {"2.4.1": "d" * 40, "2.3.0": "c" * 40}
+    added, alerts, lines = data_update.adopt(ledger, listed, releases.get)
+    assert [e["file_id"] for e in added] == [110, 120, 130]
+    assert ledger["editions"][-3:] == added  # after what the ledger had: the order of sending
+    release, second, unreadable = added
+    assert release == {
+        "by": "Suite release 2.4.1",
+        "commit": "d" * 40,
+        "date": "2026-11-12",
+        "file_id": 110,
+        "live": True,
+        "n": 1,
+        "name": cf_name("2.4.1+data.20261112.1"),
+        "sent": True,
+        "sent_at": "2026-11-12T11:20:39Z",
+    }
+    assert lines == [
+        f"CurseForge has Data file 110 ({cf_name('2.4.1+data.20261112.1')}), sent with the "
+        "Suite release 2.4.1 (dddddddd): taken into this machine's ledger"
+    ]
+    # the second file of a version is no release's: another machine sends editions
+    assert second["by"] == "another machine" and "live" not in second
+    assert (second["date"], second["n"]) == ("2026-11-12", 2)
+    assert (unreadable["date"], unreadable["n"]) == ("2026-11-13", 0)
+    assert len(alerts) == 2 and all("no Suite release explains" in a for a in alerts)
+    assert "Data file 120" in alerts[0] and "exactly one may hold [edition] send" in alerts[0]
+    # this machine's next edition is numbered after them, and nothing is taken twice
+    edition, new = data_update.next_edition(ledger, "e", "2026-11-12")
+    assert new and edition["n"] == 3
+    assert data_update.adopt(ledger, listed, releases.get) == ([], [], [])
+    # a ledger that never sent compares with nothing
+    assert data_update.adopt({"editions": [{"date": "x"}]}, listed, releases.get) == ([], [], [])
+    assert data_update.last_sent(ledger) is unreadable
+    assert data_update.last_built(ledger)["file_id"] == 100
+
+
+def test_adopt_foreign_writes_the_ledger_only_when_it_took_a_file(tmp_path: Path):
+    path = tmp_path / "editions.json"
+    own = {"date": "2026-11-12", "n": 1, "sha256": "a", "sent": True, "file_id": 100}
+    data_update.write_ledger(path, {"editions": [own]})
+    config = {"projects": {"Bastians_Data": {"id": 2}}}
+    files = [{"id": 101, "name": cf_name("2.4.1+data.20261112.1"), "at": "", "available": True}]
+    nothing = {"listed": lambda c: None, "release": lambda v: None}
+    assert data_update.adopt_foreign(config, path, **nothing) == ([], [])
+    assert len(data_update.read_ledger(path)["editions"]) == 1
+    alerts, lines = data_update.adopt_foreign(
+        config, path, listed=lambda c: files, release={"2.4.1": "d" * 40}.get
+    )
+    assert alerts == [] and "sent with the Suite release 2.4.1" in lines[0]
+    assert [e["file_id"] for e in data_update.read_ledger(path)["editions"]] == [100, 101]
+    before = path.stat().st_mtime_ns
+    taken = {"listed": lambda c: files, "release": lambda v: None}
+    assert data_update.adopt_foreign(config, path, **taken) == ([], [])
+    assert path.stat().st_mtime_ns == before
+
+
+def test_a_release_commit_is_found_by_its_exact_subject(tmp_path: Path):
+    import subprocess
+
+    repo = tmp_path / "r"
+    repo.mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), *args], capture_output=True, text=True, check=True
+        ).stdout
+
+    git("init", "-q", "-b", "main")
+    git("config", "user.email", "t@example.org")
+    git("config", "user.name", "T")
+    git("commit", "-q", "--allow-empty", "-m", "Release: Bastian's Suite 2.4.1\n\nnotes")
+    sha = git("rev-parse", "HEAD").strip()
+    git("commit", "-q", "--allow-empty", "-m", "Docs: Release: Bastian's Suite 2.4 is planned")
+    assert data_update.release_commit("2.4.1", repo) == sha
+    assert data_update.release_commit("2.4", repo) is None
+    assert data_update.release_commit("2.4.1", tmp_path / "none") is None
+
+
+def test_the_next_build_is_held_against_this_machines_last_edition(tmp_path: Path):
+    """A file another machine sent carries no row counts, book state or news: the build after it
+    is checked against the last edition this machine built, and numbered after the other's."""
+    ledger = tmp_path / "editions.json"
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    common = {
+        "ledger_path": ledger,
+        "book_toml": book_toml,
+        "today": "2026-11-07",
+        "book_states": tmp_path / "states",
+        "boot": False,
+    }
+    out = tmp_path / "out"
+    first, _ = data_update.update(
+        inputs(tmp_path), out, build=build_with_report("npc 10000, zone 71, area 809"), **common
+    )
+    data_update.mark_sent(ledger, first, 1)
+    data = data_update.read_ledger(ledger)
+    data["editions"].append(
+        {"by": "Suite release 9.9.9", "date": "2026-11-07", "n": 2, "sent": True, "file_id": 2}
+    )
+    data_update.write_ledger(ledger, data)
+    with pytest.raises(data_update.DataUpdateError, match="world npc 10000 -> 8000"):
+        data_update.update(
+            inputs(tmp_path), out, build=build_with_report("npc 8000, zone 71, area 809"), **common
+        )
+    third, uploads = data_update.update(
+        inputs(tmp_path), out, build=build_with_report("npc 9900, zone 71, area 809"), **common
+    )
+    assert third["n"] == 3 and uploads[0].version.endswith("+data.20261107.3")
+    # the news the own edition carried are not said again
+    assert "Four new farming pages." not in uploads[0].metadata["changelog"]
+
+
+def test_the_boot_tests_suite_is_the_one_players_install_today(tmp_path: Path):
+    """R5 (12.11.2026): CurseForge's newest approved Forever Suite file, kept in place of the old
+    one after its length and SHA-1 are checked; the kept copy when it is that file already."""
+    import hashlib
+
+    folder = tmp_path / "forever"
+    folder.mkdir()
+    (folder / "Bastians_Suite.zip").write_bytes(b"old")
+    meta = {"project": "Bastians_Suite", "version": "2.1.0", "file_id": 9523382}
+    (folder / "Bastians_Suite.json").write_text(json.dumps(meta), encoding="utf-8")
+    new = b"the suite 2.4.1"
+
+    def files(sha: str = hashlib.sha1(new).hexdigest(), length: int = len(new)):
+        return lambda config, project_name: [
+            {
+                "id": 9523382,
+                "name": "Bastian's Suite 2.1.0 (WoW Forever)",
+                "available": True,
+                "url": "u1",
+                "length": 3,
+                "sha1": "",
+            },
+            {
+                "id": 9572800,
+                "name": "Bastian's Suite 2.4.1 (WoW Forever)",
+                "available": True,
+                "url": "https://cdn/2.4.1.zip",
+                "length": length,
+                "sha1": sha,
+            },
+            {
+                "id": 9580000,
+                "name": "Bastian's Suite 2.5.0 (WoW Forever)",
+                "available": False,
+                "url": "u3",
+                "length": 1,
+                "sha1": "",
+            },  # not approved yet: no player has it
+        ]
+
+    fetched = []
+    fetch = lambda url: fetched.append(url) or new  # noqa: E731
+    zip_path, lines, alerts = data_update.current_suite(
+        {}, listed=files(), fetch=fetch, root=tmp_path
+    )
+    assert fetched == ["https://cdn/2.4.1.zip"] and alerts == []
+    assert zip_path == folder / "Bastians_Suite.zip" and zip_path.read_bytes() == new
+    assert lines == [
+        "boot test: Suite 2.4.1 (file 9572800) from CurseForge, was 2.1.0 (file 9523382)"
+    ]
+    kept = json.loads((folder / "Bastians_Suite.json").read_text(encoding="utf-8"))
+    assert kept == {"project": "Bastians_Suite", "version": "2.4.1", "file_id": 9572800}
+    # the next night: the kept copy is that file, nothing is fetched
+    again = data_update.current_suite({}, listed=files(), fetch=fetch, root=tmp_path)
+    assert again[1] == ["boot test: Suite 2.4.1 (file 9572800), as players have it"]
+    assert len(fetched) == 1
+    # a download that is not CurseForge's file is refused, and the old copy stays
+    (folder / "Bastians_Suite.json").write_text(json.dumps(meta), encoding="utf-8")
+    (folder / "Bastians_Suite.zip").write_bytes(b"old")
+    bad = data_update.current_suite({}, listed=files(sha="0" * 40), fetch=fetch, root=tmp_path)
+    assert (
+        bad[0].read_bytes() == b"old" and "SHA-1" in bad[2][0] and "players have 2.4.1" in bad[2][0]
+    )
+    # CurseForge does not answer: the kept copy, said so, no alarm
+    quiet = data_update.current_suite({}, listed=lambda config, project_name: None, root=tmp_path)
+    assert quiet[0] == folder / "Bastians_Suite.zip" and quiet[2] == []
+    assert "were not read" in quiet[1][0]

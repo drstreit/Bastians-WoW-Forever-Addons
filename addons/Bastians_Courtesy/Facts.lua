@@ -32,7 +32,9 @@ function Facts.Surroundings(facts)
   local subzone = Compat.SubZone()
   facts.subzone = subzone ~= facts.zone and subzone or nil
   facts.land = Model.LANDS[Compat.PlayerMap() or false]
-  facts.time = Model.DayKey(plain((Compat.Call("GetGameTime"))))
+  local hour = plain((Compat.Call("GetGameTime")))
+  facts.time = Model.DayKey(hour)
+  facts.dayWord = Model.DayWord(hour)
   local weather, intensity = Compat.Weather()
   facts.weather = weather
   facts.heavy = Model.Heavy(weather, intensity)
@@ -89,6 +91,7 @@ function Facts.Moment(event)
   local facts = Facts.Surroundings(Facts.Speaker())
   facts.situation = Model.Situation(event, Facts.BuffKind)
   facts.target = event.who
+  facts.company = event.company -- the other players at a fire, in words (Voice.Company)
   if event.kind == "buff" then -- what was cast, whether in a fight, whether more came with it
     local spell = plain(event.what)
     facts.spell = type(spell) == "string" and spell ~= "" and spell or nil

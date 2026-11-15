@@ -124,6 +124,20 @@ function Flight.Current()
   return flight
 end
 
+-- The flight in plain values (the `route` service's Flight, plan-chat-v3.md V23): { to (the
+-- destination's short name), seconds (left, from the learned time) }, each nil when unknown; nil
+-- without a flight.
+function Flight.Info()
+  if not flight then
+    return nil
+  end
+  local left
+  if type(flight.expected) == "number" then
+    left = math.max(0, math.floor(flight.expected - (GetTime() - flight.startedAt) + 0.5))
+  end
+  return { to = shortName(flight.to), seconds = left }
+end
+
 function Flight.IsShown()
   return frame ~= nil and frame:IsShown()
 end

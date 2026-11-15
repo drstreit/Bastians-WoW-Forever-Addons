@@ -81,6 +81,7 @@ ns.L:Register("ruRU", {
   ["On Bastian's styles, show the herbs, ore and creatures the game's tracking finds"] = "В стилях Bastian's показывать травы, руду и существ, которые находит поиск игры",
   ["this client does not let an addon read the minimap's dots"] = "этот клиент не позволяет аддону читать точки миникарты",
   ["the game refused the minimap sweep; it rests until the next login"] = "игра отклонила сканирование миникарты; оно приостановлено до следующего входа",
+  ["Forever's update of 7 November stopped addons reading the minimap's dots; Game minimap shows them"] = "обновление Forever от 7 ноября не даёт аддонам читать точки миникарты; Миникарта игры их показывает",
   ["needs Bastian's Data to tell herbs and ore from the rest"] = "нужен Bastian's Data, чтобы отличать травы и руду от остального",
   ["(Not at this zoom: zoom in or out to see it.)"] = "(Не при этом масштабе: приблизьте или отдалите карту, чтобы увидеть.)",
   ["Bookmark name"] = "Название закладки",
@@ -268,4 +269,6 @@ ns.L:Register("ruRU", {
   ["%d running"] = "Запущено: %d",
   ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "Секундомеры и обратные отсчеты в любом количестве. Подсвеченная кнопка: обратный отсчет закончился.",
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "Не удалось распознать это время. Попробуйте 5m, 1:30, 90s или 2h.",
+  -- the route's arrow at the minimap's rim (15.11.2026)
+  ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Во время маршрута стрелка у края миникарты указывает прямо на конец участка",
 })

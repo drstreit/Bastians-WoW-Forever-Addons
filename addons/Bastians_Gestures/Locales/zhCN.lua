@@ -40,6 +40,7 @@ ns.L:Register("zhCN", {
   ["Unknown command: %s"] = "未知命令：%s",
   ["morning"] = "早晨",
   ["afternoon"] = "下午",
+  ["day"] = "中午", -- %h at noon, 12:00 to 13:59
   ["evening"] = "傍晚",
   ["night"] = "夜晚",
   ["he"] = "他",

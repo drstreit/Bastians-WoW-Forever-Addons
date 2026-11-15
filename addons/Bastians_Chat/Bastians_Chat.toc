@@ -1,16 +1,16 @@
 ## Interface: 16001, 120105
 ## Title: Bastian's Chat
 ## IconTexture: Interface\AddOns\Bastians_Chat\Icon
-## Notes: The whole chat in movable windows with tabs, a Messenger for whispers, a spam filter, long texts and copying.
-## Notes-koKR: 탭이 있는 이동 가능한 창에 담긴 모든 대화, 귓속말 메신저, 스팸 필터, 긴 글과 복사.
-## Notes-zhCN: 整个聊天放进可移动、带标签页的窗口，另有密语信使、垃圾信息过滤、长文本和复制。
-## Notes-zhTW: 整個聊天放進可移動、帶分頁的視窗，另有密語信使、垃圾訊息過濾、長文字與複製。
-## Notes-deDE: Der ganze Chat in verschiebbaren Fenstern mit Reitern, ein Messenger für Flüstern, ein Spamfilter, lange Texte und Kopieren.
-## Notes-frFR: Toute la discussion dans des fenêtres déplaçables à onglets, une messagerie pour les chuchotements, un filtre anti-spam, les longs textes et la copie.
-## Notes-esES: Todo el chat en ventanas movibles con pestañas, un Messenger para los susurros, un filtro de spam, textos largos y copiar.
-## Notes-esMX: Todo el chat en ventanas movibles con pestañas, un Messenger para los susurros, un filtro de spam, textos largos y copiar.
-## Notes-ruRU: Весь чат в перемещаемых окнах с вкладками, мессенджер для личных сообщений, спам-фильтр, длинные тексты и копирование.
-## Notes-ptBR: Todo o chat em janelas móveis com abas, um Messenger para os sussurros, um filtro de spam, textos longos e cópia.
+## Notes: The whole chat in one window: your people, the streams and saved searches on the left, plain-word filters, a spam filter, long texts and copying.
+## Notes-koKR: 모든 채팅을 한 창에: 왼쪽에 사람들, 흐름, 저장된 검색, 쉬운 단어 필터, 스팸 필터, 긴 글과 복사.
+## Notes-zhCN: 整个聊天放在一个窗口：左侧是联系人、信息流和已保存的搜索，简单关键词筛选、垃圾信息过滤、长文本和复制。
+## Notes-zhTW: 整個聊天放在一個視窗：左側是聯絡人、訊息流與已儲存的搜尋，簡單關鍵字篩選、垃圾訊息過濾、長文字與複製。
+## Notes-deDE: Der ganze Chat in einem Fenster: links deine Leute, die Ströme und gespeicherte Suchen, Filter aus einfachen Wörtern, ein Spamfilter, lange Texte und Kopieren.
+## Notes-frFR: Toute la discussion dans une seule fenêtre : vos contacts, les flux et les recherches enregistrées à gauche, des filtres en mots simples, un filtre anti-spam, les longs textes et la copie.
+## Notes-esES: Todo el chat en una ventana: tu gente, los flujos y las búsquedas guardadas a la izquierda, filtros de palabras sencillas, un filtro de spam, textos largos y copiar.
+## Notes-esMX: Todo el chat en una ventana: tu gente, los flujos y las búsquedas guardadas a la izquierda, filtros de palabras sencillas, un filtro de spam, textos largos y copiar.
+## Notes-ruRU: Весь чат в одном окне: слева ваши люди, потоки и сохранённые поиски, фильтры простыми словами, спам-фильтр, длинные тексты и копирование.
+## Notes-ptBR: Todo o chat em uma janela: sua gente, os fluxos e as buscas salvas à esquerda, filtros de palavras simples, um filtro de spam, textos longos e cópia.
 ## Category: Bastian's Suite
 ## Category-koKR: Bastian's 애드온 모음
 ## Category-zhCN: Bastian's 插件合集
@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.4.1
+## Version: 2.5.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## SavedVariables: BastiansChatDB
@@ -41,8 +41,30 @@ Model.lua
 Compat.lua
 Rules.lua
 Keys.lua
+Words.lua
+Record.lua
+Intent.lua
+Relevance.lua
+Store.lua
+Rows.lua
+Find.lua
+Views.lua
+Cards.lua
+Requests.lua
+Answers.lua
+Combat.lua
+Away.lua
+Inbox.lua
+Front.lua
+Asks.lua
+Ledger.lua
 View.lua
-Messenger.lua
+People.lua
+Menus.lua
+Places.lua
+Basics.lua
+Fights.lua
+Decks.lua
 Feed.lua
 Junk.lua
 Chat.lua

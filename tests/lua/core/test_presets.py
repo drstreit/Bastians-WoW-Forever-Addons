@@ -2,9 +2,9 @@
 built-in presets write every look setting at once, a change by hand reads Custom, the current look
 can be saved as a preset of the player's own (account-wide) and deleted again; the skin of ADR
 0034 migrates; the Azeroth preset is gone and its profiles moved to WoW (migration 3); the suite's
-five fonts are in the font choices."""
+ten fonts are in the font choices (five more since V17, 13.11.2026)."""
 
-from harness import WowRuntime
+from harness import ADDONS, WowRuntime
 
 S = "Bastians.UI.Style"
 CORE = "Bastians:GetModule('Core')"
@@ -251,25 +251,42 @@ def test_the_seven_presets_each_name_a_look_and_a_scheme(core: WowRuntime):
     assert core.errors == []
 
 
-def test_the_suites_five_fonts_are_in_the_choices(core: WowRuntime):
+def test_the_suites_ten_fonts_are_in_the_choices(core: WowRuntime):
+    # five since 30.10.2026 (ADR 0038), five more 13.11.2026 (plan-chat-v3.md V17: "some variety")
     choices = dict(core.eval(f"{SET}.FontChoices()"))
     fonts = "Interface\\AddOns\\Bastians_Core\\Fonts\\"
+    folder = ADDONS / "Bastians_Core" / "Fonts"
     for file, name in (
         ("Inter.ttf", "Inter"),
         ("Exo2.ttf", "Exo 2"),
         ("RobotoCondensed.ttf", "Roboto Condensed"),
         ("Alegreya.ttf", "Alegreya"),
         ("Cinzel.ttf", "Cinzel"),
+        ("IBMPlexSans.ttf", "IBM Plex Sans"),
+        ("IBMPlexMono.ttf", "IBM Plex Mono"),
+        ("Oswald.ttf", "Oswald"),
+        ("VarelaRound.ttf", "Varela Round"),
+        ("Almendra.ttf", "Almendra"),
     ):
         assert choices[fonts + file] == name
-    # the heading font offers the same plus "the text font"
-    values = dict(
-        core.eval(
-            f"""(function()
-              for _, o in ipairs({CORE}.def.options) do
-                if o.key == "headingFont" then return o.values() end
-              end
-            end)()"""
+        # the file ships, its licence beside it
+        assert (folder / file).is_file(), file
+        assert (folder / file.replace(".ttf", "-LICENSE.txt")).is_file(), file
+    # the heading, the label and the number font offer the same plus "the text font"
+    for key in ("headingFont", "labelFont", "numberFont"):
+        values = dict(
+            core.eval(
+                f"""(function()
+                  for _, o in ipairs({CORE}.def.options) do
+                    if o.key == "{key}" then return o.values() end
+                  end
+                end)()"""
+            )
         )
-    )
-    assert values[""] == "Same as the text" and values[fonts + "Cinzel.ttf"] == "Cinzel"
+        assert values[""] == "Same as the text", key
+        assert values[fonts + "Cinzel.ttf"] == "Cinzel", key
+    # the two new look settings are look keys, nil in the built-ins: the suite looks as before
+    assert {"labelFont", "numberFont"} <= set(core.eval(f"{SET}.LOOK_KEYS").values())
+    for pid in ("modern-dark", "glass", "parchment", "wow"):
+        values = core.eval(f"{SET}.PresetValues('{pid}')")
+        assert values.labelFont is None and values.numberFont is None, pid

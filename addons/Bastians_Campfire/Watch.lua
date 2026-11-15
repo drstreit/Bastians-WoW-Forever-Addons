@@ -74,6 +74,66 @@ local function groupAtCamp()
   return n
 end
 
+-- Whether a unit's auras say it is at a fire: nearby, resting by it, or warmed by its buffs.
+local function atFire(unit)
+  for _, a in ipairs(B.Compat.UnitAuras(unit)) do
+    if a.spellId == Camp.NEARBY or Camp.RESTING[a.spellId] or Camp.BY_AURA[a.spellId] then
+      return true
+    end
+  end
+  return false
+end
+
+-- The units besides the group that the client may name: the target, the focus, the mouse.
+local OTHERS = { "target", "focus", "mouseover" }
+
+-- The other players at the fire, as the client names them (courtesy.md "Greeting the fire"): every
+-- player unit it gives (the group, the shown nameplates, target, focus, mouseover), once by GUID,
+-- that carries a fire's aura; their first names, sorted. Read live, never stored. Empty when the
+-- auras are hidden (a fight).
+function Watch.Company()
+  local out = {}
+  if B.Compat.AurasSecret() then
+    return out
+  end
+  local plain = B.Compat.Plain
+  local seen = {}
+  local function consider(unit)
+    if not (UnitExists(unit) and UnitIsPlayer(unit)) or UnitIsUnit(unit, "player") then
+      return
+    end
+    local guid = plain(UnitGUID(unit))
+    if not guid or seen[guid] then
+      return
+    end
+    seen[guid] = true
+    if atFire(unit) then
+      local name = plain((UnitName(unit)))
+      name = type(name) == "string" and name:match("^([^%s%-]+)") or nil -- the first name
+      if name then
+        out[#out + 1] = name
+      end
+    end
+  end
+  for _, unit in ipairs(GROUP) do
+    consider(unit)
+  end
+  for _, unit in ipairs(OTHERS) do
+    consider(unit)
+  end
+  local plates = rawget(_G, "C_NamePlate")
+  if plates and type(plates.GetNamePlates) == "function" then
+    for _, plate in ipairs(plates.GetNamePlates() or {}) do
+      local unit = type(plate) == "table" and plate.namePlateUnitToken or nil
+      if type(unit) == "string" then
+        consider(unit)
+      end
+    end
+  end
+  table.sort(out)
+  return out
+end
+
 -- The live name of a source unit (shown, never stored).
 local function hostName(unit)
   if type(unit) ~= "string" or unit == "player" or not UnitExists(unit) then
@@ -164,12 +224,13 @@ function Watch.Read()
     return -- hidden (combat): the last reading stands, Offer reads again after the fight
   end
   local nearby, resting, buffs, host = false, nil, {}, nil
-  local landed, violet = false, false
+  local landed, violet, restHost = false, false, nil
   for _, a in ipairs(B.Compat.UnitAuras("player")) do
     if a.spellId == Camp.NEARBY then
       nearby = true
     elseif Camp.RESTING[a.spellId] then
       resting = a.expires or true
+      restHost = a.source
     elseif a.spellId == Camp.VIOLET.aura then
       violet = true
     else
@@ -188,6 +249,7 @@ function Watch.Read()
     features[key] = true
   end
   groupBenefits(features)
+  local sat = resting ~= nil and st.resting == nil -- the rest aura landed: the player sat down
   local changed = nearby ~= st.nearby
     or (resting ~= nil) ~= (st.resting ~= nil)
     or violet ~= st.violet
@@ -204,6 +266,9 @@ function Watch.Read()
   end
   if nearby or resting or landed then
     st.seen = now()
+  end
+  if sat then
+    B:Fire("BASTIANS_CAMP_SAT", hostName(restHost)) -- Courtesy greets the fire (courtesy.md)
   end
   if next(buffs) and not st.warm then
     st.warm = true

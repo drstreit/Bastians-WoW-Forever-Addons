@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.5.0:1",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "On WoW Forever, Bastian's minimap styles show what your tracking finds again (herbs, ore, tracked creatures), with your group and pings: since the game's update of 7 November addons cannot read these dots, so the game's minimap now draws them over our map, and the mouse wheel steps through the game's zooms while they show.",
+  },
+  {
+    id = "2.5.0:2",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = 'The minimap shows a "Recentre on you" button on the map itself whenever you dragged or zoomed the view away from your character.',
+  },
+  {
     id = "2.4.1:1",
     date = "2026-11-12",
     version = "2.4.1",
@@ -171,17 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "Three new optional map styles, Modern, Pencil and Parchment, drawn by Bastian from the world itself, one addon each (about 100 MB); pick them in the map's style bar.",
-  },
-  {
-    id = "1.0.0-beta.13:7",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "The map's layer bar shows one icon per layer, with the map style and the bookmarks behind one icon each.",
-  },
-  {
-    id = "1.0.0-beta.13:8",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "The map can keep you in the middle while you move (the Centred button).",
   },
 }

@@ -350,6 +350,18 @@ define("shared", "UnitEntity", function(unit)
   return Compat.EntityFromGUID(type(UnitGUID) == "function" and plain(UnitGUID(unit)) or nil)
 end)
 
+-- How the client ranks a unit: "normal", "elite", "rare", "rareelite", "worldboss", "trivial",
+-- "minus"; nil without a unit or the call (Helpers' rare finder; the retail family's
+-- UnitClassification, assumed on Forever until seen, forever-api.md).
+define("shared", "UnitClassification", function(unit)
+  local f = rawget(_G, "UnitClassification")
+  if not (type(f) == "function" and type(UnitExists) == "function" and UnitExists(unit)) then
+    return nil
+  end
+  local rank = plain(f(unit))
+  return type(rank) == "string" and rank ~= "" and rank or nil
+end)
+
 define("shared", "TargetEntity", function()
   return Compat.UnitEntity("target")
 end)
@@ -2354,12 +2366,21 @@ define("shared", "GreetingQuests", function()
   local active, available = {}, {}
   local numActive, activeTitle = api("GetNumActiveQuests"), api("GetActiveTitle")
   local numAvailable, availableTitle = api("GetNumAvailableQuests"), api("GetAvailableTitle")
+  -- the quest's id where the client names it (the retail family's GetActiveQuestID; not in either
+  -- dump, so read guarded): two quests of one title stay apart
+  local activeID = api("GetActiveQuestID")
   for i = 1, numActive and numActive() or 0 do
     local title, complete
     if activeTitle then
       title, complete = activeTitle(i)
     end
-    active[#active + 1] = { index = i, title = plain(title), complete = complete and true or false }
+    local id = activeID and plain(activeID(i)) or nil
+    active[#active + 1] = {
+      index = i,
+      title = plain(title),
+      complete = complete and true or false,
+      questID = type(id) == "number" and id > 0 and id or nil,
+    }
   end
   for i = 1, numAvailable and numAvailable() or 0 do
     available[#available + 1] = { index = i, title = availableTitle and plain(availableTitle(i)) or nil }

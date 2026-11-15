@@ -40,6 +40,7 @@ local strings = {
   ["Unknown command: %s"] = "Comando desconocido: %s",
   ["morning"] = "mañana",
   ["afternoon"] = "tarde",
+  ["day"] = "día", -- %h at noon, 12:00 to 13:59
   ["evening"] = "anochecer",
   ["night"] = "noche",
   ["he"] = "él",

@@ -123,6 +123,17 @@ function Model.DayKey(hour)
   return "night"
 end
 
+-- The word a line's %h says for the hour: the time of day's key, but "day" at noon, 12:00 to 13:59
+--. The
+-- conditions keep DayKey's four times. Nil when the hour is unknown.
+function Model.DayWord(hour)
+  hour = tonumber(hour)
+  if hour and hour >= 12 and hour < 14 then
+    return "day"
+  end
+  return Model.DayKey(hour)
+end
+
 function Model.IsRude(text)
   local lower = string.lower(text or "")
   for _, word in ipairs(Model.RUDE) do
@@ -184,6 +195,8 @@ function Model.Situation(event, kindOf)
     return of and ("buff." .. of) or "buff"
   elseif kind == "rez" or kind == "camp" then
     return kind
+  elseif kind == "fire" then
+    return "camp.greet" -- I sat down by a fire (courtesy.md "Greeting the fire")
   elseif kind == "emote" then
     if Model.IsRude(event.text) then
       return "emote.rude"

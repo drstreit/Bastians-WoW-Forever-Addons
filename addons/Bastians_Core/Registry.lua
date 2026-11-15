@@ -1640,6 +1640,7 @@ B.SERVICES = {
   waypoint = true, -- the player's own waypoint on Bastian's Map (#14, 04.11.2026)
   mapPicture = true, -- the chosen map style's cells for a picture (the Map, ADR 0056, PA6)
   account = true, -- the account's gold over its characters (Alts, #14, 04.11.2026)
+  courtesy = true, -- a line of the player's moods for thanks, gz, hi (Courtesy, plan-chat-v3.md V23)
 }
 local services = {} -- name -> array of { owner, impl, priority }
 local active = {} -- name -> impl

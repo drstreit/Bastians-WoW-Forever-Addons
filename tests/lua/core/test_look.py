@@ -261,3 +261,57 @@ def test_the_chosen_tab_wears_the_accent_frame(wow: WowRuntime):
     assert wow.eval(f"{PAINTED}[LookTest.b.face][2]") == 0.16
     assert wow.eval(f"{PAINTED}[LookTest.b.icon][1] == {S}.C.accent") is True
     assert wow.errors == []
+
+
+def test_the_segmented_switch_the_flat_tab_and_the_lit_lock_in_every_look(wow: WowRuntime):
+    """plan-chat-v3.md V27 ("The button look all the same color - hard
+    to read"): a switch whose chosen part is filled, a flat tab with a line of its colour and a
+    count, a toggle action lit while on; each drawn by every look."""
+    boot(wow)
+    wow.execute(
+        f"""
+        LookTest = {{ changed = {{}} }}
+        LookTest.seg = {S}.segmented(UIParent, {{
+          items = {{ {{ id = 'a', label = 'Inbox' }}, {{ id = 'b', label = 'Switchboard' }} }},
+          value = 'a',
+          onChange = function(_, id) table.insert(LookTest.changed, id) end,
+        }})
+        LookTest.tab = {S}.tab(UIParent, {{ label = 'Market', count = 3, line = 'tier3', on = true }})
+        LookTest.lock = {S}.action(UIParent, {{ icon = 'lock', label = 'Lock', only = true, toggle = true }})
+        """
+    )
+    for preset in ("modern-dark", "glass", "parchment", "wow"):
+        assert wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')") is True
+        a, b = "LookTest.seg:Part('a')", "LookTest.seg:Part('b')"
+        assert wow.eval(f"{a}.fill:IsShown()") is True, preset
+        assert wow.eval(f"{b}.fill:IsShown()") is False, preset
+        assert wow.eval(f"{S}.inked[{a}.label] ~= {S}.inked[{b}.label]") is True, preset
+        width = wow.eval("LookTest.seg:GetWidth()")
+        assert width >= wow.eval(f"{a}:GetWidth()") + wow.eval(f"{b}:GetWidth()") - 0.5, preset
+        # the flat tab: no plate, no frame, the line under the chosen one, the count after it
+        assert wow.eval(f"{PAINTED}[LookTest.tab.face][2]") == 0, preset
+        assert wow.eval(f"{PAINTED}[LookTest.tab.edges][2]") == 0, preset
+        assert wow.eval("LookTest.tab.under:IsShown()") is True, preset
+        assert wow.eval(f"{PAINTED}[LookTest.tab.under][1] == {S}.Tok(LookTest.tab, 'tier3')")
+        assert wow.eval("LookTest.tab.count:GetText()") == "3", preset
+        # the lock's pictogram alone, dim while off
+        assert wow.eval("LookTest.lock.label:GetText()") == "", preset
+        assert wow.eval(f"{PAINTED}[LookTest.lock.icon][1] == {S}.Tok(LookTest.lock, 'dim')")
+    upper = {"modern-dark": "MARKET", "glass": "MARKET", "parchment": "Market", "wow": "Market"}
+    for preset, label in upper.items():
+        wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')")
+        assert wow.eval("LookTest.tab.label:GetText()") == label, preset  # capitals as the sections
+    wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-dark')")
+    wow.execute("LookTest.lock:SetOn(true)")
+    assert wow.eval(f"{PAINTED}[LookTest.lock.icon][1] == {S}.C.accent") is True
+    # a click on the other part chooses it and says so; on the chosen one nothing happens
+    wow.execute("LookTest.seg:Part('b'):Click(); LookTest.seg:Part('b'):Click()")
+    assert wow.eval("LookTest.changed[1]") == "b" and wow.eval("#LookTest.changed") == 1
+    assert wow.eval("LookTest.seg:Part('b').fill:IsShown()") is True
+    wow.execute("LookTest.seg:SetValue(nil)")  # none chosen: no part filled
+    assert wow.eval("LookTest.seg:Part('a').fill:IsShown()") is False
+    assert wow.eval("LookTest.seg:Part('b').fill:IsShown()") is False
+    wow.execute("LookTest.tab:SetOn(false)")
+    assert wow.eval("LookTest.tab.under:IsShown()") is False
+    assert wow.eval(f"{S}.inked[LookTest.tab.label] == {S}.C.dim") is True
+    assert wow.errors == []

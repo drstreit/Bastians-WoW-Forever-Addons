@@ -90,10 +90,17 @@ local function row(i)
   return r
 end
 
+local refresh
+
+-- The lines drawn again, in the palette of the window (Chat's look, V13).
 function Junk.Refresh()
   if not win then
     return
   end
+  return S.WithPalette(S.PaletteOf(win.frame), refresh)
+end
+
+function refresh()
   -- our own label
   senders:SetLabel(string.format(L["Blocked senders: %d"], Junk.CountSenders()))
   local fit = math.max(1, math.floor(((win.list:GetHeight() or 200) - 4) / Junk.ROW_H))
@@ -244,6 +251,7 @@ local function build()
     Junk.Refresh()
   end)
   Junk.win = win -- tests reach the window's controls
+  ns.View.Dress(win) -- Chat's look (V13), once its parts are built
   return win
 end
 

@@ -97,6 +97,11 @@ function S.applyShape()
   end
 end
 
+-- The theme's own radii, before a look's (S.RadiusOf for a frame of a look of its own).
+function S.ThemeShape()
+  return themeShape
+end
+
 -- Writes a theme's values into the token tables (an unknown id falls back to the first theme).
 local function loadTheme(id)
   local theme = themeById(id)
@@ -194,10 +199,54 @@ local function under(region, frame)
   return false
 end
 
+-- Whether a region stands under `frame` with no frame of a palette of its own between them (a
+-- part that keeps its own palette, as the chat's stream on the game's dark ground, keeps it).
+local function ownedBy(region, frame)
+  local f = region
+  for _ = 1, 40 do
+    if not f then
+      return false
+    end
+    if f == frame then
+      return true
+    end
+    if f ~= region and f.palette ~= nil then
+      return false
+    end
+    f = f.GetParent and f:GetParent() or nil
+  end
+  return false
+end
+
+-- The same for a painted part: a shape (S.roundFill, S.roundEdges) is no region and has no
+-- parent; it stands in its frame, whose own palette counts too. Found 13.11.2026 (V25): a
+-- window of a light look of its own kept its header's and its panels' rounded fills in the
+-- suite's dark colours, so the header's buttons read dark on dark.
+local function paintOwnedBy(part, frame)
+  if getmetatable(part) ~= S.Shape then
+    return ownedBy(part, frame)
+  end
+  local f = part.frame
+  for _ = 1, 40 do
+    if not f then
+      return false
+    end
+    if f == frame then
+      return true
+    end
+    if f.palette ~= nil then
+      return false
+    end
+    f = f.GetParent and f:GetParent() or nil
+  end
+  return false
+end
+
 -- A frame changes its palette (`from` and `to` are palettes, nil for the theme): what the kit
--- drew under it with a token takes the same token of the new one, and its widgets draw again.
--- The frame's own `palette` is set by the caller first. Walks everything the kit drew once, so
--- it is for a changed option, never for a layout.
+-- drew under it with a token takes the same token of the new one, and its widgets draw again;
+-- a part under it with a palette of its own keeps that one. The frame's own `palette` is set by
+-- the caller first. Walks everything the kit drew once, so it is for a changed option, never for
+-- a layout.
 function S.Repalette(frame, from, to)
   local old, new = from and from.C or themeC, to and to.C or themeC
   local names = {}
@@ -206,19 +255,52 @@ function S.Repalette(frame, from, to)
   end
   for tex, paint in pairs(S.painted) do
     local name = names[paint[1]]
-    if name and under(tex, frame) then
+    if name and paintOwnedBy(tex, frame) then
       S.tint(tex, new[name], paint[2])
     end
   end
   for fs, color in pairs(S.inked) do
     local name = names[color]
-    if name and under(fs, frame) then
+    if name and ownedBy(fs, frame) then
       S.ink(fs, new[name])
     end
   end
   for widget in pairs(S.widgets or {}) do
     if under(widget, frame) then
       S.Draw(widget)
+    end
+  end
+end
+
+-- A frame draws in a preset of its own (ADR 0046's look per window; plan-chat-v3.md §9, V13):
+-- `values` a preset's values (Bastians.UI.Settings.PresetValues), its scheme the frame's palette,
+-- its renderer the frame's look; nil puts the suite's back. What the kit drew under the frame
+-- takes the new tokens, its widgets and their corners draw again. For a changed option, never
+-- for a layout (it walks everything the kit drew).
+function S.SetFramePreset(frame, values)
+  local from = frame.palette
+  local to = values and values.theme and S.Palette(values.theme) or nil
+  frame.palette = to
+  frame.look = values and values.look or nil
+  frame.presetValues = values or nil
+  if values then
+    S.anyLook = true
+  end
+  S.Repalette(frame, from, to)
+  for shape in pairs(S.shapes or {}) do
+    if shape.frame and under(shape.frame, frame) then
+      shape:Layout()
+    end
+  end
+  -- its fonts (V17): every kit text under the frame takes the font of its role as the frame has it
+  for fs in pairs(S.fonts) do
+    if under(fs, frame) then
+      S.refont(fs)
+    end
+  end
+  for fs in pairs(S.headings) do
+    if under(fs, frame) then
+      S.applyHeading(fs)
     end
   end
 end
@@ -344,16 +426,136 @@ function S.size(base)
   return math.floor((base or 12) * S.scale() + 0.5)
 end
 
+-- Fonts per window (plan-chat-v3.md V17, ADR 0046): a kit text has a role, each role a look
+-- setting. `text` (S.text) and `heading` (S.heading) as before; `label` the small heads (a
+-- section's title, a tab's label), `number` counts, times and prices. nil for label and number is
+-- the text font, so a preset without them looks as it did.
+S.FONT_KEYS = { text = "font", heading = "headingFont", label = "labelFont", number = "numberFont" }
+S.LABEL_STEP = 2 -- px: a label in a face of its own reads small (the condensed ones)
+S.roles = setmetatable({}, { __mode = "k" }) -- [font string] = "label" | "number"; nil: text
+
+-- The values of the nearest frame up from `region` with a preset of its own, nil for the suite's.
+local function ownValues(region)
+  if not S.anyLook then -- no frame took a preset of its own (S.SetFramePreset)
+    return nil
+  end
+  local f = region
+  for _ = 1, 40 do
+    if not f then
+      return nil
+    end
+    local v = f.presetValues
+    if v then
+      return v
+    end
+    f = f.GetParent and f:GetParent() or nil
+  end
+  return nil
+end
+
+-- The font of a role where `region` stands: its window's preset, else the suite's profile. A
+-- client with its own script (S.CLIENT_FONT) keeps the client's font for every role.
+function S.FontOf(region, role)
+  if S.CLIENT_FONT then
+    return S.font()
+  end
+  local key = S.FONT_KEYS[role or "text"] or "font"
+  local own = region and ownValues(region)
+  if own then
+    local text = own.font or S.font()
+    return key ~= "font" and own[key] or text
+  end
+  if key == "font" then
+    return S.font()
+  elseif key == "headingFont" then
+    return S.headingFont()
+  end
+  return S.Skin(key) or S.font()
+end
+
+-- A kit text's font and size again, by its role and where it stands.
+function S.refont(fs)
+  local base = S.fonts[fs]
+  if not base then
+    return
+  end
+  local role = S.roles[fs] or "text"
+  local path = S.FontOf(fs, role)
+  if role == "label" and path ~= S.FontOf(fs, "text") then
+    base = base + S.LABEL_STEP
+  end
+  fs:SetFont(path, S.size(base), "")
+end
+
+-- Gives a kit text its role ("text", "label", "number") and the font of it.
+function S.SetRole(fs, role)
+  S.roles[fs] = (role and role ~= "text") and role or nil
+  S.refont(fs)
+  return fs
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- LibSharedMedia (plan-chat-v3.md V25, the look engine's skinning): borders, backgrounds and
+-- sounds other addons register. Optional: without the library every answer is nil (golden rule 4).
+-- ---------------------------------------------------------------------------------------------
+
+local function sharedMedia()
+  local stub = rawget(_G, "LibStub")
+  if type(stub) ~= "table" and type(stub) ~= "function" then
+    return nil
+  end
+  local ok, lsm = pcall(stub, "LibSharedMedia-3.0", true)
+  return ok and type(lsm) == "table" and lsm or nil
+end
+
+-- Is LibSharedMedia loaded?
+function S.HasMedia()
+  return sharedMedia() ~= nil
+end
+
+-- The file of a medium of LibSharedMedia (`kind` "border", "background", "sound", ...) by its
+-- name, nil without the library, the name, or for "none".
+function S.Media(kind, name)
+  local lsm = sharedMedia()
+  if not lsm or type(name) ~= "string" or name == "" or name == "none" then
+    return nil
+  end
+  local ok, path = pcall(lsm.Fetch, lsm, kind, name, true)
+  return ok and type(path) == "string" and path ~= "" and path or nil
+end
+
+-- The names of a kind of medium, sorted; an empty list without the library.
+function S.MediaNames(kind)
+  local lsm = sharedMedia()
+  local out = {}
+  if lsm and type(lsm.HashTable) == "function" then
+    local ok, list = pcall(lsm.HashTable, lsm, kind)
+    for name in pairs(ok and type(list) == "table" and list or {}) do
+      if type(name) == "string" then
+        out[#out + 1] = name
+      end
+    end
+  end
+  table.sort(out)
+  return out
+end
+
+-- A text that keeps a font of its own (the chat's lines): no font or preset change touches it.
+function S.OwnFont(fs)
+  S.fonts[fs] = nil
+  S.roles[fs] = nil
+  return fs
+end
+
 -- Sets a kit text's base size (scaled), kept for the next font or size change.
 function S.setSize(fs, base)
   S.fonts[fs] = base
-  fs:SetFont(S.font(), S.size(base), "")
+  S.refont(fs)
 end
 
 function S.applyFont()
-  local path = S.font()
-  for fs, size in pairs(S.fonts) do
-    fs:SetFont(path, S.size(size), "")
+  for fs in pairs(S.fonts) do
+    S.refont(fs)
   end
   for fs in pairs(S.headings) do
     S.applyHeading(fs)
@@ -383,8 +585,9 @@ S.SKIN_DEFAULTS = {
   gameFrames = false, -- the game's own windows and insets
 }
 S.HEADING_FONT = "Fonts\\MORPHEUS.TTF"
--- The suite's own fonts (ADR 0038, owner: "add 5 more"; SIL Open Font License, Fonts/):
--- { path, name }, listed after the client's four. None has Hangul or Han (S.CLIENT_FONT keeps the client's).
+-- The suite's own fonts (ADR 0038, owner: "add 5 more"; 13.11.2026, plan-chat-v3.md V17: "5 new
+-- open fonts - we should give some variety"; SIL Open Font License, Fonts/): { path, name }, listed
+-- after the client's four. None has Hangul or Han (S.CLIENT_FONT keeps the client's).
 local FONT_DIR = "Interface\\AddOns\\Bastians_Core\\Fonts\\" -- beside Media, like the Library's
 S.ADDON_FONTS = {
   { FONT_DIR .. "Inter.ttf", "Inter" },
@@ -392,7 +595,14 @@ S.ADDON_FONTS = {
   { FONT_DIR .. "RobotoCondensed.ttf", "Roboto Condensed" },
   { FONT_DIR .. "Alegreya.ttf", "Alegreya" },
   { FONT_DIR .. "Cinzel.ttf", "Cinzel" },
+  { FONT_DIR .. "IBMPlexSans.ttf", "IBM Plex Sans" },
+  { FONT_DIR .. "IBMPlexMono.ttf", "IBM Plex Mono" },
+  { FONT_DIR .. "Oswald.ttf", "Oswald" },
+  { FONT_DIR .. "VarelaRound.ttf", "Varela Round" },
+  { FONT_DIR .. "Almendra.ttf", "Almendra" },
 }
+S.SANS_FONT = FONT_DIR .. "IBMPlexSans.ttf" -- the artifact's text (Bastian's Chat, V17)
+S.MONO_FONT = FONT_DIR .. "IBMPlexMono.ttf" -- the artifact's numbers (Bastian's Chat, V17)
 S.SERIF_FONT = FONT_DIR .. "Alegreya.ttf" -- the Parchment preset's headings (plan-round4 H4)
 S.ORNAMENT = "Interface\\AddOns\\Bastians_Core\\Media\\Ornament"
 S.GLOW = "Interface\\AddOns\\Bastians_Core\\Media\\Glow" -- a soft disc behind the plate (ADR 0038)
@@ -640,8 +850,8 @@ function S.applyHeading(fs)
   if not h then
     return
   end
-  local font = S.headingFont()
-  fs:SetFont(font, S.size(font ~= S.font() and h.bigSize or h.size), "")
+  local font = S.FontOf(fs, "heading") -- the window's (V17), else the suite's
+  fs:SetFont(font, S.size(font ~= S.FontOf(fs, "text") and h.bigSize or h.size), "")
   S.ink(fs, h.color)
 end
 
@@ -678,6 +888,69 @@ end
 function S.Light(frame)
   local t = frame and S.Tok(frame, "text") or S.C.text
   return (0.299 * t[1] + 0.587 * t[2] + 0.114 * t[3]) < 0.5
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Readable colours on a light ground (plan-chat-v3.md V25, "full skinning"): the game writes its
+-- colours for its own dark frames (a common item's white link, a priest's white name, a rogue's
+-- pale yellow, the say channel's white). On a light look such a colour is darkened just as far as
+-- 4.5:1 on the window's panel needs (WCAG, as the theme compiler checks the tokens); on a dark
+-- look nothing changes.
+-- ---------------------------------------------------------------------------------------------
+
+local function linear(c)
+  return c <= 0.03928 and c / 12.92 or ((c + 0.055) / 1.055) ^ 2.4
+end
+
+local function luminance(r, g, b)
+  return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b)
+end
+
+S.READABLE = 4.5
+
+-- A colour readable on `ground` ({ r, g, b }), the colour itself when it already is.
+function S.ReadableColor(r, g, b, ground)
+  local lg = luminance(ground[1], ground[2], ground[3])
+  for step = 0, 40 do
+    local k = 1 - step / 40
+    local lc = luminance(r * k, g * k, b * k)
+    local hi, lo = math.max(lc, lg), math.min(lc, lg)
+    if (hi + 0.05) / (lo + 0.05) >= S.READABLE then
+      return r * k, g * k, b * k
+    end
+  end
+  return 0, 0, 0
+end
+
+local readable = {} -- [ground table] = { [RRGGBB] = RRGGBB }
+
+-- A text's colour codes made readable where `frame` stands (a light look only).
+function S.ReadableText(text, frame)
+  if type(text) ~= "string" or not text:find("|c", 1, true) or not S.Light(frame) then
+    return text
+  end
+  local ground = S.Tok(frame, "panel")
+  local cache = readable[ground]
+  if not cache then
+    cache = {}
+    readable[ground] = cache
+  end
+  return (
+    text:gsub("|c(%x%x)(%x%x%x%x%x%x)", function(alpha, rgb)
+      local out = cache[rgb]
+      if not out then
+        local r, g, b = S.ReadableColor(
+          tonumber(rgb:sub(1, 2), 16) / 255,
+          tonumber(rgb:sub(3, 4), 16) / 255,
+          tonumber(rgb:sub(5, 6), 16) / 255,
+          ground
+        )
+        out = string.format("%02x%02x%02x", r * 255 + 0.5, g * 255 + 0.5, b * 255 + 0.5)
+        cache[rgb] = out
+      end
+      return "|c" .. alpha .. out
+    end)
+  )
 end
 
 -- Shows or hides a texture, a frame or one of the kit's shapes (they have Show and Hide only).
@@ -849,8 +1122,8 @@ end
 
 function S.text(parent, size, color, layer)
   local fs = parent:CreateFontString(nil, layer or "OVERLAY")
-  fs:SetFont(S.font(), S.size(size or 12), "")
   S.fonts[fs] = size or 12
+  S.refont(fs) -- the font of its window (V17)
   S.ink(fs, color or S.C.text)
   fs:SetJustifyH("LEFT")
   S.applyShadow(fs)
@@ -930,7 +1203,7 @@ function Shape:Radius()
   if r == "pill" then
     r = math.floor((self.frame:GetHeight() or 0) / 2)
   elseif type(r) == "string" then
-    r = S.SHAPE[r] or 0
+    r = S.RadiusOf(self.frame, r) or 0
   end
   r = r or 0
   local w, h = self.frame:GetWidth() or 0, self.frame:GetHeight() or 0
@@ -938,6 +1211,27 @@ function Shape:Radius()
     r = math.min(r, math.floor(math.min(w, h) / 2)) -- a small frame never folds over itself
   end
   return math.max(0, r)
+end
+
+-- A corner radius by its name as a frame sees it: the suite's (S.SHAPE), or for a frame of a look
+-- of its own (S.SetFramePreset) the theme's radii under that look's own.
+function S.RadiusOf(frame, key)
+  local id = S.anyLook and frame and S.LookOf and S.LookOf(frame) or nil
+  if not id or id == S.LookId() then
+    return S.SHAPE[key]
+  end
+  local own = S.LOOKS[id] and S.LOOKS[id].shape or {}
+  if own[key] then
+    return own[key]
+  end
+  if key == "tile" then
+    return own.radiusSmall or themeShape.radiusSmall or S.SHAPE.radiusSmall
+  end
+  local theme = themeShape[key]
+  if theme == nil then
+    return S.SHAPE[key]
+  end
+  return theme
 end
 
 function Shape:Rounded(corner)

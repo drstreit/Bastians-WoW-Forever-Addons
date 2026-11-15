@@ -55,6 +55,7 @@ import tempfile
 import time
 import tomllib
 import urllib.error
+import urllib.request
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -191,16 +192,27 @@ def write_ledger(path: Path, ledger: dict) -> None:
 
 def next_edition(ledger: dict, sha256: str, today: str) -> tuple[dict, bool]:
     """The edition for data with this hash: the last one when nothing changed, else a new one,
-    numbered from 1 per day. -> (edition, is_new)."""
+    numbered from 1 per day, after every number of the day the ledger holds (another machine's
+    file taken in by adopt() among them). -> (edition, is_new)."""
     editions = ledger["editions"]
-    if editions and editions[-1]["sha256"] == sha256:
+    if editions and editions[-1].get("sha256") == sha256:
         return editions[-1], False
-    n = 1 + sum(1 for e in editions if e["date"] == today)
+    numbers = [int(e.get("n") or 0) for e in editions if e.get("date") == today]
+    n = 1 + max([len(numbers), *numbers])
     return {"date": today, "n": n, "sha256": sha256, "sent": False}, True
 
 
 def last_sent(ledger: dict) -> dict | None:
+    """The last edition on CurseForge that the ledger knows, whoever sent it."""
     sent = [e for e in ledger["editions"] if e.get("sent")]
+    return sent[-1] if sent else None
+
+
+def last_built(ledger: dict) -> dict | None:
+    """The last sent edition this machine built: what the next build is held against (its book
+    state, row counts, step numbers, news and commit). A file another machine sent (adopt) has
+    none of these, so it is passed over."""
+    sent = [e for e in ledger["editions"] if e.get("sent") and e.get("sha256")]
     return sent[-1] if sent else None
 
 
@@ -228,8 +240,8 @@ def changelog(
 
 
 def seen_news(ledger: dict) -> set[str]:
-    """The What's new texts the last sent edition carried."""
-    sent = last_sent(ledger)
+    """The What's new texts the last edition this machine sent carried."""
+    sent = last_built(ledger)
     return set(sent.get("news", [])) if sent else set()
 
 
@@ -302,38 +314,210 @@ def stream(cmd: list[str], cwd: Path, env: dict | None = None) -> int:
     return proc.returncode
 
 
-def foreign_files(
+# a Forever Data file's name on CurseForge carries its edition (curseforge.plan, version_suffix):
+# "Bastian's Data <Data's TOC version>+data.<YYYYMMDD>.<n> (WoW Forever)"
+FILE_VERSION = re.compile(r"(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)\+data\.(\d{4})(\d{2})(\d{2})\.(\d+)")
+RELEASE_SUBJECT = "Release: Bastian's Suite "  # the release commit (tools/suite_release.py)
+
+
+def listed_files(
     config: dict,
-    ledger: dict,
     transport: curseforge.Transport = curseforge._urlopen,
     key: str | None = None,
-) -> list[str]:
-    """The Data project's files on CurseForge that are newer than every file this machine's
-    ledger knows: another machine uploaded too (plan-nightly-content.md F2: the desktop's task
-    beside the notebook's, or a Suite release, which sends Data from the desktop's ledger). One
-    line per file; [] without the read key, without a sent edition or when CurseForge does not
-    answer. The read API lists a file only once it is approved, so a file sent minutes ago is
-    not seen yet: this finds the second sender the next night, not the same minute."""
+    project_name: str = PROJECT,
+) -> list[dict] | None:
+    """A project's newest Forever files on CurseForge (the Data project's by default), oldest
+    first: [{"id", "name", "at", "available", "url", "length", "sha1"}]. Retail's files (a Suite
+    release sends them to the same projects) are left out. None without the read key or when
+    CurseForge does not answer. The read API lists a file only once it is approved, so a file
+    sent minutes ago is not there yet; what it lists is what a player can install."""
     key = key or curseforge.core_key()
-    known = [int(e["file_id"]) for e in ledger.get("editions", []) if e.get("file_id")]
-    if not key or not known:
-        return []
-    project = config["projects"][PROJECT]["id"]
+    if not key:
+        return None
+    project = config["projects"][project_name]["id"]
+    client = f"({curseforge.CLIENT_NAMES[CLIENT]})"
     try:
         files = curseforge.core_get(f"/v1/mods/{project}/files?pageSize=20", key, transport)["data"]
-        newer = sorted(
-            (int(f["id"]), str(f.get("displayName") or f.get("fileName") or ""))
+        listed = [
+            {
+                "id": int(f["id"]),
+                "name": str(f.get("displayName") or f.get("fileName") or ""),
+                "at": str(f.get("fileDate") or ""),
+                "available": f.get("isAvailable") is True,
+                "url": str(f.get("downloadUrl") or ""),
+                "length": int(f.get("fileLength") or 0),
+                "sha1": next(
+                    (str(h.get("value")) for h in f.get("hashes") or [] if h.get("algo") == 1),
+                    "",
+                ),
+            }
             for f in files
-            if int(f["id"]) > max(known)
-        )
+        ]
     except (urllib.error.URLError, OSError, KeyError, TypeError, ValueError) as err:
         print(f"note: CurseForge's file list was not read: {err}")
-        return []
-    return [
-        f"CurseForge has Data file {fid} ({name}) that this machine did not send: another "
-        "machine uploads too, and its ledger and this one's now differ"
-        for fid, name in newer
-    ]
+        return None
+    return sorted((f for f in listed if f["name"].endswith(client)), key=lambda f: f["id"])
+
+
+SUITE_VERSION = re.compile(r"(\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?)")
+
+
+def _fetch(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=300) as response:  # the CDN, no key
+        return response.read()
+
+
+def current_suite(
+    config: dict,
+    *,
+    listed: Callable[..., list[dict] | None] = listed_files,
+    fetch: Callable[[str], bytes] = _fetch,
+    root: Path | None = None,
+) -> tuple[Path | None, list[str], list[str]]:
+    """The Suite a player installs today, for the boot test: CurseForge's newest approved Forever
+    file of the Suite project. The kept copy (`.local/released/forever`) when it is that file,
+    else that file downloaded, checked against its length and SHA-1, and kept in its place.
+    -> (the zip, lines, alerts). Until 12.11.2026 only a Suite release cut on the same machine
+    renewed the copy, so the notebook booted every nightly edition against 2.1.0 of 09.11.2026
+    while players ran 2.4.1 (plan-nightly-content.md R5)."""
+    folder = (root or curseforge.RELEASED) / CLIENT
+    kept_zip = curseforge.kept(INSTALL, CLIENT, root)
+    meta_path = folder / f"{INSTALL}.json"
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
+    except ValueError:
+        meta = {}
+    have = f"{meta.get('version', 'unknown')} (file {meta.get('file_id', '?')})"
+    files = [f for f in listed(config, project_name=INSTALL) or [] if f.get("available")]
+    if not files:
+        line = f"boot test: the Suite kept here, {have}; CurseForge's Suite files were not read"
+        return kept_zip, [line], []
+    newest = max(files, key=lambda f: f["id"])
+    found = SUITE_VERSION.search(newest["name"])
+    version = found.group(1) if found else newest["name"]
+    if kept_zip is not None and str(meta.get("file_id")) == str(newest["id"]):
+        line = f"boot test: Suite {version} (file {newest['id']}), as players have it"
+        return kept_zip, [line], []
+    try:
+        data = fetch(newest["url"])
+        if newest.get("length") and len(data) != newest["length"]:
+            raise ValueError(f"{len(data)} bytes, CurseForge says {newest['length']}")
+        if newest.get("sha1") and hashlib.sha1(data).hexdigest() != newest["sha1"]:
+            raise ValueError("its SHA-1 is not CurseForge's")
+    except (urllib.error.URLError, OSError, ValueError) as err:
+        alert = (
+            f"the boot test uses Suite {have}, but players have {version} (file {newest['id']}): "
+            f"the download failed: {err}"
+        )
+        return kept_zip, [alert], [alert]
+    folder.mkdir(parents=True, exist_ok=True)
+    target = folder / f"{INSTALL}.zip"
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(target)
+    meta = {"project": INSTALL, "version": version, "file_id": newest["id"]}
+    meta_path.write_text(
+        json.dumps(meta, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+    )
+    line = f"boot test: Suite {version} (file {newest['id']}) from CurseForge, was {have}"
+    return target, [line], []
+
+
+def release_commit(version: str, root: Path = ROOT) -> str | None:
+    """The commit "Release: Bastian's Suite <version>" of this repository, or None."""
+    subject = RELEASE_SUBJECT + version
+    try:
+        out = release_notes.git(
+            "log", "--format=%H %s", "--fixed-strings", f"--grep={subject}", root=root
+        )
+    except release_notes.NotesError:
+        return None
+    for line in out.splitlines():
+        sha, _, text = line.partition(" ")
+        if text.strip() == subject:
+            return sha
+    return None
+
+
+def adopt(
+    ledger: dict, listed: list[dict], release: Callable[[str], str | None]
+) -> tuple[list[dict], list[str], list[str]]:
+    """Takes the Forever Data files another machine sent into this machine's ledger
+    (plan-nightly-content.md F2, 12.11.2026): every file on CurseForge newer than every file the
+    ledger knows becomes a sent edition with the date and number of its version, so this
+    machine numbers its next edition after it and compares with what players have. Until then
+    each machine numbered from its own ledger, and the notebook's edition of 12.11.2026 went out
+    under the name of the 2.4.1 release's Data file. `listed` is listed_files', `release` gives
+    the commit of a Suite release by its version. A file that came with a Suite release (the
+    first Forever file of its version, and that release's commit in this repository) is by
+    design, a line; any other means a second machine sends editions, an alert, once.
+    -> (the entries added, the alerts, the lines). Changes `ledger`; writing it is the caller's.
+    """
+    known = [int(e["file_id"]) for e in ledger.get("editions", []) if e.get("file_id")]
+    if not known:  # a ledger that never sent has nothing to compare with
+        return [], [], []
+    newest = max(known)
+    added: list[dict] = []
+    alerts: list[str] = []
+    lines: list[str] = []
+    versions: set[str] = set()
+    for f in sorted(listed, key=lambda f: f["id"]):
+        m = FILE_VERSION.search(f["name"])
+        version = m.group(1) if m else None
+        first = version is not None and version not in versions
+        if version is not None:
+            versions.add(version)
+        if f["id"] <= newest:
+            continue
+        at = f.get("at") or ""
+        entry: dict = {
+            "by": "another machine",
+            "date": f"{m.group(2)}-{m.group(3)}-{m.group(4)}" if m else at[:10] or None,
+            "file_id": f["id"],
+            "n": int(m.group(5)) if m else 0,
+            "name": f["name"],
+            "sent": True,
+            "sent_at": f"{at[:19]}Z" if len(at) >= 19 else None,
+        }
+        if f.get("available"):
+            entry["live"] = True
+        commit = release(version) if first and version else None
+        said = f"CurseForge has Data file {f['id']} ({f['name']})"
+        if commit:
+            entry["by"] = f"Suite release {version}"
+            entry["commit"] = commit
+            lines.append(
+                f"{said}, sent with the Suite release {version} ({commit[:8]}): taken into "
+                "this machine's ledger"
+            )
+        else:
+            alerts.append(
+                f"{said} that this machine did not send and no Suite release explains: a second "
+                "machine sends Data editions (exactly one may hold [edition] send, "
+                "plan-nightly-content.md F2); taken into this machine's ledger"
+            )
+        ledger["editions"].append(entry)
+        added.append(entry)
+    return added, alerts, lines
+
+
+def adopt_foreign(
+    config: dict,
+    ledger_path: Path = LEDGER,
+    *,
+    listed: Callable[[dict], list[dict] | None] = listed_files,
+    release: Callable[[str], str | None] = release_commit,
+) -> tuple[list[str], list[str]]:
+    """adopt() on the ledger at `ledger_path` with CurseForge's file list, written when it took a
+    file. -> (the alerts, the lines); nothing without the read key or an answer."""
+    files = listed(config)
+    if not files:
+        return [], []
+    ledger = read_ledger(ledger_path)
+    added, alerts, lines = adopt(ledger, files, release)
+    if added:
+        write_ledger(ledger_path, ledger)
+    return alerts, lines
 
 
 def downloads(
@@ -671,7 +855,7 @@ def update(
             )
     config = config or curseforge.load_config()
     ledger = read_ledger(ledger_path)
-    sent = last_sent(ledger)
+    sent = last_built(ledger)
     packs = out / "packs"
     state_out = out / "book-state.json"
     state_out.unlink(missing_ok=True)
@@ -747,7 +931,7 @@ def mark_sent(ledger_path: Path, edition: dict, file_id: object) -> None:
     ledger = read_ledger(ledger_path)
     for e in ledger["editions"]:
         if (
-            e["sha256"] == edition["sha256"]
+            e.get("sha256") == edition["sha256"]
             and e["date"] == edition["date"]
             and e["n"] == edition["n"]
         ):

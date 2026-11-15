@@ -41,7 +41,7 @@ API.EVENTS = {
 -- one is either offered to other addons or named internal on purpose (plan-second-wave.md S12).
 API.READS = {
   prices = "Price",
-  progress = "Quest, QuestLog",
+  progress = "Quest, QuestLog, NeededItems",
   route = "Route, RouteTo",
   graph = "TravelTime",
   knowledge = "Known",
@@ -54,6 +54,7 @@ API.READS = {
 }
 API.INTERNAL = {
   data = "the packs' loader: the calls above answer from it",
+  courtesy = "Courtesy's lines for Chat's answer plates: words of the player's mood, not data",
   travel = "Route's own travel model; TravelTime is the public face",
   views = "the Browser's view registry: windows of the suite",
   questSheet = "a window of the suite, opened on hover by the Orbiter",
@@ -178,6 +179,25 @@ API.QuestLog = safe(function()
     return nil
   end
   return { count = count, ready = ready }
+end)
+
+local NEEDED = { "need", "have", "quest", "title" }
+
+-- NeededItems() -> { [itemID] = { need, have, quest, title } }: the items the quests in the log
+-- still need (need and have nil when the count is unknown; quest and title the first quest that
+-- asks it), or nil (Bastian's Quests, after its first look at the log). Since 13.11.2026.
+API.NeededItems = safe(function()
+  local progress = service("progress")
+  if not progress or type(progress.NeededItems) ~= "function" or progress:LogCounts() == nil then
+    return nil
+  end
+  local out = {}
+  for id, e in pairs(progress:NeededItems() or {}) do
+    if type(id) == "number" and type(e) == "table" then
+      out[id] = copy(e, NEEDED)
+    end
+  end
+  return out
 end)
 
 local ROUTE = { "goal", "continent", "wx", "wy", "seconds", "step", "steps" }

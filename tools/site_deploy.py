@@ -224,7 +224,10 @@ def deploy(folder: Path, branch: str, account: str, token: str) -> int:
     env = {**os.environ, "CLOUDFLARE_ACCOUNT_ID": account, "CLOUDFLARE_API_TOKEN": token}
     cmd = [npx, "--yes", WRANGLER, "pages", "deploy", str(folder)]
     cmd += ["--project-name", PROJECT, "--branch", branch, "--commit-dirty=true"]
-    return subprocess.run(cmd, env=env, check=False).returncode
+    # wrangler keeps a .wrangler/ cache in its working directory: never the checkout the loops
+    # run from (12.11.2026, the notebook's first deploy left one there), never the upload itself
+    with tempfile.TemporaryDirectory(prefix="bastians-wrangler-") as work:
+        return subprocess.run(cmd, env=env, cwd=work, check=False).returncode
 
 
 def check_account(account: str, token: str, call=None) -> None:

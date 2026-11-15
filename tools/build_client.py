@@ -134,6 +134,48 @@ def local_inputs(inputs: BuildInputs, dumps: Path = DUMPS) -> tuple[str, list[st
     return digest, parts
 
 
+def _present(path: Path | None) -> bool:
+    """A file, or a folder with something in it."""
+    if path is None or not path.exists():
+        return False
+    return path.is_file() or any(path.iterdir())
+
+
+def missing_inputs(inputs: BuildInputs, dumps: Path = DUMPS) -> list[str]:
+    """What a Forever build reads from this machine and does not find, one sentence each with
+    where it comes from. A missing input never stops the build (the packs carry what is there),
+    but each is an alarm: the packs lose what it gives, and nothing else says so (12.11.2026:
+    the notebook had no TDB dump configured since it took over, and five language packs shipped
+    without their long quest texts for two nights). Retail is the test client: none checked."""
+    if inputs.client != "forever":
+        return []
+    dumped = dumps.is_dir() and any(dumps.glob(f"{inputs.prefix}_*"))
+    checks = (
+        (dumped, f"client dumps {inputs.prefix}_*", f"{dumps}, from tools/client_tables.py"),
+        (_present(inputs.cmangos), "CMaNGOS mirror", "[build] cmangos in .local/install.toml"),
+        (
+            _present(inputs.l10n),
+            "QuestieDB l10n lookups",
+            "[build.l10n] or .local/sources/forever/questie-l10n",
+        ),
+        (
+            _present(inputs.tdb_texts),
+            "TDB world dump (the long quest texts of five languages)",
+            "[build.tdb] retail or [build.tdb_texts] forever in .local/install.toml",
+        ),
+        (
+            _present(inputs.foreverdb_api),
+            "ForeverDB API rows (seen places)",
+            "AHSync's data/external/foreverdb-api/latest or [build.foreverdb_api]",
+        ),
+    )
+    return [
+        f"the Forever build has no {what} on this machine ({where}): the packs lose what it gives"
+        for ok, what, where in checks
+        if not ok
+    ]
+
+
 FOREVERDB_API = ROOT / "ahsync" / "data" / "external" / "foreverdb-api" / "latest"
 
 
@@ -299,7 +341,7 @@ def book_args(inputs: BuildInputs) -> tuple[list[str], Path | None]:
     import data_update  # lazily: data_update imports this module
 
     extra: list[str] = []
-    sent = data_update.last_sent(data_update.read_ledger(data_update.LEDGER))
+    sent = data_update.last_built(data_update.read_ledger(data_update.LEDGER))
     previous = (
         data_update.BOOK_STATES / sent["book_state"] if sent and sent.get("book_state") else None
     )

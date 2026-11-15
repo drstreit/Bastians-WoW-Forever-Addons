@@ -132,6 +132,7 @@ function Sheet.Strip(qid, state)
     step = place.step,
     done = c.done,
     kinds = {},
+    main = c.main, -- the quest of every main step (a dot opens the chain at it)
   }
   for i = 1, #c.main do
     strip.kinds[i] = Sheet.StepState(c, i, state)
@@ -352,7 +353,8 @@ local function newCanvas(parent, colours)
     buttons = {},
     steps = {}, -- a chain's step tiles
     arrows = {}, -- and the arrows between them
-    dots = {}, -- the strip of a quest in a chain: a dot per step
+    dots = {}, -- the strip of a quest in a chain: a dot per step (buttons)
+    bars = {}, -- or its bar beyond twelve steps
     links = {}, -- and its words to click, by key
     used = {},
   }
@@ -680,22 +682,69 @@ end
 -- ---------------------------------------------------------------------------------------------
 -- The strip of a quest in a chain (ADR 0055): under the name, how far the chain is as dots (a
 -- bar beyond twelve steps), the step and the chain's name (a click opens the chain), then the
--- step before and the step after (a click opens that quest).
+-- step before and the step after (a click opens that quest). Since 15.11.2026 (owner, Forever:
+-- "click on each dot and open the browser with that quest chain on that quest ... reacting to
+-- hover and bigger") each dot is a button: the mouse on it grows it and names the step, a click
+-- opens the chain with that step marked.
 -- ---------------------------------------------------------------------------------------------
 
-local DOT, DOT_HERE, DOT_GAP, DOTS_MAX, BAR_W = 7, 11, 3, 12, 96
-local STRIP_H = 16
+local DOT, DOT_HERE, DOT_GAP, DOTS_MAX, BAR_W = 12, 16, 5, 12, 96
+local DOT_GROW = 4 -- pixels a dot grows under the mouse
+local DOT_REACH = 4 -- pixels the button reaches beyond its disc: easier to hit
+local STRIP_H = 18
 local DOT_COLOUR = { done = "good", now = "title", take = "dim", later = "dim" }
+local DOT_WORDS = { done = "Done", now = "You are here", take = "You can take it now" }
+
+-- The step the chain's page marks: { root, qid }, set by a dot or the chain's words of a quest's
+-- strip (the quest the player came from or pointed at).
+Sheet.focus = nil
 
 local function nextDot()
   local used = C.used
   used.dot = used.dot + 1
   local d = C.dots[used.dot]
   if not d then
-    d = C.frame:CreateTexture(nil, "ARTWORK")
+    local canvas = C
+    d = CreateFrame("Button", nil, C.frame)
+    d.ring = d:CreateTexture(nil, "BACKGROUND")
+    d.ring:SetTexture(S.DISC)
+    d.ring:SetPoint("CENTER")
+    d.ring:Hide()
+    d.disc = d:CreateTexture(nil, "ARTWORK")
+    d.disc:SetTexture(S.DISC)
+    d.disc:SetPoint("CENTER")
+    d:SetScript("OnEnter", function(self)
+      local grown = self.size + DOT_GROW
+      self.disc:SetSize(grown, grown)
+      self.ring:SetSize(grown + 4, grown + 4)
+      S.tint(self.ring, S.C[canvas.colours.title], 0.45)
+      self.ring:Show()
+      S.TipEnter(self)
+    end)
+    d:SetScript("OnLeave", function(self)
+      self.disc:SetSize(self.size, self.size)
+      self.ring:Hide()
+      S.TipLeave(self)
+    end)
+    d:SetScript("OnClick", function(self)
+      if self.run then
+        self.run()
+      end
+    end)
     C.dots[used.dot] = d
   end
   return d
+end
+
+local function nextBar()
+  local used = C.used
+  used.bar = used.bar + 1
+  local bar = C.bars[used.bar]
+  if not bar then
+    bar = C.frame:CreateTexture(nil, "ARTWORK")
+    C.bars[used.bar] = bar
+  end
+  return bar
 end
 
 -- Words to click. spec = { size, color, tip, run }; on a hover the mouse cannot reach them.
@@ -744,7 +793,7 @@ local function link(key, text, x, top, room, spec)
 end
 
 local function stripBar(x, width, colour)
-  local bar = nextDot()
+  local bar = nextBar()
   bar:SetTexture(S.WHITE)
   S.tint(bar, col(colour))
   bar:SetSize(math.max(1, width), 4)
@@ -759,15 +808,40 @@ local function drawStrip(m)
   local ref = "quest:" .. m.qid
   local x = PAD
   local steps = #strip.kinds
+  -- the chain's page, with `qid`'s step marked: in the host that shows pages, else the Browser
+  -- (or Quests' own window) through the chain's action
+  local function openChain(qid)
+    Sheet.EndPreview()
+    Sheet.focus = { root = strip.root, qid = qid }
+    if canvas.open then
+      canvas.open("chain:" .. strip.root)
+    else
+      B:RunAction("quests.chain", ref, canvas.ctx)
+    end
+  end
   if steps <= DOTS_MAX then
     for i, kind in ipairs(strip.kinds) do
       local d = nextDot()
       local size = i == strip.step and DOT_HERE or DOT -- the quest of this sheet stands out
-      d:SetTexture(S.DISC)
-      S.tint(d, col(DOT_COLOUR[kind]))
-      d:SetSize(size, size)
+      local qid = strip.main and strip.main[i]
+      d.size = size
+      S.tint(d.disc, col(DOT_COLOUR[kind]))
+      d.disc:SetSize(size, size)
+      d.ring:Hide()
+      d:SetSize(size + DOT_REACH, size + DOT_REACH)
       d:ClearAllPoints()
       d:SetPoint("CENTER", C.frame, "TOPLEFT", x + size / 2, -(y + STRIP_H / 2))
+      d.qid = qid
+      d.tip = qid
+          and function()
+            local words = DOT_WORDS[kind] and (L[DOT_WORDS[kind]] .. "\n") or ""
+            return i .. ". " .. R.questName(qid), words .. L["Show the quest chain"]
+          end
+        or nil
+      d.run = qid and function()
+        openChain(qid)
+      end or nil
+      d:EnableMouse(qid ~= nil and not C.preview)
       d:Show()
       x = x + size + DOT_GAP
     end
@@ -784,12 +858,7 @@ local function drawStrip(m)
     color = "title",
     tip = L["Show the quest chain"],
     run = function()
-      Sheet.EndPreview()
-      if canvas.open then
-        canvas.open("chain:" .. strip.root)
-      else
-        B:RunAction("quests.chain", ref, canvas.ctx)
-      end
+      openChain(m.qid) -- the chain, this quest's step marked
     end,
   })
   y = y + STRIP_H + 1
@@ -1048,6 +1117,14 @@ local function stepTile()
     local canvas = C
     t = CreateFrame("Button", nil, C.frame)
     t.face = S.roundFill(t, col("later"), "radiusSmall")
+    -- the step a quest's strip pointed at (Sheet.focus): a double ring around the tile
+    t.mark = CreateFrame("Frame", nil, t)
+    t.mark:SetPoint("TOPLEFT", -3, 3)
+    t.mark:SetPoint("BOTTOMRIGHT", 3, -3)
+    t.mark.edges = S.roundEdges(t.mark, col("title"), "radiusSmall")
+    t.mark.inner = S.roundEdges(t, col("title"), "radiusSmall")
+    t.mark:Hide()
+    t.mark.inner:Hide()
     t.name = S.text(t, 12, col("tileText"))
     t.name:SetPoint("TOPLEFT", 7, -5)
     t.name:SetPoint("TOPRIGHT", -7, -5)
@@ -1097,6 +1174,15 @@ local function placeStep(x, top, spec)
   S.ink(t.name, ink)
   S.ink(t.sub, ink)
   t.qid, t.step, t.kind, t.why = spec.qid, spec.step, spec.kind, spec.why
+  local marked = spec.qid ~= nil and spec.qid == C.markQid
+  t.mark:SetShown(marked)
+  if marked then
+    S.setEdges(t.mark.edges, col("title"))
+    S.setEdges(t.mark.inner, col("title"))
+    t.mark.inner:Show()
+  else
+    t.mark.inner:Hide()
+  end
   t.name:SetText(spec.name)
   t.sub:SetText(table.concat(spec.words, " - "))
   t:SetSize(STEP_W, STEP_H)
@@ -1233,6 +1319,8 @@ function Sheet.ChainWords(c)
 end
 
 local function drawChain(c)
+  local focus = Sheet.focus
+  C.markQid = focus and focus.root == c.id and focus.qid or nil
   line(ns.Chains.Name(c), { size = 20, serif = true, color = "title", right = 30, gap = 2 })
   local sub = { ns.Chains.Summary(c) }
   for _, map in ipairs(c.zones) do
@@ -1263,7 +1351,7 @@ local function draw(canvas, what)
   y, left = PAD, PAD
   local used = canvas.used
   used.text, used.tile, used.figure, used.buttons = 0, 0, 0, {}
-  used.step, used.arrow, used.dot, used.links = 0, 0, 0, {}
+  used.step, used.arrow, used.dot, used.links, used.bar = 0, 0, 0, {}, 0
   if what.chain then
     drawChain(what.chain)
   else
@@ -1277,6 +1365,9 @@ local function draw(canvas, what)
   end
   for i = used.dot + 1, #canvas.dots do
     canvas.dots[i]:Hide()
+  end
+  for i = used.bar + 1, #canvas.bars do
+    canvas.bars[i]:Hide()
   end
   for key, b in pairs(canvas.links) do
     if not used.links[key] then

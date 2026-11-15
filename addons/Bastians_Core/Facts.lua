@@ -796,12 +796,14 @@ Facts.DefineHappening("xp", {
   },
 })
 
+-- A spell learned: LEARNED_SPELL_IN_SKILL_LINE on Forever and retail (the client's documentation,
+-- 12.11.2026: LEARNED_SPELL_IN_TAB is gone, so the fact never fired there), the old name where a
+-- client still sends it; the spell's id first in both
+local function learned(spellID)
+  return type(spellID) == "number" and { spell = "spell:" .. spellID } or nil
+end
 Facts.DefineHappening("learned", {
-  events = {
-    LEARNED_SPELL_IN_TAB = function(spellID)
-      return type(spellID) == "number" and { spell = "spell:" .. spellID } or nil
-    end,
-  },
+  events = { LEARNED_SPELL_IN_SKILL_LINE = learned, LEARNED_SPELL_IN_TAB = learned },
 })
 
 -- The group and the guild changed (the `player` state says how)

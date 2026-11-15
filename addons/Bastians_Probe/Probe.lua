@@ -26,6 +26,10 @@ end
 
 -- Copy a value into something saved variables can hold: plain tables, strings, numbers, booleans.
 local function clean(v, depth)
+  local isSecret = rawget(_G, "issecretvalue")
+  if v ~= nil and isSecret and isSecret(v) then
+    return "<secret>" -- an addon may not read it (the retail family's restriction)
+  end
   local t = type(v)
   if t == "string" or t == "number" or t == "boolean" or t == "nil" then
     return v
@@ -74,6 +78,17 @@ local function try(fn, ...)
     return { ok = false, err = "missing (" .. type(fn) .. ")" }
   end
   return finish(pcall(fn, ...))
+end
+
+-- obj:name(...) protected, the lookup too: a frame may lack a method, and looking it up can raise.
+local function tryMethod(obj, name, ...)
+  local ok, fn = pcall(function()
+    return obj[name]
+  end)
+  if not ok then
+    return { ok = false, err = tostring(fn) }
+  end
+  return try(fn, obj, ...)
 end
 
 local function result(id)
@@ -1002,9 +1017,1450 @@ local function probeBooks()
   say("books: listening. Open a book in the Stormwind library, read it to the end, then /reload")
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- /bprobe chat and /bprobe combatlog: what Chat version 3 leans on (plan-chat-v3.md §13, X1 to
+-- X11). Counts, types and flags only, never another player's name or words (CLAUDE.md §8).
+-- ---------------------------------------------------------------------------------------------
+
+local CHAT_CALLS = {
+  "ChatFrameUtil.SendTell",
+  "ChatFrame_SendTell",
+  "ChatFrameUtil.OpenChat",
+  "ChatEdit_ActivateChat",
+  "AcceptGroup",
+  "DeclineGroup",
+  "AcceptDuel",
+  "CancelDuel",
+  "CancelTrade",
+  "ConfirmReadyCheck",
+  "AcceptResurrect",
+  "DeclineResurrect",
+  "C_SummonInfo.ConfirmSummon",
+  "BNSendWhisper",
+  "GetAverageItemLevel",
+  "C_Item.GetDetailedItemLevelInfo",
+  "GetInventoryItemLink",
+  "UnitIsAFK",
+  "UnitIsDND",
+  "CombatLogGetCurrentEventInfo",
+  "issecretvalue",
+}
+local CHAT_EVENTS = {
+  "CHAT_MSG_WHISPER",
+  "CHAT_MSG_WHISPER_INFORM",
+  "CHAT_MSG_BN_WHISPER",
+  "CHAT_MSG_AFK",
+  "CHAT_MSG_DND",
+}
+-- the worn slots of the item level's mean: not the shirt (4) nor the tabard (19)
+local WORN_SLOTS = { 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 }
+
+local function resolve(path)
+  local v = _G
+  for part in string.gmatch(path, "[^%.]+") do
+    if type(v) ~= "table" then
+      return nil
+    end
+    v = v[part]
+  end
+  return v
+end
+
+local chatListening = false
+
+local CHAT_EVENT_SET = {}
+for _, event in ipairs(CHAT_EVENTS) do
+  CHAT_EVENT_SET[event] = true
+end
+
+local function onChatProbeEvent(out, event, ...)
+  if not CHAT_EVENT_SET[event] then
+    return
+  end
+  local text, flags, guid = (select(1, ...)), (select(6, ...)), (select(12, ...))
+  local e = out.events[event] or { count = 0, flags = {}, secret = 0, guid = {}, errors = 0 }
+  out.events[event] = e
+  e.count = e.count + 1
+  local ok = pcall(function()
+    if type(issecretvalue) == "function" and issecretvalue(text) then
+      e.secret = e.secret + 1
+    end
+    local flag = "none"
+    if type(issecretvalue) == "function" and issecretvalue(flags) then
+      flag = "secret"
+    elseif type(flags) == "string" and flags ~= "" then
+      flag = flags
+    end
+    e.flags[flag] = (e.flags[flag] or 0) + 1
+    local kind = type(guid) == "string" and guid:match("^(%a+)%-") or type(guid)
+    e.guid[kind] = (e.guid[kind] or 0) + 1
+  end)
+  if not ok then
+    e.errors = e.errors + 1
+  end
+end
+
+local function probeChat()
+  local out = db.results.chat or { events = {} }
+  db.results.chat = out
+  out.at = now()
+  out.calls = {}
+  for _, path in ipairs(CHAT_CALLS) do
+    out.calls[path] = type(resolve(path))
+  end
+  out.average = try(GetAverageItemLevel)
+  local levels, sum, n = {}, 0, 0
+  for _, slot in ipairs(WORN_SLOTS) do
+    local okLink, link = pcall(GetInventoryItemLink, "player", slot)
+    if okLink and type(link) == "string" then
+      local r = try(C_Item and C_Item.GetDetailedItemLevelInfo, link)
+      local level = r.ok and r.ret[1]
+      if type(level) == "number" then
+        levels[slot] = level
+        sum, n = sum + level, n + 1
+      end
+    end
+  end
+  out.worn = { levels = levels, count = n, mean = n > 0 and sum / n or nil }
+  local average = out.average.ok and out.average.ret[1] or nil
+  say(
+    "chat: %d calls checked; item level %s by the client, %s as the mean of %d worn items",
+    #CHAT_CALLS,
+    tostring(average),
+    tostring(out.worn.mean),
+    n
+  )
+  if chatListening then
+    say("chat: listening already; whisper and be whispered, also by a character that is AFK, then /reload")
+    return
+  end
+  chatListening = true
+  local f = CreateFrame("Frame")
+  for _, event in ipairs(CHAT_EVENTS) do
+    pcall(f.RegisterEvent, f, event)
+  end
+  f:SetScript("OnEvent", function(_, event, ...)
+    onChatProbeEvent(out, event, ...)
+  end)
+  say("chat: listening to whispers and automatic replies (counts and flags only); then /reload")
+end
+
+local combatListening = false
+local COMBAT_SECONDS = 60
+-- where a sub-event's amount stands in CombatLogGetCurrentEventInfo's answer (the retail family)
+local AMOUNT_AT = {
+  SWING_DAMAGE = 12,
+  RANGE_DAMAGE = 15,
+  SPELL_DAMAGE = 15,
+  SPELL_PERIODIC_DAMAGE = 15,
+  SPELL_HEAL = 15,
+  SPELL_PERIODIC_HEAL = 15,
+}
+
+local function onCombatProbeEvent(out, me)
+  local ok = pcall(function()
+    local info = { CombatLogGetCurrentEventInfo() }
+    local sub, source, dest = info[2], info[4], info[8]
+    out.count = out.count + 1
+    out.subevents[sub] = (out.subevents[sub] or 0) + 1
+    local at = AMOUNT_AT[sub]
+    local amount = at and info[at]
+    if type(amount) == "number" then
+      local kind = sub:find("HEAL", 1, true) and "heal" or "damage"
+      if source == me then
+        out.done[kind] = out.done[kind] + amount
+      end
+      if dest == me then
+        out.taken[kind] = out.taken[kind] + amount
+      end
+    end
+  end)
+  if not ok then
+    out.errors = out.errors + 1
+  end
+end
+
+-- X11. Forever only: retail refuses the registration with a popup no pcall catches.
+local function probeCombatLog()
+  if combatListening then
+    say("combatlog: listening already; fight something, then /reload")
+    return
+  end
+  local out = {
+    at = now(),
+    count = 0,
+    errors = 0,
+    subevents = {},
+    done = { damage = 0, heal = 0 },
+    taken = { damage = 0, heal = 0 },
+  }
+  db.results.combatlog = out
+  local f = CreateFrame("Frame")
+  local ok, err = pcall(f.RegisterEvent, f, "COMBAT_LOG_EVENT_UNFILTERED")
+  out.registered = ok
+  if not ok then
+    out.err = tostring(err)
+    say("combatlog: the client refused the event: %s", out.err)
+    return
+  end
+  combatListening = true
+  local me = UnitGUID("player")
+  local started = GetTime()
+  f:SetScript("OnEvent", function(_, event)
+    if event ~= "COMBAT_LOG_EVENT_UNFILTERED" then
+      return
+    end
+    if GetTime() - started > COMBAT_SECONDS then
+      f:UnregisterAllEvents()
+      out.closed = now()
+      return
+    end
+    onCombatProbeEvent(out, me)
+  end)
+  say("combatlog: registered; fight for up to %d seconds, then /reload", COMBAT_SECONDS)
+end
+
+-- /bprobe tracking: what the game's tracking says and what the minimap's tooltip answers over its
+-- dots ("track beasts and track humanoids are not working on our
+-- minimap"; map.md "Tracked creatures"). Records every tracking type as the client answers it (the
+-- shape of GetTrackingInfo is assumed in forever-api.md), Compat.CreatureTrackingOn, the Map's own
+-- sweep (style, stats, the dots it keeps), and one sweep of its own over the whole game minimap:
+-- every text the tooltip answered, how many points answered it, the first answer's whole tooltip
+-- data and what the Data knows of each name. A name the Data does not know is kept only as its
+-- shape (letters as A and a): it may be another player's (CLAUDE.md §8). Out of combat; /reload saves.
+local TRACK_STEP = 4 -- minimap pixels between two points of the sweep
+local TRACK_PER_FRAME = 120 -- points per frame
+local trackingRunning = false
+
+local function letterShape(text)
+  return (string.gsub(string.gsub(string.gsub(text, "%u", "A"), "%l", "a"), "[\128-\255]+", "?"))
+end
+
+local function splitNames(text)
+  local out = {}
+  text = string.gsub(text, "|c%x%x%x%x%x%x%x%x", "")
+  text = string.gsub(text, "|r", "")
+  text = string.gsub(text, "|T.-|t", "")
+  text = string.gsub(text, "|A.-|a", "")
+  for line in string.gmatch(text, "[^\r\n]+") do
+    local name = string.match(line, "^%s*(.-)%s*$")
+    if name ~= "" then
+      out[#out + 1] = name
+    end
+  end
+  return out
+end
+
+-- What the Data knows of a name: the NPCs and nodes of exactly that name, an NPC's flags.
+local function dataOf(d, name)
+  local out = { npc = {}, node = {} }
+  local key = string.lower(name)
+  for _, typ in ipairs({ "npc", "node" }) do
+    local ok, hits = pcall(d.Find, d, typ, name, 8)
+    for _, hit in ipairs(ok and hits or {}) do
+      if type(hit.name) == "string" and string.lower(hit.name) == key then
+        local r = d:Get(typ, hit.id)
+        out[typ][#out[typ] + 1] = { id = hit.id, flags = clean(r and r.flags), kind = r and r.kind }
+      end
+    end
+  end
+  out.known = #out.npc > 0 or #out.node > 0
+  return out
+end
+
+local function trackingTypes(out)
+  out.types = {}
+  if not (C_Minimap and type(C_Minimap.GetNumTrackingTypes) == "function") then
+    out.typesErr = "no C_Minimap.GetNumTrackingTypes"
+    return
+  end
+  local ok, n = pcall(C_Minimap.GetNumTrackingTypes)
+  out.numTypes = clean(n)
+  for i = 1, (ok and type(n) == "number") and n or 0 do
+    out.types[i] = {
+      info = try(C_Minimap.GetTrackingInfo, i),
+      filter = try(C_Minimap.GetTrackingFilter, i),
+    }
+  end
+end
+
+-- The Map's own sweep, read through Core's module registry.
+local function mapSweep(out)
+  local core = rawget(_G, "Bastians")
+  local ok, map = pcall(function()
+    return core and core:GetModule("Map")
+  end)
+  local T = ok and map and map.Tracked
+  if not T then
+    out.map = { err = "no Map module or no Tracked" }
+    return nil
+  end
+  local m = {}
+  out.map = m
+  m.style = try(map.Mini and map.Mini.Style)
+  m.active = try(T.Active)
+  m.available = try(T.Available)
+  m.running = try(T.Running)
+  m.stats = clean(T.stats)
+  m.known = {}
+  for i, k in ipairs(T.Known() or {}) do
+    m.known[i] = { name = k.name, kind = k.kind, missed = k.missed, fine = k.fine }
+  end
+  return T
+end
+
+-- The minimap and the screen as the sweep finds them: is the game's minimap drawn and reachable,
+-- at which zoom, and how the screen's units relate (UpdateMouseoverAtPoint's units are not
+-- documented; Lueur, Mapzeroth and SilverDragon pass frame units times the effective scale).
+local function trackingState(out)
+  local st = {}
+  out.state = st
+  local core = rawget(_G, "Bastians")
+  st.position = core and core.Coords and try(core.Coords.Player) -- continent, wx, wy, map, x, y
+  st.visible = tryMethod(Minimap, "IsVisible")
+  st.alpha = tryMethod(Minimap, "GetEffectiveAlpha")
+  st.mouse = tryMethod(Minimap, "IsMouseEnabled")
+  st.zoom = tryMethod(Minimap, "GetZoom")
+  st.strata = tryMethod(Minimap, "GetFrameStrata")
+  st.level = tryMethod(Minimap, "GetFrameLevel")
+  st.uiScale = tryMethod(UIParent, "GetEffectiveScale")
+  st.uiSize = tryMethod(UIParent, "GetSize")
+  st.screen = { try(rawget(_G, "GetScreenWidth")), try(rawget(_G, "GetScreenHeight")) }
+  st.physical = try(rawget(_G, "GetPhysicalScreenSize"))
+  local util = rawget(_G, "InputUtil")
+  st.gamepad = util and tryMethod(util, "IsGamepadUIEnabled") or "no InputUtil"
+  local soft = rawget(_G, "SoftCursor")
+  st.softCursorFrame = soft and tryMethod(soft, "IsShown") or "no SoftCursor frame"
+end
+
+-- The ways to write a point for UpdateMouseoverAtPoint: frame units times the effective scale (the
+-- others' way and Tracked.lua's), plain UI units, physical pixels.
+local function conventions(scale)
+  local list = {
+    { name = "scaled", step = TRACK_STEP, f = scale },
+    { name = "ui", step = 2 * TRACK_STEP, f = 1 },
+  }
+  local physical = rawget(_G, "GetPhysicalScreenSize")
+  local ok, _, ph = pcall(physical or error)
+  local rootH = (UIParent:GetHeight() or 0) * (UIParent:GetEffectiveScale() or 0)
+  if ok and type(ph) == "number" and rootH > 0 then
+    list[#list + 1] = { name = "physical", step = 2 * TRACK_STEP, f = scale * ph / rootH }
+  end
+  return list
+end
+
+-- What a tooltip of the minimap says, read alike by the sweeps and the hover: each name with what
+-- the Data knows of it; a name it does not know only as its shape (it may be another player's).
+local function newEar(T)
+  local core = rawget(_G, "Bastians")
+  local d = core and core.GetService and core:GetService("data")
+  local me, pet = UnitName("player"), UnitName("pet")
+  local isSecret = rawget(_G, "issecretvalue")
+  local splitter = T and T.Names or splitNames
+  local verdicts = {} -- name -> what the Data knows of it, asked once
+  local ear = {}
+
+  function ear.verdict(name)
+    local v = verdicts[name]
+    if not v then
+      v = (name ~= me and name ~= pet and d) and dataOf(d, name) or { known = false, npc = {}, node = {} }
+      verdicts[name] = v
+    end
+    return v
+  end
+
+  -- A copy of the tooltip's data to keep: a text naming anything the Data does not know becomes its
+  -- shape, and then no guid is kept either.
+  function ear.scrubbed(data)
+    local copy = clean(data)
+    local masked = false
+    for _, line in pairs(type(copy) == "table" and type(copy.lines) == "table" and copy.lines or {}) do
+      for _, field in ipairs({ "leftText", "rightText" }) do
+        local text = line[field]
+        if type(text) == "string" then
+          for _, name in ipairs(splitter(text)) do
+            if not ear.verdict(name).known then
+              line[field] = letterShape(text)
+              masked = true
+              break
+            end
+          end
+        end
+      end
+    end
+    if masked then
+      copy.guid = nil
+      for _, line in pairs(copy.lines) do
+        line.guid = nil
+      end
+    end
+    return copy
+  end
+
+  local function heard(sw, text, line, data, p)
+    for _, name in ipairs(splitter(text)) do
+      local e = sw.names[name]
+      if not e then
+        local v = ear.verdict(name)
+        if v.known then
+          e = { points = 0, data = v, tooltip = ear.scrubbed(data), text = text }
+          e.first = p and { u = p[1], v = p[2] } or nil
+          for _, other in ipairs(splitter(text)) do
+            if not ear.verdict(other).known then
+              e.text = letterShape(text) -- the raw line as the client wrote it, unless it names more
+              break
+            end
+          end
+          sw.names[name] = e
+          sw.order[#sw.order + 1] = name
+        elseif name == me then
+          sw.player = (sw.player or 0) + 1
+        elseif name == pet then
+          sw.pet = (sw.pet or 0) + 1
+        else
+          local shape = letterShape(name)
+          sw.shapes[shape] = (sw.shapes[shape] or 0) + 1
+          sw.lineTypes = sw.lineTypes or {}
+          sw.lineTypes[shape] = clean(line.type)
+        end
+      end
+      if e then
+        e.points = e.points + 1
+      end
+    end
+  end
+
+  -- One answer of the tooltip into `sw`; whether it said anything.
+  function ear.read(sw, data, p)
+    local lines = data and data.lines
+    local any = false
+    for j = 1, lines and #lines or 0 do
+      local raw = lines[j].leftText
+      if raw ~= nil and isSecret and isSecret(raw) then
+        sw.secret = sw.secret + 1
+        any = true
+      elseif type(raw) == "string" and raw ~= "" then
+        any = true
+        heard(sw, raw, lines[j], data, p)
+      end
+    end
+    if any then
+      sw.answered = sw.answered + 1
+    end
+    return any
+  end
+
+  return ear
+end
+
+local function heardText(sw)
+  local heard = {}
+  for _, name in ipairs(sw.order) do
+    local e = sw.names[name]
+    local tag = #e.data.npc > 0 and "npc" or "node"
+    heard[#heard + 1] = string.format("%s x%d [%s]", string.gsub(name, "|", "||"), e.points, tag)
+    if #heard >= 12 then
+      break
+    end
+  end
+  local others = 0
+  for _, n in pairs(sw.shapes) do
+    others = others + n
+  end
+  if sw.player then
+    heard[#heard + 1] = string.format("you x%d", sw.player)
+  end
+  if others > 0 then
+    heard[#heard + 1] = string.format("unknown names x%d", others)
+  end
+  return #heard > 0 and table.concat(heard, ", ") or "nothing"
+end
+
+local function first(r)
+  if r and r.ok and r.ret then
+    return r.ret[1]
+  end
+  return nil
+end
+
+-- A recorded answer for the chat: "?" when the call failed or was missing.
+local function answer(r)
+  if r and r.ok and r.ret then
+    return tostring(r.ret[1])
+  end
+  return "?"
+end
+
+local function trackingSummary(out)
+  local on = {}
+  for _, t in ipairs(out.types) do
+    local info = t.info.ok and t.info.ret or {}
+    local a = info[1]
+    if type(a) == "table" and a.active == true then
+      on[#on + 1] = string.format(
+        "%s (%s/%s/%s)",
+        tostring(a.name),
+        tostring(a.type),
+        tostring(a.subType),
+        tostring(a.spellID)
+      )
+    elseif type(a) == "string" and info[3] == true then
+      on[#on + 1] = string.format("%s (%s/%s/%s)", a, tostring(info[4]), tostring(info[5]), tostring(info[6]))
+    end
+  end
+  local creature = out.creatureTrackingOn
+  say(
+    "tracking: %s types, on: %s; CreatureTrackingOn = %s",
+    tostring(out.numTypes),
+    #on > 0 and table.concat(on, ", ") or "none",
+    creature and creature.ok and tostring(creature.ret[1]) or tostring(creature and creature.err)
+  )
+  local m = out.map
+  if m.err then
+    say("map: %s", m.err)
+  else
+    local s = m.stats or {}
+    say(
+      "map: style %s, active %s, running %s; sweeps %s, last answered %s, dots %s, kept %d",
+      answer(m.style),
+      answer(m.active),
+      answer(m.running),
+      tostring(s.sweeps),
+      tostring(s.answered),
+      tostring(s.dots),
+      #m.known
+    )
+  end
+  local st = out.state
+  local physical = st.physical and st.physical.ok and st.physical.ret or {}
+  say(
+    "minimap: visible %s, alpha %s, mouse %s, zoom %s; ui scale %s, physical %sx%s",
+    answer(st.visible),
+    answer(st.alpha),
+    answer(st.mouse),
+    answer(st.zoom),
+    answer(st.uiScale),
+    tostring(physical[1]),
+    tostring(physical[2])
+  )
+  for _, conv in ipairs(out.conventions) do
+    local sw = out.sweeps[conv]
+    say(
+      "sweep %s (x%.3f, step %d): %d points, %d answered, %d secret%s; heard: %s",
+      conv,
+      sw.f,
+      sw.step,
+      sw.points,
+      sw.answered,
+      sw.secret,
+      sw.err and (", error " .. sw.err) or "",
+      heardText(sw)
+    )
+  end
+  say("tracking: /reload to save the record")
+end
+
+-- One sweep of the whole game minimap in one way of writing the point, a share per frame.
+local function sweepWith(ear, conv, geo, onDone)
+  local sw = {
+    f = conv.f,
+    step = conv.step,
+    points = 0,
+    answered = 0,
+    secret = 0,
+    names = {},
+    order = {},
+    shapes = {},
+  }
+  local points = {}
+  local row = -geo.h / 2 + conv.step / 2
+  while row < geo.h / 2 do
+    local col = -geo.w / 2 + conv.step / 2
+    while col < geo.w / 2 do
+      points[#points + 1] = { col, row }
+      col = col + conv.step
+    end
+    row = row + conv.step
+  end
+  sw.points = #points
+  local i = 1
+  local function tick()
+    if InCombatLockdown() then
+      sw.cut = i
+      onDone(sw, true)
+      return
+    end
+    local last = math.min(i + TRACK_PER_FRAME - 1, #points)
+    Minimap:SetUsingSoftCursor(true)
+    local ok, err = pcall(function()
+      for k = i, last do
+        local p = points[k]
+        Minimap:UpdateMouseoverAtPoint((geo.cx + p[1]) * conv.f, (geo.cy + p[2]) * conv.f)
+        ear.read(sw, C_TooltipInfo.GetMinimapMouseover(), p)
+      end
+    end)
+    pcall(Minimap.SetUsingSoftCursor, Minimap, false) -- never left on between two frames
+    i = last + 1
+    if not ok then
+      sw.err = tostring(err)
+      onDone(sw)
+    elseif i > #points then
+      sw.done = now()
+      onDone(sw)
+    else
+      C_Timer.After(0, tick)
+    end
+  end
+  C_Timer.After(0, tick)
+end
+
+local function probeTracking()
+  if trackingRunning then
+    say("tracking: running already")
+    return
+  end
+  if InCombatLockdown() then
+    say("tracking: not in combat (the tooltip's texts may be secret there)")
+    return
+  end
+  local out = { at = now(), combat = false, sweeps = {}, conventions = {} }
+  db.results.tracking = out
+  db.results.trackingRuns = db.results.trackingRuns or {} -- every run: our style and the game's
+  table.insert(db.results.trackingRuns, out)
+  local _, class = UnitClass("player")
+  out.class = class
+  out.rotateMinimap = clean(GetCVar("rotateMinimap"))
+  trackingTypes(out)
+  local compat = rawget(_G, "Bastians") and Bastians.Compat
+  out.creatureTrackingOn = compat and try(compat.CreatureTrackingOn)
+    or { ok = false, err = "no Bastians.Compat" }
+  local T = mapSweep(out)
+  trackingState(out)
+  local ear = newEar(T)
+
+  local w, h = Minimap:GetWidth(), Minimap:GetHeight()
+  local left, bottom, scale = Minimap:GetLeft(), Minimap:GetBottom(), Minimap:GetEffectiveScale()
+  if not (w and w > 0 and h and h > 0 and left and bottom and scale and scale > 0) then
+    out.err = "the minimap has no place on the screen"
+    say("tracking: %s", out.err)
+    return
+  end
+  out.size, out.scale = { w, h }, scale
+  local radius = C_Minimap and C_Minimap.GetViewRadius and try(C_Minimap.GetViewRadius)
+  out.viewRadius = first(radius)
+  local geo = { w = w, h = h, cx = left + w / 2, cy = bottom + h / 2 }
+  local list = conventions(scale)
+  trackingRunning = true
+  local n = 1
+  local function nextSweep()
+    local conv = list[n]
+    sweepWith(ear, conv, geo, function(sw, combat)
+      out.sweeps[conv.name] = sw
+      out.conventions[#out.conventions + 1] = conv.name
+      n = n + 1
+      if combat then
+        out.combat = true
+      end
+      if combat or n > #list then
+        out.sweep = out.sweeps.scaled -- the way Tracked.lua asks
+        out.done = now()
+        trackingRunning = false
+        trackingSummary(out)
+      else
+        nextSweep()
+      end
+    end)
+  end
+  say("tracking: sweeping the game minimap %d ways; stand still", #list)
+  nextSweep()
+end
+
+-- /bprobe tracking hover: for HOVER_SECONDS, what the minimap's tooltip says under the real mouse
+-- (no soft cursor), and which frame the mouse is over. Shows whether the tooltip's data answers at
+-- all on this build: in the game's style, move the mouse over the dots.
+local HOVER_SECONDS = 15
+local hoverFrame
+local function trackingHover()
+  if trackingRunning then
+    say("tracking: running already")
+    return
+  end
+  local out = { at = now(), seconds = HOVER_SECONDS, frames = 0, answered = 0, secret = 0 }
+  out.names, out.order, out.shapes, out.foci = {}, {}, {}, {}
+  db.results.trackingHover = out
+  local core = rawget(_G, "Bastians")
+  local ok, map = pcall(function()
+    return core and core:GetModule("Map")
+  end)
+  local ear = newEar(ok and map and map.Tracked or nil)
+  local started = GetTime()
+  local foci = rawget(_G, "GetMouseFoci")
+  hoverFrame = hoverFrame or CreateFrame("Frame")
+  trackingRunning = true
+  hoverFrame:SetScript("OnUpdate", function(self)
+    if GetTime() - started > HOVER_SECONDS then
+      self:SetScript("OnUpdate", nil)
+      trackingRunning = false
+      out.done = now()
+      say("tracking hover: %d frames, %d answered; heard: %s", out.frames, out.answered, heardText(out))
+      local where = {}
+      for name, count in pairs(out.foci) do
+        where[#where + 1] = string.format("%s x%d", name, count)
+      end
+      table.sort(where)
+      say("tracking hover: the mouse was over %s; /reload to save", table.concat(where, ", "))
+      return
+    end
+    out.frames = out.frames + 1
+    local okRead, err = pcall(function()
+      ear.read(out, C_TooltipInfo.GetMinimapMouseover())
+    end)
+    if not okRead then
+      out.err = tostring(err)
+    end
+    local okFoci, name = pcall(function()
+      local list = foci and foci()
+      local top = list and list[1]
+      return top and top.GetName and top:GetName() or (top and "<unnamed>" or "<none>")
+    end)
+    if okFoci then
+      out.foci[name] = (out.foci[name] or 0) + 1
+    else
+      out.fociErr = tostring(name)
+    end
+  end)
+  say("tracking hover: move the mouse over the dots on the game's minimap for %d seconds", HOVER_SECONDS)
+end
+
+-- /bprobe ground: the game's minimap with its ground switched off (bring the
+-- tracking dots back to Bastian's styles another way, since Forever answers no addon's point).
+-- Blizzard's HybridMinimap does it on Forever too: its own map canvas, a child of the Minimap in
+-- the BACKGROUND strata, under the dots, C_Minimap.SetDrawGroundTextures(false), the canvas zoomed
+-- by C_Minimap.GetViewRadius(). Does Forever honour the call, is what is left see-through, do the
+-- dots and the player's arrow stay? In one of Bastian's styles the game's minimap is lifted above
+-- our tiles while its ground is off, so its dots lie on our map (at the game's zoom, not ours: they
+-- line up only where both zooms agree). The view radius at every zoom of the game's minimap is the
+-- scale our tiles would need. A second call puts everything back. Out of combat.
+local groundSaved -- what /bprobe ground changed: { strata, level, camLevel }
+local groundTicker -- keeps Bastian's view on the game minimap's centre and scale while the ground is off
+
+-- The game's dots sit where the game's minimap puts them: around its centre (the player), at its
+-- own scale, half its width for C_Minimap.GetViewRadius() yards. Bastian's tiles show the same
+-- ground under them only while our view follows the player and draws at that scale (owner, Forever
+-- 14.11.2026: a node stood 88 px beside its place with the view dragged away). Sets both; returns
+-- what it measured, or nil and why.
+local function fitToGame(mini)
+  local cam, view = mini.Camera(), mini.View()
+  local radius = C_Minimap.GetViewRadius()
+  if not (cam and view and type(radius) == "number" and radius > 0) then
+    return nil, "no camera, view or radius"
+  end
+  -- half the game's minimap in our view's pixels
+  local half = Minimap:GetWidth() / 2 * Minimap:GetEffectiveScale() / view:GetEffectiveScale()
+  local base = cam:Scale() / 2 ^ cam.level -- pixels per yard at level 0
+  local level = math.log(half / radius / base) / math.log(2)
+  local fit = {
+    radius = radius,
+    half = half,
+    was = cam.level,
+    level = level,
+    following = mini.Following(),
+    minimap = Minimap:GetWidth(),
+    view = view:GetWidth(),
+  }
+  if not fit.following or math.abs(cam.level - level) > 0.001 then
+    cam.level = level
+    mini.Recentre() -- follows the player again and draws
+    fit.changed = true
+  end
+  return fit
+end
+
+-- /bprobe ground level: where the game's minimap goes in our view's stack, and which clicks reach
+-- it there (counted by button while the ground is off; a pin of ours above it takes its own).
+local GROUND_LEVEL = 12
+local groundClicks, groundHooked
+
+local function hookGroundClicks()
+  if groundHooked then
+    return
+  end
+  groundHooked = pcall(Minimap.HookScript, Minimap, "OnMouseUp", function(_, button)
+    if groundClicks and type(button) == "string" then
+      groundClicks[button] = (groundClicks[button] or 0) + 1
+    end
+  end)
+end
+
+-- The type of a frame's method, the lookup protected: a frame may lack it, and looking can raise.
+local function methodType(obj, name)
+  local ok, fn = pcall(function()
+    return obj[name]
+  end)
+  return ok and type(fn) or "error"
+end
+
+local function stopGroundTicker()
+  if groundTicker then
+    groundTicker:Cancel()
+    groundTicker = nil
+  end
+end
+
+local function zoomRadii()
+  local out = {}
+  local zoom = first(tryMethod(Minimap, "GetZoom"))
+  local levels = first(tryMethod(Minimap, "GetZoomLevels")) or 6
+  for z = 0, levels - 1 do
+    local set = tryMethod(Minimap, "SetZoom", z)
+    out[#out + 1] = { zoom = z, set = set.ok, radius = first(try(C_Minimap.GetViewRadius)) }
+  end
+  if zoom then
+    tryMethod(Minimap, "SetZoom", zoom)
+  end
+  return out, levels
+end
+
+local function probeGround(arg)
+  if InCombatLockdown() then
+    say("ground: not in combat")
+    return
+  end
+  local api = rawget(_G, "C_Minimap")
+  if not (api and type(api.SetDrawGroundTextures) == "function") then
+    say("ground: this client has no C_Minimap.SetDrawGroundTextures")
+    return
+  end
+  local core = rawget(_G, "Bastians")
+  local ok, map = pcall(function()
+    return core and core:GetModule("Map")
+  end)
+  -- the Map's own dots layer (ADR 0078) holds the same switch: one owner at a time
+  local held = ok and map and map.Mini and type(map.Mini.DotsShown) == "function" and map.Mini.DotsShown()
+  if held and not groundSaved then
+    say("ground: Bastian's minimap holds the ground (its dots layer); switch its tracking setting off first")
+    return
+  end
+  local out = db.results.ground or { runs = {} }
+  db.results.ground = out
+  local run = { at = now(), indoors = try(rawget(_G, "IsIndoors")) }
+  out.runs[#out.runs + 1] = run
+  run.before = try(api.GetDrawGroundTextures)
+  run.style = ok and map and map.Mini and first(try(map.Mini.Style)) or "no Map"
+  -- off now, by this session's call or one before a /reload: put it back
+  if groundSaved or first(run.before) == false then
+    run.action = "back on"
+    run.set = try(api.SetDrawGroundTextures, true)
+    stopGroundTicker()
+    groundClicks = nil
+    if groundSaved then
+      tryMethod(Minimap, "SetFrameStrata", groundSaved.strata)
+      tryMethod(Minimap, "SetFrameLevel", groundSaved.level)
+      if groundSaved.camLevel and ok and map and map.Mini then
+        pcall(function()
+          map.Mini.Camera().level = groundSaved.camLevel
+          map.Mini.Render()
+        end)
+      end
+    end
+    groundSaved = nil
+    run.after = try(api.GetDrawGroundTextures)
+    say(
+      "ground: back on (the client says %s); the game's minimap is where it was",
+      tostring(first(run.after))
+    )
+    return
+  end
+  run.action = "off"
+  local radii, levels = zoomRadii()
+  run.zooms, run.levels = radii, levels
+  run.set = try(api.SetDrawGroundTextures, false)
+  run.after = try(api.GetDrawGroundTextures)
+  groundSaved = {
+    strata = first(tryMethod(Minimap, "GetFrameStrata")),
+    level = first(tryMethod(Minimap, "GetFrameLevel")),
+  }
+  run.saved = { strata = groundSaved.strata, level = groundSaved.level }
+  run.zoom = first(tryMethod(Minimap, "GetZoom"))
+  run.mouse = {
+    enabled = first(tryMethod(Minimap, "IsMouseEnabled")),
+    propagateClicks = methodType(Minimap, "SetPropagateMouseClicks"),
+    propagateMotion = methodType(Minimap, "SetPropagateMouseMotion"),
+    passThrough = methodType(Minimap, "SetPassThroughButtons"),
+  }
+  if run.style ~= "game" and run.style ~= "no Map" then
+    if arg == "level" then
+      -- ADR 0078, G1 and G2: above our tiles by frame level inside our view, not by strata, so
+      -- that Bastian's pins stay above the game's minimap and keep their mouse. The view's tiles
+      -- sit 10 levels above the view, the pins' overlay 15 (Mini.lua, Minimap.lua).
+      local okView, viewLevel = pcall(function()
+        return map.Mini.View():GetFrameLevel()
+      end)
+      run.variant = "level"
+      run.viewLevel = okView and viewLevel or nil
+      run.raised = okView and tryMethod(Minimap, "SetFrameLevel", viewLevel + GROUND_LEVEL).ok or false
+      run.clicks = {}
+      groundClicks = run.clicks
+      hookGroundClicks()
+    else
+      run.raised = tryMethod(Minimap, "SetFrameStrata", "HIGH").ok
+    end
+    -- our view onto the game minimap's centre and scale, and kept there: a wheel or a drag would
+    -- part the dots from the ground again
+    local mini = map.Mini
+    if type(mini.Camera) == "function" and type(mini.Recentre) == "function" then
+      local okFit, fit, why = pcall(fitToGame, mini)
+      run.fit = okFit and (fit or { err = why }) or { err = tostring(fit) }
+      if okFit and fit then
+        groundSaved.camLevel = fit.was
+        run.refits = 0
+        groundTicker = C_Timer.NewTicker(0.5, function()
+          local okAgain, again = pcall(fitToGame, mini)
+          if okAgain and again and again.changed then
+            run.refits = run.refits + 1
+          end
+        end)
+      end
+    end
+  end
+  local list = {}
+  for _, r in ipairs(radii) do
+    list[#list + 1] = string.format("%d=%s", r.zoom, r.radius and string.format("%.0f", r.radius) or "?")
+  end
+  say(
+    "ground: off (the client said %s before, %s now)%s",
+    tostring(first(run.before)),
+    tostring(first(run.after)),
+    run.raised and "; the game's minimap lies over Bastian's tiles" or ""
+  )
+  if run.variant == "level" then
+    say("ground: by frame level, under Bastian's pins. Hover a dot, click a pin of ours, click the")
+    say("ground: map, right click it, turn the wheel; the clicks the game's minimap got are counted")
+  end
+  if run.fit and not run.fit.err then
+    say(
+      "ground: Bastian's view follows you at the game's scale (%.0f yards to the edge, level %.2f, was %.2f)",
+      run.fit.radius,
+      run.fit.level,
+      run.fit.was
+    )
+  elseif run.fit then
+    say("ground: could not fit Bastian's view to the game's: %s", tostring(run.fit.err))
+  end
+  say("ground: view radius in yards per zoom: %s", table.concat(list, ", "))
+  say("ground: look, take a screenshot, then /bprobe ground puts it back; /reload saves the record")
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- /bprobe chatbasics <log | settings [n] | menus [channels | emotes] | meter | whisper>: what the
+-- Chat's two decks lean on (plan-chat-two-decks.md §13, X15 to X19; the
+-- game's combat log as the live window, the fight's summary inside ours, nothing of the game's
+-- chat lost). Frame states, types, counts and the player's own numbers only, never another
+-- player's name or words (CLAUDE.md §8).
+-- ---------------------------------------------------------------------------------------------
+
+local function parentName(f)
+  local ok, parent = pcall(f.GetParent, f)
+  if not ok or type(parent) ~= "table" then
+    return "<none>"
+  end
+  local okName, name = pcall(parent.GetName, parent)
+  return okName and type(name) == "string" and name or "<unnamed>"
+end
+
+-- What a frame says of itself; { missing = true } for a global that is no frame.
+local function frameState(f)
+  if type(f) ~= "table" or type(f.GetParent) ~= "function" then
+    return { missing = true }
+  end
+  return {
+    shown = first(tryMethod(f, "IsShown")),
+    visible = first(tryMethod(f, "IsVisible")),
+    parent = parentName(f),
+    lines = first(tryMethod(f, "GetNumMessages")),
+    children = first(tryMethod(f, "GetNumChildren")),
+  }
+end
+
+local function basicsRun(id)
+  local out = db.results[id] or { runs = {} }
+  db.results[id] = out
+  local run = { at = now(), combat = InCombatLockdown() and true or false }
+  out.runs[#out.runs + 1] = run
+  return run
+end
+
+-- X15. The game's combat log as a window of its own: the frame and its tab out of whatever parent
+-- hides them (Bastian's Chat keeps the game's chat frames under a hidden parent), onto the
+-- screen's middle, shown. Showing it runs the game's own OnShow, which switches the client's
+-- stream on and shows the filter buttons (Blizzard_CombatLog.lua). A second call puts both back.
+local logSaved -- what the first call moved: { { frame, parent, points, shown } }
+local LOG_LOOKS = { 15, 45 } -- seconds after the show at which the frame's line count is read
+
+local function takeOut(f)
+  local saved = { frame = f, parent = f:GetParent(), shown = f:IsShown(), points = {} }
+  for i = 1, f:GetNumPoints() do
+    saved.points[i] = { f:GetPoint(i) }
+  end
+  if #saved.points < 2 then
+    saved.width, saved.height = f:GetWidth(), f:GetHeight()
+  end
+  return saved
+end
+
+local function putBack(saved)
+  local f = saved.frame
+  f:SetParent(saved.parent)
+  f:ClearAllPoints()
+  for _, p in ipairs(saved.points) do
+    f:SetPoint(p[1], p[2], p[3], p[4], p[5])
+  end
+  if saved.width then
+    f:SetSize(saved.width, saved.height)
+  end
+  if not saved.shown then
+    f:Hide() -- as the game's dock does with a tab that is not selected
+  end
+end
+
+local function combatLogParts()
+  local frame = rawget(_G, "COMBATLOG") or rawget(_G, "ChatFrame2")
+  if type(frame) ~= "table" or type(frame.GetParent) ~= "function" then
+    return nil
+  end
+  local okName, name = pcall(frame.GetName, frame)
+  local tab = okName and type(name) == "string" and rawget(_G, name .. "Tab") or nil
+  return frame, tab, rawget(_G, "CombatLogQuickButtonFrame_Custom")
+end
+
+local function logStates(frame, tab, quick)
+  return { frame = frameState(frame), tab = frameState(tab), quick = frameState(quick) }
+end
+
+local function probeChatLog()
+  local frame, tab, quick = combatLogParts()
+  if not frame then
+    say("chatbasics log: this client has no combat log frame (COMBATLOG, ChatFrame2)")
+    return
+  end
+  local run = basicsRun("chatlog")
+  run.loaded = try(resolve("C_AddOns.IsAddOnLoaded"), "Blizzard_CombatLog")
+  run.restricted = try(resolve("C_CombatLog.IsCombatLogRestricted"))
+  run.before = logStates(frame, tab, quick)
+  if logSaved then
+    run.action = "back"
+    for i = #logSaved, 1, -1 do
+      local ok, err = pcall(putBack, logSaved[i])
+      if not ok then
+        run.err = tostring(err)
+      end
+    end
+    logSaved = nil
+    run.after = logStates(frame, tab, quick)
+    say("chatbasics log: the combat log is back where it was%s", run.err and " (with an error)" or "")
+    return
+  end
+  run.action = "out"
+  logSaved = {}
+  local ok, err = pcall(function()
+    logSaved[#logSaved + 1] = takeOut(frame)
+    frame:SetParent(UIParent)
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", UIParent, "CENTER", 0, -40)
+    frame:SetSize(430, 180)
+    if type(tab) == "table" and type(tab.SetParent) == "function" then
+      logSaved[#logSaved + 1] = takeOut(tab)
+      tab:SetParent(UIParent)
+      tab:ClearAllPoints()
+      tab:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 26) -- over the row of filter buttons
+      tab:Show()
+    end
+    frame:Show()
+  end)
+  run.moved = ok
+  run.err = not ok and tostring(err) or nil
+  run.after = logStates(frame, tab, quick)
+  run.looks = {}
+  for _, seconds in ipairs(LOG_LOOKS) do
+    C_Timer.After(seconds, function()
+      if not logSaved then
+        return -- put back before the look
+      end
+      local look = logStates(frame, tab, quick)
+      look.seconds = seconds
+      look.combat = InCombatLockdown() and true or false
+      run.looks[#run.looks + 1] = look
+      say(
+        "chatbasics log: after %d s the combat log holds %s lines, its buttons are %s",
+        seconds,
+        tostring(look.frame.lines),
+        look.quick.visible and "visible" or "not visible"
+      )
+    end)
+  end
+  if not ok then
+    say("chatbasics log: moving the combat log failed: %s", run.err)
+    return
+  end
+  say(
+    "chatbasics log: the game's combat log stands in the middle (%s, its filter buttons %s)",
+    run.after.frame.visible and "visible" or "NOT visible",
+    run.after.quick.visible and "visible" or "not visible"
+  )
+  say("chatbasics log: fight, click its filter buttons, cast a spell from the chat line with /cast;")
+  say("chatbasics log: then /bprobe chatbasics log puts it back, and /reload saves the record")
+end
+
+-- X16. The game's Chat Settings from addon code. With a window number the dialog is first told
+-- which chat window to edit (the global the game's tab menu sets), which is the riskier way.
+local SETTINGS_CALLS = {
+  "ChatConfigFrame",
+  "ShowUIPanel",
+  "HideUIPanel",
+  "CURRENT_CHAT_FRAME_ID",
+  "FCF_GetCurrentChatFrame",
+  "FCF_GetCurrentChatFrameID",
+  "ChatConfigFrame_OnShow",
+  "ChatConfig_UpdateChatSettings",
+}
+
+local function probeChatSettings(arg)
+  local run = basicsRun("chatsettings")
+  run.calls = {}
+  for _, path in ipairs(SETTINGS_CALLS) do
+    run.calls[path] = type(resolve(path))
+  end
+  run.current = clean(rawget(_G, "CURRENT_CHAT_FRAME_ID"))
+  local dialog = rawget(_G, "ChatConfigFrame")
+  if type(dialog) ~= "table" then
+    say("chatbasics settings: this client has no ChatConfigFrame")
+    return
+  end
+  local window = tonumber(arg)
+  if window then
+    run.window = window
+    rawset(_G, "CURRENT_CHAT_FRAME_ID", window)
+  end
+  run.before = frameState(dialog)
+  run.panel = try(rawget(_G, "ShowUIPanel"), dialog)
+  if not (run.panel.ok and first(tryMethod(dialog, "IsShown"))) then
+    run.show = tryMethod(dialog, "Show")
+  end
+  run.after = frameState(dialog)
+  local okFrame, edited = pcall(function()
+    return FCF_GetCurrentChatFrame():GetName()
+  end)
+  run.edits = okFrame and edited or nil
+  say(
+    "chatbasics settings: the game's Chat Settings are %s (editing %s%s)",
+    run.after.shown and "open" or "NOT open",
+    tostring(run.edits),
+    window and ", set by the probe" or ""
+  )
+  say("chatbasics settings: switch a message type off and on, close, /cast a spell, then /reload")
+end
+
+-- X19. The emote and language menu and the channel list, whose buttons Bastian's Chat hides.
+local MENU_CALLS = {
+  "ChatFrameMenuButton",
+  "ChatFrameChannelButton",
+  "ChannelFrame",
+  "ToggleChannelFrame",
+  "ChatMenu",
+  "EmoteMenu",
+  "LanguageMenu",
+  "VoiceMacroMenu",
+  "ChatFrameMenuButtonMixin",
+  "Menu.GetManager",
+  "MenuUtil.CreateContextMenu",
+}
+
+local function probeChatMenus(arg)
+  local run = basicsRun("chatmenus")
+  run.calls = {}
+  for _, path in ipairs(MENU_CALLS) do
+    run.calls[path] = type(resolve(path))
+  end
+  local menuButton = rawget(_G, "ChatFrameMenuButton")
+  local channelButton = rawget(_G, "ChatFrameChannelButton")
+  local channels = rawget(_G, "ChannelFrame")
+  run.before = {
+    menuButton = frameState(menuButton),
+    channelButton = frameState(channelButton),
+    channels = frameState(channels),
+  }
+  run.tried = arg
+  if arg == "channels" then
+    run.toggle = try(rawget(_G, "ToggleChannelFrame"))
+    if not run.toggle.ok and type(channelButton) == "table" then
+      run.click = tryMethod(channelButton, "Click")
+    end
+  elseif arg == "emotes" then
+    run.click = type(menuButton) == "table" and tryMethod(menuButton, "Click") or nil
+    run.menuOpen = type(menuButton) == "table" and tryMethod(menuButton, "IsMenuOpen") or nil
+  end
+  run.after = {
+    menuButton = frameState(menuButton),
+    channelButton = frameState(channelButton),
+    channels = frameState(rawget(_G, "ChannelFrame")),
+  }
+  if arg == "channels" then
+    say("chatbasics menus: the channel list is %s", run.after.channels.shown and "open" or "NOT open")
+  elseif arg == "emotes" then
+    say(
+      "chatbasics menus: clicked the game's chat menu button (%s); is a menu on the screen?",
+      run.click and run.click.ok and "no error" or "an error, or no button"
+    )
+  else
+    say("chatbasics menus: recorded what exists; '... menus channels' or '... menus emotes' opens one")
+  end
+end
+
+-- X17. What the game's whisper handling keeps while its frames are hidden. Never the name: only
+-- whether there is one.
+local WHISPER_CALLS = {
+  "ChatFrameUtil.ReplyTell",
+  "ChatFrameUtil.ReplyTell2",
+  "ChatFrameUtil.GetLastTellTarget",
+  "ChatFrameUtil.GetLastToldTarget",
+  "ChatFrame_ReplyTell",
+  "ChatEdit_GetLastTellTarget",
+  "ChatEdit_GetLastToldTarget",
+  "BNToastFrame",
+  "ChatAlertFrame",
+  "C_ChatInfo.InChatMessagingLockdown",
+}
+local WHISPER_CVARS = { "whisperMode", "chatStyle", "showToastWindow", "showToastOnline", "chatBubbles" }
+
+local function hasTarget(fn)
+  if type(fn) ~= "function" then
+    return "missing"
+  end
+  local ok, name = pcall(fn)
+  if not ok then
+    return "error"
+  end
+  local isSecret = rawget(_G, "issecretvalue")
+  if name ~= nil and isSecret and isSecret(name) then
+    return "secret"
+  end
+  return type(name) == "string" and name ~= "" and "yes" or "no"
+end
+
+local function probeChatWhisper()
+  local run = basicsRun("chatwhisper")
+  run.calls = {}
+  for _, path in ipairs(WHISPER_CALLS) do
+    run.calls[path] = type(resolve(path))
+  end
+  run.cvars = {}
+  for _, name in ipairs(WHISPER_CVARS) do
+    run.cvars[name] = first(try(resolve("C_CVar.GetCVar") or rawget(_G, "GetCVar"), name))
+  end
+  run.lastTell =
+    hasTarget(resolve("ChatFrameUtil.GetLastTellTarget") or rawget(_G, "ChatEdit_GetLastTellTarget"))
+  run.lastTold =
+    hasTarget(resolve("ChatFrameUtil.GetLastToldTarget") or rawget(_G, "ChatEdit_GetLastToldTarget"))
+  run.toast = frameState(rawget(_G, "BNToastFrame"))
+  run.alert = frameState(rawget(_G, "ChatAlertFrame"))
+  run.lockdown = try(resolve("C_ChatInfo.InChatMessagingLockdown"))
+  say(
+    "chatbasics whisper: the game knows someone to reply to: %s; someone you wrote to: %s",
+    run.lastTell,
+    run.lastTold
+  )
+  say("chatbasics whisper: after a whisper from a second character try the reply key, /r and Tab")
+end
+
+-- X18. The client's own meter after a fight: which sessions, which numbers, and when they stop
+-- being secret. Of a session only the field names, its numbers and the player's own row are kept:
+-- the other rows carry other players' names.
+local METER_TYPES = { "DamageDone", "Dps", "HealingDone", "DamageTaken", "Deaths" }
+local METER_EVENTS = {
+  "PLAYER_REGEN_DISABLED",
+  "PLAYER_REGEN_ENABLED",
+  "DAMAGE_METER_COMBAT_SESSION_UPDATED",
+  "DAMAGE_METER_RESET",
+  "ADDON_RESTRICTION_STATE_CHANGED",
+}
+local METER_AFTER = { 0, 1, 3, 10, 30 } -- seconds after the fight's end at which the meter is read
+local METER_SNAPSHOTS = 60
+local meterListening = false
+
+-- The numbers and booleans of a table, a secret one as "<secret>", and every field's type.
+local function plainFields(t)
+  local out = { fields = {}, values = {} }
+  local isSecret = rawget(_G, "issecretvalue")
+  for k, v in pairs(t) do
+    if type(k) == "string" then
+      if v ~= nil and isSecret and isSecret(v) then
+        out.fields[k] = "secret"
+        out.values[k] = "<secret>"
+      else
+        out.fields[k] = type(v)
+        if type(v) == "number" or type(v) == "boolean" then
+          out.values[k] = v
+        end
+      end
+    end
+  end
+  return out
+end
+
+local function meterSummary(session)
+  local isSecret = rawget(_G, "issecretvalue")
+  if session ~= nil and isSecret and isSecret(session) then
+    return { secret = true }
+  end
+  if type(session) ~= "table" then
+    return { type = type(session) }
+  end
+  local out = plainFields(session)
+  local sources = session.combatSources
+  if type(sources) == "table" and not (isSecret and isSecret(sources)) then
+    out.sources = #sources
+    for _, source in ipairs(sources) do
+      local okMine, mine = pcall(function()
+        return source.isLocalPlayer == true
+      end)
+      if okMine and mine then
+        out.me = plainFields(source)
+        break
+      end
+    end
+  end
+  return out
+end
+
+local function meterSnapshot(out, label)
+  if #out.snapshots >= METER_SNAPSHOTS then
+    return nil
+  end
+  local api = C_DamageMeter
+  local snap = { at = now(), label = label, combat = InCombatLockdown() and true or false }
+  out.snapshots[#out.snapshots + 1] = snap
+  snap.available = try(api.IsDamageMeterAvailable)
+  local kinds = resolve("Enum.AddOnRestrictionType")
+  snap.restricted = try(resolve("C_RestrictedActions.GetAddOnRestrictionState"), kinds and kinds.Combat)
+  local okSessions, sessions = pcall(function()
+    return #api.GetAvailableCombatSessions()
+  end)
+  snap.sessions = okSessions and sessions or tostring(sessions)
+  local sessionTypes, meterTypes = resolve("Enum.DamageMeterSessionType"), resolve("Enum.DamageMeterType")
+  local current = sessionTypes and sessionTypes.Current
+  snap.duration = try(api.GetSessionDurationSeconds, current)
+  snap.types = {}
+  for _, name in ipairs(METER_TYPES) do
+    local id = meterTypes and meterTypes[name]
+    if id ~= nil then
+      -- the summary inside the pcall too: a secret among the fields raises when it is touched
+      local ok, summary = pcall(function()
+        return meterSummary(api.GetCombatSessionFromType(current, id))
+      end)
+      snap.types[name] = ok and summary or { err = tostring(summary) }
+    end
+  end
+  local okRecap, recap = pcall(function()
+    return C_DeathRecap.GetRecapEvents()
+  end)
+  snap.recapEvents = okRecap and type(recap) == "table" and #recap or nil
+  return snap
+end
+
+local function meterLine(snap)
+  local done = snap.types.DamageDone
+  local mine = done and done.me and done.me.values.totalAmount
+  return string.format(
+    "chatbasics meter: %s: %s sessions, duration %s, my damage %s",
+    snap.label,
+    tostring(snap.sessions),
+    tostring(first(snap.duration)),
+    tostring(mine)
+  )
+end
+
+local function probeChatMeter()
+  local api = rawget(_G, "C_DamageMeter")
+  if type(api) ~= "table" then
+    say("chatbasics meter: this client has no C_DamageMeter")
+    return
+  end
+  local out = db.results.chatmeter or { snapshots = {}, events = {} }
+  db.results.chatmeter = out
+  out.at = now()
+  out.functions = {}
+  for name, v in pairs(api) do
+    out.functions[name] = type(v)
+  end
+  out.meterTypes = clean(resolve("Enum.DamageMeterType"))
+  out.sessionTypes = clean(resolve("Enum.DamageMeterSessionType"))
+  out.recap = type(resolve("C_DeathRecap.GetRecapEvents"))
+  local snap = meterSnapshot(out, "now")
+  if snap then
+    say(meterLine(snap))
+  end
+  if meterListening then
+    say("chatbasics meter: listening already; fight alone and in a group, then /reload")
+    return
+  end
+  meterListening = true
+  local f = CreateFrame("Frame")
+  out.registered = {}
+  for _, event in ipairs(METER_EVENTS) do
+    out.registered[event] = pcall(f.RegisterEvent, f, event)
+  end
+  f:SetScript("OnEvent", function(_, event)
+    out.events[event] = (out.events[event] or 0) + 1
+    if event == "PLAYER_REGEN_DISABLED" then
+      C_Timer.After(3, function()
+        meterSnapshot(out, "in the fight")
+      end)
+    elseif event == "PLAYER_REGEN_ENABLED" then
+      for _, seconds in ipairs(METER_AFTER) do
+        C_Timer.After(seconds, function()
+          local after = meterSnapshot(out, seconds .. " s after the fight")
+          if after and (seconds == 0 or seconds == 10) then
+            say(meterLine(after))
+          end
+        end)
+      end
+    end
+  end)
+  say("chatbasics meter: listening; fight once alone and once in a group, wait 30 s, then /reload")
+end
+
+local function probeChatBasics(arg)
+  local part, rest = string.match(arg or "", "^(%S*)%s*(.-)%s*$")
+  if rest == "" then
+    rest = nil
+  end
+  if part == "log" then
+    probeChatLog()
+  elseif part == "settings" then
+    probeChatSettings(rest)
+  elseif part == "menus" then
+    probeChatMenus(rest)
+  elseif part == "whisper" then
+    probeChatWhisper()
+  elseif part == "meter" then
+    probeChatMeter()
+  else
+    say("chatbasics: log | settings [window] | menus [channels | emotes] | whisper | meter")
+  end
+end
+
 local HELP = {
   "/bprobe all  - P1, P2, P3, P5, P6, P10 (automatic probes)",
+  "/bprobe chat - Chat version 3: the calls it needs, the item level, whisper flags (counts only)",
+  "/bprobe combatlog - Forever only: may addons read the combat log, a minute of it (X11)",
   "/bprobe books - the Library books: the globals that name them, every book opened, their events (A3.2)",
+  "/bprobe tracking - the game's tracking and what the minimap's tooltip says over its dots (Track Beasts)",
+  "/bprobe tracking hover - 15 s of what the minimap's tooltip says under the real mouse",
+  "/bprobe ground - the game's minimap without its ground, over Bastian's tiles; again puts it back",
+  "/bprobe ground level - the same by frame level, under Bastian's pins (ADR 0078, G1 and G2)",
+  "/bprobe chatbasics log - the game's combat log as a window of its own; again puts it back (X15)",
+  "/bprobe chatbasics settings [n] | menus [channels | emotes] | whisper | meter - the game's Chat"
+    .. " Settings, its menus, what it keeps of whispers, its meter after a fight (X16 to X19)",
   "/bprobe p1 | p2 | p3 | p5 [fileID or path] | p6 | p10  - one probe",
   "/bprobe p4 <label>  - record a landmark at your position (and your target: NPC, object, node)",
   "/bprobe alpha  - the Map_Art overview cells over red (transparency test)",
@@ -1454,6 +2910,21 @@ local function command(msg)
       probeMinimaps(arg)
     end,
     books = probeBooks,
+    ground = function()
+      probeGround(arg)
+    end,
+    tracking = function()
+      if arg == "hover" then
+        trackingHover()
+      else
+        probeTracking()
+      end
+    end,
+    chat = probeChat,
+    combatlog = probeCombatLog,
+    chatbasics = function()
+      probeChatBasics(arg)
+    end,
   }
   local fn = probes[cmd]
   if not fn then
@@ -1494,6 +2965,14 @@ events:SetScript("OnEvent", function(_, event, arg1)
     end
   elseif event == "PLAYER_LOGIN" then
     recordMeta()
+    if db.results.ground then
+      -- does the ground's switch outlive a /reload or a login? (asked before anything sets it)
+      local logins = db.results.ground.logins or {}
+      db.results.ground.logins = logins
+      if #logins < 20 then
+        logins[#logins + 1] = { at = now(), ground = try(resolve("C_Minimap.GetDrawGroundTextures")) }
+      end
+    end
     say("v%s loaded on %s %s. /bprobe help", VERSION, db.meta.client, tostring(db.meta.build))
   else
     local handlers = {
@@ -1502,6 +2981,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
       TRAINER_SHOW = onTrainerShow,
       MERCHANT_SHOW = onMerchantShow,
     }
+    if not handlers[event] then
+      return -- an event of another probe's frame
+    end
     local ok, err = pcall(handlers[event])
     if not ok then
       say("%s handler failed: %s", event, tostring(err))

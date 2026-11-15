@@ -140,6 +140,35 @@ card = "#ffffff09"
 cardEdge = "#ffffff14"
 inset = "#ffffff0f"
 headerText = "#ebebeb"
+tier0 = "#ff5c8a"         # the chat's ladder (plan-chat-v3.md §2.2): needs you
+tier1 = "#86a8ff"         # your people
+tier2 = "#4de666"         # yours (loot, money, experience)
+tier3 = "#f2c14e"         # signals (Trade's offers, groups)
+tier4 = "#8a8a8a"         # ambient
+tier5 = "#6e6e6e"         # noise (junk)
+cardHot = "#0cd29d"       # the edge of a fresh card (a request just arrived)
+roleTank = "#8ec1ff"      # the roles of a group post, as words
+roleHeal = "#6fe39a"
+roleDps = "#ff8a80"
+offerSell = "#9fe870"     # an offer's kind as a word: WTS
+offerBuy = "#ffc46b"      # WTB
+# the channels' colours (plan-chat-v3.md V25; the artifact's on a dark ground, twins on a light one)
+chanWhisper = "#ff80ff" # whispers (the artifact's --c-whisper)
+chanBnet = "#00faf6"    # Battle.net whispers
+chanParty = "#aaaaff"   # the party and instance chat
+chanRaid = "#ff7f00"    # the raid
+chanWarning = "#ff4800" # raid warnings
+chanGuild = "#40ff40"   # the guild
+chanOfficer = "#40c040" # the officers
+chanSay = "#ffffff"     # say
+chanYell = "#ff4040"    # yell
+chanEmote = "#ff8040"   # emotes
+chanChannel = "#ffc0c0" # Trade, General, LFG and other channels
+chanLoot = "#2fd466"    # loot and money
+chanXp = "#a99cff"      # experience
+chanRep = "#8fb3ff"     # reputation
+chanSystem = "#ffff00"  # system lines, achievements
+chanNpc = "#fffb9f"     # NPCs speaking
 
 # the kind tiles' eight groups (ADR 0046): value, hostile, place, nature, people, special, goods, other
 tileGold = "#a67c1e"

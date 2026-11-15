@@ -223,6 +223,7 @@ for _, name in ipairs({
   "BASTIANS_NOTICE",
   "BASTIANS_ACTION_STATE", -- an action's active() may answer differently (Voice play/stop; §16)
   "BASTIANS_REWARD_INFO_CHANGED", -- a reward item loaded or gear changed (Quests, S7; §16)
+  "BASTIANS_SAYING", -- an app sends a chat line now: Courtesy, Gestures (plan-chat-v3.md §3.3; §16)
 }) do
   B:DeclareMessage(name)
 end

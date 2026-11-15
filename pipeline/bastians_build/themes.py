@@ -58,6 +58,17 @@ UI_TEXT = (
     "typeRecipe", "typeSpot", "typeChain", "typeHere",
     "coinGold", "coinSilver", "coinCopper",
     "diffRed", "diffOrange", "diffYellow", "diffGreen", "diffGrey",
+    "roleTank", "roleHeal", "roleDps", "offerSell", "offerBuy",
+)  # fmt: skip
+# the chat's ladder and a fresh card's edge (plan-chat-v3.md §9): stripes, ticks and edges,
+# graphics read at 3:1 on the window ground and a panel
+CHAT_MARKS = ("tier0", "tier1", "tier2", "tier3", "tier4", "tier5", "cardHot")
+# the channels' colours (plan-chat-v3.md V25): a line's words in the chat, on the window ground,
+# a panel and a card in every theme (the chat draws in its own look, light ones too)
+CHAT_TEXT = (
+    "chanWhisper", "chanBnet", "chanParty", "chanRaid", "chanWarning", "chanGuild", "chanOfficer",
+    "chanSay", "chanYell", "chanEmote", "chanChannel", "chanLoot", "chanXp", "chanRep",
+    "chanSystem", "chanNpc",
 )  # fmt: skip
 TILES = (
     "tileGold", "tileRed", "tileTeal", "tileGreen",
@@ -81,6 +92,7 @@ READABLE: tuple[tuple[tuple[str, ...], tuple[str, ...], int | str], ...] = (
         11,
     ),
     ((TILE_GLYPH,), TILES, "icon"),
+    (CHAT_MARKS, ("bg", "panel"), "icon"),
 )
 # The pocket atlas' grounds (ADR 0056, "readable by rule", PA7). A tile's plate lies over the
 # window's ground and over a panel ("card/bg": the first composited over the second by its alpha).
@@ -93,6 +105,7 @@ PAPER_THEME = "parchment"
 SHEET_TEXT = ("sheetInk", "sheetDim", "sheetTitle", "sheetGood")
 READABLE += (
     (UI_TEXT, ("card/bg", "card/panel"), 12),
+    (CHAT_TEXT, ("bg", "panel", "card/bg", "card/panel"), 12),
     (SHEET_TEXT, (PAPER_GROUND,), 12),
     (("sheetTileText",), ("sheetTile",), 12),
 )

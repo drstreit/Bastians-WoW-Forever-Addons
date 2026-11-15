@@ -386,10 +386,10 @@ B.APPS = {
     module = "Chat",
     slash = "/bchat",
     icon = "app_chat",
-    about = L["The whole chat in windows of your own: tabs you define, a Messenger for whispers, a spam filter, long texts and copying. New: off until you try it."], -- luacheck: ignore 631 (a locale key stays one literal)
+    about = L["The whole chat in one window: places on the left (your people, the streams, your saved searches), plain-word filters, a spam filter, long texts and copying. New: off until you try it."], -- luacheck: ignore 631 (a locale key stays one literal)
     does = {
-      L["The whole chat in windows of your own, with tabs you define"],
-      L["A Messenger for whispers: the people on the left, the conversation on the right"],
+      L["The whole chat in one window, each place in its form"],
+      L["Whispers as people: one conversation each, those who wait first"],
       L["A spam filter, long texts sent in parts, copying, web addresses as links"],
       L["Everything kept over /reload and logout"],
       L["Works with Spoken Players: it reads the chat aloud in race voices, Chat shows the words and never reads them twice"], -- luacheck: ignore 631 (a locale key stays one literal)
@@ -732,9 +732,14 @@ Settings_.LOOK_KEYS = {
   "theme",
   "font",
   "headingFont",
+  "labelFont", -- a section's title, a tab's label (plan-chat-v3.md V17); nil: the text font
+  "numberFont", -- counts, times, prices (V17); nil: the text font
   "fontScale",
   "windowColor",
   "windowAlpha",
+  "windowBorder", -- LibSharedMedia's border by its name (plan-chat-v3.md V25); nil none
+  "windowBorderColor",
+  "windowTexture", -- LibSharedMedia's background by its name; nil the look's flat ground
   "gameButtons",
   "ornaments",
   "sheetParchment",
@@ -756,9 +761,14 @@ local function modern(theme)
     theme = theme,
     font = S.DEFAULT_FONT,
     headingFont = nil,
+    labelFont = nil,
+    numberFont = nil,
     fontScale = 100,
     windowColor = nil,
     windowAlpha = 100,
+    windowBorder = nil,
+    windowBorderColor = nil,
+    windowTexture = nil,
     gameButtons = false,
     ornaments = false,
     sheetParchment = true,
@@ -889,6 +899,28 @@ function Settings_.DeletePreset(mod)
     B.UI.Hub.Refresh()
   end
   return true
+end
+
+-- A choice of LibSharedMedia's names of a kind (V25): "" is `none`, then every name it knows.
+function Settings_.MediaChoices(kind, none)
+  local out = { [""] = none }
+  for _, name in ipairs(S.MediaNames(kind)) do
+    out[name] = name
+  end
+  return out
+end
+
+-- A preset's values by its id (a built-in or "user:<name>"), nil for an unknown one: for a window
+-- of a preset of its own (Window:SetPreset; Bastian's Chat's look, plan-chat-v3.md V13).
+function Settings_.PresetValues(id)
+  return type(id) == "string" and presetValues(ns.core, id) or nil
+end
+
+-- The presets as an app's choice ({ [id] = name }): the built-ins and the saved ones, no Custom.
+function Settings_.Presets()
+  local values = Settings_.PresetChoices(ns.core)
+  values.custom = nil
+  return values
 end
 
 -- The choice: the built-ins, the saved ones ("user:<name>"), and Custom.
@@ -1168,6 +1200,43 @@ ns.core = B:NewModule("Core", {
         S.applyFont()
       end,
     },
+    -- the faces of the small heads and of the numbers (plan-chat-v3.md V17); "" is the text font
+    {
+      type = "select",
+      key = "labelFont",
+      desc = L["The font of section titles and tabs."],
+      label = L["Labels and tabs font"],
+      values = function()
+        local values = Settings_.FontChoices()
+        values[""] = L["Same as the text"]
+        return values
+      end,
+      get = function(mod)
+        return mod.db.profile.labelFont or ""
+      end,
+      set = function(path, mod)
+        mod.db.profile.labelFont = path ~= "" and path or nil
+        S.applyFont()
+      end,
+    },
+    {
+      type = "select",
+      key = "numberFont",
+      desc = L["The font of counts, times and prices where an app marks them."],
+      label = L["Numbers font"],
+      values = function()
+        local values = Settings_.FontChoices()
+        values[""] = L["Same as the text"]
+        return values
+      end,
+      get = function(mod)
+        return mod.db.profile.numberFont or ""
+      end,
+      set = function(path, mod)
+        mod.db.profile.numberFont = path ~= "" and path or nil
+        S.applyFont()
+      end,
+    },
     {
       type = "range",
       key = "fontScale",
@@ -1186,6 +1255,53 @@ ns.core = B:NewModule("Core", {
       desc = L["The ground of every window; an app may set its own on its page."],
       label = L["Window background"],
       theme = S.C.bg,
+    },
+    -- LibSharedMedia's borders and backgrounds (plan-chat-v3.md V25): every window of the suite
+    {
+      type = "note",
+      text = function()
+        return S.HasMedia() and ""
+          or L["Borders and window textures: LibSharedMedia is not loaded (another addon brings it)."]
+      end,
+    },
+    {
+      type = "select",
+      key = "windowBorder",
+      desc = L["A border of LibSharedMedia around every window."],
+      label = L["Window border"],
+      values = function()
+        return Settings_.MediaChoices("border", L["None"])
+      end,
+      get = function(mod)
+        return mod.db.profile.windowBorder or ""
+      end,
+      set = function(name, mod)
+        mod.db.profile.windowBorder = name ~= "" and name or nil
+        B.UI.ApplyWindowLook()
+      end,
+    },
+    {
+      type = "color",
+      key = "windowBorderColor",
+      desc = L["The colour of that border."],
+      label = L["Border colour"],
+      theme = S.C.line,
+    },
+    {
+      type = "select",
+      key = "windowTexture",
+      desc = L["A background of LibSharedMedia in every window, in the window's colour and opacity."],
+      label = L["Window texture"],
+      values = function()
+        return Settings_.MediaChoices("background", L["The look's flat ground"])
+      end,
+      get = function(mod)
+        return mod.db.profile.windowTexture or ""
+      end,
+      set = function(name, mod)
+        mod.db.profile.windowTexture = name ~= "" and name or nil
+        B.UI.ApplyWindowLook()
+      end,
     },
     {
       type = "range",
@@ -1399,7 +1515,10 @@ ns.core = B:NewModule("Core", {
       S.ApplySkin() -- and its own skin (ADR 0034); redraws the windows too
     end)
     self:On("BASTIANS_SETTING_CHANGED", function(me, _, modName, key)
-      if modName == me.name and (key == "windowColor" or key == "windowAlpha") then
+      if
+        modName == me.name
+        and (key == "windowColor" or key == "windowAlpha" or key == "windowBorderColor")
+      then
         B.UI.ApplyWindowLook()
       end
       if modName == me.name then
@@ -1583,6 +1702,12 @@ local function widgetFor(canvas, option, mod)
     local w = Wd.Edit(canvas, option.label, function(text)
       setValue(mod, option, text)
     end)
+    -- an edit with a `get` shows what it holds (Chat's answers, plan-chat-v3.md V12); without one
+    -- it stays an empty line to type into (a new profile's name, a name to block)
+    if option.get then
+      local ok, text = ns.safecall(mod, option.get, mod)
+      w:SetText(ok and type(text) == "string" and text or "")
+    end
     return carded(describe(w, option.desc), option.desc)
   elseif kind == "color" then
     local w = Wd.Color(canvas, option.label, function()

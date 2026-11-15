@@ -40,6 +40,7 @@ ns.L:Register("frFR", {
   ["Unknown command: %s"] = "Commande inconnue : %s",
   ["morning"] = "matin",
   ["afternoon"] = "après-midi",
+  ["day"] = "journée", -- %h at noon, 12:00 to 13:59
   ["evening"] = "soir",
   ["night"] = "nuit",
   ["he"] = "il",

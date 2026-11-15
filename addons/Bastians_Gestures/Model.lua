@@ -367,9 +367,11 @@ function Model.DayKey(hour)
   return "night"
 end
 
--- The same in the player's language.
+-- The same in the player's language, as a line says it: "day" at noon, 12:00 to 13:59 (owner,
+-- Forever 15.11.2026: "12:26 is noon, not afternoon"; "Good day", "Guten Tag").
 function Model.DayTime(hour)
-  local key = Model.DayKey(hour)
+  local h = tonumber(hour)
+  local key = (h and h >= 12 and h < 14) and "day" or Model.DayKey(hour)
   return key and L[key] or nil
 end
 

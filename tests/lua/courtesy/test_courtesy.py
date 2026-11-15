@@ -138,11 +138,11 @@ def test_the_petals_fly_out(wow: WowRuntime):
 
 def test_a_click_sends_the_line_as_the_line_asks(wow: WowRuntime):
     boot(wow)
+    mine = f"{MOD}.Mine"
     wow.execute(
-        "Bastians:AddCourtesyLines({"
-        " { 'rez', 'polite', 'SPOKEN, %t.' },"
-        " { 'rez', 'roleplay', 'WITH ACT, %t.', act = 'bows to %t.', emote = 'BOW' },"
-        "})"
+        f"{mine}.Put({{ 'rez', 'polite', 'SPOKEN, %t.' }});"
+        f" {mine}.Put({{ 'rez', 'polite', 'SPOKEN TOO, %t.' }});"  # the next ring offers the other
+        f" {mine}.Put({{ 'rez', 'roleplay', 'WITH ACT, %t.', act = 'bows to %t.', emote = 'BOW' }})"
     )
     wow.execute("Mock.Fire('RESURRECT_REQUEST', 'Aquinne')")
     labels = {wow.eval(f"{R}.Item({i}).label"): i for i in (1, 2, 3)}
@@ -156,7 +156,8 @@ def test_a_click_sends_the_line_as_the_line_asks(wow: WowRuntime):
     wow.execute(f"{C}.Show({{ kind = 'rez', who = 'Zug' }})")
     labels = {wow.eval(f"{R}.Item({i}).label"): i for i in (1, 2, 3)}
     click(wow, labels["Polite"])
-    assert sent(wow)[-1] == ("SPOKEN, Zug.", "SAY", None)
+    words, channel, _ = sent(wow)[-1]
+    assert channel == "SAY" and words.startswith("SPOKEN") and words.endswith(", Zug.")
     assert errors(wow) == []
 
 
@@ -843,3 +844,70 @@ def test_what_the_gesture_was_decides_the_row(wow: WowRuntime):
     lines = [wow.eval(f"{R}.Item({i}).line") for i in (1, 2, 3)]
     assert all(line[1].startswith("emote.friendly") for line in lines)
     assert errors(wow) == []
+
+
+CAMPS = """
+local service = Bastians.GetService
+Bastians.GetService = function(self, name)
+  if name == "camps" then
+    return { Company = function() return COMPANY or {} end }
+  end
+  return service(self, name)
+end
+"""
+
+
+def test_sitting_down_by_a_fire_greets_the_company_aloud_once(wow: WowRuntime):
+    """ "when I sit with a campfire, I want to have another small globe
+    ... with some greetings", the people there named, "as a /say, not whisper"."""
+    boot(wow)
+    wow.execute(CAMPS + "COMPANY = { 'Alda', 'Brann' }")
+    wow.execute("Bastians:Fire('BASTIANS_CAMP_SAT', 'Hostia')")
+    assert wow.eval(f"{C}.IsShown()") is True
+    assert wow.eval(f"{R}.Caption()") == "By the fire with Alda and Brann"
+    assert wow.eval(f"{C}.PendingFacts().company") == "Alda and Brann"
+    assert wow.eval(f"{C}.PendingFacts().situation") == "camp.greet"
+    assert wow.eval(f"{R}.Item(4).emote") == "WAVE"
+    # once per fire: sitting down again, and the warmth landing after it, open nothing
+    wow.execute(f"{C}.Hide()")
+    wow.execute("Bastians:Fire('BASTIANS_CAMP_SAT', 'Hostia')")
+    assert wow.eval(f"{C}.IsShown()") is False
+    wow.execute("Bastians:Fire('BASTIANS_CAMP_WARMED', 'Hostia')")
+    assert wow.eval(f"{C}.IsShown()") is False
+    assert errors(wow) == []
+
+
+def test_the_fire_is_greeted_aloud_even_when_the_host_could_be_whispered(wow: WowRuntime):
+    boot(wow)
+    wow.execute(
+        "Mock.guids = { party1 = 'Player-1-1' }; Mock.unitNames = { party1 = 'Hostia Vale' }"
+    )
+    wow.execute(
+        f"{C}.Show({{ kind = 'fire', key = 'fire', who = 'Hostia', unit = 'party1', aloud = true,"
+        " company = 'Alda' })"
+    )
+    assert wow.eval(f"{C}.Pending().full") is None
+    for i in (1, 2, 3):
+        item = wow.eval(f"{R}.Item({i})")
+        if item:
+            assert item.secure is not None  # said through the petal's secure button
+            assert not str(item.tip).startswith("/w")
+    assert errors(wow) == []
+
+
+def test_nobody_known_at_the_fire_still_greets(wow: WowRuntime):
+    boot(wow)
+    wow.execute(CAMPS + "COMPANY = {}")
+    wow.execute("Bastians:Fire('BASTIANS_CAMP_SAT', nil)")
+    assert wow.eval(f"{C}.IsShown()") is True
+    assert wow.eval(f"{R}.Caption()") == "By the fire"
+    lines = [wow.eval(f"{R}.Item({i}).line") for i in (1, 2, 3)]
+    assert all(lines) and not any("%k" in str(line[3]) for line in lines)
+    assert errors(wow) == []
+
+
+def test_sitting_already_at_a_login_is_no_greeting(wow: WowRuntime):
+    wow.start(CORE, DATA, GESTURES, COURTESY)
+    wow.execute(CAMPS + "COMPANY = { 'Alda' }")
+    wow.execute("Bastians:Fire('BASTIANS_CAMP_SAT', nil)")  # the first seconds after a login
+    assert wow.eval(f"{C}.IsShown()") is False

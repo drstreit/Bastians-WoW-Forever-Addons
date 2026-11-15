@@ -40,6 +40,7 @@ ns.L:Register("deDE", {
   ["Unknown command: %s"] = "Unbekannter Befehl: %s",
   ["morning"] = "Morgen",
   ["afternoon"] = "Nachmittag",
+  ["day"] = "Tag", -- %h at noon, 12:00 to 13:59
   ["evening"] = "Abend",
   ["night"] = "Nacht",
   ["he"] = "er",

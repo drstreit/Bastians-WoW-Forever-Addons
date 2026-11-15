@@ -26,7 +26,42 @@ local plain = B.Compat.Plain
 local mod
 local state = { seen = {} }
 local recent = {} -- the lines of this session (Voice.Remember)
+local shown = {} -- the lines offered lately and not taken (Voice.SHOWN of them)
 local pending, pendingFacts -- the moment the ring shows
+
+-- What an offer keeps out while it can: the lines said lately and the lines offered lately.
+local function avoidance()
+  return setmetatable({}, {
+    __index = function(_, line)
+      return recent[line] or shown[line]
+    end,
+  })
+end
+
+local function offered(line)
+  Voice.Remember(shown, line, Voice.SHOWN)
+end
+
+Courtesy.RECENT_LIST = 12 -- lines the window My lines shows as offered lately
+
+-- The lines offered or said lately, newest first, each once (the window My lines: Never offer).
+function Courtesy.RecentLines()
+  local out, seen = {}, {}
+  for _, memory in ipairs({ shown, recent }) do
+    local order = memory.order or {}
+    for i = #order, 1, -1 do
+      local line = order[i]
+      if not seen[line] then
+        seen[line] = true
+        out[#out + 1] = line
+      end
+    end
+  end
+  while #out > Courtesy.RECENT_LIST do
+    table.remove(out)
+  end
+  return out
+end
 local invite -- the last group invite: { who, guid, at }
 local trace = {} -- the last buffs and what became of them, newest first (saved: spells, never names)
 local refusal -- why the last Offer was not answered
@@ -84,6 +119,8 @@ function Courtesy.Words(event)
     return string.format(L["%s invites you to a group"], event.who)
   elseif event.kind == "camp" then
     return string.format(L["%s's camp warmed you"], event.who)
+  elseif event.kind == "fire" then
+    return event.company and string.format(L["By the fire with %s"], event.company) or L["By the fire"]
   elseif event.kind == "accepted" then
     return string.format(L["You joined %s's group"], event.who)
   elseif event.kind == "try" then
@@ -98,7 +135,7 @@ end
 
 -- The game emote of a moment: a wave back for an emote, a bow for a request, thanks otherwise.
 function Courtesy.EmoteFor(event)
-  if event.kind == "emote" then
+  if event.kind == "emote" or event.kind == "fire" then
     return "WAVE"
   elseif Courtesy.IsRequest(event) then
     return "BOW"
@@ -115,25 +152,58 @@ local function emoteAt(event, token)
   return token
 end
 
+-- The `courtesy` service's line (core-contracts §11; plan-chat-v3.md V23): for a whisper that
+-- thanks ("thanks"), congratulates ("gz") or greets ("hi") the player, a spoken line of the
+-- player's moods (never an act alone), the partner's short name as %t; nil when none fits.
+Courtesy.SITUATION = { thanks = "emote.friendly.thank", gz = "emote.friendly.cheer", hi = "emote.friendly" }
+
+function Courtesy.LineFor(kind, name)
+  local situation = Courtesy.SITUATION[kind]
+  if not situation then
+    return nil
+  end
+  local facts = Facts.Surroundings(Facts.Speaker())
+  facts.situation = situation
+  facts.target = type(name) == "string" and (name:match("^([^%-]+)") or name) or nil
+  facts = Voice.Complete(facts)
+  local moods = Courtesy.Moods()
+  local line = Mine.Choose(facts, { moods = moods, via = "say", recent = avoidance(), fresh = true })
+    or Mine.Choose(facts, { moods = moods, via = "say", recent = recent })
+  if line then
+    offered(line) -- the next plate says something else while it can
+  end
+  return line and Voice.Words(line, facts, "say") or nil
+end
+
 -- Up to `count` lines for a moment: different moods where it can, never one line twice; lines said
--- lately only when nothing else is left.
+-- or offered lately only when nothing else is left ("I get always the
+-- same answers": the lines not clicked came back at every ring).
 function Courtesy.Lines(facts, count, onlyMood, via)
   local weights = onlyMood and { [onlyMood] = 1 } or Courtesy.Moods()
-  local left, out, offered = {}, {}, {}
+  local left, out, inRing = {}, {}, {}
   for mood, weight in pairs(weights) do
     left[mood] = weight
   end
-  local avoid = setmetatable({}, { __index = recent })
+  local avoid = avoidance()
+  local saidOrHere = setmetatable({}, {
+    __index = function(_, line)
+      return recent[line] or inRing[line]
+    end,
+  })
   for _ = 1, count do
     local line = Mine.Choose(facts, { moods = left, recent = avoid, fresh = true, via = via })
       or Mine.Choose(facts, { moods = weights, recent = avoid, fresh = true, via = via })
-      or Mine.Choose(facts, { moods = weights, recent = offered, fresh = true, via = via })
+      or Mine.Choose(facts, { moods = weights, recent = saidOrHere, fresh = true, via = via })
+      or Mine.Choose(facts, { moods = weights, recent = inRing, fresh = true, via = via })
     if not line then
       break
     end
     out[#out + 1] = line
-    avoid[line], offered[line] = true, true
+    avoid[line], inRing[line] = true, true
     left[line[2]] = nil
+  end
+  for _, line in ipairs(out) do
+    offered(line)
   end
   return out
 end
@@ -198,16 +268,40 @@ local function requestItems(event)
   }
 end
 
+-- The moment the ring shows, told to the bus (plan-chat-v3.md §3.3): Bastian's Chat puts it on a
+-- card, which goes with the answer. { id, kind, who, done }; the events of a few moments kept so a
+-- card can ask for the ring again (BASTIANS_MOMENT_REOPEN).
+B:DeclareMessage("BASTIANS_MOMENT")
+B:DeclareMessage("BASTIANS_MOMENT_DONE")
+local moment
+local momentSeq = 0
+local momentEvents = {}
+Courtesy.MOMENTS_KEPT = 10
+
+local function momentDone(how, text)
+  if moment and not moment.done then
+    moment.done = true
+    B:Fire("BASTIANS_MOMENT_DONE", moment.id, how, text)
+  end
+end
+
+-- An app sends a line now (the chat tags it with the app, §3.3).
+local function saying(chatType, target, text)
+  B:Fire("BASTIANS_SAYING", "courtesy", chatType, target, text)
+end
+
 -- Sends a line, as the line asks. Only ever from a click (courtesy.md "What the client allows").
 function Courtesy.Say(line, facts, event)
   Voice.Remember(recent, line)
   if event.full then -- to the person: no target needed, the player's own stays, nothing public
     local spoken = Voice.Words(line, facts, "say")
+    saying("WHISPER", event.full, spoken)
     Compat.SendChat(spoken, "WHISPER", event.full)
     return spoken
   end
   local channel = Voice.Channel(line)
   local words = Voice.Words(line, facts, channel == "SAY" and "say" or "emote")
+  saying(channel, nil, words)
   Compat.SendChat(words, channel)
   if line.emote then
     emoteAt(event, line.emote)
@@ -222,6 +316,7 @@ function Courtesy.Decline(event, facts)
     or string.gsub(L[Courtesy.DECLINE], "%%t", function()
       return event.who
     end)
+  saying("WHISPER", event.full or event.who, text)
   local sent = Compat.SendChat(text, "WHISPER", event.full or event.who)
   Compat.Decline(event.kind)
   return sent and text or false
@@ -230,40 +325,85 @@ end
 -- A petal was clicked. -> what went out, or false.
 function Courtesy.Fire(_, item)
   local event, facts = pending, pendingFacts
-  Courtesy.Hide()
-  if not (event and item) then
-    return false
-  elseif item.decline then
-    return Courtesy.Decline(event, facts)
-  elseif item.line then
-    return Courtesy.Say(item.line, facts, event)
-  elseif item.emote then
-    return emoteAt(event, item.emote)
+  local m = moment
+  if m then
+    m.done = true -- told below, with the answer
   end
-  return false
+  Courtesy.Hide()
+  local out = false
+  local how = "notnow"
+  if not (event and item) then
+    out = false
+  elseif item.decline then
+    out, how = Courtesy.Decline(event, facts), "declined"
+  elseif item.line then
+    out, how = Courtesy.Say(item.line, facts, event), "answered"
+  elseif item.emote then
+    out, how = emoteAt(event, item.emote), "answered"
+  end
+  if m then
+    B:Fire("BASTIANS_MOMENT_DONE", m.id, how, type(out) == "string" and out or nil)
+  end
+  return out
 end
 
 -- A petal's secure button has run its line: what is left to do after the game sent it.
 function Courtesy.Fired(_, item)
   local event = pending
+  local words
   if event and item and item.line then
     Voice.Remember(recent, item.line)
+    words = pendingFacts and Voice.Words(item.line, pendingFacts, "say") or nil
+    if words then
+      saying(Voice.Channel(item.line), nil, words)
+    end
     if item.line.emote then
       emoteAt(event, item.line.emote)
     end
   end
+  momentDone("answered", words)
   Courtesy.Hide()
 end
 
--- Opens the ring for a moment. `facts` and `onlyMood` from `/bcourtesy try ring`.
-function Courtesy.Show(event, facts, onlyMood)
+-- Opens the ring for a moment. `facts` and `onlyMood` from `/bcourtesy try ring`; `id` the
+-- moment's own when a chat card asks for the ring again.
+function Courtesy.Show(event, facts, onlyMood, id)
   facts = facts or Facts.Moment(event)
-  event.full = event.who and wholeName(event) or nil
+  -- an aloud moment (the fire) is never whispered, also when the host's whole name is known
+  event.full = event.who and not event.aloud and wholeName(event) or nil
   pending, pendingFacts = event, facts
+  if not id then
+    momentSeq = momentSeq + 1
+    id = momentSeq
+    momentEvents[#momentEvents + 1] = { id = id, event = event }
+    if #momentEvents > Courtesy.MOMENTS_KEPT then
+      table.remove(momentEvents, 1)
+    end
+  end
+  local m = { id = id, kind = event.kind, who = event.who }
+  moment = m
+  B:Fire("BASTIANS_MOMENT", id, event.kind, event.who)
   local items = Courtesy.IsRequest(event) and requestItems(event) or kindItems(event, facts, onlyMood)
   Medallion.Open(items, Courtesy.Words(event), Courtesy.Fire, function()
     pending, pendingFacts = nil, nil
+    if moment == m and not m.done then
+      momentDone("expired")
+    end
   end, Courtesy.Fired)
+end
+
+-- BASTIANS_MOMENT_REOPEN(id): a chat card asks for a moment's ring again (out of combat only, as
+-- every ring).
+function Courtesy.Reopen(_, _, id)
+  if InCombatLockdown() then
+    return
+  end
+  for _, kept in ipairs(momentEvents) do
+    if kept.id == id then
+      Courtesy.Show(kept.event, nil, nil, id)
+      return
+    end
+  end
 end
 
 function Courtesy.Hide()
@@ -523,9 +663,29 @@ end
 -- BASTIANS_CAMP_WARMED (Bastian's Campfire, the bus): the host's name when the client gives it.
 function Courtesy.OnCampWarmed(_, _, who)
   who = name(who)
+  local greeted = state.seen and state.seen.fire
+  if greeted and now() - greeted < Model.COURTESY_SECONDS then
+    return -- the fire was greeted when the player sat down: one ring per fire
+  end
   if who and who ~= Compat.UnitPlayerName("player") then
     Courtesy.Offer({ kind = "camp", who = who })
   end
+end
+
+-- BASTIANS_CAMP_SAT (Bastian's Campfire, the bus): the player sat down by a fire. Greetings to the
+-- company there, said aloud; the host's name
+-- when the client gives it. Not in the first seconds after a login (already sitting).
+function Courtesy.OnCampSat(_, _, host)
+  if now() < settleUntil then
+    return
+  end
+  host = name(host)
+  if host == Compat.UnitPlayerName("player") then
+    host = nil
+  end
+  local camps = B:GetService("camps")
+  local names = camps and type(camps.Company) == "function" and camps.Company() or nil
+  Courtesy.Offer({ kind = "fire", key = "fire", who = host, aloud = true, company = Voice.Company(names) })
 end
 
 function Courtesy.Attach(m)
@@ -536,6 +696,8 @@ function Courtesy.Attach(m)
   Courtesy.Settle()
   m:RegisterEvent("PLAYER_ENTERING_WORLD", Courtesy.Settle)
   m:On("BASTIANS_CAMP_WARMED", Courtesy.OnCampWarmed)
+  m:On("BASTIANS_CAMP_SAT", Courtesy.OnCampSat)
+  m:On("BASTIANS_MOMENT_REOPEN", Courtesy.Reopen)
   m:RegisterEvent("UNIT_AURA", Courtesy.OnAura)
   m:RegisterEvent("RESURRECT_REQUEST", Courtesy.OnResurrect)
   m:RegisterEvent("CHAT_MSG_TEXT_EMOTE", Courtesy.OnEmote)

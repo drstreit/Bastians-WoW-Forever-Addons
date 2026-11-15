@@ -20,6 +20,7 @@ def test_without_the_apps_every_answer_is_nil(wow: WowRuntime):
         "Price(2589)",
         "Quest(7)",
         "QuestLog()",
+        "NeededItems()",
         "Route()",
         "TravelTime(1429, 0.5, 0.5)",
         "RouteTo(1429, 0.5, 0.5, 'x')",
@@ -107,6 +108,24 @@ def test_route_to_and_the_active_route(wow: WowRuntime):
     assert wow.errors == []
 
 
+def test_the_route_service_names_the_steps_end_and_the_api_stays_as_it_was(wow: WowRuntime):
+    """The Map's arrow at the minimap's rim (15.11.2026) reads `route`:Current().next; the public
+    Route() copies only its own fields, so it is unchanged."""
+    wow.start("Bastians_Core", "Bastians_Data", "Bastians_Map", "Bastians_Route")
+    wow.run_frames(5)
+    assert wow.eval(f"{API}.RouteTo(1429, 0.42, 0.65, 'Goldshire')") is True
+    wow.run_frames(5)
+    ahead = wow.eval("Bastians:GetService('route').Current().next")
+    step = wow.eval("Bastians:GetModule('Route').Route.Active().steps[1].to")
+    assert (ahead.continent, ahead.wx, ahead.wy) == (step.continent, step.wx, step.wy)
+    assert "next" not in dict(wow.eval(f"{API}.Route()").items())
+    # the Map's overlay follows it
+    assert wow.eval("Bastians:GetModule('Map').Minimap.Goal()") is not None
+    wow.slash("/broute clear")
+    assert wow.eval("Bastians:GetModule('Map').Minimap.Goal()") is None
+    assert wow.errors == []
+
+
 def test_events_reach_callbacks_with_scalar_arguments(wow: WowRuntime):
     wow.start("Bastians_Core")
     wow.execute(
@@ -142,6 +161,38 @@ def test_the_functions_and_events_are_the_documented_ones(wow: WowRuntime):
     assert events == re.findall(r"^\| `(BASTIANS_\w+)`", doc, flags=re.M)  # same order too
     assert f"`Bastians.API.VERSION` is `{wow.eval(f'{API}.VERSION')}`" in doc
     assert "docs/" not in doc  # public: no links into the private documents
+
+
+def test_needed_items_are_what_the_open_steps_still_ask(wow: WowRuntime):
+    """Since 13.11.2026 (plan-chat-v3.md V19, Bastian's Chat's watch list): the items the quests in
+    the log still need, from their steps (ADR 0069), as copies."""
+    wow.start("Bastians_Core", "Bastians_Data", "Bastians_Quests")
+    wow.run_frames(10)
+    wow.advance(0.3)
+    wow.run_frames(10)
+    before = dict(wow.eval(f"{API}.NeededItems()").items())
+    assert 7206 not in before
+    ids = set(wow.eval("Bastians:GetModule('Quests').State.order").values())
+    assert all(dict(e.items())["quest"] in ids for e in before.values())  # quests of the log
+    wow.execute(
+        "local q = Bastians:GetModule('Quests').Logic.quest(76); "
+        "q.objectives = { { 'loot', 'item:7206' } }; q.spots = nil; "
+        "Mock.questLog[#Mock.questLog + 1] = { questID = 76, title = 'Mirror Lake', level = 10, "
+        "complete = false, objectives = { { text = 'Water Sample: 1/3', type = 'item', "
+        "finished = false, numFulfilled = 1, numRequired = 3 } } }"
+    )
+    wow.fire("QUEST_LOG_UPDATE")
+    wow.advance(0.5)
+    wow.run_frames(5)
+    needed = wow.eval(f"{API}.NeededItems()")
+    entry = dict(needed[7206].items())
+    assert entry == {"need": 2, "have": 1, "quest": 76, "title": "Mirror Lake"}
+    # a copy: the caller cannot change the quests' own answer
+    wow.execute(f"{API}.NeededItems()[7206].need = 99")
+    assert wow.eval(f"{API}.NeededItems()[7206].need") == 2
+    wow.execute("Bastians:GetModule('Quests'):Disable()")
+    assert wow.eval(f"{API}.NeededItems()") is None
+    assert wow.errors == []
 
 
 def test_where_of_a_quest_is_its_next_step_or_nil(wow: WowRuntime):

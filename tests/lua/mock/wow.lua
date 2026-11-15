@@ -564,9 +564,16 @@ end
 function Region:GetFacing()
   return self.facing or 0
 end
-function Region:SetBackdrop() end
-function Region:SetBackdropColor() end
-function Region:SetBackdropBorderColor() end
+-- kept for the tests (V25: LibSharedMedia's borders and backgrounds)
+function Region:SetBackdrop(b)
+  self.backdrop = b
+end
+function Region:SetBackdropColor(r, g, b, a)
+  self.backdropColor = { r, g, b, a }
+end
+function Region:SetBackdropBorderColor(r, g, b, a)
+  self.backdropBorderColor = { r, g, b, a }
+end
 
 -- scripts. The client refuses script types an object does not have (verified 20.10.2026, Forever
 -- 1.60.1.70450: Frame:SetScript("OnDoubleClick") errors; OnClick and OnDoubleClick are Button scripts).
@@ -601,14 +608,26 @@ function Region:HookScript(name, fn)
 end
 
 -- events
--- an event the client does not know raises, as the game does (Mock.unknownEvents[ev] = true)
-function Region:RegisterEvent(ev)
-  if Mock.unknownEvents and Mock.unknownEvents[ev] then
-    error('Attempt to register unknown event "' .. tostring(ev) .. '"', 2)
+-- an event the client does not know raises, as the game does: one a test names
+-- (Mock.unknownEvents[ev] = true), and one the client's documentation (the API dump's events)
+-- does not list. Found 12.11.2026: Bastian's Chat registered DUEL_REQUEST_CANCEL, which no client
+-- has; the real client refused it and the chat never started, while every test passed.
+Mock.TEST_EVENTS = { TEST_EVENT = true, BOOM = true } -- the kernel's own tests make these up
+local function checkEvent(ev)
+  local known = Mock.api and Mock.api.events
+  if
+    (Mock.unknownEvents and Mock.unknownEvents[ev])
+    or (type(known) == "table" and not known[ev] and not Mock.TEST_EVENTS[ev])
+  then
+    error('Attempt to register unknown event "' .. tostring(ev) .. '"', 3)
   end
+end
+function Region:RegisterEvent(ev)
+  checkEvent(ev)
   self.events[ev] = true
 end
 function Region:RegisterUnitEvent(ev)
+  checkEvent(ev)
   self.events[ev] = true
 end
 function Region:UnregisterEvent(ev)
@@ -777,6 +796,9 @@ end
 function Region:SetJustifyH(j)
   self.justifyH = j
 end
+function Region:GetJustifyH()
+  return self.justifyH or "CENTER"
+end
 function Region:SetJustifyV(j)
   self.justifyV = j
 end
@@ -928,6 +950,9 @@ end
 function Region:SetMaxLetters() end
 function Region:SetAltArrowKeyMode(on)
   self.altArrowKeyMode = on
+end
+function Region:GetAltArrowKeyMode()
+  return self.altArrowKeyMode
 end
 function Region:SetNumber(n)
   self.text = tostring(n)
@@ -1114,17 +1139,22 @@ end
 -- A dot's `text` is the line as the client writes it (colour codes, an icon, several names), its
 -- `secret` a text the addon may not read (combat). A point is only taken with the soft cursor on
 -- (Minimap.softCursor tells a test whether it was given back). Mock.minimapError raises from the
--- tooltip call.
+-- tooltip call. The player's own arrow at the centre answers the player's name within
+-- Mock.minimapArrowReach pixels, as a client that answers does (05.11.2026); Mock.minimapDeaf is
+-- Forever since 1.60.1.70862 (07.11.2026, measured 13.11.2026): a point an addon names is never
+-- taken, the tooltip answers nothing.
 Mock.minimapBlips = {}
 Mock.minimapProbe = nil
 Mock.minimapProbes = 0
 Mock.minimapError = nil
+Mock.minimapDeaf = false
+Mock.minimapArrowReach = 5
 function Minimap:SetUsingSoftCursor(on)
   self.softCursor = on
 end
 function Minimap:UpdateMouseoverAtPoint(x, y)
   Mock.minimapProbes = Mock.minimapProbes + 1
-  if not self.softCursor then
+  if not self.softCursor or Mock.minimapDeaf then
     Mock.minimapProbe = nil -- the client reads the real mouse then
     return
   end
@@ -1139,6 +1169,10 @@ C_TooltipInfo.GetMinimapMouseover = function()
   end
   local p = Mock.minimapProbe
   local lines = {}
+  local arrow = Mock.minimapArrowReach
+  if p and arrow and p.u * p.u + p.v * p.v <= arrow * arrow then
+    lines[#lines + 1] = { leftText = (UnitName("player")) }
+  end
   for _, b in ipairs(p and Mock.minimapBlips or {}) do
     local du, dv = p.u - b.u, p.v - b.v
     local reach = b.reach or 12
@@ -1158,6 +1192,29 @@ C_Minimap.GetViewRadius = function()
   local diameter = { [0] = 466.67, 400, 333.33, 266.67, 200, 133.33 }
   return (diameter[Mock.minimapZoom or 0] or diameter[0]) / 2
 end
+-- The minimap's ground (C_Minimap.SetDrawGroundTextures, verified on Forever 14.11.2026: an
+-- addon's call is honoured, what is left is see-through with the dots and the game's arrow; it
+-- does not outlive a /reload). Mock.ground is what the client draws, Mock.groundCalls counts the
+-- calls and Mock.groundInCombat those made in a fight (ADR 0078 decision 6 makes none).
+-- Mock.GroundSwitch(false) makes a client without the switch, the one of Tracked.lua's sweep.
+Mock.ground = true
+Mock.groundCalls = 0
+Mock.groundInCombat = 0
+local function setGround(on)
+  Mock.groundCalls = Mock.groundCalls + 1
+  if Mock.combat then
+    Mock.groundInCombat = Mock.groundInCombat + 1
+  end
+  Mock.ground = on and true or false
+end
+local function getGround()
+  return Mock.ground
+end
+function Mock.GroundSwitch(on)
+  C_Minimap.SetDrawGroundTextures = on and setGround or nil
+  C_Minimap.GetDrawGroundTextures = on and getGround or nil
+end
+Mock.GroundSwitch(true)
 function Minimap:SetZoom(zoom)
   -- the client fires MINIMAP_UPDATE_ZOOM when the zoom changes, on a later frame (an addon
   -- that probes the zoom from that event loops forever, seen on Forever 23.10.2026)
@@ -1422,6 +1479,97 @@ function ChatEdit_SendText(box)
   Mock.chatSent[#Mock.chatSent + 1] = box:GetText()
   box:SetText("")
 end
+-- The game's chat edit box reads a typed channel command at once (Blizzard_ChatFrameBase,
+-- Shared/ChatFrameEditBox.lua, retail live, read 13.11.2026: OnTextSet and OnTextChanged call
+-- ParseText(0)): "/p pulling" becomes the chat type PARTY and the text "pulling", "/w Name omw"
+-- the tell target Name and "omw", "/2 WTS linen" the channel 2 and "WTS linen". A command with
+-- no space after it, an emote and an addon's command stay text. Mock.ChatEditBox(box) gives a box
+-- that parse (the chat tests' ChatFrameNEditBox): the chat types below by the client's
+-- SLASH_<TYPE>n globals (set here when a test has not), a joined channel's number; no
+-- autocomplete (a tell target is one word), no /r. Assumed the same on Forever (the retail
+-- family); the bug it shows was seen there.
+Mock.CHAT_SLASH = {
+  SAY = { "/s", "/say" },
+  YELL = { "/y", "/yell" },
+  EMOTE = { "/e", "/me" },
+  PARTY = { "/p", "/party" },
+  RAID = { "/ra", "/raid" },
+  GUILD = { "/g", "/guild" },
+  OFFICER = { "/o", "/officer" },
+  WHISPER = { "/w", "/whisper" },
+}
+local function chatTypeOf(command)
+  command = string.lower(command)
+  for chatType in pairs(Mock.CHAT_SLASH) do
+    local i = 1
+    while type(rawget(_G, "SLASH_" .. chatType .. i)) == "string" do
+      if string.lower(rawget(_G, "SLASH_" .. chatType .. i)) == command then
+        return chatType
+      end
+      i = i + 1
+    end
+  end
+  return nil
+end
+local function channelJoined(n)
+  for _, num in pairs(Mock.channels or {}) do
+    if num == n then
+      return true
+    end
+  end
+  local list = GetChannelList and { GetChannelList() } or {}
+  for i = 1, #list, 3 do
+    if list[i] == n then
+      return true
+    end
+  end
+  return false
+end
+local function chatParse(box)
+  local text = box.text or ""
+  if string.sub(text, 1, 1) ~= "/" or not string.find(text, "%s") then
+    return
+  end
+  local command = string.match(text, "^(/[^%s]+)") or ""
+  local msg = string.sub(text, #command + 2)
+  msg = string.match(msg, "^%s*(.*)$") or msg
+  local number = tonumber(string.match(command, "^/([0-9]+)$"))
+  if number then
+    if channelJoined(number) then
+      box:SetAttribute("channelTarget", number)
+      box:SetAttribute("chatType", "CHANNEL")
+      box:SetText(msg)
+    end
+    return
+  end
+  local chatType = chatTypeOf(command)
+  if chatType == "WHISPER" then
+    local target = msg
+    if not string.find(target, "%s") or string.sub(target, 1, 1) == "|" then
+      return -- the name is not finished
+    end
+    while string.find(target, "%s") do
+      target = string.match(target, "(.+)%s+[^%s]*") or target
+    end
+    box:SetAttribute("tellTarget", target)
+    box:SetAttribute("chatType", "WHISPER")
+    box:SetText(string.sub(msg, #target + 2))
+  elseif chatType then
+    box:SetAttribute("chatType", chatType)
+    box:SetText(msg)
+  end
+end
+function Mock.ChatEditBox(box)
+  for chatType, words in pairs(Mock.CHAT_SLASH) do
+    for i, word in ipairs(words) do
+      if rawget(_G, "SLASH_" .. chatType .. i) == nil then
+        rawset(_G, "SLASH_" .. chatType .. i, word)
+      end
+    end
+  end
+  box:SetScript("OnTextChanged", chatParse)
+  return box
+end
 -- The player's macros (GetNumMacros -> account, character; GetMacroInfo(i) -> name, icon, body;
 -- the character's from MAX_ACCOUNT_MACROS + 1): Mock.macros.account / .character, one of each.
 MAX_ACCOUNT_MACROS = 120
@@ -1549,6 +1697,10 @@ function UnitExists(unit)
 end
 function UnitIsPlayer(unit)
   return unit == "player"
+end
+-- how the client ranks a unit (Mock.classification[unit]; "normal" for the rest)
+function UnitClassification(unit)
+  return Mock.classification and Mock.classification[unit] or "normal"
 end
 function UnitPosition(unit)
   local p = Mock.positions and Mock.positions[unit]
@@ -1816,6 +1968,16 @@ function CombatLogGetCurrentEventInfo()
     return nil
   end
   return unpack(e, 1, e.n or #e)
+end
+-- The nameplates shown (retail family's C_NamePlate.GetNamePlates: the plate frames, each with its
+-- unit token in namePlateUnitToken). Mock.namePlates = { "nameplate1", ... } lists the tokens.
+C_NamePlate = C_NamePlate or {}
+C_NamePlate.GetNamePlates = function()
+  local out = {}
+  for i, unit in ipairs(Mock.namePlates or {}) do
+    out[i] = { namePlateUnitToken = unit }
+  end
+  return out
 end
 C_UnitAuras = C_UnitAuras or {}
 -- Mock.auras: the player's helpful auras { name, spellId, expirationTime, duration, sourceUnit };

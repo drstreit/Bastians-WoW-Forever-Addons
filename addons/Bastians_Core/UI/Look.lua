@@ -25,25 +25,45 @@ function S.LookId()
   return S.GameButtons() and "wow" or "modern"
 end
 
-local function look()
-  return LOOKS[S.LookId()] or LOOKS.modern
+-- The look a frame draws in (ADR 0046's look per window, plan-chat-v3.md V13): its own or an
+-- ancestor's (`frame.look`, set by S.SetFramePreset), else the suite's. Nothing is walked until a
+-- frame took a look of its own (S.anyLook).
+function S.LookOf(frame)
+  if S.anyLook then
+    local f = frame
+    for _ = 1, 40 do
+      if not f then
+        break
+      end
+      local id = f.look
+      if id and LOOKS[id] then
+        return id
+      end
+      f = f.GetParent and f:GetParent() or nil
+    end
+  end
+  return S.LookId()
+end
+
+local function look(frame)
+  return LOOKS[frame and S.LookOf(frame) or S.LookId()] or LOOKS.modern
 end
 
 -- The look's own corner radii over the theme's (Style.applyShape reads them with every theme
 -- load): Glass rounds more, Parchment squares the kind tiles (`tile`). nil: the theme's.
-function S.LookShape()
-  return look().shape
+function S.LookShape(frame)
+  return look(frame).shape
 end
 
 -- The look's cap on the window ground's opacity in percent (Glass: 75), nil for none.
-function S.LookGroundAlpha()
-  return look().groundAlpha
+function S.LookGroundAlpha(frame)
+  return look(frame).groundAlpha
 end
 
--- Draws one widget by the look in force (a changed spec, a changed look).
+-- Draws one widget by the look in force where it stands (a changed spec, a changed look).
 function S.Draw(frame)
   local kind = S.widgets[frame]
-  local draw = kind and look()[kind]
+  local draw = kind and look(frame)[kind]
   if draw then
     draw(frame)
   end
@@ -134,9 +154,11 @@ end
 
 -- ---------------------------------------------------------------------------------------------
 -- The action button: a pictogram and its text ("always an optical clue plus
--- text"). spec = { icon, label, tip, primary, on, boxed, only, row, onClick, badge }: `only`
--- draws the pictogram alone (the one case is "More"), `row` the smaller button inside a row,
--- `boxed` a face and edges in Modern (a quiet button has none). It sizes itself (Fit).
+-- text"). spec = { icon, label, tip, primary, on, boxed, only, toggle, row, onClick, badge }:
+-- `only` draws the pictogram alone ("More", a window's head with `headIcons`), `row` the smaller
+-- button inside a row, `boxed` a face and edges in Modern (a quiet button has none), `toggle` a
+-- switch whose pictogram is lit while `on` and dim while off (the window's lock, plan-chat-v3.md
+-- V27). It sizes itself (Fit).
 -- ---------------------------------------------------------------------------------------------
 
 function S.action(parent, spec)
@@ -148,16 +170,17 @@ function S.action(parent, spec)
   b.icon = b:CreateTexture(nil, "ARTWORK")
   b.label = S.text(b, 12, S.C.text)
   b.label:SetJustifyH("LEFT")
+  b.label:SetWordWrap(false) -- one line; a fixed width cuts it (layoutAction)
   b.tip = spec.tip or (spec.only and spec.label) or nil
   b:SetScript("OnEnter", function(self)
-    local hover = look().hover
+    local hover = look(self).hover
     if hover and self.enabledFlat ~= false then
       hover(self, true)
     end
     S.TipEnter(self)
   end)
   b:SetScript("OnLeave", function(self)
-    local hover = look().hover
+    local hover = look(self).hover
     if hover then
       hover(self, false)
     end
@@ -192,7 +215,7 @@ function S.action(parent, spec)
       self.badge:SetPoint("TOPRIGHT", 4, 4)
       self.badge:SetFrameLevel((self:GetFrameLevel() or 1) + 2)
       self.badge.bg = S.roundFill(self.badge, S.C.accent, "radiusSmall")
-      self.badge.text = S.text(self.badge, 10, S.C.headerText)
+      self.badge.text = S.SetRole(S.text(self.badge, 10, S.C.headerText), "number")
       self.badge.text:SetPoint("CENTER")
     end
     self.badge:SetShown(n > 0)
@@ -203,6 +226,18 @@ function S.action(parent, spec)
   S.buttons[b] = true -- the skin loop of ApplySkin knows it too (tests list the buttons there)
   S.Draw(b)
   return b
+end
+
+-- The pictogram's ink: the ground's on a primary's plate, dim for a switch that is off, else
+-- `lit` (the accent; WoW's gold).
+local function iconInk(b, lit)
+  local spec = b.spec
+  if spec.primary then
+    return S.Tok(b, "bg")
+  elseif spec.toggle and not spec.on then
+    return S.Tok(b, "dim")
+  end
+  return lit or S.Tok(b, "accent")
 end
 
 -- The shared layout of an action: the icon left, the text after it, the size from both.
@@ -220,16 +255,34 @@ local function layoutAction(b, h, icon, gap, pad)
     b.icon:Hide()
   end
   local text = spec.only and "" or (spec.label or "")
+  local lead = pad + iconW + (icon and text ~= "" and gap or 0)
   b.label:SetText(text)
   b.label:ClearAllPoints()
   if spec.width and not icon then
     b.label:SetPoint("CENTER") -- a fixed width without a pictogram: the word in the middle
   else
-    b.label:SetPoint("LEFT", pad + iconW + (icon and text ~= "" and gap or 0), 0)
+    b.label:SetPoint("LEFT", lead, 0)
   end
-  local w = pad + iconW + (icon and text ~= "" and gap or 0) + textWidth(b.label, text) + pad
+  local textW = textWidth(b.label, text)
+  local w = lead + textW + pad
+  -- a fixed width never draws its label past the edge (, screens 5 and
+  -- 8: the settings' choices ran out of their buttons): the label is cut to the room (the client
+  -- ends it with "...") and the whole label is the tooltip, unless the button has a tip of its own
+  if b.tipFromCut ~= nil and b.tip == b.tipFromCut then
+    b.tip = nil -- the cut's own tip; one the app set since stays
+  end
+  b.tipFromCut, b.cutTip = nil, nil
+  b.label:SetWidth(0) -- as wide as its text
   if spec.width then
     w = spec.width -- a column of equal buttons (the hub's rows): the app's choice
+    local room = math.max(1, w - lead - pad)
+    if textW > room then
+      b.label:SetWidth(room)
+      b.cutTip = text
+      if not b.tip then
+        b.tip, b.tipFromCut = text, text
+      end
+    end
   end
   b:SetSize(math.max(w, h), h)
 end
@@ -358,7 +411,7 @@ LOOKS.modern = {
     S.setEdges(b.edges, S.Tok(b, "accent"), spec.boxed and not spec.primary and edge or 0)
     local ink = spec.primary and "bg" or (spec.on and "accent" or "text")
     S.ink(b.label, S.Tok(b, ink))
-    S.tint(b.icon, S.Tok(b, spec.primary and "bg" or "accent"), 1)
+    S.tint(b.icon, iconInk(b), 1)
     layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 5 or 7)
   end,
   hover = function(b, over)
@@ -392,7 +445,7 @@ LOOKS.wow = {
     hideSheen(b)
     S.applyButton(b) -- the textures, the face and edges hidden, the gold label
     local gold = S.Palette("blizzard").C.gold
-    S.tint(b.icon, gold, 1)
+    S.tint(b.icon, spec.toggle and not spec.on and S.Tok(b, "dim") or gold, 1)
     layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 6 or 9)
     S.fitGameArt(b) -- the caps follow the size the layout gave
   end,
@@ -422,7 +475,7 @@ function S.pill(parent, spec)
   p.label = S.text(p, 12, S.C.text)
   p.label:SetJustifyH("LEFT")
   p.label:SetWordWrap(false)
-  p.count = S.text(p, 11, S.C.dim)
+  p.count = S.SetRole(S.text(p, 11, S.C.dim), "number") -- a count in the numbers' face (V17)
   p.arrow = p:CreateTexture(nil, "ARTWORK")
   p.arrow:SetTexture(S.ARROW)
   p.arrow:SetSize(9, 9)
@@ -451,14 +504,14 @@ function S.pill(parent, spec)
   end)
   p.tip = spec.tip
   p:SetScript("OnEnter", function(self)
-    local hover = look().pillHover
+    local hover = look(self).pillHover
     if hover then
       hover(self, true)
     end
     S.TipEnter(self)
   end)
   p:SetScript("OnLeave", function(self)
-    local hover = look().pillHover
+    local hover = look(self).pillHover
     if hover then
       hover(self, false)
     end
@@ -551,8 +604,11 @@ end
 LOOKS.wow.pillHover = LOOKS.modern.pillHover
 
 -- ---------------------------------------------------------------------------------------------
--- The tab: a kind tile, the label, a badge; `on` the shown one, `unread` lit.
--- spec = { kind, label, badge, on, unread, onClick, onDrag... (the app's own scripts stay) }
+-- The tab: a kind tile, the label, a count, a badge; `on` the shown one, `unread` lit. `line`, a
+-- colour token, makes it a flat tab (the chat artifact's world tabs, plan-chat-v3.md V27): no
+-- plate, no frame, the label in capitals where the look's sections are, the shown one in the
+-- text's ink over a line of that colour. spec = { kind, label, count, badge, on, unread, line,
+-- onClick, onDrag... (the app's own scripts stay) }
 -- ---------------------------------------------------------------------------------------------
 
 function S.tab(parent, spec)
@@ -568,8 +624,10 @@ function S.tab(parent, spec)
   t.under:SetHeight(2)
   t.tile = S.tile(t, spec.kind)
   t.tile:SetPoint("LEFT", 6, 0)
-  t.label = S.text(t, 12, S.C.dim)
+  t.label = S.SetRole(S.text(t, 12, S.C.dim), "label") -- the labels' face (V17)
   t.label:SetJustifyH("LEFT")
+  t.count = S.SetRole(S.text(t, 11, S.C.dim), "number") -- a count in the numbers' face (V27)
+  t.count:Hide()
   t.tip = spec.tip
   t:SetScript("OnEnter", S.TipEnter)
   t:SetScript("OnLeave", S.TipLeave)
@@ -590,13 +648,17 @@ function S.tab(parent, spec)
     self.spec.label = text
     S.Draw(self)
   end
+  function t.SetCount(self, n)
+    self.spec.count = n
+    S.Draw(self)
+  end
   function t.SetBadge(self, n)
     n = tonumber(n) or 0
     if not self.badge then
       self.badge = CreateFrame("Frame", nil, self)
       self.badge:SetSize(16, 13)
       self.badge.bg = S.roundFill(self.badge, S.C.accent, "radiusSmall")
-      self.badge.text = S.text(self.badge, 10, S.C.headerText)
+      self.badge.text = S.SetRole(S.text(self.badge, 10, S.C.headerText), "number")
       self.badge.text:SetPoint("CENTER")
     end
     self.badge:SetShown(n > 0)
@@ -609,16 +671,31 @@ function S.tab(parent, spec)
   return t
 end
 
-local function layoutTab(t, h, inkTok, faceAlpha)
+local function layoutTab(t, h, inkTok, faceAlpha, upper)
   local spec = t.spec
   t.tile:SetKind(spec.kind)
   t.tile:SetShown(spec.kind ~= nil)
   local x = spec.kind and (6 + S.G.tile + S.G.gap) or 10
-  t.label:SetText(spec.label or "")
+  local label = spec.label or ""
+  if upper then
+    label = string.upper(label)
+  end
+  t.label:SetText(label)
   t.label:ClearAllPoints()
   t.label:SetPoint("LEFT", x, 0)
   S.ink(t.label, S.Tok(t, inkTok))
-  local w = x + textWidth(t.label, spec.label or "")
+  local w = x + textWidth(t.label, label)
+  if spec.count ~= nil then
+    local n = tostring(spec.count)
+    t.count:SetText(n)
+    t.count:ClearAllPoints()
+    t.count:SetPoint("LEFT", w + 5, 0)
+    S.ink(t.count, S.Tok(t, "dim"))
+    t.count:Show()
+    w = w + 5 + textWidth(t.count, n)
+  else
+    t.count:Hide()
+  end
   if t.badge and (spec.badge or 0) > 0 then
     t.badge:ClearAllPoints()
     t.badge:SetPoint("LEFT", w + 5, 0)
@@ -628,10 +705,23 @@ local function layoutTab(t, h, inkTok, faceAlpha)
   t:SetSize(w + 10, h)
 end
 
+-- The flat tab (`spec.line`): no plate, no frame; the shown one in `onInk` over a 2 px line of
+-- the spec's colour, the others dim; capitals where the look's sections have them (`upper`).
+local function flatTab(t, onInk, upper)
+  local spec = t.spec
+  layoutTab(t, S.G.tab, (spec.on or spec.unread) and onInk or "dim", 0, upper)
+  t.under:SetShown(spec.on == true)
+  S.tint(t.under, S.Tok(t, spec.line) or S.Tok(t, "accent"), 1)
+  S.setEdges(t.edges, S.Tok(t, "accent"), 0)
+end
+
 -- The chosen tab reads in the accent inside an accent frame ("hard to
 -- see what is menu tabs, what is text and what is active tab"); the others in dim.
 LOOKS.modern.tab = function(t)
   local spec = t.spec
+  if spec.line then
+    return flatTab(t, "text", true)
+  end
   layoutTab(t, S.G.tab, (spec.on or spec.unread) and "accent" or "dim", spec.on and 1 or 0)
   t.under:SetShown(spec.on == true)
   S.tint(t.under, S.Tok(t, "accent"), 1)
@@ -640,6 +730,9 @@ end
 
 LOOKS.wow.tab = function(t)
   local spec = t.spec
+  if spec.line then
+    return flatTab(t, "gold", false)
+  end
   layoutTab(t, S.G.tab, (spec.on or spec.unread) and "gold" or "dim", spec.on and 1 or 0.6)
   t.under:SetShown(spec.on == true)
   S.tint(t.under, S.Palette("blizzard").C.gold, 1)
@@ -659,7 +752,7 @@ function S.section(parent, spec)
   s.icon = s:CreateTexture(nil, "ARTWORK")
   s.icon:SetSize(14, 14)
   s.icon:SetPoint("LEFT", 0, 0)
-  s.title = S.text(s, 11, S.C.dim)
+  s.title = S.SetRole(S.text(s, 11, S.C.dim), "label") -- the labels' face (V17)
   s.title:SetJustifyH("LEFT")
   s.rule = S.fill(s, S.C.line, "ARTWORK")
   s.rule:ClearAllPoints()
@@ -759,6 +852,97 @@ LOOKS.wow.toggle = function(t)
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- The card (plan-chat-v3.md §3, §9; ADR 0075): the block a request, an offer or a group stands
+-- on, with a stripe of its colour along the left edge and a lit edge while it is fresh. What it
+-- says is its owner's: texts and buttons go into `card.body`, which the look leaves alone; the
+-- owner sets the card's height. spec = { stripe (a colour token, nil for none), hot, flat (no
+-- plate, no edge: a quiet card), onClick, tip }.
+-- ---------------------------------------------------------------------------------------------
+
+S.CARD_PAD = 8 -- between the card's edge and its body
+S.CARD_STRIPE = 3 -- the stripe's width
+
+function S.card(parent, spec)
+  spec = spec or {}
+  local c = CreateFrame("Button", nil, parent)
+  c.spec = spec
+  c.face = S.roundFill(c, S.C.card, "radius")
+  c.edges = S.roundEdges(c, S.C.cardEdge, "radius")
+  c.stripe = S.fill(c, S.C.accent, "BORDER")
+  c.stripe:ClearAllPoints()
+  c.stripe:SetPoint("TOPLEFT", c, "TOPLEFT", 1, -3)
+  c.stripe:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 1, 3)
+  c.stripe:SetWidth(S.CARD_STRIPE)
+  c.body = CreateFrame("Frame", nil, c)
+  c.body:SetPoint("TOPLEFT", c, "TOPLEFT", S.CARD_PAD + S.CARD_STRIPE, -S.CARD_PAD)
+  c.body:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -S.CARD_PAD, S.CARD_PAD)
+  c:SetScript("OnClick", function(self, button)
+    if self.spec.onClick then
+      self.spec.onClick(self, button)
+    end
+  end)
+  c:SetScript("OnEnter", function(self)
+    local hover = look(self).cardHover
+    if hover and self.spec.onClick then
+      hover(self, true)
+    end
+    S.TipEnter(self)
+  end)
+  c:SetScript("OnLeave", function(self)
+    local hover = look(self).cardHover
+    if hover then
+      hover(self, false)
+    end
+    S.TipLeave(self)
+  end)
+  function c.SetCard(self, s)
+    self.spec = s or {}
+    S.Draw(self)
+  end
+  S.widgets[c] = "card"
+  S.Draw(c)
+  return c
+end
+
+-- The shared part of every look: the stripe, the tip, the mouse; the plate and the edge by the look.
+local function layoutCard(c, faceTok, faceAlpha, edgeTok, edgeAlpha)
+  local spec = c.spec
+  local stripe = spec.stripe and S.Tok(c, spec.stripe)
+  if stripe then
+    S.tint(c.stripe, stripe, 1)
+  end
+  c.stripe:SetShown(stripe ~= nil)
+  if spec.flat then
+    c.face:Hide()
+  else
+    c.face:Show()
+    S.tint(c.face, type(faceTok) == "table" and faceTok or S.Tok(c, faceTok), faceAlpha)
+  end
+  local edge = type(edgeTok) == "table" and edgeTok or S.Tok(c, edgeTok)
+  S.setEdges(c.edges, edge, spec.flat and not spec.hot and 0 or edgeAlpha)
+  c.tip = spec.tip
+  c:EnableMouse(spec.onClick ~= nil or spec.tip ~= nil)
+end
+
+LOOKS.modern.card = function(c)
+  hideSheen(c)
+  local hot = c.spec.hot
+  layoutCard(c, "card", 1, hot and "cardHot" or "cardEdge", 1)
+end
+
+LOOKS.modern.cardHover = function(c, over)
+  S.tint(c.face, S.Tok(c, over and "hover" or "card"), 1)
+end
+
+LOOKS.wow.card = function(c)
+  hideSheen(c)
+  local hot = c.spec.hot
+  layoutCard(c, "card", 1, hot and "cardHot" or S.Palette("blizzard").C.gold, hot and 1 or 0.5)
+end
+
+LOOKS.wow.cardHover = LOOKS.modern.cardHover
+
+-- ---------------------------------------------------------------------------------------------
 -- Parchment: paper panels with a sepia
 -- edge on every boxed button, square kind tiles with the same edge, no gold text (a choice of
 -- value reads in the accent), section titles in their own case over a sepia rule. The paper
@@ -784,7 +968,7 @@ LOOKS.parchment = {
     S.setEdges(b.edges, S.Tok(b, edge), spec.boxed and not spec.primary and 0.7 or 0)
     local ink = spec.primary and "bg" or (spec.on and "accent" or "text")
     S.ink(b.label, S.Tok(b, ink))
-    S.tint(b.icon, S.Tok(b, spec.primary and "bg" or "accent"), 1)
+    S.tint(b.icon, iconInk(b), 1)
     layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 5 or 7)
   end,
   hover = function(b, over)
@@ -808,6 +992,9 @@ LOOKS.parchment = {
   pillHover = LOOKS.modern.pillHover,
   tab = function(t)
     local spec = t.spec
+    if spec.line then
+      return flatTab(t, "text", false)
+    end
     layoutTab(t, S.G.tab, (spec.on or spec.unread) and "accent" or "dim", spec.on and 1 or 0)
     t.under:SetShown(spec.on == true)
     S.tint(t.under, S.Tok(t, "accent"), 1)
@@ -855,7 +1042,7 @@ LOOKS.glass = {
     glassRim(b, false)
     local ink = spec.primary and "bg" or (spec.on and "accent" or "text")
     S.ink(b.label, S.Tok(b, ink))
-    S.tint(b.icon, S.Tok(b, spec.primary and "bg" or "accent"), 1)
+    S.tint(b.icon, iconInk(b), 1)
     layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 6 or 8)
   end,
   hover = function(b, over)
@@ -878,6 +1065,9 @@ LOOKS.glass = {
   end,
   tab = function(t)
     local spec = t.spec
+    if spec.line then
+      return flatTab(t, "text", true)
+    end
     layoutTab(t, S.G.tab, (spec.on or spec.unread) and "accent" or "dim", spec.on and GLASS_PLATE or 0)
     t.under:SetShown(spec.on == true)
     S.tint(t.under, S.Tok(t, "accent"), 1)
@@ -886,3 +1076,344 @@ LOOKS.glass = {
   section = LOOKS.modern.section,
   toggle = LOOKS.modern.toggle,
 }
+
+-- The card in Parchment and Glass (plan-chat-v3.md §9): paper with its sepia edge; glass with its
+-- plate and no edge, the rim in the fresh card's colour while it is fresh and on hover.
+LOOKS.parchment.card = function(c)
+  hideSheen(c)
+  local hot = c.spec.hot
+  layoutCard(c, "card", 1, hot and "cardHot" or "muted", hot and 1 or 0.5)
+end
+LOOKS.parchment.cardHover = function(c, over)
+  S.tint(c.face, S.Tok(c, over and "faceHover" or "card"), 1)
+end
+
+LOOKS.glass.card = function(c)
+  local hot = c.spec.hot
+  layoutCard(c, "panel", GLASS_PLATE, hot and "cardHot" or "bright", hot and 1 or 0)
+  if c.spec.flat then
+    hideSheen(c)
+  else
+    local veil = sheen(c)
+    veil:Show()
+    S.tint(veil, S.Tok(c, "bright"), GLASS_SHEEN)
+  end
+end
+LOOKS.glass.cardHover = function(c, over)
+  if not c.spec.hot then
+    glassRim(c, over)
+  end
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- The segmented switch (plan-chat-v3.md V27, the chat artifact's layout switch; owner, Forever
+-- 13.11.2026: "the button look all the same color"): two or more choices side by side on one
+-- plate, the chosen one filled, so the switch says which is shown. spec = { items = { { id,
+-- label, icon, tip } }, value (the chosen id; nil: none), onChange(self, id) }. A click on another
+-- part chooses it and calls onChange; SetValue chooses without the call; Part(id) is its button.
+-- ---------------------------------------------------------------------------------------------
+
+S.SEGMENT_HOVER = 0.25 -- the fill's opacity under the mouse on a part not chosen
+
+function S.segmented(parent, spec)
+  spec = spec or {}
+  spec.items = spec.items or {}
+  local f = CreateFrame("Frame", nil, parent)
+  f.spec = spec
+  f.face = S.roundFill(f, S.C.panel, "radiusSmall")
+  f.edges = S.roundEdges(f, S.C.line, "radiusSmall")
+  f.parts = {}
+  for i, item in ipairs(spec.items) do
+    local b = CreateFrame("Button", nil, f)
+    b.item = item
+    b.fill = S.roundFill(b, S.C.accent, "radiusSmall", "BORDER")
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.label = S.text(b, 12, S.C.text)
+    b.label:SetJustifyH("LEFT")
+    b.tip = item.tip
+    b:SetScript("OnEnter", function(self)
+      if f.spec.value ~= self.item.id and f.fillTok then
+        S.tint(self.fill, f.fillTok, S.SEGMENT_HOVER)
+        self.fill:Show()
+      end
+      S.TipEnter(self)
+    end)
+    b:SetScript("OnLeave", function(self)
+      S.Draw(f)
+      S.TipLeave(self)
+    end)
+    b:SetScript("OnClick", function(self)
+      local id = self.item.id
+      if f.spec.value == id then
+        return
+      end
+      f:SetValue(id)
+      if f.spec.onChange then
+        f.spec.onChange(f, id)
+      end
+    end)
+    f.parts[i] = b
+  end
+  function f.SetValue(self, id)
+    self.spec.value = id
+    S.Draw(self)
+  end
+  function f.Part(self, id)
+    for _, b in ipairs(self.parts) do
+      if b.item.id == id then
+        return b
+      end
+    end
+    return nil
+  end
+  S.widgets[f] = "segmented"
+  S.Draw(f)
+  return f
+end
+
+-- The shared layout: the parts side by side, each its pictogram and its word; the chosen part's
+-- fill in `c.fill` with its ink `c.on`, the others' words in `c.off` and pictograms in `c.icon`.
+-- c = { fill, on, off, icon } (colours: a look's own or the frame's tokens).
+local function layoutSegmented(f, c)
+  local G = S.G
+  local h = G.actionRow
+  local pad = 9
+  local x = 0
+  f.fillTok = c.fill
+  for _, b in ipairs(f.parts) do
+    local item = b.item
+    local on = item.id ~= nil and item.id == f.spec.value
+    local icon = item.icon and B.UI.Pictogram(item.icon) or nil
+    local iconW = icon and (h - 8) or 0
+    b.icon:ClearAllPoints()
+    b.icon:SetSize(math.max(iconW, 1), math.max(iconW, 1))
+    b.icon:SetPoint("LEFT", pad, 0)
+    if icon then
+      b.icon:SetTexture(icon)
+      S.tint(b.icon, on and c.on or c.icon, 1)
+      b.icon:Show()
+    else
+      b.icon:SetTexture(nil)
+      b.icon:Hide()
+    end
+    local text = item.label or ""
+    local gap = (icon and text ~= "") and G.gap or 0
+    b.label:SetText(text)
+    b.label:ClearAllPoints()
+    b.label:SetPoint("LEFT", pad + iconW + gap, 0)
+    S.ink(b.label, on and c.on or c.off)
+    local w = pad + iconW + gap + textWidth(b.label, text) + pad
+    b:SetSize(w, h)
+    b:ClearAllPoints()
+    b:SetPoint("LEFT", f, "LEFT", x, 0)
+    S.tint(b.fill, c.fill, 1)
+    if on then
+      b.fill:Show()
+    else
+      b.fill:Hide()
+    end
+    x = x + w
+  end
+  f:SetSize(math.max(x, h), h)
+end
+
+LOOKS.modern.segmented = function(f)
+  hideSheen(f)
+  S.tint(f.face, S.Tok(f, "panel"), 1)
+  S.setEdges(f.edges, S.Tok(f, "line"), 1)
+  layoutSegmented(f, {
+    fill = S.Tok(f, "accent"),
+    on = S.Tok(f, "bg"),
+    off = S.Tok(f, "text"),
+    icon = S.Tok(f, "accent"),
+  })
+end
+
+LOOKS.parchment.segmented = function(f)
+  hideSheen(f)
+  S.tint(f.face, S.Tok(f, "panel"), 1)
+  S.setEdges(f.edges, S.Tok(f, "muted"), 0.7)
+  layoutSegmented(f, {
+    fill = S.Tok(f, "accent"),
+    on = S.Tok(f, "bg"),
+    off = S.Tok(f, "text"),
+    icon = S.Tok(f, "accent"),
+  })
+end
+
+LOOKS.glass.segmented = function(f)
+  glassPlate(f, "panel", GLASS_PLATE)
+  glassRim(f, false)
+  layoutSegmented(f, {
+    fill = S.Tok(f, "accent"),
+    on = S.Tok(f, "bg"),
+    off = S.Tok(f, "text"),
+    icon = S.Tok(f, "accent"),
+  })
+end
+
+-- WoW: a dark plate with a gilt edge, the chosen part in the game's gold with dark words.
+LOOKS.wow.segmented = function(f)
+  hideSheen(f)
+  local gold = S.Palette("blizzard").C.gold
+  S.tint(f.face, S.Tok(f, "panel"), 1)
+  S.setEdges(f.edges, gold, 0.8)
+  layoutSegmented(f, { fill = gold, on = S.Tok(f, "bg"), off = gold, icon = gold })
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- The slider (plan-chat-one-window.md §8, R1, V34; , screens 1 and 2:
+-- the flat track with a square knob, the artifact's slider): a title in the labels' face, the
+-- track filled up to the knob in the accent, a round knob, the value at the right and a line of
+-- words under it ("2 . and what is yours"). The WoW look draws the game's own slider: its bar and
+-- its knob. spec = { title, plain (the title as written, not in capitals), min, max, step, value,
+-- words = function(v) -> the line under, number = function(v) -> the value's text (default the
+-- number), onChange(self, v) }. SetValue(v, silent) moves it without the call.
+-- ---------------------------------------------------------------------------------------------
+
+S.SLIDER_KNOB = 12 -- the round knob of the flat looks
+S.SLIDER_TRACK = 4 -- the track's height in the flat looks
+S.SLIDER_TOP = 16 -- the track's row under the title
+S.GAME_SLIDER_BAR = "Interface\\Buttons\\UI-SliderBar-Background"
+S.GAME_SLIDER_KNOB = "Interface\\Buttons\\UI-SliderBar-Button-Horizontal"
+
+function S.slider(parent, spec)
+  spec = spec or {}
+  local f = CreateFrame("Frame", nil, parent)
+  f.spec = spec
+  f:SetHeight(spec.words and (S.SLIDER_TOP + 30) or (S.SLIDER_TOP + 18))
+  f.title = S.SetRole(S.text(f, 11, S.C.muted), "label")
+  f.title:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
+  f.title:SetJustifyH("LEFT")
+  f.title:SetWordWrap(false)
+  f.number = S.SetRole(S.text(f, 11, S.C.dim), "number")
+  f.number:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, 0)
+  f.number:SetJustifyH("RIGHT")
+  f.title:SetPoint("RIGHT", f.number, "LEFT", -6, 0)
+  local slider = CreateFrame("Slider", nil, f)
+  slider:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -S.SLIDER_TOP)
+  slider:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -S.SLIDER_TOP)
+  slider:SetHeight(14)
+  slider:SetOrientation("HORIZONTAL")
+  slider:SetMinMaxValues(spec.min or 0, spec.max or 1)
+  slider:SetValueStep(spec.step or 1)
+  slider:SetObeyStepOnDrag(true)
+  f.slider = slider
+  -- the flat looks' track and its filled part, under the knob
+  f.rail = CreateFrame("Frame", nil, slider)
+  f.rail:SetPoint("LEFT", slider, "LEFT", 0, 0)
+  f.rail:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
+  f.rail:SetHeight(S.SLIDER_TRACK)
+  f.track = S.roundFill(f.rail, S.C.track, "pill")
+  f.filled = CreateFrame("Frame", nil, f.rail)
+  f.filled:SetPoint("TOPLEFT", f.rail, "TOPLEFT", 0, 0)
+  f.filled:SetPoint("BOTTOMLEFT", f.rail, "BOTTOMLEFT", 0, 0)
+  f.fill = S.roundFill(f.filled, S.C.accent, "pill", "BORDER")
+  -- the game's bar (the WoW look)
+  f.bar = slider:CreateTexture(nil, "BACKGROUND")
+  f.bar:SetPoint("TOPLEFT", slider, "TOPLEFT", 0, 2)
+  f.bar:SetPoint("BOTTOMRIGHT", slider, "BOTTOMRIGHT", 0, -2)
+  f.bar:Hide()
+  slider:SetThumbTexture(S.DISC)
+  f.knob = slider:GetThumbTexture()
+  f.words = S.text(f, 11, S.C.text)
+  f.words:SetPoint("TOPLEFT", slider, "BOTTOMLEFT", 0, -3)
+  f.words:SetPoint("RIGHT", f, "RIGHT", 0, 0)
+  f.words:SetJustifyH("LEFT")
+  f.words:SetWordWrap(false)
+  if spec.value then
+    slider:SetValue(spec.value)
+  end
+  function f.SetValue(self, v, silent)
+    self.silent = silent
+    slider:SetValue(v)
+    self.silent = nil
+    S.Draw(self)
+  end
+  function f.GetValue()
+    return slider:GetValue()
+  end
+  slider:SetScript("OnValueChanged", function(_, v, user)
+    S.Draw(f) -- the fill, the value and its words follow the knob
+    if spec.onChange and not f.silent and user ~= false then
+      spec.onChange(f, v)
+    end
+  end)
+  f:SetScript("OnSizeChanged", function()
+    S.Draw(f)
+  end)
+  S.widgets[f] = "slider"
+  S.Draw(f)
+  return f
+end
+
+-- The texts and the filled part (every look); returns the value's share of the track, 0..1.
+local function layoutSlider(f, titleTok, numberTok, wordsTok)
+  local spec = f.spec
+  local v = f.slider:GetValue() or spec.min or 0
+  local lo, hi = f.slider:GetMinMaxValues()
+  local frac = (hi and lo and hi > lo) and math.max(0, math.min(1, (v - lo) / (hi - lo))) or 0
+  local title = spec.title or ""
+  f.title:SetText(spec.plain and title or string.upper(title))
+  S.ink(f.title, titleTok)
+  local number
+  if spec.number then
+    number = spec.number(v)
+  elseif (spec.step or 1) >= 1 then
+    number = tostring(math.floor(v + 0.5))
+  else
+    number = string.format("%.2f", v)
+  end
+  f.number:SetText(number or "")
+  S.ink(f.number, numberTok)
+  f.words:SetText(spec.words and spec.words(v) or "")
+  f.words:SetShown(spec.words ~= nil)
+  S.ink(f.words, wordsTok)
+  local w = f.rail:GetWidth()
+  if not w or w <= 0 then
+    w = f:GetWidth() or 0
+  end
+  f.filled:SetWidth(math.max(1, math.floor(w * frac + 0.5)))
+  return frac
+end
+
+-- the flat looks: a thin track, filled up to a round knob in the accent
+local function flatSlider(f, trackTok, fillTok, knobTok)
+  f.bar:Hide()
+  f.rail:Show()
+  S.tint(f.track, trackTok, 1)
+  S.tint(f.fill, fillTok, 1)
+  f.knob:SetTexture(S.DISC)
+  f.knob:SetTexCoord(0, 1, 0, 1)
+  f.knob:SetSize(S.SLIDER_KNOB, S.SLIDER_KNOB)
+  S.tint(f.knob, knobTok, 1)
+end
+
+LOOKS.modern.slider = function(f)
+  flatSlider(f, S.Tok(f, "line"), S.Tok(f, "accent"), S.Tok(f, "bright"))
+  layoutSlider(f, S.Tok(f, "muted"), S.Tok(f, "dim"), S.Tok(f, "text"))
+end
+
+LOOKS.parchment.slider = function(f)
+  flatSlider(f, S.Tok(f, "line"), S.Tok(f, "accent"), S.Tok(f, "accent"))
+  layoutSlider(f, S.Tok(f, "muted"), S.Tok(f, "dim"), S.Tok(f, "text"))
+end
+
+LOOKS.glass.slider = function(f)
+  flatSlider(f, S.Tok(f, "line"), S.Tok(f, "accent"), S.Tok(f, "bright"))
+  layoutSlider(f, S.Tok(f, "muted"), S.Tok(f, "dim"), S.Tok(f, "text"))
+end
+
+-- WoW: the game's own slider bar and knob, the title in the game's gold
+LOOKS.wow.slider = function(f)
+  local gold = S.Palette("blizzard").C.gold
+  f.rail:Hide()
+  f.bar:SetTexture(S.GAME_SLIDER_BAR)
+  S.untint(f.bar)
+  f.bar:Show()
+  f.knob:SetTexture(S.GAME_SLIDER_KNOB)
+  f.knob:SetTexCoord(0, 1, 0, 1)
+  f.knob:SetSize(32, 32)
+  S.untint(f.knob)
+  layoutSlider(f, gold, S.Tok(f, "dim"), S.Tok(f, "text"))
+end

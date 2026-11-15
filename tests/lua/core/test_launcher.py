@@ -104,17 +104,17 @@ def test_a_second_click_closes_and_a_switched_off_app_opens_its_page(wow: WowRun
         assert wow.eval(f"{views}:IsShown('campfire.planner')") is True
         wow.execute("Bastians:FeedObject('Campfire').OnClick(nil, 'LeftButton')")
         assert wow.eval(f"{views}:IsShown()") is False
-    # Chat ships off: its button and the Messenger's open Chat's page with the switch
+    # Chat ships off: its button opens Chat's page with the switch; the Messenger's own button is
+    # gone (plan-chat-one-window.md Q5, V30)
     assert wow.eval("Bastians:GetModule('Chat'):IsEnabled()") is False
     wow.execute("Bastians:FeedObject('Chat').OnClick(nil, 'LeftButton')")
     assert wow.eval("Bastians.UI.Hub.Shows('Chat')") is True
     wow.execute("BastiansHubFrame:Hide()")
-    wow.execute(
-        f"for _, e in ipairs({LAUNCHER}.ButtonEntries()) do "
-        "if e.name == 'ChatMessenger' then e.open() end end"
-    )
-    assert wow.eval("Bastians.UI.Hub.Shows('Chat')") is True
-    wow.execute("BastiansHubFrame:Hide()")
+    names = wow.eval(
+        f"(function() local t = {{}} for _, e in ipairs({LAUNCHER}.ButtonEntries()) do "
+        "t[#t + 1] = e.name end return table.concat(t, ',') end)()"
+    ).split(",")
+    assert "Chat" in names and "ChatMessenger" not in names
     # the welcome's own button
     assert wow.eval("BastiansMinimapButtonWelcome:IsShown()") is True
     wow.execute("BastiansMinimapButtonWelcome:Click('LeftButton')")

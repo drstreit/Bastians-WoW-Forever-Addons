@@ -959,6 +959,7 @@ mod = B:NewModule("Map", {
       minimapPins = true, -- the layers on the game's minimap (S5)
       barOpen = true, -- the layer bar over the top of the map
       minimapMax = 20,
+      minimapGoal = true, -- the route's arrow at the rim
       -- Bastian's minimap: on by default, the game's live minimap first
       miniMap = true,
       miniStyle = "game",
@@ -1084,6 +1085,12 @@ mod = B:NewModule("Map", {
           min = 5,
           max = 40,
           step = 5,
+        },
+        {
+          type = "toggle",
+          key = "minimapGoal",
+          label = L["While routing, an arrow at the minimap's edge points straight to where the step ends"],
+          default = true,
         },
         {
           type = "toggle",

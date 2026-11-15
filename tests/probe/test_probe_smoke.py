@@ -74,3 +74,62 @@ def test_single_probes_and_passive_handlers(lua):
     assert results.P7.opens[1] is not None
     assert results.trainer[1] is not None
     assert results.merchant[1] is not None
+
+
+def test_the_chat_probes_count_and_never_name(lua):
+    """plan-chat-v3.md §13: the calls, the item level, the whisper flags; no name, no word."""
+    slash = lua.globals().SlashCmdList.BASTIANSPROBE
+    lua.execute(
+        """
+        function GetAverageItemLevel() return 21.5, 20.25 end
+        function GetInventoryItemLink(_, slot)
+          if slot == 1 or slot == 16 then return "|cff1eff00|Hitem:" .. slot .. "|h[x]|h|r" end
+        end
+        C_Item = {
+          GetDetailedItemLevelInfo = function(link) return link:find("item:1|") and 20 or 24 end,
+        }
+        function CombatLogGetCurrentEventInfo()
+          return 0, "SPELL_DAMAGE", false, "Player-1-1", "", 0, 0, "Creature-0-1", "", 0, 0,
+            1, "", 0, 37
+        end
+        function UnitGUID() return "Player-1-1" end
+        """
+    )
+    slash("chat")
+    slash("combatlog")
+    lua.globals().stub_fire(
+        "CHAT_MSG_WHISPER",
+        "hello there",
+        "Testfriend-Realm",
+        "",
+        "",
+        "",
+        "GM",
+        0,
+        0,
+        "",
+        0,
+        7,
+        "Player-1-0002",
+    )
+    lua.globals().stub_fire("COMBAT_LOG_EVENT_UNFILTERED")
+    text = "\n".join(messages(lua))
+    assert "failed" not in text, text
+    chat = lua.globals().BastiansProbeDB.results.chat
+    assert chat.calls["GetAverageItemLevel"] == "function"
+    assert chat.calls["ChatFrameUtil.SendTell"] == "nil"
+    assert chat.average.ret[1] == 21.5
+    assert (chat.worn.count, chat.worn.mean) == (2, 22)
+    e = chat.events.CHAT_MSG_WHISPER
+    assert (e.count, e.flags.GM, e.guid.Player) == (1, 1, 1)
+
+    def flat(t) -> str:
+        if lua.globals().type(t) != "table":
+            return str(t)
+        return " ".join(f"{k}={flat(v)}" for k, v in t.items())
+
+    saved = flat(chat)
+    assert "Testfriend" not in saved and "hello" not in saved
+    log = lua.globals().BastiansProbeDB.results.combatlog
+    assert log.registered is True
+    assert (log.count, log.done.damage, log.subevents.SPELL_DAMAGE) == (1, 37, 1)

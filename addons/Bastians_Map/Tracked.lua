@@ -17,7 +17,12 @@
 -- no layer (no dots on our styles; the layer they had been was switched off in
 -- the profile, one pill among the map's). Polling where no event exists (CLAUDE.md rule 7): only
 -- while our frame shows one of our styles, a few frames per sweep, slower while nothing changes,
--- nothing in the game's style, where the dots show by themselves.
+-- nothing in the game's style, where the dots show by themselves. Forever answers no addon's point
+-- since 1.60.1.70862 (07.11.2026, measured 13.11.2026): sweeps that hear not even the player's
+-- arrow end in a check at the centre, and a client that stays silent there gets no more sweeps
+-- this session; the setting's note says why and points to the game's style. Where the client can
+-- switch the minimap's ground off, the dots layer of Mini.lua shows the game's own dots instead
+-- (ADR 0078) and the sweep rests while it shows.
 local _, ns = ...
 local B = Bastians
 local S = B.UI.Style
@@ -42,6 +47,7 @@ Tracked.MEAN = 6 -- sweeps a dot's place is averaged over until its fine pass
 Tracked.MAX = 40 -- pins at most, the nearest
 Tracked.STRIKES = 3 -- failed sweeps in a row before they rest until the next login
 Tracked.RETRY = 30 -- seconds until the next sweep after a failed one
+Tracked.DEAF = 3 -- sweeps in a row that heard nothing before the client is asked whether it answers
 Tracked.stats = { sweeps = 0, probes = 0, known = 0, answered = 0, dots = 0, fine = 0, errors = 0 }
 -- the node kinds that get a pin -> the glyph of it (the data says "mine" on Forever, "ore" on retail)
 Tracked.GLYPH = { herb = "herb", mine = "mine", ore = "mine" }
@@ -55,6 +61,8 @@ local counter = 0
 local nextAt = 0 -- GetTime() of the next sweep
 local strikes = 0 -- failed sweeps in a row
 local broken -- the game raised an error STRIKES times in a row: no more sweeps this session
+local deaf -- the client answers no addon's point: no sweep until the setting or the next login
+local silent = 0 -- sweeps in a row that heard nothing at all, not even the player's arrow
 local byName -- lower-cased name of a herb or a vein -> its node kind, built on first use
 local creatures = {} -- lower-cased name -> whether it is a creature without a service, per session
 local grid -- the probe points of the last sweep's size and shape: { half, shape, points }
@@ -95,15 +103,20 @@ function Tracked.Available()
   then
     return nil, L["this client does not let an addon read the minimap's dots"]
   end
+  if deaf then
+    return nil,
+      L["Forever's update of 7 November stopped addons reading the minimap's dots; Game minimap shows them"]
+  end
   return true
 end
 
--- Whether a sweep is wanted now: the setting, our frame showing one of our styles.
+-- Whether a sweep is wanted now: the setting, our frame showing one of our styles, and not the
+-- dots layer, where the game's minimap draws its dots itself (ADR 0078).
 function Tracked.Active()
   if db().miniTracked == false then
     return false
   end
-  return ns.Mini.Taken() and ns.Mini.Style() ~= "game"
+  return ns.Mini.Taken() and ns.Mini.Style() ~= "game" and not ns.Mini.DotsShown()
 end
 
 function Tracked.Running()
@@ -453,6 +466,36 @@ local function listen(u, v)
   return n, secret
 end
 
+-- Whether the client answers an addon's point at all: at the minimap's centre it names the player's
+-- own arrow on a client that does (seen 05.11.2026). Forever answers nothing since 1.60.1.70862
+-- (07.11.2026; measured 13.11.2026 on 70938 in both styles and three ways of writing the point;
+-- ImprovedForever and MapUtils saw the same). Nine points around the centre, within one frame, the
+-- soft cursor given back. True, false, or nil when it cannot be told now (combat, a controller, the
+-- minimap without a place, an error).
+function Tracked.Answers()
+  if paused() or not Minimap:IsVisible() or not geometry() then
+    return nil
+  end
+  local answered = false
+  cursor()
+  local ok = pcall(function()
+    for du = -3, 3, 3 do
+      for dv = -3, 3, 3 do
+        if not answered then
+          local n, secret = listen(du, dv)
+          answered = n > 0 or secret
+        end
+      end
+    end
+  end)
+  cursorOn = false
+  pcall(Minimap.SetUsingSoftCursor, Minimap, false)
+  if not ok then
+    return nil
+  end
+  return answered
+end
+
 -- One frame's share of the sweep: every point's tooltip, every name in it, the point in world yards
 -- of this frame (the player moves on during a sweep).
 local function batch()
@@ -505,6 +548,19 @@ end
 -- pass at the mean of its places), an unseen one survives KEEP sweeps, a new one gets a pin. Then
 -- the wait: short while the player moves or something changed.
 local function finish(now)
+  -- a client that answers names the player's arrow in every sweep: DEAF silent sweeps in a row and a
+  -- silent centre mean it answers no addon (Forever since 1.60.1.70862): no more sweeps (rule 7)
+  if sweep.answered == 0 and not sweep.blind then
+    silent = silent + 1
+    if silent >= Tracked.DEAF and Tracked.Answers() == false then
+      deaf = true
+      B:Log(mod, "info", "the minimap answers no addon: no more sweeps on Bastian's styles")
+      Tracked.Stop()
+      return
+    end
+  else
+    silent = 0
+  end
   local names = {}
   for name in pairs(sweep.hits) do
     names[#names + 1] = name
@@ -799,8 +855,12 @@ function Tracked.Wake()
   end
 end
 
--- The settings' note under the switch.
+-- The settings' note under the switch; silent where the client has the ground switch: the dots
+-- layer shows the dots there, without the sweep and without the Data (ADR 0078).
 function Tracked.Note()
+  if ns.Mini.DotsClient() then
+    return nil
+  end
   local ok, why = Tracked.Available()
   if ok then
     return nil
@@ -826,6 +886,7 @@ table.insert(Map.onEnable, function(self)
 end)
 table.insert(Map.onSetting, function(key)
   if key == "miniTracked" then
+    deaf, silent = nil, 0 -- switched on again: the client is asked again
     Tracked.Sync()
   end
 end)

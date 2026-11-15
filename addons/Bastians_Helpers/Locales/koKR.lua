@@ -98,4 +98,19 @@ ns.L:Register("koKR", {
   ["Enchanting materials"] = "마법부여 재료",
   ["Elemental"] = "원소",
   ["Recipes"] = "제조법",
+  -- the game's windows (15.11.2026)
+  ["The game's windows"] = "게임 창",
+  ["Drag the game's windows to move them; their places are kept"] = "게임 창을 끌어서 옮기기; 위치가 저장됩니다",
+  ["Put the game's windows back where the game places them"] = "게임 창을 원래 위치로 되돌리기",
+  ["The game's windows are back in their places."] = "게임 창이 원래 위치로 돌아왔습니다.",
+  -- the rare finder (15.11.2026)
+  ["Rare nearby: %s"] = "근처의 희귀 몬스터: %s",
+  ["at its known place"] = "알려진 위치",
+  ["somewhere near you"] = "근처 어딘가",
+  ["Level %d"] = "레벨 %d",
+  ["Arrow"] = "화살표",
+  ["Rares spotted"] = "발견한 희귀 몬스터",
+  ["Known rare spawns"] = "알려진 희귀 몬스터 위치",
+  ["Rare finder: a sound and a banner when a rare is near"] = "희귀 몬스터 탐지: 희귀 몬스터가 가까이 있으면 소리와 배너",
+  ["Sound for a rare"] = "희귀 몬스터 알림음",
 })

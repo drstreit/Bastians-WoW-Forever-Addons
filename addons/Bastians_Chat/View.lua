@@ -26,6 +26,7 @@ View.MESSENGER_ICON = "Interface\\AddOns\\Bastians_Chat\\Icon" -- the app's icon
 -- the condensed fonts shipped with the app (SIL OFL, sources.md)
 View.FONTS = {
   { "BarlowCondensed", "Barlow Condensed" },
+  { "BarlowCondensedSemiBold", "Barlow Condensed SemiBold" }, -- the artifact's heads (V17)
   { "FiraSansCondensed", "Fira Sans Condensed" },
   { "IBMPlexSansCondensed", "IBM Plex Sans Condensed" },
   { "PTSansNarrow", "PT Sans Narrow" },
@@ -90,6 +91,7 @@ function View.FontChoices()
 end
 
 local function applyFont(f)
+  S.OwnFont(f) -- the line's font is the chat's own: no look or font change of the kit touches it
   local p = profile()
   local gamePath, _, gameFlags = Compat.ChatFont():GetFont()
   local flags = (p.outline and p.outline ~= "") and p.outline or gameFlags or ""
@@ -101,6 +103,33 @@ local function applyFont(f)
   call(f, "SetSpacing", p.spacing or 0)
 end
 View.ApplyFont = applyFont -- the Messenger's bubbles too
+
+-- The faces of the chat's windows (plan-chat-v3.md V17): an option per role and the value of the
+-- look it sets. `auto` is the artifact's faces when the look draws in the Modern or the Glass
+-- renderer, the look's own in WoW and Parchment; "" the look's own; else the font chosen.
+View.FACES = { uiFont = "font", labelFont = "labelFont", numberFont = "numberFont" }
+View.ARTIFACT_FACES = {
+  font = S.SANS_FONT, -- IBM Plex Sans
+  labelFont = View.FONT_DIR .. "BarlowCondensedSemiBold.ttf",
+  numberFont = S.MONO_FONT, -- IBM Plex Mono
+}
+View.ARTIFACT_LOOKS = { modern = true, glass = true }
+
+-- The choice for one of the faces: by the look, the look's own, every font.
+function View.FaceChoices(option)
+  local out = {}
+  for path, name in pairs(View.FontChoices()) do
+    if path ~= "" then -- "" there is the game's chat font, here the look's own
+      out[path] = name
+    end
+  end
+  -- "By the look" alone, the face it means in the option's description: the long label ran out of
+  -- the choice button
+  local artifact = View.ARTIFACT_FACES[View.FACES[option] or "font"]
+  out.auto = (artifact and out[artifact]) and L["By the look"] or L["The look's own"]
+  out[""] = L["The look's own"]
+  return out
+end
 
 -- ---------------------------------------------------------------------------------------------
 -- Tabs
@@ -155,6 +184,9 @@ View.MIN_W = 220 -- a window's width at least, before its tabs ask for more
 local function fitWidth(W, tabsEnd)
   if not (W.copy and W.plus and W.filterButton) then
     return
+  end
+  if W.id == View.MAIN and View.LayoutKind() ~= "tabs" then
+    return -- the tabs do not show: the layout in force has the window's least size
   end
   local right = (W.copy:GetWidth() or 50) + 4 + (W.filterButton:GetWidth() or 50) + 4
   if W.junk then
@@ -907,6 +939,7 @@ local function buildEditor()
   w.cancel:SetScript("OnClick", function()
     w:Hide()
   end)
+  View.Dress(w) -- Chat's look (V13), once its parts are built
   return w
 end
 
@@ -1015,8 +1048,10 @@ function View.Decorate(line)
     end
     text = Model.Linkify(text, S.H.chat)
   end
-  local stamp = Model.Stamp(p.stamps, line.at)
-  if stamp then
+  local stamp = not line.noStamp and Model.Stamp(p.stamps, line.at) -- a speaker block's head has it
+  if stamp and line.id then
+    text = S.H.tipDim .. ns.Menus.TimeLink(line.id, stamp) .. "|r" .. text -- Shift+click quotes (V33)
+  elseif stamp then
     text = S.H.tipDim .. stamp .. "|r" .. text
   end
   return text
@@ -1063,7 +1098,8 @@ local function show(tab, line)
     tab.unread = true
     paintTab(tab)
   end
-  local sound = tab.def.sound
+  -- the tab's sound while the tabs show; under a version 3 layout its view rings (Views.OnStore)
+  local sound = View.LayoutKind() == "tabs" and tab.def.sound
   if sound and not line.own and (GetTime() - (lastSound[tab.def.id] or -100)) >= View.SOUND_GAP then
     lastSound[tab.def.id] = GetTime()
     Compat.PlaySound(sound)
@@ -1071,11 +1107,12 @@ local function show(tab, line)
   return true
 end
 
--- A captured line into every tab that takes it. A tab marked "only here" takes it from the others;
--- whisper tabs open on the first whisper when whispers go to tabs.
+-- A captured line into every tab that takes it. A tab marked "only here" takes it from the others.
+-- While the tabs show, whisper tabs open on the first whisper (the conversations are places of
+-- the one window otherwise, plan-chat-one-window.md §3; the Messenger's window is gone, V30).
 function View.Add(line)
   local p = profile()
-  local toTabs = p.whisperTo ~= "messenger"
+  local toTabs = View.LayoutKind() == "tabs"
   if toTabs and line.cat == "whisper" and line.partner and not byId["w:" .. line.partner] then
     View.AddTab(Model.WhisperTab(line.partner))
     ns.Chat.RememberWhisper(line.partner)
@@ -1101,7 +1138,7 @@ function View.Add(line)
     end
   end
   local main = wins[View.MAIN]
-  if toTabs and line.cat == "whisper" and main and not main.win:IsShown() and p.showOnWhisper then
+  if line.cat == "whisper" and main and not main.win:IsShown() and p.showOnWhisper then
     main.win:Show()
   end
 end
@@ -1298,6 +1335,20 @@ function View.NameMenu(name)
         ns.Chat.BlockSender(name)
       end,
     },
+    -- the person's place and their lines (plan-chat-one-window.md §5, V33)
+    {
+      label = L["Open the conversation"],
+      onClick = function()
+        ns.People.Open(name)
+      end,
+    },
+    {
+      label = L["Show their lines"],
+      onClick = function()
+        ns.Front.ShowMix()
+        ns.Front.SetFilter(Model.ShortName(name))
+      end,
+    },
   }
   B.UI.Menu(nil, Model.ShortName(name), items, ns.mod)
   return items
@@ -1318,6 +1369,15 @@ function View.OnLink(frame, link, text, button)
       Compat.Invite(name)
     else
       Compat.OpenChat("/w " .. name .. " ")
+    end
+  elseif kind == "BNplayer" then
+    -- a Battle.net friend's name: Chat's menu, never the game's (R16: its "Move to New Window"
+    -- opened a game whisper window Chat keeps hidden); a click whispers them in the game's bar
+    local name, bnID = link:match("^BNplayer:([^:]+):(%d+)")
+    if button == "RightButton" then
+      View.BNetMenu = ns.Menus.BNetName(name or text, tonumber(bnID), frame)
+    else
+      Compat.OpenBNetChat(name or text)
     end
   elseif kind == "addon" and link:sub(1, #Model.URL_LINK) == Model.URL_LINK then
     View.Copy(link:sub(#Model.URL_LINK + 1))
@@ -1359,6 +1419,7 @@ function View.Copy(text)
       copyWin.bar.SetTotal(self:GetHeight() or 0) -- the box grows with its text
     end)
     copyWin.scroll = scroll
+    View.Dress(copyWin) -- Chat's look (V13), once its parts are built
   end
   copyEdit:SetWidth(math.max(200, (copyWin.content:GetWidth() or 520) - 30))
   copyEdit:SetText(text or "")
@@ -1516,16 +1577,11 @@ local function buildLongBar(W)
   longNote:Hide()
 end
 
--- The Messenger button in the main window's header, with the unread count.
-function View.MessengerCount(n)
-  n = n or 0
-  local W = wins[View.MAIN]
-  if W and W.msgButton then
-    W.msgButton:SetBadge(n)
-    W.msgButton.tip = n > 0 and string.format(L["Messenger (%d)"], n) or L["Your whispers as conversations"]
-  end
+-- The whispers' unread count on the chat's minimap button (plan-chat-one-window.md Q5: the
+-- Messenger's own button is gone; the feed keeps the count too).
+function View.UnreadCount(n)
   if B.UI.Launcher and B.UI.Launcher.SetBadge then
-    B.UI.Launcher.SetBadge("ChatMessenger", n) -- the Messenger's minimap button
+    B.UI.Launcher.SetBadge("Chat", n or 0)
   end
 end
 
@@ -1581,6 +1637,7 @@ newWindow = function(wid)
     minWidth = 220,
     minHeight = 120,
     lockable = true, -- the pin in the header
+    headIcons = true, -- Lock, Options, Close as pictograms (V27: "all the same color")
     db = main and p.window or (function()
       p.places[wid] = p.places[wid] or {}
       return p.places[wid]
@@ -1588,25 +1645,6 @@ newWindow = function(wid)
     escape = false, -- Escape must not close the chat
     strata = "LOW", -- under every other window, as the game's chat; the game's input bar lives here
   })
-  local head = W.win.head
-  if main then
-    -- the Messenger as a pictogram with the unread count as a badge (
-    -- "replace the Messenger button with an icon button")
-    local m = S.action(head, {
-      icon = "messenger",
-      label = L["Messenger"],
-      tip = L["Your whispers as conversations"],
-      row = true,
-      onClick = function()
-        ns.Messenger.Toggle()
-      end,
-    })
-    m:SetPoint("RIGHT", W.win.lock or W.win.options or W.win.close, "LEFT", -6, 0)
-    m:SetBadge(0)
-    W.win.title:SetPoint("RIGHT", m, "LEFT", -6, 0)
-    W.msgButton = m
-  end
-
   local bar = CreateFrame("Frame", nil, W.win.content)
   bar:SetPoint("TOPLEFT", 0, 0)
   bar:SetPoint("TOPRIGHT", 0, 0)
@@ -1673,7 +1711,7 @@ newWindow = function(wid)
   filterBox:SetPoint("LEFT", 0, 0)
   filterBox:SetPoint("RIGHT", help, "LEFT", -4, 0)
   Model.FilterBox(filterBox)
-  filterBox.count = S.text(filterBox, 10, S.C.muted)
+  filterBox.count = S.SetRole(S.text(filterBox, 10, S.C.muted), "number")
   filterBox.count:SetPoint("RIGHT", filterBox.clear, "LEFT", -2, 0)
   filterBox:SetScript("OnTextChanged", function(self)
     local text = self:GetText() or ""
@@ -1732,6 +1770,7 @@ newWindow = function(wid)
     wireExtra(W)
   end
   wins[wid] = W
+  View.Dress(W.win)
   return W
 end
 
@@ -1807,6 +1846,9 @@ function View.Setup()
     local sel = byId[p.selected[wid] or ""]
     View.Select(sel and sel.wid == wid and sel.def.id or (firstShown(W) and firstShown(W).def.id))
   end
+  if View.LayoutKind() ~= "tabs" then
+    View.SetLayout(View.LayoutKind())
+  end
   return wins[View.MAIN]
 end
 
@@ -1850,6 +1892,191 @@ function View.Apply()
   for _, W in pairs(wins) do
     layoutTabs(W)
   end
+  if wins[View.MAIN] and (View.LayoutKind() ~= "tabs" or ns.Inbox.Frame() or ns.Decks.Frame()) then
+    View.SetLayout(View.LayoutKind()) -- a font or a layout changed: the layout drawn again
+  end
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Chat's look (plan-chat-v3.md §9, V13; owner: "our blizzard theme but also skinnable"): every
+-- window of the chat in a preset of its own, the WoW look by default whatever the suite's; ""
+-- follows the suite's. A window is dressed when it is built (what it drew so far takes the
+-- preset's tokens) and again when the setting changes.
+-- ---------------------------------------------------------------------------------------------
+
+local dressed = setmetatable({}, { __mode = "k" })
+
+-- A preset's values for a look setting ("look" or "toastLook") with the chat's faces (V17), nil
+-- for the suite's. A copy: the suite's preset tables are never written.
+function View.LookValues(key)
+  local p = profile()
+  local id = p[key or "look"]
+  local set = B.UI.Settings
+  if type(id) ~= "string" or id == "" or not (set and set.PresetValues) then
+    return nil
+  end
+  local values = set.PresetValues(id)
+  if not values then
+    return nil
+  end
+  local out = {}
+  for k, v in pairs(values) do
+    out[k] = v
+  end
+  for option, valueKey in pairs(View.FACES) do
+    local choice = p[option]
+    if choice == nil or choice == "auto" then
+      if View.ARTIFACT_LOOKS[out.look or "modern"] then
+        out[valueKey] = View.ARTIFACT_FACES[valueKey]
+      end
+    elseif choice ~= "" then
+      out[valueKey] = choice
+    end
+  end
+  -- LibSharedMedia's border and background of the chat's own (V25): "" the suite's, "none" none
+  for option, valueKey in pairs(View.MEDIA) do
+    local choice = p[option]
+    if type(choice) == "table" or (type(choice) == "string" and choice ~= "") then
+      out[valueKey] = choice
+    end
+  end
+  return out
+end
+
+View.MEDIA =
+  { chatBorder = "windowBorder", chatBorderColor = "windowBorderColor", chatTexture = "windowTexture" }
+
+-- A choice of LibSharedMedia's names (V25): the suite's, `none`, every name it knows.
+function View.MediaChoices(kind, none)
+  local out = { [""] = L["The suite's"], none = none }
+  for _, name in ipairs(S.MediaNames(kind)) do
+    out[name] = name
+  end
+  return out
+end
+
+function View.Dress(win)
+  dressed[win] = true
+  if win.SetPreset then
+    win:SetPreset(View.LookValues("look"))
+  end
+  return win
+end
+
+-- The options that dress the windows anew when they change (V13, V17's faces).
+View.LOOK_OPTIONS = {
+  channelColors = true, -- V25
+  chatBorder = true,
+  chatBorderColor = true,
+  chatTexture = true,
+  look = true,
+  toastLook = true,
+  windowAlpha = true,
+  uiFont = true,
+  labelFont = true,
+  numberFont = true,
+}
+
+-- The look settings changed: every window again, the fight's pop-ups, the layout drawn anew.
+function View.ApplyLookChange()
+  local values = View.LookValues("look")
+  for win in pairs(dressed) do
+    win:SetPreset(values)
+  end
+  ns.Combat.ApplyLook()
+  View.Apply()
+end
+
+-- The choice of looks: the suite's, and every preset (their names in the client's language).
+function View.LookChoices()
+  local out = { [""] = L["The suite's"] }
+  local set = B.UI.Settings
+  for id, name in pairs(set and set.Presets and set.Presets() or {}) do
+    out[id] = name
+  end
+  return out
+end
+
+-- The main window's layout (plan-chat-v3.md §7.4, ADR 0075, amended by ADR 0076): the one window
+-- ("inbox"), or the tabs of version 2 (`/bchat tabs`, until V35). The Inbox takes the place of the
+-- tab bar and the message areas; the input bar stays. The Switchboard went in V31.
+View.LAYOUTS = { tabs = true, inbox = true, decks = true }
+
+function View.LayoutKind()
+  local kind = profile().layoutKind
+  return View.LAYOUTS[kind] and kind or "tabs"
+end
+
+-- The layout of a kind that takes the tabs' place: the two decks (plan-chat-two-decks.md), the
+-- Inbox of version 3 (until V35), or nil for the tabs.
+local function layoutOf(kind)
+  return (kind == "decks" and ns.Decks) or (kind == "inbox" and ns.Inbox) or nil
+end
+
+function View.SetLayout(kind)
+  profile().layoutKind = View.LAYOUTS[kind] and kind or "tabs"
+  local W = wins[View.MAIN]
+  if not W then
+    return
+  end
+  local v3 = layoutOf(View.LayoutKind())
+  W.bar:SetShown(v3 == nil)
+  W.area:SetShown(v3 == nil)
+  -- the tabs' other windows go with the tabs and come back with them
+  for _, wid in ipairs(View.Windows()) do
+    if wid ~= View.MAIN then
+      wins[wid].win:SetShown(v3 == nil and W.win:IsShown())
+    end
+  end
+  -- the other layouts' frames go; the decks give the window's head back
+  for _, other in ipairs({ ns.Inbox, ns.Decks }) do
+    if other ~= v3 and other.Frame() then
+      other.Frame():Hide()
+    end
+  end
+  ns.Decks.TakeHead(W, v3 == ns.Decks)
+  ns.Places.ShowWindows(v3 ~= nil and W.win:IsShown())
+  if v3 then
+    W.filterRow:Hide()
+    local box = S.WithPalette(S.PaletteOf(W.win.frame), v3.Build, W)
+    -- the one window's least size (V34): its rail, its filter line, a stream to read
+    local frame = W.win.frame
+    W.minWidth = v3.MIN_W
+    W.win.opts.minWidth, W.win.opts.minHeight = v3.MIN_W, v3.MIN_H
+    call(frame, "SetResizeBounds", v3.MIN_W, v3.MIN_H)
+    local fw, fh = frame:GetWidth() or 0, frame:GetHeight() or 0
+    if (fw > 0 and fw < v3.MIN_W) or (fh > 0 and fh < v3.MIN_H) then
+      frame:SetSize(math.max(fw, v3.MIN_W), math.max(fh, v3.MIN_H))
+      W.win:SavePlace()
+    end
+    box:Show()
+    v3.Rebuild()
+    ns.Decks.ShowWindows(v3 == ns.Decks and W.win:IsShown())
+  else
+    W.win.opts.minHeight = 120
+    layoutTabs(W) -- the tabs' bar gives the least width again
+  end
+end
+
+-- The fight is over (V11): the layout in force draws what it held.
+function View.AfterFight()
+  local v3 = layoutOf(View.LayoutKind())
+  if v3 and v3.Frame() and v3.Frame():IsVisible() then
+    v3.Rebuild()
+  end
+end
+
+-- The one window with the Inbox in front (a person, People, a request's chip): the layout and the
+-- window shown when they were not.
+function View.ShowInbox()
+  View.Setup()
+  if View.LayoutKind() == "tabs" then
+    View.SetLayout("inbox")
+  end
+  local W = wins[View.MAIN]
+  if W and not W.win:IsShown() then
+    View.Show()
+  end
 end
 
 -- In combat the windows fade (a setting), back after.
@@ -1877,17 +2104,28 @@ function View.SelectGroup(inside)
   end
 end
 
+-- The windows: all of the tabs layout's; with a version 3 layout the main window alone (the tabs
+-- of the other windows are views now, plan-chat-v3.md §11).
 function View.Show()
   View.Setup()
+  local tabs = View.LayoutKind() == "tabs"
   for _, wid in ipairs(View.Windows()) do
-    wins[wid].win:Show()
+    if tabs or wid == View.MAIN then
+      wins[wid].win:Show()
+    else
+      wins[wid].win:Hide()
+    end
   end
+  ns.Places.ShowWindows(not tabs) -- the places in windows of their own (V32)
+  ns.Decks.ShowWindows(View.LayoutKind() == "decks") -- a deck in a window of its own
 end
 
 function View.Hide()
   for _, W in pairs(wins) do
     W.win:Hide()
   end
+  ns.Places.ShowWindows(false)
+  ns.Decks.ShowWindows(false)
   if copyWin then
     copyWin:Hide()
   end

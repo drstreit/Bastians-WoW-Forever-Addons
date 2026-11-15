@@ -98,4 +98,19 @@ ns.L:Register("ptBR", {
   ["Enchanting materials"] = "Materiais de encantamento",
   ["Elemental"] = "Elemental",
   ["Recipes"] = "Receitas",
+  -- the game's windows (15.11.2026)
+  ["The game's windows"] = "As janelas do jogo",
+  ["Drag the game's windows to move them; their places are kept"] = "Arrastar as janelas do jogo para movê-las; os lugares ficam guardados",
+  ["Put the game's windows back where the game places them"] = "Devolver as janelas do jogo aos lugares originais",
+  ["The game's windows are back in their places."] = "As janelas do jogo voltaram aos seus lugares.",
+  -- the rare finder (15.11.2026)
+  ["Rare nearby: %s"] = "Raro por perto: %s",
+  ["at its known place"] = "no seu lugar conhecido",
+  ["somewhere near you"] = "em algum lugar perto de você",
+  ["Level %d"] = "Nível %d",
+  ["Arrow"] = "Seta",
+  ["Rares spotted"] = "Raros avistados",
+  ["Known rare spawns"] = "Lugares conhecidos de raros",
+  ["Rare finder: a sound and a banner when a rare is near"] = "Localizador de raros: um som e um aviso quando um raro está perto",
+  ["Sound for a rare"] = "Som para um raro",
 })

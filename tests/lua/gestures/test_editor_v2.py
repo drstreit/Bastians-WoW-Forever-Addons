@@ -154,7 +154,8 @@ def test_the_new_placeholders_fill_and_ask_the_client_only_when_used(wow: WowRun
     for hour, word in (
         (4, "night"),
         (5, "morning"),
-        (12, "afternoon"),
+        (12, "day"),  # noon
+        (14, "afternoon"),
         (17, "evening"),
         (21, "night"),
     ):

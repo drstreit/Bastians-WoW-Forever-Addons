@@ -40,6 +40,7 @@ ns.L:Register("ptBR", {
   ["Unknown command: %s"] = "Comando desconhecido: %s",
   ["morning"] = "manhã",
   ["afternoon"] = "tarde",
+  ["day"] = "dia", -- %h at noon, 12:00 to 13:59
   ["evening"] = "anoitecer",
   ["night"] = "noite",
   ["he"] = "ele",

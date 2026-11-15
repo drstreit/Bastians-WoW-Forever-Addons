@@ -639,9 +639,13 @@ local function newBubble()
   return b
 end
 
--- The key a bubble is kept under between renders.
+-- The key a bubble is kept under between renders: the item's own when it names one (a greeting's
+-- place in its list), else its thing, its line or its kind and title.
 local function itemKey(item)
-  return item.ref or (item.line and item.line.key) or (tostring(item.kind) .. ":" .. tostring(item.title))
+  return item.key
+    or item.ref
+    or (item.line and item.line.key)
+    or (tostring(item.kind) .. ":" .. tostring(item.title))
 end
 
 local function paint(b, item, playing)

@@ -5,6 +5,30 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.5.0:1",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "Bastian's Chat follows your look completely, light ones too, shows every channel in its own colour (or the game's), and its windows and every window of the suite can wear LibSharedMedia borders and textures.",
+  },
+  {
+    id = "2.5.0:2",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "In its Modern and Glass looks Bastian's Chat draws its heads and tabs in Barlow Condensed and its counts, times and prices in IBM Plex Mono, and the suite offers five more fonts: IBM Plex Sans, IBM Plex Mono, Oswald, Varela Round and Almendra.",
+  },
+  {
+    id = "2.5.0:3",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "On WoW Forever, Core notices the spells you learn (it listened for an event the game no longer has).",
+  },
+  {
+    id = "2.5.0:4",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "Long choices in the settings no longer run past their buttons.",
+  },
+  {
     id = "2.2.0:1",
     date = "2026-11-11",
     version = "2.2.0",
@@ -159,29 +183,5 @@ ns.NEWS = {
     date = "2026-11-09",
     version = "2.1.0",
     text = "A window you open always comes to the front, also one that was already open behind another.",
-  },
-  {
-    id = "2.1.0:17",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "Trainers and vendors say what kind they are, also when their title has no word Trainer in it.",
-  },
-  {
-    id = "2.0.1:1",
-    date = "2026-11-06",
-    version = "2.0.1",
-    text = 'The Browser\'s search no longer stays on "Searching ..." while other things happen; a search that fails says so.',
-  },
-  {
-    id = "2.0.0:1",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "Quests now open on a parchment sheet with the task first, the story and large rewards, from My quests, the map and on hover at the Orbiter's quest marks.",
-  },
-  {
-    id = "2.0.0:2",
-    date = "2026-11-06",
-    version = "2.0.0",
-    text = "Rewards come from the game itself, so quests no source knows show their real experience, money and items.",
   },
 }

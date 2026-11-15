@@ -48,6 +48,12 @@ def pencil(wow: WowRuntime) -> None:
     wow.execute("Bastians.Deliver()")
 
 
+def no_dots(wow: WowRuntime) -> None:
+    """Our own zoom, drag and arrow: a client without the ground switch, where the dots layer
+    (ADR 0078, test_mini_dots.py) never shows."""
+    wow.execute("Mock.GroundSwitch(false)")
+
+
 def setting(wow: WowRuntime, key: str, value: str) -> None:
     wow.execute(
         f"{MOD}.db.profile.{key} = {value}; "
@@ -115,6 +121,7 @@ def test_nothing_moves_in_combat(wow: WowRuntime):
 
 def test_our_styles_warn_once_then_draw_with_the_pins_on_our_view(wow: WowRuntime):
     boot(wow)
+    no_dots(wow)
     pencil(wow)
     wow.execute(f"{MINI}.SetStyle('pencil')")
     # the warning first: what only the game's minimap shows
@@ -159,6 +166,7 @@ def test_the_settings_page_asks_first_too(wow: WowRuntime):
 
 def test_wheel_drag_recentre_and_alt_wheel(wow: WowRuntime):
     boot(wow)
+    no_dots(wow)
     # the game's style: the wheel zooms the game's minimap
     wow.execute("Mock.minimapZoom = 1")
     wow.execute(f"{MINI}.catcher:GetScript('OnMouseWheel')({MINI}.catcher, 1)")
@@ -177,7 +185,10 @@ def test_wheel_drag_recentre_and_alt_wheel(wow: WowRuntime):
     )
     assert wow.eval(f"{MINI}.Size()") == 210
     assert wow.eval(f"{MINI}.view:GetWidth()") == 210
-    # a drag pans away from the player and lets go; Recentre comes back
+    # a drag pans away from the player and lets go; Recentre comes back. Its button stands on the
+    # view only while the view looks elsewhere
+    assert wow.eval(f"{MINI}.recentre:GetParent() == {MINI}.clip") is True
+    assert wow.eval(f"{MINI}.recentre:IsShown()") is False
     cam = wow.eval(f"{MINI}.Camera()")
     wx, wy = cam.wx, cam.wy
     wow.execute("Mock.cursorX, Mock.cursorY = 500, 500")
@@ -189,9 +200,15 @@ def test_wheel_drag_recentre_and_alt_wheel(wow: WowRuntime):
     cam = wow.eval(f"{MINI}.Camera()")
     assert wow.eval(f"{MINI}.Following()") is False and (cam.wx, cam.wy) != (wx, wy)
     assert wow.eval("BastiansMiniMap:GetScript('OnUpdate')") is None  # nothing ticks when still
-    wow.execute(f"{MINI}.Recentre()")
+    assert wow.eval(f"{MINI}.recentre:IsShown()") is True
+    wow.execute(f"{MINI}.recentre:Click()")
     cam = wow.eval(f"{MINI}.Camera()")
     assert wow.eval(f"{MINI}.Following()") is True and (cam.wx, cam.wy) == (wx, wy)
+    assert wow.eval(f"{MINI}.recentre:IsShown()") is False
+    # the game's style never shows it: the game's minimap always stays on the player
+    wow.execute(f"{MINI}.Zoom(1)")
+    wow.execute(f"{MINI}.SetStyle('game')")
+    assert wow.eval(f"{MINI}.recentre:IsVisible()") is False
     assert wow.errors == []
 
 
@@ -363,6 +380,7 @@ def test_the_wheel_zooms_at_the_cursor(wow: WowRuntime):
     """ "zoom exactly where my cursor is", Shift + wheel at the centre.
     The world point under the cursor stays under it; the view lets go of the player."""
     boot(wow)
+    no_dots(wow)
     wow.execute(f"{MOD}.db.profile.miniWarned = true; {MINI}.SetStyle('physical')")
     top = wow.eval(f"{MINI}.clip:GetTop()")
     wow.execute(
@@ -601,6 +619,7 @@ def test_walking_recentres_and_the_arrow_sits_above_the_pins(wow: WowRuntime):
     cursor had let go of the player and the pins in Goldshire covered the arrow. Walking brings the
     view back; the arrow is drawn on a frame above the overlay's pins."""
     boot(wow)
+    no_dots(wow)
     wow.execute(f"{MOD}.db.profile.miniWarned = true; {MINI}.SetStyle('physical')")
     wow.execute(f"{MINI}.Zoom(1)")  # the mock's cursor is off the centre: a zoom at the cursor
     assert wow.eval(f"{MINI}.Following()") is False
@@ -766,6 +785,7 @@ def test_a_player_moved_without_a_movement_event_is_followed(wow: WowRuntime):
 
 def test_a_zoom_during_a_walk_does_not_let_go_of_the_player(wow: WowRuntime):
     physical(wow)
+    no_dots(wow)
     wow.fire("PLAYER_STARTED_MOVING")
     wow.run_frames(2)
     wow.execute(f"{MINI}.Zoom(1)")  # the mock's cursor is off the centre: a zoom at the cursor

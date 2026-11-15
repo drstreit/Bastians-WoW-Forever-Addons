@@ -40,6 +40,7 @@ ns.L:Register("koKR", {
   ["Unknown command: %s"] = "알 수 없는 명령: %s",
   ["morning"] = "아침",
   ["afternoon"] = "오후",
+  ["day"] = "낮", -- %h at noon, 12:00 to 13:59
   ["evening"] = "저녁",
   ["night"] = "밤",
   ["he"] = "그",

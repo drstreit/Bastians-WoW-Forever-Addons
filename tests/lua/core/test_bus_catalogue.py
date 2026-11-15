@@ -28,6 +28,7 @@ ALL_ADDONS = [
     "Bastians_Helpers",
     "Bastians_Voice",
     "Bastians_Gestures",
+    "Bastians_Courtesy",
     "Bastians_Campfire",
     "Bastians_Chat",
 ]

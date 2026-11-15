@@ -262,7 +262,7 @@ def test_the_way_says_a_step_ready_to_hand_in_and_what_is_still_ahead(wow: WowRu
 
 STRIP = """
 (function()
-  local out = { links = {}, dots = {} }
+  local out = { links = {}, dots = {}, bars = {} }
   local canvas = %s
   for key, b in pairs(canvas.links) do
     if b:IsShown() then
@@ -271,6 +271,9 @@ STRIP = """
   end
   for _, d in ipairs(canvas.dots) do
     if d:IsShown() then out.dots[#out.dots + 1] = d:GetWidth() end
+  end
+  for _, b in ipairs(canvas.bars) do
+    if b:IsShown() then out.bars[#out.bars + 1] = b:GetWidth() end
   end
   return out
 end)()
@@ -379,7 +382,7 @@ def test_a_side_quest_and_a_long_chain_on_the_strip(wow: WowRuntime):
     assert len(wow.eval(f"{SHEET}.Strip(7, {state})").kinds) == 14
     wow.execute(f"{SHEET}.Open(7)")
     wow.execute(f"BST_CANVAS = {SHEET}.Canvas(BastiansQuestSheet)")
-    bar = list(wow.eval(STRIP % "BST_CANVAS").dots.values())
+    bar = list(wow.eval(STRIP % "BST_CANVAS").bars.values())
     # the track, and over it what is done (the mock's character has done one of the fourteen)
     assert bar[0] == 96 and [round(w, 1) for w in bar[1:]] == [round(96 / 14, 1)]
     assert wow.errors == []
@@ -760,4 +763,56 @@ def test_the_map_shows_what_has_no_place_of_its_own_at_the_places_named(wow: Wow
     assert (
         wow.eval("Bastians:GetAction('map.show').when('item:2589', { source = 'sheet' })") is False
     )
+    assert wow.errors == []
+
+
+def test_each_dot_of_the_strip_opens_the_chain_at_its_step(wow: WowRuntime):
+    """ "click on each dot and open the browser with that quest chain on
+    that quest. Make that dots reacting to hover and bigger so that it is clear they are
+    clickable"."""
+    boot(wow, CORE, DATA, QUESTS, "Bastians_Map", "Bastians_Browser")
+    wow.execute(f"{SHEET}.Open(76)")
+    wow.execute(f"BST_CANVAS = {SHEET}.Canvas(BastiansQuestSheet)")
+    dots = [wow.eval(f"BST_CANVAS.dots[{i}]") for i in (1, 2, 3)]
+    assert all(d.IsMouseEnabled(d) for d in dots)
+    assert [d.size for d in dots] == [12, 16, 12]  # bigger than before (7 and 11)
+    # the mouse on the third: it grows, a ring shows, the tip names the step
+    third = "BST_CANVAS.dots[3]"
+    wow.execute(f"{third}:GetScript('OnEnter')({third})")
+    assert (
+        wow.eval(f"{third}.disc:GetWidth()") == 16 and wow.eval(f"{third}.ring:IsShown()") is True
+    )
+    title, text = wow.eval(f"{{ {third}.tip({third}) }}").values()
+    assert title == "3. Riverpaw Gnoll Bounty" and "Show the quest chain" in text
+    wow.execute(f"{third}:GetScript('OnLeave')({third})")
+    assert (
+        wow.eval(f"{third}.disc:GetWidth()") == 12 and wow.eval(f"{third}.ring:IsShown()") is False
+    )
+    # a click: the chain's page in the Browser, that step's tile marked
+    wow.execute(f"{third}:Click()")
+    wow.advance(0.3)
+    wow.run_frames(3)
+    root = wow.eval(f"{MOD}.Logic.chainRoot(76)")
+    assert wow.eval("Bastians:GetModule('Browser').Browser.PageRef()") == f"chain:{root}"
+    canvas = f"{SHEET}.Canvas(Bastians:GetModule('Browser').dossier.content)"
+    marked = [
+        wow.eval(f"{canvas}.steps[{i}].qid")
+        for i in range(1, 4)
+        if wow.eval(f"{canvas}.steps[{i}].mark:IsShown()")
+    ]
+    assert marked == [11]
+    # the chain's words mark the sheet's own quest
+    wow.execute(f"{SHEET}.Open(76); BST_CANVAS = {SHEET}.Canvas(BastiansQuestSheet)")
+    wow.execute("BST_CANVAS.links['strip.chain']:Click()")
+    wow.advance(0.3)
+    wow.run_frames(3)
+    marked = [
+        wow.eval(f"{canvas}.steps[{i}].qid")
+        for i in range(1, 4)
+        if wow.eval(f"{canvas}.steps[{i}].mark:IsShown()")
+    ]
+    assert marked == [76]
+    # on a hover of the sheet (a preview) the dots take no mouse
+    wow.execute(f"{SHEET}.Preview(76, {{}})")
+    assert wow.eval("BST_CANVAS.dots[1]:IsMouseEnabled()") is False
     assert wow.errors == []

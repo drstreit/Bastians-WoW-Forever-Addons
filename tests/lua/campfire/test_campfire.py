@@ -683,3 +683,42 @@ def test_while_auras_are_hidden_the_last_reading_stands(wow: WowRuntime):
     wow.fire("PLAYER_REGEN_ENABLED")
     assert wow.eval(f"{W}.State().nearby") is False  # read again after the fight
     assert errors(wow) == []
+
+
+def test_the_company_at_the_fire_and_sitting_down(wow: WowRuntime):
+    """Greeting the fire: Courtesy names the people there.
+    Company() lists the other players the client names (the group, the nameplates, the target)
+    that carry a fire's aura, once each, by first name; sitting down tells the bus."""
+    boot(wow)
+    wow.execute(
+        "UnitIsPlayer = function(u) return u ~= nil end;"
+        " Mock.guids = { party1 = 'Player-1-1', nameplate1 = 'Player-1-2', nameplate2 = 'Player-1-3',"
+        "  target = 'Player-1-2' };"
+        " Mock.unitNames = { party1 = 'Tobb Ironfoot', nameplate1 = 'Alda Vey', nameplate2 = 'Brann',"
+        "  target = 'Alda Vey' };"
+        f" Mock.unitAuras = {{ party1 = {{ {{ spellId = {NEARBY} }} }}, nameplate1 = {{ {{ spellId = {RESTING} }} }},"
+        f"  nameplate2 = {{}}, target = {{ {{ spellId = {RESTING} }} }} }};"
+        " Mock.namePlates = { 'nameplate1', 'nameplate2' }"
+    )
+    assert list(wow.eval(f"{W}.Company()").values()) == ["Alda", "Tobb"]  # Brann is not at a fire
+    assert list(wow.eval("Bastians:GetService('camps').Company()").values()) == ["Alda", "Tobb"]
+    wow.execute("Mock.aurasSecret = true")
+    assert list(wow.eval(f"{W}.Company()").values()) == []  # hidden in a fight: nobody known
+    wow.execute("Mock.aurasSecret = false")
+    wow.execute(
+        "Sat = {} ; Bastians:GetModule('Core'):On('BASTIANS_CAMP_SAT', function(_, _, who)"
+        " Sat[#Sat + 1] = who or 'nil' end)"
+    )
+    auras(wow, f"{{ {{ spellId = {NEARBY} }} }}")
+    assert wow.eval("#Sat") == 0  # near a fire is not sitting
+    auras(
+        wow,
+        f"{{ {{ spellId = {NEARBY} }}, {{ spellId = {RESTING}, expirationTime = GetTime() + 60 }} }}",
+    )
+    assert list(wow.eval("Sat").values()) == ["nil"]
+    auras(
+        wow,
+        f"{{ {{ spellId = {NEARBY} }}, {{ spellId = {RESTING}, expirationTime = GetTime() + 59 }} }}",
+    )
+    assert wow.eval("#Sat") == 1  # still sitting: told once
+    assert errors(wow) == []

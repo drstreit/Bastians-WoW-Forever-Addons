@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.4.1
+## Version: 2.5.0
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB
@@ -63,6 +63,7 @@ UI\Style.lua
 UI\Money.lua
 UI\Icons.lua
 UI\Look.lua
+UI\VirtualList.lua
 UI\Ring.lua
 UI\Scenery.lua
 UI\Window.lua

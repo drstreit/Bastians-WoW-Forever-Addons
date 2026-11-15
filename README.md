@@ -64,10 +64,13 @@ whose video or guide it retells, with the link. The book's drawings and the welc
 Gemini image model from our own scene descriptions. The maps of Forever's own dungeons (the City
 of Dalaran, the Excavation Site: Wetlands, the Hall of Thanes, the Ruins of Lordaeron) are by
 Santiago Reyes, from his "Atlas of Azeroth: Forever" (https://www.artstation.com/sr433_20), used
-with his kind permission and not under the GPL: thank you, Santiago! The settings offer five typefaces beside the
+with his kind permission and not under the GPL: thank you, Santiago! The settings offer ten typefaces beside the
 client's own: Inter (Rasmus Andersson), Exo 2 and Cinzel (Natanael Gama), Roboto Condensed
-(Google) and Alegreya (Huerta Tipografica), SIL Open Font License 1.1, their licence texts beside
-the files in `Bastians_Core/Fonts/`.
+(Google), Alegreya (Huerta Tipografica), IBM Plex Sans and IBM Plex Mono (IBM), Oswald (Vernon
+Adams), Varela Round (Joe Prince, Avraham Cornfeld) and Almendra (Ana Sanfelippo), SIL Open Font
+License 1.1, their licence texts beside the files in `Bastians_Core/Fonts/`. Bastian's Chat adds
+Barlow Condensed (Regular and SemiBold), Fira Sans Condensed, IBM Plex Sans Condensed, PT Sans
+Narrow and Saira Condensed, same licence, in `Bastians_Chat/Fonts/`.
 
 ## Licence
 

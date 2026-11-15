@@ -860,3 +860,31 @@ def test_the_lock_on_the_ring_toggles_dragging(wow: WowRuntime):
     assert wow.eval(f"{ORBIT}.IsDragging()") is True
     wow.execute(f"{hub}:GetScript('OnDragStop')({hub})")
     assert errors(wow) == []
+
+
+def test_two_quests_of_one_title_at_a_greeting_are_two_bubbles(wow: WowRuntime):
+    """ "Harvesting the Harvesters" at Ozwin Ironsprocket, one step
+    done (bring the Precessive Autocognition Assembly), one open (0/5 Gyrostabilizers), both of
+    one title on the greeting page. The two were one bubble (its key was the title), the one drawn
+    last hid the other, and the hand-in could not be reached."""
+    boot(wow)
+    wow.execute("Bastians:GetModule('Voice.Talk'):Enable()")
+    wow.execute(
+        """Mock.unitNames.npc = "Ozwin Ironsprocket"
+        Mock.guids = { npc = "Creature-0-1-0-1-238234-0000ABCD" }
+        Mock.greeting = {
+          active = {
+            { title = "Harvesting the Harvesters", complete = false },
+            { title = "Harvesting the Harvesters", complete = true },
+          },
+          available = {},
+        }
+        QuestFrame:Show()"""
+    )
+    wow.fire("QUEST_GREETING")
+    quests = [b for b in bubbles(wow) if b.kind == "quest"]
+    assert sorted(b.status for b in quests) == ["log", "ready"]
+    ready = next(i for i, b in enumerate(bubbles(wow)) if b.status == "ready") + 1
+    wow.execute(f"{ORBIT}.Visible()[{ready}]:Click()")
+    assert wow.eval("Mock.npcCalls[#Mock.npcCalls]") == "greeting active 2"  # the done one
+    assert errors(wow) == []

@@ -82,6 +82,23 @@ About.SOURCES = {
   { "Roboto Condensed (Google)", "SIL Open Font License 1.1", "a text font to choose in the settings" },
   { "Alegreya (Huerta Tipografica)", "SIL Open Font License 1.1", "a text font to choose in the settings" },
   { "Cinzel (Natanael Gama)", "SIL Open Font License 1.1", "a heading font to choose in the settings" },
+  -- five more
+  { "IBM Plex Sans (IBM)", "SIL Open Font License 1.1", "a text font to choose; the chat's text" },
+  { "IBM Plex Mono (IBM)", "SIL Open Font License 1.1", "a numbers font to choose; the chat's numbers" },
+  {
+    "Oswald (Vernon Adams, the Oswald Project Authors)",
+    "SIL Open Font License 1.1",
+    "a condensed font to choose",
+  },
+  { "Varela Round (Joe Prince, Avraham Cornfeld)", "SIL Open Font License 1.1", "a rounded font to choose" },
+  { "Almendra (Ana Sanfelippo)", "SIL Open Font License 1.1", "a calligraphic font to choose" },
+  -- Bastian's Chat's condensed fonts (Bastians_Chat/Fonts, each with its licence text beside it)
+  { "Barlow Condensed SemiBold (Jeremy Tribby)", "SIL Open Font License 1.1", "the chat's heads and tabs" },
+  { "Barlow Condensed", "SIL Open Font License 1.1", "a condensed font of the chat (Jeremy Tribby)" },
+  { "Fira Sans Condensed", "SIL Open Font License 1.1", "a condensed font of the chat (Carrois, Mozilla)" },
+  { "IBM Plex Sans Condensed", "SIL Open Font License 1.1", "a condensed font of the chat (IBM)" },
+  { "PT Sans Narrow", "SIL Open Font License 1.1", "a condensed font of the chat (ParaType)" },
+  { "Saira Condensed", "SIL Open Font License 1.1", "a condensed font of the chat (Omnibus-Type)" },
   -- the Library's fonts (EB Garamond, IM FELL Types, Atkinson Hyperlegible, OpenDyslexic; SIL Open
   -- Font License 1.1) come back with the Library: it is private until it ships
   {

@@ -111,6 +111,21 @@ local KINDS = {
   "flame",
   "flame_heart",
   "flame_ring",
+  -- the classes and a person, the Messenger's faces (plan-chat-v3.md V26, 13.11.2026)
+  "class_warrior",
+  "class_paladin",
+  "class_hunter",
+  "class_rogue",
+  "class_priest",
+  "class_shaman",
+  "class_mage",
+  "class_warlock",
+  "class_druid",
+  "class_deathknight",
+  "class_monk",
+  "class_demonhunter",
+  "class_evoker",
+  "person",
 }
 local PATHS = {}
 local GLYPH_PATHS = {}

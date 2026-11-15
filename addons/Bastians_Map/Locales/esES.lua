@@ -83,6 +83,7 @@ local strings = {
   ["On Bastian's styles, show the herbs, ore and creatures the game's tracking finds"] = "En los estilos de Bastian, mostrar las hierbas, minerales y criaturas que encuentra el rastreo del juego",
   ["this client does not let an addon read the minimap's dots"] = "este cliente no permite a un addon leer los puntos del minimapa",
   ["the game refused the minimap sweep; it rests until the next login"] = "el juego rechazó el barrido del minimapa; descansa hasta el próximo inicio de sesión",
+  ["Forever's update of 7 November stopped addons reading the minimap's dots; Game minimap shows them"] = "la actualización de Forever del 7 de noviembre impide a los addons leer los puntos del minimapa; el Minimapa del juego los muestra",
   ["needs Bastian's Data to tell herbs and ore from the rest"] = "necesita Bastian's Data para distinguir hierbas y minerales del resto",
   ["(Not at this zoom: zoom in or out to see it.)"] = "(No a este nivel de zoom: acerca o aleja para verlo.)",
   ["Bookmark name"] = "Nombre del marcador",
@@ -270,6 +271,8 @@ local strings = {
   ["%d running"] = "%d en marcha",
   ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "Cronómetros y cuentas atrás, tantos como quieras. Un botón iluminado: una cuenta atrás ha terminado.",
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "No pude leer ese tiempo. Prueba 5m, 1:30, 90s o 2h.",
+  -- the route's arrow at the minimap's rim (15.11.2026)
+  ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Durante una ruta, una flecha en el borde del minimapa apunta directamente al final del tramo",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

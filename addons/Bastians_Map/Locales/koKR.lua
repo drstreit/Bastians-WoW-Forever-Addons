@@ -83,6 +83,7 @@ ns.L:Register("koKR", {
   ["On Bastian's styles, show the herbs, ore and creatures the game's tracking finds"] = "Bastian 스타일에서 게임 추적이 찾은 약초, 광석, 생물을 표시",
   ["this client does not let an addon read the minimap's dots"] = "이 클라이언트는 애드온이 미니맵의 점을 읽는 것을 허용하지 않습니다",
   ["the game refused the minimap sweep; it rests until the next login"] = "게임이 미니맵 탐색을 거부했습니다. 다음 로그인까지 중단됩니다",
+  ["Forever's update of 7 November stopped addons reading the minimap's dots; Game minimap shows them"] = "Forever의 11월 7일 업데이트 이후 애드온이 미니맵의 점을 읽을 수 없습니다; 게임 미니맵에서 보입니다",
   ["needs Bastian's Data to tell herbs and ore from the rest"] = "약초와 광석을 구분하려면 Bastian's Data가 필요합니다",
   ["(Not at this zoom: zoom in or out to see it.)"] = "(이 확대 수준에서는 표시되지 않음: 확대하거나 축소하세요.)",
   ["Bookmark name"] = "책갈피 이름",
@@ -270,4 +271,6 @@ ns.L:Register("koKR", {
   ["%d running"] = "%d개 진행 중",
   ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "스톱워치와 카운트다운을 원하는 만큼. 버튼이 켜지면 카운트다운이 끝난 것입니다.",
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "시간을 읽을 수 없습니다. 5m, 1:30, 90s 또는 2h로 입력해 보세요.",
+  -- the route's arrow at the minimap's rim (15.11.2026)
+  ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "경로 안내 중 미니맵 가장자리의 화살표가 구간의 끝을 곧바로 가리킵니다",
 })

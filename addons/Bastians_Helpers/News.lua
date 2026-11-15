@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.5.0:1",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "The game's own windows can be moved by dragging them and keep their places (Helpers, on by default; a button puts them back).",
+  },
+  {
+    id = "2.5.0:2",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "A rare finder: a sound and a banner when a rare creature is near (its nameplate, your target, its yell), with an Arrow to it and its mark on the map and minimap; a map layer shows every known rare spawn.",
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",

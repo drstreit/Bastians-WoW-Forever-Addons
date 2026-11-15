@@ -259,3 +259,65 @@ def test_the_clear_screen_key_hides_the_pins_and_brings_them_back(wow: WowRuntim
     wow.advance(0.2)
     assert shown(wow) == {} and wow.eval(f"{MM}.frame:IsShown()") is False
     assert wow.errors == []
+
+
+ROUTE = """
+local m = Bastians:NewModule("FakeRoute", { addon = "Bastians_Map" })
+Bastians:ProvideService(m, "route", { Current = function() return ROUTE end })
+local c, px, py = Bastians.Coords.Player()
+function GOAL(north, name)
+  ROUTE = { next = { continent = c, wx = px + north, wy = py, name = name, ref = "npc:1" } }
+  Bastians:Fire("BASTIANS_ROUTE_CHANGED", ROUTE)
+end
+"""
+
+
+def test_the_routes_arrow_points_straight_at_the_steps_end_from_the_rim(wow: WowRuntime):
+    """ "the blizzard minimap shows an arrow to your body - always
+    pointing exactly there. we should do the same always when routing ... make that an option to
+    toggle". The current step's end, at any distance (the layers' pins stop at 600 yards)."""
+    boot(wow)
+    wow.execute(ROUTE)
+    wow.execute("GOAL(2500, 'Goldshire')")  # far beyond the overlay's range, straight north
+    goal = shown(wow).get("npc:1")
+    assert goal is not None and goal.pin.isGoal is True and goal.pin.label == "Goldshire"
+    assert goal.arrow.IsShown(goal.arrow) is True  # on the rim, its arrow pointing the way
+    x, y = offset(goal)
+    assert abs(x) < 0.5 and y > 50  # north is up
+    assert goal.GetWidth(goal) == wow.eval(f"{MM}.GOAL_EDGE")
+    # close by: at the step's end itself, no rim arrow
+    wow.execute("GOAL(20, 'Goldshire')")
+    goal = shown(wow)["npc:1"]
+    assert goal.arrow.IsShown(goal.arrow) is False
+    # without the map's layers on the minimap it still shows
+    setting(wow, "minimapPins", False)
+    assert "npc:1" in shown(wow)
+    # the switch, and no route
+    setting(wow, "minimapGoal", False)
+    assert "npc:1" not in shown(wow)
+    setting(wow, "minimapGoal", True)
+    assert "npc:1" in shown(wow)
+    wow.execute("ROUTE = nil; Bastians:Fire('BASTIANS_ROUTE_CHANGED', nil)")
+    assert "npc:1" not in shown(wow)
+    assert wow.errors == []
+
+
+def test_the_routes_pin_of_the_next_bend_gives_way_to_the_arrow(wow: WowRuntime):
+    boot(wow)
+    wow.execute(
+        """
+        local m = Bastians:NewModule("BendLayer", { addon = "Bastians_Map" })
+        Bastians:RegisterMapLayer(m, { id = "test.bend", label = "Bend", defaultOn = true, minLevel = 0,
+          query = function(view)
+            local p = view.player
+            return { { ref = "npc:2", wx = p[2] + 40, wy = p[3], icon = 1, nextStep = true } }
+          end })
+        Bastians:Fire("BASTIANS_LAYER_CHANGED", "test.bend")
+        """
+    )
+    wow.advance(0.3)
+    assert "npc:2" in shown(wow)  # no route's arrow: the bend's pin points the way
+    wow.execute(ROUTE)
+    wow.execute("GOAL(900, 'Goldshire')")
+    assert "npc:2" not in shown(wow) and "npc:1" in shown(wow)  # one arrow, to the step's end
+    assert wow.errors == []

@@ -196,6 +196,22 @@ local OWN_PLACES = { data = true, eq = true, capture = true, verified = true, au
 -- source, the quest's own points included: it is there because a source was wrong or silent.
 local AUTHORED = { verified = true, authored = true }
 
+-- The places of `own` and then those of `more` it does not hold yet (the same map and point), as a
+-- new list: the pack's tables stay as they are.
+local function joinedPlaces(own, more)
+  local out, seen = {}, {}
+  for _, list in ipairs({ own or {}, more or {} }) do
+    for _, p in ipairs(list) do
+      local key = tostring(p.map) .. ":" .. tostring(p.x) .. ":" .. tostring(p.y)
+      if not seen[key] then
+        seen[key] = true
+        out[#out + 1] = p
+      end
+    end
+  end
+  return out
+end
+
 -- The things to do of `steps` (those between take and hand-in) joined with the log's objectives;
 -- each gets `n`, the client's number, where that is known.
 --   A step with `n` is the client's n-th.
@@ -255,9 +271,14 @@ local function thingsToDo(steps, objectives)
         local area = areas[j]
         if area then
           gone[area] = true
-          -- its own spots stay; otherwise the client's area, and always the place we authored
+          -- the place we authored replaces everything; places that are not the quest's own
+          -- give way to the area; the quest's own points and the area both show (quests.md "A
+          -- step with points of its own and an area": Red Linen Goods' eight points were one
+          -- named Defias each, the bandits' camps were the area's and were dropped)
           if not OWN_PLACES[s.src] or AUTHORED[area.src] then
             s.places, s.src = area.places, area.src
+          elseif not AUTHORED[s.src] then
+            s.places = joinedPlaces(s.places, area.places)
           end
         end
         kept[#kept + 1] = s

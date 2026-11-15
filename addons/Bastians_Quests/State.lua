@@ -330,6 +330,40 @@ function State.Attach(mod)
   State.RefreshTracked()
 end
 
+-- The items the open steps of the quests in the log still need (plan-chat-v3.md V19, Bastian's
+-- Chat's watch list): an open `get` step whose subject is an item (ADR 0069's steps, so the pack's
+-- knowledge and the client's counts both count). { [itemID] = { need, have, quest, title } }:
+-- `need` the amount still missing and `have` the amount so far, each nil when the count is
+-- unknown (unknown is not zero); `quest` and `title` the first quest of the log that asks it. Two
+-- quests asking one item add their needs (nil when one of them is unknown).
+function State.NeededItems()
+  local out = {}
+  local forLogic = State.ForLogic()
+  for _, qid in ipairs(State.order) do
+    local entry = State.log[qid]
+    local steps = entry and ns.Logic.QuestSteps(qid, entry, forLogic)
+    for _, s in ipairs(steps or {}) do
+      local id = s.open
+        and s.step == "get"
+        and type(s.ref) == "string"
+        and tonumber(s.ref:match("^item:(%d+)$"))
+      if id then
+        local need
+        if type(s.count) == "number" and type(s.have) == "number" then
+          need = math.max(0, s.count - s.have)
+        end
+        local e = out[id]
+        if not e then
+          out[id] = { need = need, have = s.have, quest = qid, title = entry.title }
+        else
+          e.need = (e.need and need) and (e.need + need) or nil
+        end
+      end
+    end
+  end
+  return out
+end
+
 -- The `progress` service (core-contracts §11), provided by the Quests module while it is enabled.
 ns.Progress = {
   IsQuestDone = function(_, questID)
@@ -347,6 +381,10 @@ ns.Progress = {
       return nil
     end
     return State.count, #State.Ready()
+  end,
+  -- the items the quests in the log still need (V19): { [itemID] = { need, have, quest, title } }
+  NeededItems = function()
+    return State.NeededItems()
   end,
   -- The live table; consumers read it and never modify it.
   KnownFlightPaths = function()

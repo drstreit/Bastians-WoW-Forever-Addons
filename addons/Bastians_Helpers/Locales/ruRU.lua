@@ -98,4 +98,19 @@ ns.L:Register("ruRU", {
   ["Enchanting materials"] = "Материалы для наложения чар",
   ["Elemental"] = "Стихии",
   ["Recipes"] = "Рецепты",
+  -- the game's windows (15.11.2026)
+  ["The game's windows"] = "Окна игры",
+  ["Drag the game's windows to move them; their places are kept"] = "Перетаскивать окна игры мышью; их места запоминаются",
+  ["Put the game's windows back where the game places them"] = "Вернуть окна игры на их места",
+  ["The game's windows are back in their places."] = "Окна игры снова на своих местах.",
+  -- the rare finder (15.11.2026)
+  ["Rare nearby: %s"] = "Редкий противник рядом: %s",
+  ["at its known place"] = "на известном месте",
+  ["somewhere near you"] = "где-то рядом с вами",
+  ["Level %d"] = "Уровень %d",
+  ["Arrow"] = "Стрелка",
+  ["Rares spotted"] = "Замеченные редкие",
+  ["Known rare spawns"] = "Известные места редких",
+  ["Rare finder: a sound and a banner when a rare is near"] = "Поиск редких: звук и баннер, когда рядом редкий противник",
+  ["Sound for a rare"] = "Звук для редкого",
 })

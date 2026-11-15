@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.5.0:1",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "While routing, an arrow at the minimap's edge points straight to where the current step ends, at any distance (switch on the Minimap page).",
+  },
+  {
     id = "2.4.1:1",
     date = "2026-11-12",
     version = "2.4.1",

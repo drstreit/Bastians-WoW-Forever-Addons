@@ -96,8 +96,14 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
         "theme",
         "font",
         "headingFont",
+        "labelFont",  # since V17 (13.11.2026): section titles and tabs
+        "numberFont",  # since V17: counts, times, prices
         "fontScale",
         "windowColor",
+        None,  # since V25 (13.11.2026): the note when LibSharedMedia is not loaded
+        "windowBorder",  # LibSharedMedia's border
+        "windowBorderColor",
+        "windowTexture",  # LibSharedMedia's background
         "windowAlpha",
         "gameButtons",
         "ornaments",

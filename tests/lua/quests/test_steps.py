@@ -188,7 +188,8 @@ def test_the_clients_area_joins_the_step_it_belongs_to(wow: WowRuntime):
 def test_a_place_we_authored_for_the_objective_wins_over_the_quests_own_points(wow: WowRuntime):
     """data.md "Our authored table" (package QD5): a row of our own table names an objective by
     its number in the log, as the client's areas do. The quest's own points stay against the
-    client's area; against a place a person checked or read they give way, checked or not."""
+    client's area, which joins them (15.11.2026, Red Linen Goods: before, the area was dropped);
+    against a place a person checked or read they give way, checked or not."""
     boot(wow)
     wow.execute(PLAIN)
     wow.execute(
@@ -205,15 +206,29 @@ def test_a_place_we_authored_for_the_objective_wins_over_the_quests_own_points(w
     )
     entry = "{ objectives = { objective('monster', 0, 8) } }"
     for src, where, said in (
-        ("client", (0.2, 0.2), "eq"),
-        ("fdb", (0.2, 0.2), "eq"),
-        ("verified", (0.5, 0.5), "verified"),
-        ("authored", (0.5, 0.5), "authored"),
+        ("client", [(0.2, 0.2), (0.5, 0.5)], "eq"),
+        ("fdb", [(0.2, 0.2), (0.5, 0.5)], "eq"),
+        ("verified", [(0.5, 0.5)], "verified"),
+        ("authored", [(0.5, 0.5)], "authored"),
     ):
         got = steps(wow, entry, plain=f"own('{src}')")
         assert [(s.step, s.ref, s.n) for s in got[2:3]] == [("slay", "npc:2", 1)], src
-        assert [(p.x, p.y) for p in got[2].places.values()] == [where], src
+        assert [(p.x, p.y) for p in got[2].places.values()] == where, src
         assert got[2].src == said and len(got) == 4, src  # the area itself is gone either way
+    # a place both name is listed once, and the pack's own list is not written to
+    wow.execute(
+        """
+        twice = own('fdb')
+        twice[3].places[2] = { map = 1429, x = 0.2, y = 0.2 }
+        """
+    )
+    got = steps(wow, entry, plain="twice")
+    assert [(p.x, p.y) for p in got[2].places.values()] == [(0.2, 0.2), (0.5, 0.5)]
+    assert wow.eval("#twice[2].places") == 1
+    # a step whose own points a person checked takes nothing from an area
+    wow.execute("checked = own('fdb'); checked[2].src = 'verified'")
+    got = steps(wow, entry, plain="checked")
+    assert [(p.x, p.y) for p in got[2].places.values()] == [(0.2, 0.2)]
     assert wow.errors == []
 
 

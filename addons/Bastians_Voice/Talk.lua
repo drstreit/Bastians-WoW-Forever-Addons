@@ -96,16 +96,23 @@ local function listStep(frame)
       end)
     end
   else
+    -- a bubble per place in the list: two quests of one title (a chain's steps, owner, Forever
+    -- 15.11.2026: "Harvesting the Harvesters" done and open at Ozwin) were one bubble, and the
+    -- one drawn last hid the other
     active, available = B.Compat.GreetingQuests()
     for _, q in ipairs(active) do
-      state.quests[#state.quests + 1] = questItem(q.title, q.complete and "ready" or "log", nil, function()
+      local item = questItem(q.title, q.complete and "ready" or "log", q.questID, function()
         B.Compat.NpcSelect("greeting", "active", q.index)
       end)
+      item.key = "greeting:active:" .. q.index
+      state.quests[#state.quests + 1] = item
     end
     for _, q in ipairs(available) do
-      state.quests[#state.quests + 1] = questItem(q.title, "available", nil, function()
+      local item = questItem(q.title, "available", q.questID, function()
         B.Compat.NpcSelect("greeting", "available", q.index)
       end)
+      item.key = "greeting:available:" .. q.index
+      state.quests[#state.quests + 1] = item
     end
   end
   state.options[#state.options + 1] = sayItem(L["Farewell"], Talk.Bye, L["Ends the conversation"])

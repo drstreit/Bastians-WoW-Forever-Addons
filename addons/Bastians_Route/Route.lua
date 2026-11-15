@@ -1751,6 +1751,10 @@ mod = B:NewModule("Route", {
       ToPoint = function(_, continent, wx, wy, name)
         return Route.ToPoint(continent, wx, wy, name)
       end,
+      -- the flight under way: { to, seconds } or nil (Bastian's Chat's flight plate, V23)
+      Flight = function()
+        return ns.Flight.Info()
+      end,
       -- the active route in plain values (the public API's Route, ADR 0044); nil without one
       Current = function()
         local r = Route.Active()
@@ -1758,6 +1762,21 @@ mod = B:NewModule("Route", {
           return nil
         end
         local goal = r.goal or {}
+        -- where the current step ends, exactly (the Map's arrow at the minimap's rim, map.md
+        -- "The route's arrow"); the public API copies only the fields it names
+        local step = r.steps[r.index or 1]
+        local to = step and step.to
+        local ahead
+        if to and to.continent and to.wx and to.wy then
+          local last = step == r.steps[#r.steps]
+          ahead = {
+            continent = to.continent,
+            wx = to.wx,
+            wy = to.wy,
+            name = to.name or (last and goal.name) or nil,
+            ref = last and r.ref or nil,
+          }
+        end
         return {
           goal = r.tour and r.tour.name or goal.name,
           continent = goal.continent,
@@ -1766,6 +1785,7 @@ mod = B:NewModule("Route", {
           seconds = Graph.Remaining(r),
           step = r.index or 1,
           steps = #r.steps,
+          next = ahead,
         }
       end,
     }, { priority = 100 })

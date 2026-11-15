@@ -103,6 +103,10 @@ local function camps()
   function svc.Fires()
     return #ns.Beacon.Fires()
   end
+  -- Company() -> the first names of the other players at the fire, as the client names them
+  function svc.Company()
+    return ns.Watch.Company()
+  end
   return svc
 end
 
@@ -183,6 +187,9 @@ B:DeclareMessage("BASTIANS_CAMP_CHANGED")
 B:DeclareMessage("BASTIANS_CAMP_SHARED")
 -- the camp's buffs landed: the host's name when the client gives it (public)
 B:DeclareMessage("BASTIANS_CAMP_WARMED")
+-- the player sat down by a fire (the rest aura landed): the host's name when the client gives it
+-- (Courtesy greets the fire, courtesy.md "Greeting the fire"; not public)
+B:DeclareMessage("BASTIANS_CAMP_SAT")
 -- the warmth ends soon: seconds left (public)
 B:DeclareMessage("BASTIANS_CAMP_FADING")
 

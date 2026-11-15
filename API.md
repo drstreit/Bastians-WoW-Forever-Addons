@@ -57,6 +57,7 @@ arrives after `PLAYER_LOGIN`: until then, and whenever an app is missing, the an
 | `Price(itemID)` | `{ median, minBuyout, quantity, salesPerDay, median7d, median30d, low30d, high30d, age, source, stale, label }` or `nil`. Prices in copper. `age`: seconds since the data was taken. `source`: `"scan"` (the player's own auction house scan), `"addon"` (AHledger's, Auctionator's or TradeSkillMaster's price for this market, when the player has one of them) or `"market"` (the market data shipped with Bastian's Data, which may come from a neighbouring market). `stale`: `true` when an old own scan is all there is. `label`: the name of the market or addon that answered | Bastian's Gold |
 | `Quest(questID)` | `{ done, inLog, ready }` (booleans; `ready`: in the log and can be turned in) or `nil` until Bastian's Quests has read the quest log | Bastian's Quests |
 | `QuestLog()` | `{ count, ready }`: the quests in the log and how many can be turned in; or `nil` | Bastian's Quests |
+| `NeededItems()` | `{ [itemID] = { need, have, quest, title } }`: the items the quests in the log still need to collect. `need` is how many are still missing and `have` how many the character has for it (each `nil` when the game does not say), `quest` and `title` the first quest that asks for it; two quests asking for one item add their needs. An empty table when no quest asks for an item; `nil` until Bastian's Quests has read the quest log | Bastian's Quests |
 | `Route()` | `{ goal, continent, wx, wy, seconds, step, steps }` of the active route: the goal's name and world position, the time left, the current step and the number of steps; or `nil` without a route | Bastian's Route |
 | `TravelTime(uiMapID, x, y)` | `seconds, approx` from the character to that point (`approx` is `true` where part of the way is estimated), or `nil` when not known yet. It reads a cache and never starts a search: listen to `BASTIANS_GRAPH_TIMES` and ask again | Bastian's Data |
 | `RouteTo(uiMapID, x, y, name)` | `true` when Bastian's Route started planning a route to that point, the same as the player choosing "Route to"; `nil` without Route or for a point it cannot place. `name` is optional | Bastian's Route |
@@ -148,7 +149,7 @@ A test in the suite's repository fails when a new app forgets one.
 
 | App (`name`) | Data source | Slash | Calls and events |
 |---|---|---|---|
-| Quests | Bastian's Quests | `/bq` | `Quest`, `QuestLog`; `BASTIANS_QUESTS_CHANGED`, `BASTIANS_TRACKED_CHANGED` |
+| Quests | Bastian's Quests | `/bq` | `Quest`, `QuestLog`, `NeededItems`; `BASTIANS_QUESTS_CHANGED`, `BASTIANS_TRACKED_CHANGED` |
 | Map | Bastian's Map | `/bmap` | `Waypoint`, `SetWaypoint`, `ClearWaypoint`; `BASTIANS_WAYPOINT_CHANGED`, `BASTIANS_PLAYER_MOVED_ZONE` (Core) |
 | Browser | Bastian's Browser | `/bb` | `Open("Browser")` |
 | Gold | Bastian's Gold | `/bgold` | `Price`, `Income`; `BASTIANS_PRICES_UPDATED` |

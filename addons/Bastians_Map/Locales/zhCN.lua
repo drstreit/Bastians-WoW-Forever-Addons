@@ -83,6 +83,7 @@ ns.L:Register("zhCN", {
   ["On Bastian's styles, show the herbs, ore and creatures the game's tracking finds"] = "在 Bastian 的样式中显示游戏追踪找到的草药、矿石和生物",
   ["this client does not let an addon read the minimap's dots"] = "此客户端不允许插件读取小地图上的点",
   ["the game refused the minimap sweep; it rests until the next login"] = "游戏拒绝了小地图扫描；在下次登录前暂停",
+  ["Forever's update of 7 November stopped addons reading the minimap's dots; Game minimap shows them"] = "Forever 11月7日的更新使插件无法读取小地图上的点；游戏小地图会显示它们",
   ["needs Bastian's Data to tell herbs and ore from the rest"] = "需要 Bastian's Data 才能区分草药和矿石",
   ["(Not at this zoom: zoom in or out to see it.)"] = "(此缩放级别不显示: 放大或缩小即可看到。)",
   ["Bookmark name"] = "书签名称",
@@ -270,4 +271,6 @@ ns.L:Register("zhCN", {
   ["%d running"] = "%d 个运行中",
   ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "秒表和倒计时，想要多少都行。按钮亮起：有倒计时结束了。",
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "无法识别这个时间。试试 5m、1:30、90s 或 2h。",
+  -- the route's arrow at the minimap's rim (15.11.2026)
+  ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "导航时，小地图边缘的箭头直接指向当前路段的终点",
 })

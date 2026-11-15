@@ -185,14 +185,29 @@ local OPTIONS = {
   { type = "header", label = L["Tooltips"] },
   { type = "toggle", key = "tooltipIDs", label = L["Item and NPC IDs"] },
   { type = "toggle", key = "tooltipItemLevel", label = L["Item level"] },
+  { type = "header", label = L["The game's windows"] },
+  {
+    type = "toggle",
+    key = "moveWindows",
+    label = L["Drag the game's windows to move them; their places are kept"],
+  },
+  {
+    type = "execute",
+    icon = "replay",
+    label = L["Put the game's windows back where the game places them"],
+    func = function()
+      ns.Windows.Reset()
+    end,
+  },
   { type = "header", label = L["Warnings"] },
   { type = "toggle", key = "warnDurability", label = L["Warn when your gear is almost broken"] },
   { type = "toggle", key = "warnBags", label = L["Warn when your bags are almost full"] },
   {
     type = "toggle",
     key = "warnRares",
-    label = L["Warn when a rare creature is targeted or under the mouse"],
+    label = L["Rare finder: a sound and a banner when a rare is near"],
   },
+  { type = "toggle", key = "rareSound", label = L["Sound for a rare"] },
   {
     type = "select",
     key = "pauseKey",
@@ -240,7 +255,10 @@ mod = B:NewModule("Helpers", {
       warnDurability = true,
       warnBags = true,
       warnRares = true, -- catalog review A3.3 (07.11.2026)
+      rareSound = true, -- the rare finder's raid warning sound (15.11.2026)
       pauseKey = "shift",
+      moveWindows = true, -- the game's windows move by a drag
+      windows = {}, -- name -> { point, relativePoint, x, y } (Windows.lua)
     },
     char = {},
     global = {},
@@ -261,6 +279,15 @@ mod = B:NewModule("Helpers", {
     ns.Quests.Attach(self)
     ns.Tooltips.Attach(self)
     ns.Info.Attach(self)
+    ns.Rares.Attach(self)
+    if Helpers.On("moveWindows") then
+      ns.Windows.Attach()
+    end
+    self:On("BASTIANS_SETTING_CHANGED", function(_, _, name, key)
+      if name == self.name and key == "moveWindows" and Helpers.On(key) then
+        ns.Windows.Attach() -- switched on: the windows are taken now (off: nothing is picked up)
+      end
+    end)
     self:RegisterEvent("PLAYER_ENTERING_WORLD", Helpers.RecordMe)
     self:RegisterEvent("ZONE_CHANGED_NEW_AREA", Helpers.RecordMe)
     self:On("BASTIANS_CHARACTER_FORGOTTEN", function(_, _, key) -- Alts: deleted in the game

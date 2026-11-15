@@ -112,6 +112,7 @@ Compat.CONTRACT = {
   ItemTooltipLines = "itemID -> { { left, right, r, g, b } } (the lines of the game's item tooltip,"
     .. " the first its name) or nil (the item not cached yet, or no tooltip API)",
   UnitEntity = "(unit) -> 'npc:<id>' | 'object:<id>' or nil ; a unit token's entity from its GUID",
+  UnitClassification = "(unit) -> 'normal' | 'elite' | 'rare' | 'rareelite' | 'worldboss' | ... or nil",
   TargetEntity = "-> 'npc:<id>' | 'object:<id>' or nil ; the target's entity from UnitGUID('target'):"
     .. " Creature and Vehicle are npcs, GameObject objects; players, pets and no target give nil",
   SetObjectiveTrackerShown = "on -> bool (done) ; shows or hides the game's objective tracker"

@@ -31,6 +31,8 @@ MM.EDGE_INSET = 7 -- pixels the rim pins keep from the minimap's edge
 MM.MARK_SIZE = 20 -- the search's mark, on a disc MARK_RING pixels wider
 MM.MARK_RING = 8
 MM.MARK_SAME = 2 -- yards: a layer pin of the marked entity this close is the mark's double
+MM.GOAL_SIZE = 18 -- the route's arrow inside the minimap
+MM.GOAL_EDGE = 18 -- and on the rim, pointing straight at where the step ends
 MM.PIECE = 10 -- pixels of one line piece of a path; a piece is drawn when its middle is inside the rim
 MM.MAX_PIECES = 80
 -- Yards across the minimap per zoom step (0 = farthest), outdoors and indoors.
@@ -49,6 +51,7 @@ local paths = {} -- the path pins of the last query (points in world yards)
 local center -- { continent, wx, wy } of the last query
 local mark -- the search's mark: { ref, continent, wx, wy, icon, color, label, card } or nil
 local live = {} -- the live pins: { ref, continent, wx, wy, icon, color, label, card } each
+local goal -- where the route's current step ends: { continent, wx, wy, name, ref } or nil
 local host -- nil: the game's minimap; else { frame, Center(), Scale(), Half(), Shape() }
 local indoors = false
 local elapsed = 0
@@ -314,19 +317,22 @@ function MM.Reposition()
       S.tint(f.icon, pin.color, 1)
     end
     -- the mark on top, a live pin above the layers' (a tracked herb on its known place)
-    f:SetFrameLevel((frame:GetFrameLevel() or 0) + (pin.isMark and 3 or pin.isLive and 2 or 1))
+    f:SetFrameLevel(
+      (frame:GetFrameLevel() or 0) + ((pin.isMark or pin.isGoal) and 3 or pin.isLive and 2 or 1)
+    )
     f.ring:SetShown(pin.isMark == true and not onEdge)
     if onEdge then
       edge = edge + 1
-      f:SetSize(MM.EDGE_SIZE, MM.EDGE_SIZE)
-      f:SetAlpha(0.8)
+      local size = pin.isGoal and MM.GOAL_EDGE or MM.EDGE_SIZE
+      f:SetSize(size, size)
+      f:SetAlpha(pin.isGoal and 1 or 0.8)
       -- the game's arrow texture points up at rotation 0; turn it outward
       f.arrow:SetRotation(angle - math.pi / 2)
       local c = pin.color or S.C.accent
       S.tint(f.arrow, c, 0.9)
       f.arrow:Show()
     else
-      local size = pin.isMark and MM.MARK_SIZE or MM.PIN_SIZE
+      local size = pin.isMark and MM.MARK_SIZE or pin.isGoal and MM.GOAL_SIZE or MM.PIN_SIZE
       f:SetSize(size, size)
       f.ring:SetSize(size + MM.MARK_RING, size + MM.MARK_RING)
       f:SetAlpha(1)
@@ -358,6 +364,25 @@ local function markPin(px, py)
   }
 end
 
+-- The route's arrow as a pin of the overlay: on the rim with its arrow while the step's end lies
+-- beyond, at the end itself inside; a click opens Route's step list.
+local function goalPin(px, py)
+  local dx, dy = goal.wx - px, goal.wy - py
+  return {
+    ref = goal.ref,
+    wx = goal.wx,
+    wy = goal.wy,
+    icon = B.UI.IconTexture("route"),
+    color = S.C.path,
+    label = goal.name,
+    isGoal = true,
+    distance = math.sqrt(dx * dx + dy * dy),
+    onClick = function()
+      B:OpenApp("Route")
+    end,
+  }
+end
+
 -- Whether a layer's pin is the mark's double (the same entity on the same spot).
 local function isMarked(pin)
   if not (mark and pin.ref and pin.ref == mark.ref) then
@@ -377,7 +402,7 @@ function MM.Query()
     return -- hidden by the key: nothing drawn until the key brings it back
   end
   local on = enabled()
-  if not (on or mark or #live > 0) then
+  if not (on or mark or #live > 0 or goal) then
     hideFrom(0)
     hidePiecesFrom(0)
     frame:Hide()
@@ -410,7 +435,8 @@ function MM.Query()
         elseif pin.wx and pin.wy and pin.kind ~= "path" and pin.ref then
           local dx, dy = pin.wx - px, pin.wy - py
           pin.distance = math.sqrt(dx * dx + dy * dy)
-          if pin.distance <= r and not isMarked(pin) then
+          -- with the route's arrow on, the route's pin of the next bend is not a second arrow
+          if pin.distance <= r and not isMarked(pin) and not (goal and pin.nextStep) then
             found[#found + 1] = pin
           end
         end
@@ -425,6 +451,9 @@ function MM.Query()
   end)
   if mark and mark.continent == continent then
     pins[1] = markPin(px, py)
+  end
+  if goal and goal.continent == continent then
+    pins[#pins + 1] = goalPin(px, py)
   end
   for _, pin in ipairs(live) do
     if pin.continent == continent then
@@ -452,7 +481,7 @@ end
 
 -- A layer changed, the zone changed, the settings changed: one query, coalesced.
 function MM.Schedule()
-  if mod and (enabled() or #live > 0) then
+  if mod and (enabled() or #live > 0 or goal) then
     mod:Coalesce("minimap", 0.1, MM.Query)
   end
 end
@@ -514,6 +543,34 @@ local function build()
   frame:SetFrameLevel((over:GetFrameLevel() or 0) + 5)
   frame:Hide()
   MM.frame = frame
+end
+
+-- The route's arrow follows the route (BASTIANS_ROUTE_CHANGED, the setting): the `route`
+-- service's current step's end, while the setting is on ("the blizzard
+-- minimap shows an arrow to your body - always pointing exactly there. we should do the same
+-- always when routing ... make that an option to toggle").
+function MM.SyncGoal()
+  local was = goal
+  goal = nil
+  if mod and mod:IsEnabled() and db().minimapGoal ~= false then
+    local route = B:GetService("route")
+    local current = route and type(route.Current) == "function" and route.Current() or nil
+    local ahead = type(current) == "table" and current.next or nil
+    if type(ahead) == "table" and ahead.continent and ahead.wx and ahead.wy then
+      goal = ahead
+    end
+  end
+  if not (goal or was) or not mod then
+    return
+  end
+  if not frame then
+    build()
+  end
+  MM.Query()
+end
+
+function MM.Goal()
+  return goal
 end
 
 -- The minimap search's mark (Mini.lua): { ref, continent, wx, wy, icon, color, label, card }, or
@@ -615,8 +672,8 @@ function MM.Apply()
     MM.stats.shown, MM.stats.edge, MM.stats.queried, MM.stats.pieces = 0, 0, 0, 0
     stopTicks()
     frame:Hide()
-    if mark or #live > 0 then
-      MM.Query() -- the search's mark and the live pins stay without the layers
+    if mark or #live > 0 or goal then
+      MM.Query() -- the search's mark, the live pins and the route's arrow stay without the layers
     end
   end
 end
@@ -656,6 +713,7 @@ table.insert(Map.onEnable, function(self)
     MM.Reposition()
     MM.StartTicks()
   end)
+  self:On("BASTIANS_ROUTE_CHANGED", MM.SyncGoal) -- the route's arrow at the rim
   -- enabled while the key hides the suite: hidden until the key comes back
   local Screen = B.UI.Screen
   byKey = Screen ~= nil and Screen.Hidden ~= nil and Screen.Hidden() and Screen.Hides("Map") or false
@@ -670,6 +728,8 @@ table.insert(Map.onZone, MM.Schedule)
 table.insert(Map.onSetting, function(key)
   if key == "minimapPins" or key == "minimapMax" then
     MM.Apply()
+  elseif key == "minimapGoal" then
+    MM.SyncGoal()
   end
 end)
 table.insert(Map.onLayerChanged, MM.Schedule)
@@ -677,6 +737,7 @@ table.insert(Map.onSuiteHidden, MM.HideByKey)
 table.insert(Map.onDisable, function()
   mark = nil
   live = {}
+  goal = nil
   if frame then
     hideFrom(0)
     hidePiecesFrom(0)

@@ -38,17 +38,24 @@ OPTIONS[#OPTIONS + 1] = { type = "header", label = L["My own lines"] }
 OPTIONS[#OPTIONS + 1] = {
   type = "toggle",
   key = "myLines",
-  label = L["Use my own lines (the addon Bastians_MyLines)"],
-  desc = L["On: yours first, and ours where none of yours fits. Off: only the lines that come with the addon."], -- luacheck: ignore 631 (a locale key stays one literal)
+  label = L["Use my own lines"],
+  desc = L["On: one of yours while it is fresh, else one of ours. Off: only the lines that come with the addon."], -- luacheck: ignore 631 (a locale key stays one literal)
 }
 OPTIONS[#OPTIONS + 1] = {
   type = "execute",
-  key = "checkMyLines",
-  label = L["Check my lines"],
-  icon = "search",
-  desc = L["Says in the chat how many of your lines can be used, and what is wrong with the others."],
+  key = "openMyLines",
+  label = L["My lines"],
+  icon = "note",
+  desc = L["Write your own lines, and switch off lines you never want offered."],
   func = function()
-    ns.Mine.Report()
+    ns.Editor.Open()
+  end,
+}
+OPTIONS[#OPTIONS + 1] = {
+  type = "note",
+  text = function()
+    local total, usable = ns.Mine.State()
+    return string.format(L["%d of your lines, %d of them in use."], total, usable)
   end,
 }
 
@@ -124,7 +131,14 @@ local mod = B:NewModule("Courtesy", {
       handedOver = true
       B:AddCourtesyLines(self.db.profile.keptLines)
     end
+    ns.Mine.Attach(self) -- the player's lines, and Bastians_MyLines' handed over once
     ns.Courtesy.Attach(self)
+    -- the `courtesy` service (V23): Bastian's Chat's answer plates for thanks, gz and hi
+    B:ProvideService(self, "courtesy", {
+      Line = function(_, kind, name)
+        return ns.Courtesy.LineFor(kind, name)
+      end,
+    })
   end,
   OnDisable = function()
     ns.Courtesy.Detach()
@@ -135,6 +149,7 @@ mod.Courtesy = ns.Courtesy
 mod.Model = ns.Model
 mod.Voice = ns.Voice
 mod.Mine = ns.Mine
+mod.Editor = ns.Editor
 mod.Try = ns.Try
 mod.Facts = ns.Facts
 mod.Medallion = ns.Medallion

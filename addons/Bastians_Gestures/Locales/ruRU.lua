@@ -40,6 +40,7 @@ ns.L:Register("ruRU", {
   ["Unknown command: %s"] = "Неизвестная команда: %s",
   ["morning"] = "утро",
   ["afternoon"] = "день",
+  ["day"] = "день", -- %h at noon, 12:00 to 13:59
   ["evening"] = "вечер",
   ["night"] = "ночь",
   ["he"] = "он",

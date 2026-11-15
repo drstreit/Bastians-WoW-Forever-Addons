@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.5.0:1",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "A quest's objective now shows every place it is known at. Before, the places where players found it on Forever were left out when the quest had points of its own (Red Linen Goods showed one area instead of the bandits' camps).",
+  },
+  {
+    id = "2.5.0:2",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "The dots of a quest chain on a quest's sheet are bigger, react to the mouse and open the chain at that step.",
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",

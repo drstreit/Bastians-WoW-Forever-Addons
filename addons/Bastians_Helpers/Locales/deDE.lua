@@ -98,4 +98,19 @@ ns.L:Register("deDE", {
   ["Enchanting materials"] = "Verzauberkunstmaterial",
   ["Elemental"] = "Elementar",
   ["Recipes"] = "Rezepte",
+  -- the game's windows (15.11.2026)
+  ["The game's windows"] = "Die Fenster des Spiels",
+  ["Drag the game's windows to move them; their places are kept"] = "Die Fenster des Spiels mit der Maus verschieben; ihre Plätze bleiben gespeichert",
+  ["Put the game's windows back where the game places them"] = "Die Fenster des Spiels an ihre ursprünglichen Plätze zurücksetzen",
+  ["The game's windows are back in their places."] = "Die Fenster des Spiels sind wieder an ihren Plätzen.",
+  -- the rare finder (15.11.2026)
+  ["Rare nearby: %s"] = "Seltener Gegner in der Nähe: %s",
+  ["at its known place"] = "an seinem bekannten Platz",
+  ["somewhere near you"] = "irgendwo in deiner Nähe",
+  ["Level %d"] = "Stufe %d",
+  ["Arrow"] = "Pfeil",
+  ["Rares spotted"] = "Gesichtete Seltene",
+  ["Known rare spawns"] = "Bekannte Fundorte seltener Gegner",
+  ["Rare finder: a sound and a banner when a rare is near"] = "Seltenen-Finder: ein Ton und ein Banner, wenn ein Seltener in der Nähe ist",
+  ["Sound for a rare"] = "Ton bei einem Seltenen",
 })

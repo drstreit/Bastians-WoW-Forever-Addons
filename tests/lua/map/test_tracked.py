@@ -20,6 +20,9 @@ NODES = {"Peacebloom": "herb", "Copper Vein": "mine", "Battleboar": "skin"}
 
 
 def our_style(wow: WowRuntime) -> None:
+    # the sweep's client: one without the ground switch (ADR 0078 decision 7); where the switch
+    # is, the dots layer shows the game's own dots instead (test_mini_dots.py)
+    wow.execute("Mock.GroundSwitch(false)")
     pencil(wow)
     nodes(wow)
     wow.execute(f"{MOD}.db.profile.miniWarned = true; {MINI}.SetStyle('pencil')")
@@ -626,6 +629,7 @@ def test_without_the_data_no_sweep_runs_and_the_setting_says_why(wow: WowRuntime
     boot(wow)
     wow.execute(
         """
+        Mock.GroundSwitch(false) -- the sweep's client (ADR 0078 decision 7)
         local service = Bastians.GetService
         Bastians.GetService = function(self, name)
           if name == "data" then return nil end
@@ -696,3 +700,61 @@ def test_the_grouping_and_the_yard_conversion_are_pure(wow: WowRuntime):
     # a rotating minimap: facing east (a quarter turn) puts "ahead" up, so up is east
     wx, wy = wow.eval(f"{TR}.ToWorld(0, 10, 0.5, -math.pi / 2, 1000, 2000)")
     assert math.isclose(wx, 1000, abs_tol=1e-6) and math.isclose(wy, 1980, abs_tol=1e-6)
+
+
+def test_a_client_that_answers_no_addon_gets_no_more_sweeps(wow: WowRuntime):
+    # Forever since 1.60.1.70862 (07.11.2026; measured 13.11.2026): no point an addon names is
+    # taken, not even the player's arrow answers. A few silent sweeps, a silent centre, then rest.
+    boot(wow)
+    our_style(wow)
+    wow.execute("Mock.minimapDeaf = true")
+    blips(wow, (20, 0, "Peacebloom"))
+    for _ in range(wow.eval(f"{TR}.DEAF") + 1):
+        sweep(wow, frames=60)
+    assert wow.eval(f"{TR}.Running()") is False
+    assert "Forever's update of 7 November" in wow.eval(f"{TR}.Note()")
+    assert wow.eval("Minimap.softCursor") is False
+    probes = wow.eval("Mock.minimapProbes")
+    for _ in range(3):
+        sweep(wow, frames=60)
+    wow.execute(f"{MINI}.Render()")  # a render asks nothing more
+    assert wow.eval("Mock.minimapProbes") == probes
+    assert tracked_pins(wow) == {}
+    # the setting switched off and on again asks again: a client that answers is swept as before
+    wow.execute("Mock.minimapDeaf = false")
+    setting(wow, "miniTracked", "false")
+    setting(wow, "miniTracked", "true")
+    assert wow.eval(f"{TR}.Running()") is True and wow.eval(f"{TR}.Note()") is None
+    sweep(wow, frames=60)
+    assert set(tracked_pins(wow)) == {"Peacebloom"}
+    assert wow.errors == []
+
+
+def test_a_client_that_answers_never_rests_though_no_dot_is_near(wow: WowRuntime):
+    # the player's arrow answers in every sweep of a client that answers: no dot is no silence
+    boot(wow)
+    our_style(wow)
+    for _ in range(wow.eval(f"{TR}.DEAF") + 2):
+        sweep(wow, frames=60)
+    assert wow.eval(f"{TR}.Running()") is True and wow.eval(f"{TR}.Note()") is None
+    assert wow.eval(f"{TR}.stats.answered") > 0
+    # one silent sweep while the world is not ready yet, then answers again: no rest
+    wow.execute("Mock.minimapDeaf = true")
+    sweep(wow, frames=60)
+    wow.execute("Mock.minimapDeaf = false")
+    for _ in range(wow.eval(f"{TR}.DEAF")):
+        sweep(wow, frames=60)
+    assert wow.eval(f"{TR}.Running()") is True
+    assert wow.errors == []
+
+
+def test_the_centre_check_says_yes_no_or_cannot_tell(wow: WowRuntime):
+    boot(wow)
+    our_style(wow)
+    assert wow.eval(f"{TR}.Answers()") is True  # the player's arrow
+    wow.execute("Mock.minimapDeaf = true")
+    assert wow.eval(f"{TR}.Answers()") is False
+    assert wow.eval("Minimap.softCursor") is False
+    wow.set_combat(True)
+    assert wow.eval(f"{TR}.Answers()") is None
+    assert wow.errors == []

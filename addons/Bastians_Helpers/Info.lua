@@ -71,39 +71,10 @@ function Info.CheckDurability()
   lastDurability = lowest
 end
 
--- A rare creature targeted or under the mouse (helpers.md "Warnings", catalog review A3.3,
--- 07.11.2026): the strip names it once per creature and session, with the Map button where the
--- Map's action is there (every app works alone). No respawn guess: unknown is not zero.
-local rareSeen = {}
-
+-- A rare creature targeted or under the mouse: the rare finder (Rares.lua, helpers.md "The rare
+-- finder"; before 15.11.2026 a line in the strip alone, catalog review A3.3).
 function Info.CheckUnit(unit)
-  if not Helpers.On("warnRares") then
-    return nil
-  end
-  local ref = B.Compat.UnitEntity(unit)
-  local typ, id = B.Entity.Parse(ref or "")
-  local d = B:GetService("data")
-  if not (d and typ == "npc" and id) or rareSeen[id] then
-    return nil
-  end
-  local r = d:Get("npc", id)
-  if not (r and Model.IsRare(r.flags)) then
-    return nil
-  end
-  rareSeen[id] = true
-  local button
-  for _, action in ipairs(B:GetActions(ref, { source = "helpers" }) or {}) do
-    if action.id == "map.show" then
-      button = {
-        label = L["Map"],
-        run = function()
-          B:RunAction("map.show", ref, { source = "helpers" })
-        end,
-      }
-    end
-  end
-  Helpers.Notice(string.format(L["Rare: %s"], B:Entity(ref):Name() or r.name or ref), button)
-  return ref
+  return ns.Rares.Check(unit)
 end
 
 function Info.CheckBags()

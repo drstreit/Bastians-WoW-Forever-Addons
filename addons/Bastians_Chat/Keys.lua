@@ -56,6 +56,32 @@ function Keys.Walk(history, state, dir, current)
   return history[i], state
 end
 
+-- A sent line with the command of the channel it went to (`head`: "/p", "/w Name", "/2"), so the
+-- history brings it back to the same place; a line that is a command already stays as it is, and
+-- so does every line when the channel's command is unknown.
+function Keys.WithChannel(line, head)
+  if type(line) ~= "string" or line:sub(1, 1) == "/" or type(head) ~= "string" or head == "" then
+    return line
+  end
+  return head .. " " .. line
+end
+
+-- The history without the lines whose command `isSecure(command)` calls secure; the history itself
+-- when there is no such check (unknown is not secure).
+function Keys.Walkable(history, isSecure)
+  if not isSecure then
+    return history
+  end
+  local out = {}
+  for _, line in ipairs(history) do
+    local cmd = type(line) == "string" and line:match("^(/%S+)") or nil
+    if not (cmd and isSecure(cmd)) then
+      out[#out + 1] = line
+    end
+  end
+  return out
+end
+
 -- A sent line into the history: no empty line, no repeat of the newest, at most Keys.HISTORY.
 function Keys.Remember(history, line)
   if type(line) ~= "string" or not line:find("%S") or history[#history] == line then

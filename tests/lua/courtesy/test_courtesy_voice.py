@@ -264,11 +264,10 @@ def test_unknown_weather_stays_unknown(wow: WowRuntime):
     assert wow.eval(f"({MOD}.Compat.Weather())") is None
 
 
-TEMPLATE = ROOT / "addons/Bastians_Courtesy/Template/Bastians_MyLines"
-OWN = """Bastians:AddCourtesyLines({
-  { 'rez', 'polite', 'MY OWN LINE, %t.' },
-  { 'rez', 'polite', false, act = 'MY OWN ACT toward %t.', when = { time = 'night' } },
-})"""
+MINE = f"{MOD}.Mine"
+# my lines as the window My lines keeps them (ADR 0063's amendment of 15.11.2026)
+OWN = f"""{MINE}.Put({{ 'rez', 'polite', 'MY OWN LINE, %t.' }})
+{MINE}.Put({{ 'rez', 'polite', false, act = 'MY OWN ACT toward %t.', when = {{ time = 'night' }} }})"""
 REZ_MORNING = FACTS.replace("buff.mind", "rez").replace("'night'", "'morning'")
 
 
@@ -288,13 +287,12 @@ def uses_ours(wow: WowRuntime) -> bool:
     return wow.eval(f"{MOD}.Mine.Pool() == {MOD}.CourtesyLines")
 
 
-def test_without_the_addon_our_lines_and_the_check_says_how_to_install(wow: WowRuntime):
+def test_without_lines_of_my_own_ours_and_the_check_opens_the_window(wow: WowRuntime):
     boot(wow)
     assert uses_ours(wow)
     assert wow.eval(f"{MOD}.Mine.Report()") is False
-    said = " ".join(chat(wow))
-    assert "Bastians_MyLines is not installed" in said
-    assert "Template/Bastians_MyLines" in said
+    assert any("0 can be used, 0 cannot" in line for line in chat(wow))
+    assert wow.eval("BastiansCourtesyLines:IsShown()") is True
     assert not errors(wow)
 
 
@@ -324,8 +322,94 @@ def test_off_means_ours_alone(wow: WowRuntime):
 
 def test_on_without_a_usable_line_is_ours(wow: WowRuntime):
     boot(wow)
-    wow.execute("Bastians:AddCourtesyLines({ { 'rez', 'grumpy', 'bad' } })")
+    wow.execute(f"table.insert({MINE}.List(), {{ 'rez', 'grumpy', 'bad' }}); {MINE}.Reset()")
     assert uses_ours(wow)
+
+
+def test_my_line_said_lately_gives_way_to_ours(wow: WowRuntime):
+    """ "I get always the same answers". The template's four buff lines
+    answered every buff: once all of mine were said, the choice repeated them rather than take one
+    of ours. Mine come first only while they are fresh."""
+    boot(wow)
+    wow.execute(OWN)
+    wow.execute(f"""
+      RECENT = {{}}
+      SAID = {{}}
+      for i = 1, 4 do
+        local line = {MOD}.Mine.Choose({V}.Complete({REZ_MORNING}), {{ recent = RECENT }})
+        {V}.Remember(RECENT, line)
+        SAID[i] = {MOD}.Mine.Owns(line)
+      end
+    """)
+    assert list(wow.eval("SAID").values()) == [True, False, False, False]
+
+
+@pytest.mark.parametrize(
+    ("hour", "word"),
+    [(9, "morning"), (11, "morning"), (12, "day"), (13, "day"), (14, "afternoon"), (18, "evening")],
+)
+def test_noon_is_day_not_afternoon(wow: WowRuntime, hour: int, word: str):
+    """ "12:26 is noon, not afternoon". %h says "day" from 12:00 to
+    13:59 ("Good day"); the conditions keep the four times."""
+    boot(wow)
+    wow.execute(f"GetGameTime = function() return {hour}, 26 end")
+    facts = wow.eval(f"{V}.Complete({MOD}.Facts.Surroundings({{}}))")
+    assert facts.daytime == word
+    assert facts.time == wow.eval(f"{MOD}.Model.DayKey({hour})")
+    assert wow.eval(f"{MOD}.Model.DayWord(nil)") is None
+
+
+def test_noon_has_its_word_in_every_language():
+    for addon in ("Bastians_Courtesy", "Bastians_Gestures"):
+        for path in sorted((ROOT / "addons" / addon / "Locales").glob("*.lua")):
+            text = path.read_text(encoding="utf-8")
+            if '["afternoon"]' in text:
+                assert '["day"] =' in text, path
+    de = (ROOT / "addons/Bastians_Courtesy/Locales/deDE.lua").read_text(encoding="utf-8")
+    assert '["day"] = "Tag"' in de  # "Guten Tag"
+
+
+def test_rings_in_a_row_offer_new_lines_while_there_are_any(wow: WowRuntime):
+    """ "I get always the same answers". Only the line clicked was
+    remembered, so the two not taken came back at the next ring; with my own lines first, the
+    same few every time. Lines offered lately stay out while others exist."""
+    boot(wow)
+    wow.execute(f"""
+      F = {V}.Complete({FACTS})
+      OFFERED = {{}}
+      for ring = 1, 3 do
+        for _, line in ipairs({MOD}.Courtesy.Lines(F, 3)) do OFFERED[#OFFERED + 1] = line end
+      end
+    """)
+    n = wow.eval("#OFFERED")
+    distinct = wow.eval(
+        "(function() local s, k = {}, 0 for _, l in ipairs(OFFERED) do if not s[l] then s[l] = true k = k + 1 end end return k end)()"
+    )
+    assert n == 9 and distinct == 9
+    # with lines of my own for a buff: they come, then ours, not mine again and again
+    wow.execute(
+        f"{MINE}.Put({{ 'buff', 'polite', 'MINE ONE, %t.' }});"
+        f" {MINE}.Put({{ 'buff', 'cheerful', 'MINE TWO, %t.' }})"
+    )
+    wow.execute(f"""
+      MINE = 0
+      for ring = 1, 3 do
+        for _, line in ipairs({MOD}.Courtesy.Lines(F, 3)) do
+          if {MOD}.Mine.Owns(line) then MINE = MINE + 1 end
+        end
+      end
+    """)
+    assert wow.eval("MINE") == 2  # each of mine once in three rings
+    assert errors(wow) == []
+
+
+def test_the_chat_plate_varies(wow: WowRuntime):
+    """The `courtesy` service's line for a greeting (Bastian's Chat's plate) is not the same twice
+    in a row while others fit."""
+    boot(wow)
+    said = [wow.eval(f"{MOD}.Courtesy.LineFor('hi', 'Wilfried-Realm')") for _ in range(6)]
+    assert all(said) and len(set(said)) == 6
+    assert all("Wilfried" in s or "%t" not in s for s in said)
 
 
 @pytest.mark.parametrize(
@@ -353,7 +437,8 @@ def test_a_good_line_passes_and_a_bad_one_does_not_stop_the_rest(wow: WowRuntime
     boot(wow)
     assert problem(wow, "{ 'rez', 'polite', 'Fine, %t.', when = { time = 'night' } }") is None
     wow.execute(
-        "Bastians:AddCourtesyLines({ { 'rez', 'grumpy', 'bad' }, { 'rez', 'polite', 'GOOD, %t.' } })"
+        f"table.insert({MINE}.List(), {{ 'rez', 'grumpy', 'bad' }});"
+        f" table.insert({MINE}.List(), {{ 'rez', 'polite', 'GOOD, %t.' }}); {MINE}.Reset()"
     )
     assert wow.eval(f"{MOD}.Mine.Report()") is True
     said = chat(wow)
@@ -366,7 +451,8 @@ def test_try_follows_the_switch_and_tags_my_line(wow: WowRuntime):
     boot(wow)
     wow.execute(OWN)
     wow.eval(f"{T}.Run('5 polite morning')")
-    assert sum("my line" in line for line in chat(wow)) == 5
+    # my one fitting line once, then ours: mine never repeat in place of ours (15.11.2026)
+    assert sum("my line" in line for line in chat(wow)) == 1
     assert not sent(wow)
     wow.execute("Mock.chat = {}")
     switch(wow, False)
@@ -381,19 +467,125 @@ def test_the_slash_command_reports(wow: WowRuntime):
     assert any("2 can be used, 0 cannot" in line for line in chat(wow))
 
 
-def test_the_template_as_shipped_is_valid(wow: WowRuntime):
-    boot(wow)
-    wow.execute((TEMPLATE / "MyLines.lua").read_text(encoding="utf-8"))
-    assert wow.eval(f"{MOD}.Mine.Report()") is True
-    assert any(", 0 cannot" in line for line in chat(wow))
+def test_the_template_no_longer_ships():
+    """ADR 0063's amendment of 15.11.2026: your lines live in the game; Bastians_MyLines retires."""
+    assert not (ROOT / "addons/Bastians_Courtesy/Template").exists()
+
+
+# the eight example lines of the retired template, as an installed Bastians_MyLines hands them over
+TEMPLATE_LINES = """{
+  { "buff", "polite", "Thank you, %t. I will not forget it." },
+  { "buff", "roleplay", "May your road stay dry, %t.", act = "tips %p hat." },
+  { "buff.mind", "snarky", "Finally, someone thinks I need to think. Thanks, %t." },
+  { "buff", "cheerful", "Oh, lovely! Good %h to you, %t!", emote = "WAVE" },
+  { "buff", "weary", "One more step, then. Thank you, %t.", when = { time = "night" } },
+  { "rez", "philosophic", "So the road goes on after all. My thanks, %t." },
+  { "emote.friendly", "polite", false, act = "smiles back at %t." },
+  { "invite.declined", "polite", "Another time, %t. Good %h to you." },
+}"""
+
+
+def start_with_handed(wow: WowRuntime, lines: str) -> None:
+    """The addons load, the retired folder hands its lines to Core, then the login enables."""
+    for name in ("Bastians_Core", "Bastians_Data", "Bastians_Gestures", "Bastians_Courtesy"):
+        wow.load_addon(name)
+    wow.execute(f"Bastians:AddCourtesyLines({lines})")
+    wow.login()
+    wow.run_frames(5)
+
+
+def test_the_retired_folders_lines_come_into_the_game_once_without_the_examples(wow: WowRuntime):
+    mine = (
+        TEMPLATE_LINES[:-1]
+        + """  { "rez", "polite", "MY OWN, %t." },
+  { "camp.greet", "cheerful", "Hi %k!" },
+  { "rez", "grumpy", "a bad one" },
+}"""
+    )
+    start_with_handed(wow, mine)
+    kept = [line[3] for line in wow.eval(f"{MINE}.List()").values()]
+    assert kept == ["MY OWN, %t.", "Hi %k!"]  # not the template's examples, not the bad one
+    assert any("2 of your lines from Bastians_MyLines" in line for line in chat(wow))
+    assert wow.eval(f"{MOD}.db.global.myLinesImported") is True
+    # a second start takes nothing again
+    wow.execute(f"{MINE}.Import()")
+    assert len(wow.eval(f"{MINE}.List()")) == 2
     assert not errors(wow)
-    assert not uses_ours(wow)
 
 
-def test_the_template_is_an_addon_of_its_own():
-    toc = (TEMPLATE / "Bastians_MyLines.toc").read_text(encoding="utf-8")
-    assert "## Dependencies: Bastians_Core" in toc
-    assert "\nMyLines.lua" in toc
+def test_a_folder_of_only_examples_says_it_can_go(wow: WowRuntime):
+    start_with_handed(wow, TEMPLATE_LINES)
+    assert len(wow.eval(f"{MINE}.List()")) == 0
+    assert any("only the template's examples" in line for line in chat(wow))
+    assert uses_ours(wow)
+
+
+def test_a_line_never_offered_is_no_candidate_of_either_kind(wow: WowRuntime):
+    boot(wow)
+    wow.execute(OWN)
+    wow.execute(f"{MINE}.Never({{ 'rez', 'polite', 'MY OWN LINE, %t.' }})")
+    for _ in range(30):
+        assert choose_mine(wow, REZ_MORNING)[3] != "MY OWN LINE, %t."
+    # one of ours too: the only polite line of a made-up list
+    wow.execute(
+        f"LINES = {{ {{ 'rez', 'polite', 'OURS A' }}, {{ 'rez', 'polite', 'OURS B' }} }};"
+        f" {MINE}.Never(LINES[1])"
+    )
+    for _ in range(20):
+        line = wow.eval(
+            f"{V}.Choose(LINES, {{ situation = 'rez' }}, {{ never = {MINE}.NeverSet() }})"
+        )
+        assert line[3] == "OURS B"
+    wow.execute(f"{MINE}.Allow('MY OWN LINE, %t.')")
+    assert wow.eval(f"{MINE}.IsNever({{ 'rez', 'polite', 'MY OWN LINE, %t.' }})") is False
+    assert not errors(wow)
+
+
+def test_the_window_adds_saves_removes_and_tries_a_line(wow: WowRuntime):
+    boot(wow)
+    ed = f"{MOD}.Editor"
+    wow.execute(f"{ed}.Open()")
+    f = f"{ed}.form"
+    wow.execute(f"{f}.situation:SetValue('camp.greet'); {f}.mood:SetValue('cheerful')")
+    wow.execute(f"{f}.text:SetText('Hello %k, good %h!')")
+    assert wow.eval(f"{ed}.Commit()") is True
+    assert [line[3] for line in wow.eval(f"{MINE}.List()").values()] == ["Hello %k, good %h!"]
+    assert wow.eval(f"{ed}.tabs.mine.label:GetText()") == "Mine (1)"
+    # a line nobody can use is not added, and the form says why
+    wow.execute(f"{f}.text:SetText('')")
+    assert wow.eval(f"({ed}.Commit())") is False  # the first answer; the second says why
+    assert "text or an act" in wow.eval(f"{f}.problem:GetText()")
+    # a click on the row puts it into the form; Save replaces it
+    wow.execute(f"{ed}.rows[1]:Click()")
+    assert wow.eval(f"{f}.text:GetText()") == "Hello %k, good %h!"
+    assert wow.eval(f"{f}.add.label:GetText()") == "Save"
+    wow.execute(f"{f}.text:SetText('Hello %k!')")
+    wow.execute(f"{ed}.Commit()")
+    assert [line[3] for line in wow.eval(f"{MINE}.List()").values()] == ["Hello %k!"]
+    # Try says it in my own chat with the stand-ins, and sends nothing
+    wow.execute(f"{f}.text:SetText('Hi %t, %k!')")
+    said = wow.eval(f"{ed}.Try()")
+    assert "Hi Alda, Alda and Brann!" in said and not sent(wow)
+    # the cross removes it
+    wow.execute(f"{ed}.rows[1].remove:Click()")
+    assert len(wow.eval(f"{MINE}.List()")) == 0
+    assert not errors(wow)
+
+
+def test_the_window_lists_the_lines_offered_lately_and_switches_one_off(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"F = {V}.Complete({FACTS}); RING = {MOD}.Courtesy.Lines(F, 3)")
+    ed = f"{MOD}.Editor"
+    wow.execute(f"{ed}.Open(); {ed}.SetView('offered')")
+    items = list(wow.eval(f"{ed}.Items('offered')").values())
+    assert len(items) == 3 and all(i.action == "never" for i in items)
+    wow.execute(f"{ed}.rows[1].button:Click()")
+    assert wow.eval(f"{MINE}.IsNever(RING[3])") is True  # newest first
+    wow.execute(f"{ed}.SetView('never')")
+    assert len(wow.eval(f"{ed}.Items('never')")) == 1
+    wow.execute(f"{ed}.rows[1].button:Click()")
+    assert len(wow.eval(f"{ed}.Items('never')")) == 0
+    assert not errors(wow)
 
 
 def test_the_core_registry_refuses_what_is_not_a_table(wow: WowRuntime):
@@ -458,6 +650,7 @@ ROWS = {
     "duel.declined",
     "trade.gift",
     "camp",
+    "camp.greet",
 }
 BUFF_ONLY = {"fight", "many"}  # facts only a buff has
 
@@ -681,3 +874,40 @@ def test_an_invented_moment_keeps_the_place_and_its_country_together(wow: WowRun
     """)
     assert list(wow.eval("BAD").values()) == []
     assert wow.eval("REZ.spell") is None and wow.eval("REZ.fight") is None  # only a buff has them
+
+
+def test_the_company_in_words(wow: WowRuntime):
+    """Greeting the fire: "[camper] could be replaced by a list of all
+    people sitting there". Four names at most; nobody known stays unknown."""
+    boot(wow)
+    company = f"{V}.Company"
+    assert wow.eval(f"{company}({{ 'Alda' }})") == "Alda"
+    assert wow.eval(f"{company}({{ 'Alda', 'Brann' }})") == "Alda and Brann"
+    assert (
+        wow.eval(f"{company}({{ 'Alda', 'Brann', 'Cedric', 'Dara' }})")
+        == "Alda, Brann, Cedric and Dara"
+    )
+    assert wow.eval(f"{company}({{ 'A', 'B', 'C', 'D', 'E' }})") == "everyone"
+    assert wow.eval(f"{company}({{}})") is None
+    assert wow.eval(f"{company}(nil)") is None
+
+
+def test_a_greeting_names_the_company_only_when_it_is_known(wow: WowRuntime):
+    boot(wow)
+    facts = "{ situation = 'camp.greet', myName = 'Bastian', mySex = 'f', time = 'evening' }"
+    wow.execute(f"""
+      WITH, WITHOUT = {{}}, {{}}
+      local known = {V}.Complete({facts})
+      known.company = 'Alda and Brann'
+      for i = 1, 60 do
+        local a = {V}.Choose({MOD}.CourtesyLines, known, {{ via = 'say' }})
+        WITH[#WITH + 1] = {V}.Words(a, known, 'say')
+        local b = {V}.Choose({MOD}.CourtesyLines, {V}.Complete({facts}), {{ via = 'say' }})
+        WITHOUT[#WITHOUT + 1] = b[3]
+      end
+    """)
+    with_names = list(wow.eval("WITH").values())
+    without = list(wow.eval("WITHOUT").values())
+    assert any("Alda and Brann" in w for w in with_names)
+    assert not any("%k" in w for w in without)  # nobody known: no line asks for them
+    assert problem(wow, "{ 'camp.greet', 'cheerful', 'Hi %k!' }") is None  # my own lines may use it

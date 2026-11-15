@@ -214,11 +214,14 @@ function B.UI.Window(name, opts)
   win.title:SetWordWrap(false) -- a title never breaks into two lines
   win.title:SetText(opts.title or name)
 
-  -- the header's actions (ADR 0046: declared, the look draws the pictogram and the text)
+  -- the header's actions (ADR 0046: declared, the look draws the pictogram and the text);
+  -- `opts.headIcons`: the pictograms alone, the words in the tooltips (plan-chat-v3.md V27)
+  local only = opts.headIcons and true or nil
   win.close = S.action(head, {
     icon = "close",
     label = L["Close"],
     tip = L["Close (Escape)"],
+    only = only,
     row = true,
     onClick = function()
       frame:Hide()
@@ -233,6 +236,7 @@ function B.UI.Window(name, opts)
       icon = "settings",
       label = L["Options"],
       tip = L["Options of this window"],
+      only = only,
       row = true,
       onClick = function()
         if B.UI.Hub then
@@ -251,6 +255,8 @@ function B.UI.Window(name, opts)
     local b = S.action(head, {
       icon = "lock",
       label = L["Lock"],
+      only = only,
+      toggle = true, -- the pictogram lit while locked, dim while free
       row = true,
       onClick = function()
         win:SetLocked(not win.db.locked)
@@ -715,7 +721,7 @@ function Window:ApplyLook()
   end
   local alpha = own and tonumber(own.windowAlpha) or (core and tonumber(core.windowAlpha)) or 100
   local a = math.max(0.2, math.min(1, alpha / 100))
-  local cap = S.LookGroundAlpha and S.LookGroundAlpha() or nil -- Glass: 75 % at most (ADR 0046)
+  local cap = S.LookGroundAlpha and S.LookGroundAlpha(self.frame) or nil -- Glass: 75 % at most (ADR 0046)
   if cap then
     a = math.min(a, cap / 100)
   end
@@ -726,6 +732,7 @@ function Window:ApplyLook()
   -- of its insets
   S.insetAlpha = a
   self:ApplyFrame()
+  self:ApplyMedia(color, a) -- LibSharedMedia's border and background (V25)
   if self.chrome and self.chrome.Bg then
     self.chrome.Bg:SetAlpha(a)
   end
@@ -781,8 +788,93 @@ function Window:Insets()
   return HEADER_H + inset, inset, inset
 end
 
+-- A medium setting as this window takes it (V25): its own preset's where it names one, else the
+-- suite's (a window of its own look still takes the suite's border unless it chose another).
+function Window:Media(key)
+  local own = self.frame.presetValues
+  local v = own and own[key]
+  if v == nil then
+    v = S.Skin(key)
+  end
+  return v
+end
+
+-- LibSharedMedia's border and background (plan-chat-v3.md V25): a backdrop behind the content with
+-- the border's edge (in `windowBorderColor`, else the look's line) and the background tiled and
+-- tinted with the window's colour and opacity, which then takes the flat ground's place. Not over
+-- the game's own window (WoW's frame); nothing without the library or a name it knows.
+Window.MEDIA_EDGE = 16
+Window.MEDIA_INSET = 4
+function Window:ApplyMedia(color, alpha)
+  local edge = not self.gameFramed and S.Media("border", self:Media("windowBorder")) or nil
+  local tex = not self.gameFramed and S.Media("background", self:Media("windowTexture")) or nil
+  local m = self.media
+  if (edge or tex) and not m then
+    m = B.Compat.NewBackdrop(self.frame)
+    if m then
+      m:SetAllPoints(self.frame)
+      m:SetFrameLevel(self.frame:GetFrameLevel() or 1) -- under the content, over the window's own
+      self.media = m
+    end
+  end
+  if not m then
+    return false
+  end
+  if not (edge or tex) then
+    m:Hide()
+    S.showPart(self.frame.bg, not self.gameFramed)
+    return false
+  end
+  local inset = edge and Window.MEDIA_INSET or 0
+  m:SetBackdrop({
+    bgFile = tex,
+    edgeFile = edge,
+    tile = true,
+    tileSize = 64,
+    edgeSize = Window.MEDIA_EDGE,
+    insets = { left = inset, right = inset, top = inset, bottom = inset },
+  })
+  if tex then
+    local c = color or S.Tok(self.frame, "bg")
+    m:SetBackdropColor(c[1], c[2], c[3], alpha or 1)
+  end
+  if edge then
+    local bc = self:Media("windowBorderColor")
+    if not (type(bc) == "table" and tonumber(bc[1])) then
+      bc = S.Tok(self.frame, "line")
+    end
+    m:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4] or 1)
+    if self.border then
+      self.border:Hide() -- the game's dialog border gives way to the chosen one
+    end
+  end
+  S.showPart(self.frame.bg, not tex) -- the background takes the flat ground's place
+  if self.frame.edges then
+    S.showPart(self.frame.edges, not edge and not self.framed)
+  end
+  m:Show()
+  return true
+end
+
+-- A skin setting as this window takes it: its own preset's (Window:SetPreset), else the suite's.
+function Window:Skin(key)
+  local own = self.frame.presetValues
+  if own then
+    return own[key]
+  end
+  return S.Skin(key)
+end
+
+-- The window draws in a preset of its own (`values` a preset's values, nil: the suite's again):
+-- its palette and look (S.SetFramePreset), the game's frame or the dialog border as the preset
+-- says, its ground (plan-chat-v3.md §9, V13: Bastian's Chat in the WoW look whatever the suite's).
+function Window:SetPreset(values)
+  S.SetFramePreset(self.frame, values)
+  self:ApplyLook()
+end
+
 function Window:ApplyChrome()
-  local on = (self.opts.gameFrames or S.GameFrames()) and self:Chrome() ~= nil
+  local on = (self.opts.gameFrames or self:Skin("gameFrames") == true) and self:Chrome() ~= nil
   if self.chrome then
     self.chrome:SetShown(on)
   end
@@ -823,7 +915,7 @@ function Window:ApplyFrame()
     end
     return
   end
-  local on = S.Skin("skinFrames") == true
+  local on = self:Skin("skinFrames") == true
   local border = self.border
   if on and not border then
     border = B.Compat.NewBackdrop(self.frame)

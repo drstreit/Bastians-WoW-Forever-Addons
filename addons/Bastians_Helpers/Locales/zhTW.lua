@@ -98,4 +98,19 @@ ns.L:Register("zhTW", {
   ["Enchanting materials"] = "附魔材料",
   ["Elemental"] = "元素",
   ["Recipes"] = "配方",
+  -- the game's windows (15.11.2026)
+  ["The game's windows"] = "遊戲視窗",
+  ["Drag the game's windows to move them; their places are kept"] = "拖曳遊戲視窗來移動它們；位置會被記住",
+  ["Put the game's windows back where the game places them"] = "將遊戲視窗恢復到原來的位置",
+  ["The game's windows are back in their places."] = "遊戲視窗已回到原來的位置。",
+  -- the rare finder (15.11.2026)
+  ["Rare nearby: %s"] = "附近的稀有怪：%s",
+  ["at its known place"] = "在已知的重生點",
+  ["somewhere near you"] = "就在你附近",
+  ["Level %d"] = "等級 %d",
+  ["Arrow"] = "箭頭",
+  ["Rares spotted"] = "已發現的稀有怪",
+  ["Known rare spawns"] = "已知的稀有怪重生點",
+  ["Rare finder: a sound and a banner when a rare is near"] = "稀有怪偵測：稀有怪靠近時播放聲音並顯示橫幅",
+  ["Sound for a rare"] = "稀有怪提示音",
 })

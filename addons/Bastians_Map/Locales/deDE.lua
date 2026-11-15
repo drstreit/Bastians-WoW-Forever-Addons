@@ -84,6 +84,7 @@ ns.L:Register("deDE", {
   ["On Bastian's styles, show the herbs, ore and creatures the game's tracking finds"] = "In Bastians Stilen die Kräuter, Erze und Kreaturen zeigen, die das Aufspüren des Spiels findet",
   ["this client does not let an addon read the minimap's dots"] = "dieser Client lässt ein Addon die Punkte der Minikarte nicht lesen",
   ["the game refused the minimap sweep; it rests until the next login"] = "das Spiel hat das Abtasten der Minikarte verweigert; es ruht bis zur nächsten Anmeldung",
+  ["Forever's update of 7 November stopped addons reading the minimap's dots; Game minimap shows them"] = "Forevers Update vom 7. November hindert Addons daran, die Punkte der Minikarte zu lesen; die Minikarte des Spiels zeigt sie",
   ["needs Bastian's Data to tell herbs and ore from the rest"] = "braucht Bastian's Data, um Kräuter und Erze vom Rest zu unterscheiden",
   ["(Not at this zoom: zoom in or out to see it.)"] = "(Nicht in diesem Zoom: hinein- oder herauszoomen, um sie zu sehen.)",
   ["Bookmark name"] = "Name des Lesezeichens",
@@ -271,4 +272,6 @@ ns.L:Register("deDE", {
   ["%d running"] = "%d laufen",
   ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "Stoppuhren und Countdowns, so viele du willst. Ein leuchtender Knopf: ein Countdown ist abgelaufen.",
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "Diese Zeit konnte ich nicht lesen. Versuche 5m, 1:30, 90s oder 2h.",
+  -- the route's arrow at the minimap's rim (15.11.2026)
+  ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Beim Routen zeigt ein Pfeil am Rand der Minikarte direkt auf das Ende des Abschnitts",
 })

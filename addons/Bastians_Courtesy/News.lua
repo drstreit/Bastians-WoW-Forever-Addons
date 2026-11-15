@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.5.0:1",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = 'Courtesy says "Good day" around noon, offers fresher lines instead of the same few, and greets everyone at a campfire aloud when you sit down, naming the people there.',
+  },
+  {
+    id = "2.5.0:2",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "Your own Courtesy lines are written in the game now (Courtesy page, My lines), and any line can be switched off for good; lines from the old Bastians_MyLines folder come over by themselves.",
+  },
+  {
     id = "2.4.0:1",
     date = "2026-11-11",
     version = "2.4.0",

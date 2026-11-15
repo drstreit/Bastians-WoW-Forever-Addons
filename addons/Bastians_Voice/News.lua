@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.5.0:1",
+    date = "2026-11-15",
+    version = "2.5.0",
+    text = "The Orbiter's conversation shows every quest of a quest giver, also two of the same name; the hand-in of one was hidden behind the other (Harvesting the Harvesters).",
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",

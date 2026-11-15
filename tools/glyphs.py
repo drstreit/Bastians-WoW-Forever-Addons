@@ -900,6 +900,128 @@ def _flame_ring() -> Shape:  # the thin ring around the flame that runs down wit
     return cut(circle(32, 32, 27), circle(32, 32, 24), gap=0.0)
 
 
+# ---------------------------------------------------------------------------------------------
+# The classes (plan-chat-v3.md V26; "generic symbols for their classes - to be
+# generated"): a whisper partner whose face the game cannot draw shows their class's symbol in
+# the Messenger, tinted in the class's colour as the client gives it; one per class of the
+# retail family, and a person for someone whose class is not known.
+# ---------------------------------------------------------------------------------------------
+
+
+def _class_warrior() -> Shape:  # a heater shield, an upright sword through it
+    shield = polygon([(12, 16), (52, 16), (52, 32), (32, 56), (12, 32)])
+    blade = polygon([(32, 6), (36, 12), (36, 40), (28, 40), (28, 12)])  # shorter than the mob's
+    sword = union(
+        blade, box(19, 40, 45, 45, 2.5), box(29.5, 45, 34.5, 52, 1.5), circle(32, 54.5, 3.4)
+    )
+    return union(cut(shield, sword, gap=2.5), sword)
+
+
+def _class_paladin() -> Shape:  # a war hammer in a ring of light
+    head = union(box(17, 10, 47, 24, 3), box(29, 7, 35, 27, 1.5))
+    hammer = rotate(union(capsule(32, 24, 32, 54, 3.4), head), 32, 32, -28)
+    light = ring(32, 32, 24, 3.4)
+    return union(cut(light, hammer, gap=2.5), hammer)
+
+
+def _class_hunter() -> Shape:  # a bow with its arrow
+    return _mob_bow()
+
+
+def _class_rogue() -> Shape:  # two daggers crossed
+    blade = polygon([(32, 6), (36, 15), (35, 36), (29, 36), (28, 15)])
+    dagger = union(blade, box(23, 36, 41, 40, 2), box(30, 40, 34, 50, 1), circle(32, 53, 3.2))
+    front, back = rotate(dagger, 32, 30, 35), rotate(dagger, 32, 30, -35)
+    return union(cut(back, front, gap=2.5), front)
+
+
+def _class_priest() -> Shape:  # an ankh: a loop over a cross
+    return union(
+        ring(32, 18, 9, 4.5),
+        capsule(32, 27, 32, 54, 3.2),
+        capsule(16, 33, 48, 33, 3.2),
+    )
+
+
+def _class_shaman() -> Shape:  # a lightning bolt
+    return polygon([(38, 6), (17, 34), (29, 34), (24, 57), (47, 27), (35, 27), (44, 6)])
+
+
+def _class_mage() -> Shape:  # an arcane star
+    return cut(star(32, 32, 26, 10, 8), circle(32, 32, 5))
+
+
+def _class_warlock() -> Shape:  # a skull
+    head = union(circle(32, 26, 18), box(22, 34, 42, 50, 4))
+    eyes = union(circle(25, 27, 5), circle(39, 27, 5))
+    nose = polygon([(32, 33), (35, 39), (29, 39)])
+    teeth = union(box(27.5, 43, 29.5, 51), box(34.5, 43, 36.5, 51))
+    return cut(head, eyes, nose, teeth)
+
+
+def _class_druid() -> Shape:  # a paw
+    return union(
+        ellipse(32, 42, 14, 12),
+        circle(16, 27, 6),
+        circle(26, 17, 6),
+        circle(38, 17, 6),
+        circle(48, 27, 6),
+    )
+
+
+def _class_deathknight() -> Shape:  # a rune in a ring
+    return union(
+        ring(32, 32, 24, 3.6),
+        capsule(32, 14, 32, 50, 3),
+        capsule(32, 30, 20, 18, 3),
+        capsule(32, 30, 44, 18, 3),
+        capsule(32, 38, 22, 48, 3),
+        capsule(32, 38, 42, 48, 3),
+    )
+
+
+def _class_monk() -> Shape:  # yin and yang in a ring
+    left = intersect(circle(32, 32, 21), halfplane(1, 0, 32))
+    yin = cut(union(left, circle(32, 21.5, 10.5)), circle(32, 42.5, 10.5))
+    yin = cut(union(yin, circle(32, 42.5, 3.5)), circle(32, 21.5, 3.5))
+    return union(ring(32, 32, 24.5, 3.5), yin)
+
+
+def _class_demonhunter() -> Shape:  # two horns, thick at the brow and sharp at the tip
+    left = polygon([(29, 50), (19, 46), (11, 36), (8, 24), (11, 11), (15, 22), (19, 32), (29, 40)])
+    right = polygon(
+        [(35, 50), (45, 46), (53, 36), (56, 24), (53, 11), (49, 22), (45, 32), (35, 40)]
+    )
+    return union(left, right, box(24, 41, 40, 52, 4))
+
+
+def _class_evoker() -> Shape:  # a dragon's wing: the arm bone, the ribs as grooves
+    wing = polygon(
+        [
+            (10, 52),
+            (18, 26),
+            (30, 10),
+            (54, 8),
+            (46, 20),
+            (54, 24),
+            (44, 32),
+            (50, 38),
+            (38, 42),
+            (40, 48),
+        ]
+    )
+    ribs = union(
+        capsule(26, 18, 47, 19, 0.6), capsule(20, 30, 45, 31, 0.6), capsule(14, 42, 39, 43, 0.6)
+    )
+    return union(cut(wing, ribs, gap=1.2), capsule(10, 52, 30, 10, 2.6))
+
+
+def _person() -> Shape:  # a head and shoulders: someone the Messenger knows no class of
+    head = circle(32, 21, 11)
+    shoulders = intersect(ellipse(32, 58, 22, 20), halfplane(0, 1, 56))
+    return union(head, shoulders)
+
+
 GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "quest": (_quest, "available quest"),
     "questActive": (_quest_active, "quest in the log; Track"),
@@ -1000,6 +1122,21 @@ GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "flame": (_flame, "the flame on screen, its outer layer"),
     "flame_heart": (_flame_heart, "the flame's inner tongue"),
     "flame_ring": (_flame_ring, "the ring that runs down with the warmth"),
+    # the classes and a person (plan-chat-v3.md V26): the Messenger's faces
+    "class_warrior": (_class_warrior, "a warrior"),
+    "class_paladin": (_class_paladin, "a paladin"),
+    "class_hunter": (_class_hunter, "a hunter"),
+    "class_rogue": (_class_rogue, "a rogue"),
+    "class_priest": (_class_priest, "a priest"),
+    "class_shaman": (_class_shaman, "a shaman"),
+    "class_mage": (_class_mage, "a mage"),
+    "class_warlock": (_class_warlock, "a warlock"),
+    "class_druid": (_class_druid, "a druid"),
+    "class_deathknight": (_class_deathknight, "a death knight"),
+    "class_monk": (_class_monk, "a monk"),
+    "class_demonhunter": (_class_demonhunter, "a demon hunter"),
+    "class_evoker": (_class_evoker, "an evoker"),
+    "person": (_person, "a person whose class is not known"),
 }
 
 # ---------------------------------------------------------------------------------------------

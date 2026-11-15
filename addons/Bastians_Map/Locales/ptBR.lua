@@ -83,6 +83,7 @@ ns.L:Register("ptBR", {
   ["On Bastian's styles, show the herbs, ore and creatures the game's tracking finds"] = "Nos estilos do Bastian, mostrar as ervas, o minério e as criaturas que o rastreamento do jogo encontra",
   ["this client does not let an addon read the minimap's dots"] = "este cliente não permite que um addon leia os pontos do minimapa",
   ["the game refused the minimap sweep; it rests until the next login"] = "o jogo recusou a varredura do minimapa; ela fica parada até o próximo login",
+  ["Forever's update of 7 November stopped addons reading the minimap's dots; Game minimap shows them"] = "a atualização do Forever de 7 de novembro impede os addons de ler os pontos do minimapa; o Minimapa do jogo os mostra",
   ["needs Bastian's Data to tell herbs and ore from the rest"] = "precisa do Bastian's Data para distinguir ervas e minério do resto",
   ["(Not at this zoom: zoom in or out to see it.)"] = "(Não neste zoom: aproxime ou afaste para ver.)",
   ["Bookmark name"] = "Nome do favorito",
@@ -270,4 +271,6 @@ ns.L:Register("ptBR", {
   ["%d running"] = "%d em andamento",
   ["Stopwatches and countdowns, as many as you like. A lit button: a countdown ended."] = "Cronômetros e contagens regressivas, quantos você quiser. Um botão aceso: uma contagem regressiva terminou.",
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "Não consegui ler esse tempo. Tente 5m, 1:30, 90s ou 2h.",
+  -- the route's arrow at the minimap's rim (15.11.2026)
+  ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Durante uma rota, uma seta na borda do minimapa aponta direto para o fim do trecho",
 })

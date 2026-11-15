@@ -428,7 +428,7 @@ def test_the_facts_the_engine_reads_since_l4(core: WowRuntime):
     core.fire("BAG_UPDATE_DELAYED")
     core.fire("PLAYER_EQUIPMENT_CHANGED", 1, False)
     core.fire("PLAYER_XP_UPDATE", "player")
-    core.fire("LEARNED_SPELL_IN_TAB", 2383, 1)
+    core.fire("LEARNED_SPELL_IN_SKILL_LINE", 2383, 1, False)
     core.fire("GROUP_ROSTER_UPDATE")
     core.fire("PLAYER_GUILD_UPDATE")
     core.fire("PLAYER_UPDATE_RESTING")

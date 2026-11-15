@@ -98,6 +98,21 @@ local strings = {
   ["Enchanting materials"] = "Materiales de encantamiento",
   ["Elemental"] = "Elemental",
   ["Recipes"] = "Recetas",
+  -- the game's windows (15.11.2026)
+  ["The game's windows"] = "Las ventanas del juego",
+  ["Drag the game's windows to move them; their places are kept"] = "Arrastrar las ventanas del juego para moverlas; su sitio se guarda",
+  ["Put the game's windows back where the game places them"] = "Devolver las ventanas del juego a su sitio original",
+  ["The game's windows are back in their places."] = "Las ventanas del juego vuelven a estar en su sitio.",
+  -- the rare finder (15.11.2026)
+  ["Rare nearby: %s"] = "Raro cerca: %s",
+  ["at its known place"] = "en su lugar conocido",
+  ["somewhere near you"] = "en algún lugar cerca de ti",
+  ["Level %d"] = "Nivel %d",
+  ["Arrow"] = "Flecha",
+  ["Rares spotted"] = "Raros avistados",
+  ["Known rare spawns"] = "Lugares conocidos de raros",
+  ["Rare finder: a sound and a banner when a rare is near"] = "Buscador de raros: un sonido y un aviso cuando hay un raro cerca",
+  ["Sound for a rare"] = "Sonido para un raro",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)
