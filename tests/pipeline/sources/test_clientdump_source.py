@@ -1,6 +1,7 @@
 """clientdump TaxiNodes JSON -> flight masters (route.md, B9.2): faction bits, continents and
-dummies."""
+dummies; FactionTemplate's sides."""
 
+import json
 from pathlib import Path
 
 import pytest
@@ -305,3 +306,51 @@ def test_a_world_point_finds_its_floor_by_region_and_height_band():
     assert floor_for_point([low, high, other], 10, 10, None) is None
     assert floor_for_point([low, other], 250, 250, None) == 2  # the index in the list
     assert floor_for_point([low, other], 500, 500, 10) is None
+
+
+# FactionTemplate (moved from test_tdb.py with the retail world database, 15.11.2026)
+FACTIONS = [
+    {"ID": 20, "FactionGroup": 8, "EnemyGroup": 1},  # monster, hostile to players
+    {"ID": 12, "FactionGroup": 2, "EnemyGroup": 4},  # Stormwind
+    {"ID": 85, "FactionGroup": 5, "EnemyGroup": 10},  # Orgrimmar: players and Horde
+    {"ID": 35, "FactionGroup": 0, "FriendGroup": 1, "EnemyGroup": 0},  # friendly to all
+]
+
+
+def test_faction_sides_and_hostility(tmp_path):
+    from bastians_build.sources.clientdump import faction_rows, faction_sides
+
+    sides = faction_sides(FACTIONS)
+    assert sides[20] == (None, True)
+    assert sides[12] == ("A", False)
+    assert sides[85] == ("H", False)  # hostile to the Alliance only: a side, not a monster
+    assert sides[35] == (None, False)
+    dump = tmp_path / "forever_FactionTemplate.json"
+    dump.write_text(json.dumps({"table": "FactionTemplate", "rows": FACTIONS}), encoding="utf-8")
+    assert faction_rows(dump) == FACTIONS
+    dump.write_text("{}", encoding="utf-8")
+    with pytest.raises(ValueError, match="rows missing"):
+        faction_rows(dump)
+
+
+def test_cmangos_creatures_get_their_side_and_hostility_from_the_client():
+    """Forever had no guards (0 found, 26.10.2026): CMaNGOS' creatures had no side. The Faction
+    column through the client's FactionTemplate gives it, and the hostility for the danger."""
+    from bastians_build.canon import merge_creatures
+    from bastians_build.model import World
+    from bastians_build.sources.clientdump import faction_sides
+
+    rows = [
+        {"Entry": 68, "Name": "Stormwind City Guard", "MinLevel": 55, "Faction": 12},
+        {"Entry": 448, "Name": "Hogger", "MinLevel": 11, "Faction": 20, "Rank": 1},
+        {"Entry": 721, "Name": "Rabbit", "MinLevel": 1, "Faction": 35},
+        {"Entry": 9, "Name": "Unknown", "MinLevel": 3, "Faction": 999},
+    ]
+    s = Sources(client="forever", cm_creatures=rows, cm_factions=faction_sides(FACTIONS))
+    world = World(client="forever", build="test")
+    merge_creatures(world, s)
+    guard, hogger, rabbit, unknown = (world.get("npc", i) for i in (68, 448, 721, 9))
+    assert guard["faction"] == "A" and guard["hostile"] is False
+    assert hogger.get("faction") is None and hogger["hostile"] is True
+    assert rabbit.get("faction") is None and rabbit["hostile"] is False
+    assert "hostile" not in unknown  # a template the client lacks: unknown, the Monsters rule

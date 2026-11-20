@@ -2,6 +2,10 @@
 
 Source: Blizzard_APIDocumentationGenerated of the `forever` and `live` (retail) branches of
 Gethe/wow-ui-source. This is documentation, not a runtime measurement (docs/forever-api.md).
+The live branch stays the reference of the API family (ADR 0009): it splits Forever's globals
+into shared and Forever-only ones and feeds the diff report. ~~api_retail.lua,
+globals_retail_only.lua~~: the retail mock and its luacheck set went with retail (15.11.2026,
+ADR 0037).
 
 Usage:
   python tools/api_stubs.py fetch    [--cache DIR]   sparse-clone or update both branches
@@ -28,6 +32,8 @@ BRANCHES = (BRANCH_FOREVER, BRANCH_RETAIL)
 
 GEN_DIR = Path("tests/lua/mock/Generated")
 REPORT_PATH = Path("data/api/diff_forever_vs_retail.md")
+# the global sets the repo keeps: Forever's, split by what retail documents too
+WRITTEN_SETS = ("shared", "forever_only")
 LUACHECKRC = Path(".luacheckrc")
 BEGIN_MARK = "-- BEGIN GENERATED GLOBALS"
 END_MARK = "-- END GENERATED GLOBALS"
@@ -59,7 +65,7 @@ LUA_KEYWORDS = frozenset(
 )
 IDENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
-# Directories whose files may use API names that only one of the two clients has.
+# Directories whose files may use API names that only Forever's documentation lists.
 COMPAT_PATHS = ("addons/Bastians_Core/Compat/", "addons/Bastians_Probe/")
 
 
@@ -358,7 +364,6 @@ def render_rc_block(sets: dict[str, list[str]], hdr: str) -> str:
     for var, key in (
         ("api_shared", "shared"),
         ("api_forever_only", "forever_only"),
-        ("api_retail_only", "retail_only"),
     ):
         out.append(f"local {var} = {{\n")
         out.extend(line + "\n" for line in wrap_names(sets[key]))
@@ -377,13 +382,13 @@ def render_rc_block(sets: dict[str, list[str]], hdr: str) -> str:
         "\n"
         "read_globals = extend(api_shared, handwritten_globals)\n"
         "\n"
-        "-- Compat and the probe may touch API that exists on one client only.\n"
+        "-- Compat and the probe may touch API that only Forever's documentation lists.\n"
     )
     for path in COMPAT_PATHS:
         out.append(
             f'files["{path}"] = {{\n'
             "  read_globals = extend(api_shared, handwritten_globals, "
-            "api_forever_only, api_retail_only),\n"
+            "api_forever_only),\n"
             "}\n"
         )
     out.append(END_MARK + "\n")
@@ -528,12 +533,9 @@ def build_outputs(cache: Path, current_rc: str) -> dict[str, str]:
         (GEN_DIR / "api_forever.lua").as_posix(): render_api(
             forever, BRANCH_FOREVER, metas[BRANCH_FOREVER]
         ),
-        (GEN_DIR / "api_retail.lua").as_posix(): render_api(
-            retail, BRANCH_RETAIL, metas[BRANCH_RETAIL]
-        ),
         REPORT_PATH.as_posix(): render_report(forever, retail, metas),
     }
-    for key in sets:
+    for key in WRITTEN_SETS:
         files[(GEN_DIR / f"globals_{key}.lua").as_posix()] = render_name_list(sets[key], both)
     files[LUACHECKRC.as_posix()] = update_luacheckrc(current_rc, render_rc_block(sets, both))
     return files

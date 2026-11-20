@@ -19,7 +19,11 @@ Usage: python tools/data_update.py [--export <dir>] [--out build/data] [--send]
    The quest steps' numbers ride with it too (the build's `links-forever.json`, data.md "The
    count and the watch"): steps that fell by a tenth, or steps without a place or placed by
    Classic knowledge alone that rose by a tenth, hold the run the same way. A smaller rise
-   holds nothing: the watch says it (tools/ops/health.py `links`).
+   holds nothing: the watch says it (tools/ops/health.py `links`). So does the quality ledger
+   (`quality-forever.json`, plan-data-quality.md L1): a kind whose known records fell, or whose
+   Classic records rose, by a tenth holds the run; a smaller change is the watch's
+   (`health.quality`). The edition also keeps the source addons' versions and the engine's build
+   it was built from (L2: `sources`, `engine`).
 3. Zips the whole install, the suite and its data (tools/release.py into `<out>/release`), boots it
    on the WoW mock (with the Suite as it was last sent when `.local/released/forever/` keeps it:
    what players run), and writes the Data project's CurseForge file with the version
@@ -37,7 +41,8 @@ sent file went live (tools/daily.py after its upload). Without the key both say 
 The ledger records each edition (its commit, the export it was built from and that export's
 fingerprint) and whether it was sent: an edition that was not sent is planned again by the next
 run. The daily data is Forever's (the book is written for Forever, the export's markets are
-Forever's); retail's data ships with the suite's releases. tools/daily.py runs this every day.
+Forever's); ~~retail's data ships with the suite's releases~~ (retail out 15.11.2026, ADR
+0037). tools/daily.py runs this every day.
 """
 
 from __future__ import annotations
@@ -58,7 +63,7 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 import book_art
 import build_client
@@ -109,6 +114,99 @@ SOURCES = (
 
 def missing_sources(addons: Path) -> list[str]:
     return [s for s in SOURCES if not (addons / s).exists()]
+
+
+# the source addons by folder, as tools/sources_update.py keeps them (its state.json)
+SOURCE_FOLDERS = tuple(dict.fromkeys(s.split("/")[0] for s in SOURCES))
+
+
+def toc_version(folder: Path) -> str:
+    """The `## Version:` of an addon folder's first TOC, "?" without one."""
+    for toc in sorted(folder.glob("*.toc")):
+        for line in toc.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+            if line.startswith("## Version:"):
+                return line.split(":", 1)[1].strip()
+    return "?"
+
+
+def tree_hash(folder: Path) -> str:
+    """A short hash over a folder's files (path and content). The files are taken in the order
+    of their POSIX paths, so a copy hashes the same on Windows and Linux (plan-data-quality.md
+    L2: the release checks its copy of the notebook's sources against the notebook's hash)."""
+    h = hashlib.sha256()
+    files = [p for p in folder.rglob("*") if p.is_file()]
+    for p in sorted(files, key=lambda p: PurePosixPath(p.relative_to(folder).as_posix())):
+        h.update(p.relative_to(folder).as_posix().encode())
+        h.update(hashlib.sha256(p.read_bytes()).digest())
+    return h.hexdigest()[:16]
+
+
+def number(text: str) -> tuple[int, ...]:
+    """The first dotted version number in a text: "ForeverDB 0.54.8" -> (0, 54, 8)."""
+    m = re.search(r"\d+(?:\.\d+)+", text or "")
+    return tuple(int(x) for x in m.group(0).split(".")) if m else ()
+
+
+def older(version: str, than: str) -> bool:
+    """True only when both texts carry a version number and the first is the lower one."""
+    a, b = number(version), number(than)
+    return bool(a and b and a < b)
+
+
+def source_state(addons: Path) -> dict[str, dict[str, str]]:
+    """The source addons a build reads, {folder: {"version", "hash"}}: what the edition records
+    (plan-data-quality.md L2), so the watch can say when an edition's sources are older than the
+    one's before. A folder that is not there is left out."""
+    return {
+        folder: {"version": toc_version(addons / folder), "hash": tree_hash(addons / folder)}
+        for folder in SOURCE_FOLDERS
+        if (addons / folder).is_dir()
+    }
+
+
+ENGINE_STATE = build_client.DUMPS / "engine-forever.json"  # tools/engine.py's record
+
+
+def engine_state(inputs: build_client.BuildInputs, state: Path | None = None) -> dict[str, int]:
+    """The engine a build reads (plan-data-quality.md E7, L2): the client build of its dumps,
+    the hotfix push applied to them (tools/engine.py's record, when it names these dumps) and
+    the build of the probe record. A part that is unknown is left out."""
+    out: dict[str, int] = {}
+    if re.fullmatch(r"f\d+", inputs.prefix):
+        out["dumps"] = int(inputs.prefix[1:])
+    try:
+        record = json.loads((state or ENGINE_STATE).read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        record = {}
+    if isinstance(record, dict) and record.get("prefix") == inputs.prefix and record.get("push"):
+        out["push"] = int(record["push"])
+    m = build_client.PROBE_NAME.match(inputs.probe.name) if inputs.probe else None
+    if m:
+        out["probe"] = int(m.group(2))
+    return out
+
+
+def behind(old: dict | None, new: dict | None) -> list[str]:
+    """What of `new` (an edition's `sources` and `engine`) is older than in `old`, one text
+    each: a source at a lower version, dumps of an older build, an older hotfix push of the same
+    build, a probe of an older build. A part either side does not know says nothing."""
+    old, new = old or {}, new or {}
+    found = []
+    was, now = old.get("sources") or {}, new.get("sources") or {}
+    for folder in sorted(was):
+        a, b = was[folder].get("version", ""), (now.get(folder) or {}).get("version", "")
+        if older(b, a):
+            found.append(f"{folder} {b} (was {a})")
+    was, now = old.get("engine") or {}, new.get("engine") or {}
+    if was.get("dumps") and now.get("dumps"):
+        if now["dumps"] < was["dumps"]:
+            found.append(f"the engine dumps of build {now['dumps']} (was {was['dumps']})")
+        elif now["dumps"] == was["dumps"] and was.get("push") and now.get("push", 0) < was["push"]:
+            push = now.get("push") or "none"
+            found.append(f"the hotfix push {push} of build {now['dumps']} (was {was['push']})")
+    if was.get("probe") and now.get("probe") and now["probe"] < was["probe"]:
+        found.append(f"the probe of build {now['probe']} (was {was['probe']})")
+    return found
 
 
 def project_folders(config: dict, project: str) -> list[str]:
@@ -327,10 +425,10 @@ def listed_files(
     project_name: str = PROJECT,
 ) -> list[dict] | None:
     """A project's newest Forever files on CurseForge (the Data project's by default), oldest
-    first: [{"id", "name", "at", "available", "url", "length", "sha1"}]. Retail's files (a Suite
-    release sends them to the same projects) are left out. None without the read key or when
-    CurseForge does not answer. The read API lists a file only once it is approved, so a file
-    sent minutes ago is not there yet; what it lists is what a player can install."""
+    first: [{"id", "name", "at", "available", "url", "length", "sha1"}]. Retail's files (Suite
+    releases sent them to the same projects until 15.11.2026) are left out. None without the read
+    key or when CurseForge does not answer. The read API lists a file only once it is approved, so
+    a file sent minutes ago is not there yet; what it lists is what a player can install."""
     key = key or curseforge.core_key()
     if not key:
         return None
@@ -634,12 +732,13 @@ def run_build(inputs: build_client.BuildInputs, packs: Path) -> None:
         code = stream(cmd, ROOT)
         if code:
             raise DataUpdateError(f"the {cmd[3]} build exited with {code}")
-    place_report(REPORT, packs, started)
-    place_report(LINKS, packs, started)
+    for report in (REPORT, LINKS, QUALITY):
+        place_report(report, packs, started)
 
 
 REPORT = ROOT / "build" / "report.md"  # where `bastians_build data` writes it (--report-dir)
 LINKS = ROOT / "build" / f"links-{CLIENT}.json"  # the quest steps' numbers, beside the report
+QUALITY = ROOT / "build" / f"quality-{CLIENT}.json"  # the quality ledger (L1), beside it too
 
 
 def forget_reports(packs: Path, reports: tuple[Path, ...] | None = None) -> None:
@@ -650,7 +749,7 @@ def forget_reports(packs: Path, reports: tuple[Path, ...] | None = None) -> None
     out with "the row counts were not checked" (11.11.2026); a second run on one export would
     have been refused once the last sent edition carried counts. Gone before the build, what
     lies there after it is this build's."""
-    for path in reports or (REPORT, LINKS):
+    for path in reports or (REPORT, LINKS, QUALITY):
         (packs / path.name).unlink(missing_ok=True)
         path.unlink(missing_ok=True)
 
@@ -668,6 +767,11 @@ DROP = (
     0.10  # a pack type whose rows fell by more than a tenth holds the edition (catalog review B2)
 )
 MIN_ROWS = 50  # under this many rows before, a fall is noise, not drift
+# Counts that fall by design, so a fall is no sign of a broken source: (pack, type). AHSync gives
+# a farm signal only while the live day is inside an item's launch window (m01_playbook), so
+# "market signal" went 874 -> 400 as the windows ended and held five editions, 15. to 19.11.2026,
+# each waiting for a person. Such a fall is a line; only the type gone altogether holds.
+WINDOWED = frozenset({("market", "signal")})
 
 
 def report_counts(packs: Path) -> dict[str, dict[str, int]]:
@@ -699,7 +803,8 @@ def report_counts(packs: Path) -> dict[str, dict[str, int]]:
 
 def drift(old: dict | None, new: dict) -> tuple[list[str], list[str]]:
     """The row counts against the last sent edition's: (the falls that hold the edition, every
-    change as a line). A type gone is a fall; a type under MIN_ROWS before never is."""
+    change as a line). A type gone is a fall; a type under MIN_ROWS before never is; a type in
+    WINDOWED holds only when it is gone."""
     held: list[str] = []
     lines: list[str] = []
     for pack in sorted(old or {}):
@@ -707,7 +812,8 @@ def drift(old: dict | None, new: dict) -> tuple[list[str], list[str]]:
             now = new.get(pack, {}).get(typ, 0)
             if now != before:
                 lines.append(f"{pack} {typ} {before} -> {now}")
-            if before >= MIN_ROWS and now < before * (1 - DROP):
+            floor = 1 if (pack, typ) in WINDOWED else before * (1 - DROP)
+            if before >= MIN_ROWS and now < floor:
                 held.append(f"{pack} {typ} {before} -> {now}")
     return held, lines
 
@@ -810,6 +916,78 @@ def check_links(packs: Path, sent: dict | None, allow: bool) -> dict[str, int]:
     return counts
 
 
+def quality_counts(packs: Path) -> dict[str, dict]:
+    """The quality ledger of this build (`quality-forever.json` beside the packs,
+    plan-data-quality.md L1), {kind: its row without the kind}; {} without the file."""
+    try:
+        rows = json.loads((packs / QUALITY.name).read_text(encoding="utf-8"))
+    except OSError, ValueError:
+        return {}
+    if not isinstance(rows, list):
+        return {}
+    return {
+        row["kind"]: {k: v for k, v in row.items() if k != "kind"}
+        for row in rows
+        if isinstance(row, dict)
+        and isinstance(row.get("kind"), str)
+        and isinstance(row.get("known"), int)
+    }
+
+
+def classic(row: dict) -> int:
+    """The records of a ledger row that Classic knowledge alone gives (the label `classic`)."""
+    value = (row.get("sources") or {}).get("classic", 0)
+    return value if isinstance(value, int) else 0
+
+
+def quality_drift(old: dict | None, new: dict) -> tuple[list[str], list[str]]:
+    """The quality ledger against the last sent edition's, kind by kind: (the jumps that hold
+    the edition, every change as a line). A jump is a source or a reader gone wrong: the known
+    records of a kind fell by more than a tenth, or its Classic records rose by more than a
+    tenth. A number under MIN_ROWS before never holds; a kind either side lacks says nothing.
+    A smaller fall is the watch's alarm, not a stop (ADR 0073's rule, L1)."""
+    held: list[str] = []
+    lines: list[str] = []
+    for kind in sorted(set(old or {}) & set(new)):
+        was, now = old[kind], new[kind]
+        for words, before, after, worse in (
+            ("known", was.get("known"), now.get("known"), lambda a, b: b < a * (1 - DROP)),
+            ("Classic", classic(was), classic(now), lambda a, b: b > a * (1 + RISE)),
+        ):
+            if not isinstance(before, int) or not isinstance(after, int) or before == after:
+                continue
+            line = f"{kind}: {words} {before} -> {after}"
+            lines.append(line)
+            if before >= MIN_ROWS and worse(before, after):
+                held.append(line)
+    return held, lines
+
+
+def check_quality(packs: Path, sent: dict | None, allow: bool) -> dict[str, dict]:
+    """Says every change of the quality ledger since the last sent edition and refuses a jump
+    unless `allow`. -> this build's ledger, for the edition and the watch."""
+    counts = quality_counts(packs)
+    before = sent.get("quality") if sent else None
+    if not counts:
+        if before and not allow:
+            raise DataUpdateError(
+                f"no {QUALITY.name} beside the packs although the last sent edition had one: the "
+                "quality ledger cannot be checked (pass --allow-drift to ship without the check)"
+            )
+        print(f"quality: no {QUALITY.name} beside the packs, the ledger was not checked")
+        return counts
+    held, lines = quality_drift(before, counts)
+    for line in lines:
+        print(f"quality: {line}")
+    if held and not allow:
+        raise DataUpdateError(
+            "the quality ledger jumped by more than a tenth since the last sent edition: "
+            + "; ".join(held)
+            + " (a source or a reader broke? pass --allow-drift when the change is right)"
+        )
+    return counts
+
+
 def check_nav(packs: Path) -> None:
     """Refuses an edition whose walk network is the stub: Route would plan without it."""
     nav = packs / NAV
@@ -875,6 +1053,7 @@ def update(
     check_nav(packs)
     records = check_drift(packs, sent, allow_drift)
     links = check_links(packs, sent, allow_drift)
+    quality = check_quality(packs, sent, allow_drift)
     sha = data_hash(packs, data, addons_dir)
     write_downloads(packs, counts)  # after the hash: a new count is no new edition
     with book_toml.open("rb") as fh:
@@ -894,6 +1073,11 @@ def update(
         edition["records"] = records  # the row counts the next edition is held against (B2)
         if links:  # the quest steps' numbers: held against too, and the watch's line
             edition["links"] = links
+        if quality:  # the quality ledger (L1): held against too, and the watch's alarm on a fall
+            edition["quality"] = quality
+        # what the build read: the watch alarms when it is older than the edition's before (L2)
+        edition["sources"] = source_state(inputs.addons)
+        edition["engine"] = engine_state(inputs)
         if state:
             name = f"{edition['date']}.{edition['n']}.json"
             book_states.mkdir(parents=True, exist_ok=True)
@@ -999,6 +1183,10 @@ def main(
     args = parser.parse_args(argv)
     try:
         inputs = build_client.read_inputs(CLIENT)
+        if inputs.prefix_note:  # the engine's dumps lag the client (plan-data-quality.md E7)
+            print(f"warning: {inputs.prefix_note}", flush=True)
+        if inputs.probe_note:
+            print(f"warning: {inputs.probe_note}", flush=True)
         if args.export:
             inputs = dataclasses.replace(inputs, export=args.export)
         if inputs.export is None:

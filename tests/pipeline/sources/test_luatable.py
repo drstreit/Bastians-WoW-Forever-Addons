@@ -73,7 +73,7 @@ def test_other_peoples_files_reach_neither_files_nor_processes_nor_python(tmp_pa
     """02.11.2026 (the sources update themselves daily, tools/sources_update.py): a data file runs
     on a Lua without os, io, debug, package, require, dofile, loadfile, load and lupa's python;
     a file that tries one fails as a data error, the string and table libraries stay."""
-    from bastians_build.sources import allthethings, itemdb, probe
+    from bastians_build.sources import probe
 
     lua = luatable.new_runtime()
     for name in luatable.UNSAFE:
@@ -89,7 +89,8 @@ def test_other_peoples_files_reach_neither_files_nor_processes_nor_python(tmp_pa
     sneaky.write_text('local _, ns = ...\nns.f = io.open("x", "w")\n', encoding="utf-8")
     with pytest.raises(luatable.LuaDataError, match="io"):
         luatable.run_file(luatable.new_runtime(), sneaky)
-    # the readers that build their own runtime use the same one
-    for module in (allthethings, itemdb, probe):
+    # the readers that build their own runtime use the same one (~~AllTheThings, ItemDB~~:
+    # out with retail, 15.11.2026)
+    for module in (probe,):
         source = Path(module.__file__).read_text(encoding="utf-8")
         assert "safe_runtime()" in source and "lua51.LuaRuntime(" not in source, module.__name__

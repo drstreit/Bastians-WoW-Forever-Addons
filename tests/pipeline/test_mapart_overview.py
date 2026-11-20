@@ -41,8 +41,8 @@ HINT = (
 def test_config_carries_the_mapart_section():
     cfg = load_config().mapart
     assert cfg.addon == "Bastians_Map_Art" and cfg.span == 8
-    # full resolution on both clients, 80 MB budget (retail: 75 MB)
-    assert cfg.pixels_for("forever") == 64 and cfg.pixels_for("retail") == 64
+    # full resolution, 80 MB budget (~~retail: 75 MB~~, out 15.11.2026)
+    assert cfg.pixels_for("forever") == 64
     assert cfg.budget_kb == 81920
 
 
@@ -197,7 +197,7 @@ def test_install_copies_cells_removes_stale_ones_and_is_idempotent(tmp_path):
     assert tight.over_budget and 'build = "1.60.1.70450"' in tight.path.read_text(encoding="utf-8")
     # a dry run writes nothing
     dry = install_overview(
-        "retail", OVERVIEW, tmp_path / "dry", MapArtConfig(span=8, pixels=4), write=False
+        "forever", OVERVIEW, tmp_path / "dry", MapArtConfig(span=8, pixels=4), write=False
     )
     assert dry.counts == {0: 3, 1: 1} and not (tmp_path / "dry").exists()
 

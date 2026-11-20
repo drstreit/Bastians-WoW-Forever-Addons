@@ -123,9 +123,9 @@ def test_tokens_never_cover_each_other(wow: WowRuntime):
     assert [(p.x, p.y) for p in wow.eval("Q").values()] == first  # deterministic
 
 
-def test_a_new_reader_starts_on_the_map_and_a_token_opens_its_story(wow: WowRuntime):
+def test_the_atlas_shows_the_stories_and_a_token_opens_its_story(wow: WowRuntime):
     boot(wow)
-    wow.slash("/bbook")
+    wow.slash("/bbook map")
     assert wow.eval(f"{WIN}.Current().kind") == "atlas"
     size(wow)
     assert wow.eval(f"{WIN}.atlas:IsShown()") is True
@@ -133,7 +133,7 @@ def test_a_new_reader_starts_on_the_map_and_a_token_opens_its_story(wow: WowRunt
     assert wow.eval(f"{WIN}.folio:IsShown()") is False
     shown = tokens(wow)
     assert "hogger-camp" in [t.id for t in shown]
-    assert wow.eval(f"{WIN}.bar.map.spec.on") is True
+    assert wow.eval(f"{WIN}.bar.atlas.spec.on") is True
     # no two tokens on the land cover each other
     land = [(t.x, t.y) for t in shown if not t.onBoard]
     for i, a in enumerate(land):
@@ -149,23 +149,26 @@ def test_a_new_reader_starts_on_the_map_and_a_token_opens_its_story(wow: WowRunt
     assert wow.errors == []
 
 
-def test_the_map_is_the_books_front_door(wow: WowRuntime):
-    """ "the map is really hard to find": the minimap button (the
-    module's open), /bbook and the launcher open the map; the tabs lead into the book from there.
-    ~~The reader's last place~~ (ADR 0057, point 4, until then)."""
+def test_the_front_table_is_the_front_door_and_the_atlas_a_button(wow: WowRuntime):
+    """ADR 0080 ("front door is A ... The map from C is prominently linked on
+    the frontpage - its a fixed button top right"): the minimap button (the module's open), /bbook
+    and the launcher open the front table; the Atlas is a button on every page. ~~The map was the
+    front door~~ (ADR 0057, point 4, 06.11 to 16.11.2026)."""
     boot(wow)
     wow.slash("/bbook contents")
     assert wow.eval(f"{WIN}.Current().kind") == "contents"
     wow.execute(f"{WIN}.Hide()")
     wow.slash("/bbook")
+    assert wow.eval(f"{WIN}.Current().kind") == "front"
+    wow.execute(f"{WIN}.bar.atlas:Click()")
     assert wow.eval(f"{WIN}.Current().kind") == "atlas"
-    wow.execute(f"{WIN}.bar.title:Click()")
-    assert wow.eval(f"{WIN}.Current().kind") == "title"
-    assert wow.eval(f"{WIN}.bar.map.spec.on") is None
+    assert wow.eval(f"{WIN}.bar.atlas.spec.on") is True
+    wow.execute(f"{WIN}.bar.front:Click()")
+    assert wow.eval(f"{WIN}.Current().kind") == "front"
+    assert wow.eval(f"{WIN}.bar.atlas.spec.on") is None
     wow.execute(f"{WIN}.Hide()")
     wow.execute(f"{MOD}.def.open()")  # the minimap button, the launcher, the feed
-    assert wow.eval(f"{WIN}.Current().kind") == "atlas"
-    assert wow.eval(f"{WIN}.bar.map.spec.on") is True
+    assert wow.eval(f"{WIN}.Current().kind") == "front"
     wow.execute(f"{MOD}.def.open()")  # a second press closes the book
     assert wow.eval(f"{WIN}.IsShown()") is False
     assert wow.errors == []
@@ -197,7 +200,7 @@ def test_the_window_takes_the_maps_proportions(wow: WowRuntime):
     boot(wow)
     wow.slash("/bbook title")
     wow.execute(f"{WIN}.atlas:SetSize(928, 560)")  # the atlas' room in a 940 x 640 window
-    wow.execute(f"{WIN}.bar.map:Click()")
+    wow.execute(f"{WIN}.bar.atlas:Click()")
     w, h = wow.eval(f"{WIN}.win.frame:GetSize()")
     assert (w, h) == (940, 928 / 2 + 80)  # the window adds 80 around the map's height
     assert wow.eval(f"{WIN}.win.db.size[2]") == h  # saved as after a drag
@@ -212,7 +215,7 @@ def test_the_window_takes_the_maps_proportions(wow: WowRuntime):
     w, h = wow.eval(f"{WIN}.win.frame:GetSize()")
     assert h == 420 and w == (420 - 80) * 2 + 12
     # the pages keep their size: nothing fits a page's window to the map
-    wow.execute(f"{WIN}.bar.title:Click()")
+    wow.execute(f"{WIN}.bar.front:Click()")
     wow.execute(f"{WIN}.win.frame:SetSize(1000, 900); {WIN}.win.opts.onResize(nil, false)")
     assert wow.eval(f"{WIN}.win.frame:GetSize()") == (1000, 900)
     assert wow.errors == []

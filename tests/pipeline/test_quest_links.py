@@ -209,7 +209,19 @@ def test_a_vendor_questiedb_names_gets_the_item_without_a_price():
     new = w.get("npc", 99)
     assert new["vendor"] == [[100, None, None, None, "classic"], [101, None, None, None, "questie"]]
     assert new["flags"] == ["vendor"]
-    assert w.notes == ["2 vendor rows from QuestieDB's item rows (no price)"]
+    assert w.notes == ["2 vendor rows from QuestieDB's item rows"]
+    # where the client knows the item, the engine's price and stack (plan-data-quality.md rule 3)
+    from bastians_build.sources.client_tables import ClientItem, ClientTables
+
+    s.client_tables = ClientTables(
+        items={101: ClientItem(101, "x", 1, 1, 1, 0, 0, 2, 120, 20, None, 5)}
+    )
+    w = world()
+    canon.merge_questie_vendors(w, s)
+    assert w.get("npc", 99)["vendor"] == [
+        [100, None, None, None, "classic"],
+        [101, 120, 5, None, "questie", "client"],
+    ]
 
 
 def test_the_merge_labels_a_quests_spots_and_keeps_the_sources_rows():

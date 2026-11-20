@@ -128,7 +128,7 @@ def test_a_hand_in_goes_only_with_all_of_its_quests_stops(wow: WowRuntime):
     boot(wow)
     wow.execute(
         """
-        local q = Bastians:GetModule('Quests').Logic.quest(176)
+        local q = Mock.Keep(Bastians:GetModule('Quests').Logic.quest(176))
         q.objectives = { { 'slay', 'npc:448', 0 }, { 'slay', 'npc:234', 1 } }
         q.requiredItems = nil
         q.spots = { [1429] = { { 0.4, 0.7, 'slay', 1 }, { 0.9, 0.1, 'slay', 2 } } }

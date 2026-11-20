@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Text (zhCN)
 ## Title-koKR: Bastian's Data: 텍스트 (중국어 간체)
 ## Title-zhCN: Bastian's Data: 文字（简体中文）
@@ -22,7 +22,7 @@
 ## Notes-ptBR: Nomes e textos de missões em chinês simplificado gerados; só monta suas tabelas em um cliente em chinês simplificado.
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

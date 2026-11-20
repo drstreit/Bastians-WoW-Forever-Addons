@@ -1074,6 +1074,12 @@ mod = B:NewModule("Map", {
         },
         {
           type = "toggle",
+          key = "cityNudge", -- CityLink.lua (map.md "The ways in"): on Bastian's minimap or the game's
+          label = L["A city map button on the minimap in a city"],
+          default = true,
+        },
+        {
+          type = "toggle",
           key = "minimapPins",
           label = L["Show the map's layers on the minimap (the nearest pins, arrows at the rim)"],
           default = true,

@@ -1,7 +1,7 @@
 """Build the walk network of one client (ADR 0025, route.md "Walk network"): the terrain cells and
 the graph per continent, into .local/out/nav_<client>/ (<continent>.json and .png, meta.json).
 
-Usage: python tools/nav_build.py --client forever|retail [--install <client folder>]
+Usage: python tools/nav_build.py --client forever [--install <client folder>]
        [--continent 0 ...] [--force] [--navmesh] [--emit [--out addons]]
 
 Steps, each skipped when its output is current:
@@ -45,7 +45,8 @@ INSTALL = ROOT / ".local" / "install.toml"
 LISTFILE = ROOT / ".local" / "listfile" / "community-listfile.csv"
 CONFIG = ROOT / "pipeline" / "config"
 PROJECT = ROOT / "tools" / "clientdump"
-CLIENTS = ("forever", "retail")
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
 GRAPH_KEYS = (
     "max_slope",
     "swim_depth",
@@ -142,13 +143,13 @@ def continent_maps(client: str, prefix: str) -> dict[int, tuple[str, int]]:
 
 def install_for(client: str, given: Path | None) -> tuple[Path, str]:
     if given:
-        return given, "beta" if client == "forever" else "retail"
+        return given, "beta"
     raw = tomllib.loads(INSTALL.read_text(encoding="utf-8")) if INSTALL.is_file() else {}
     folder = (raw.get("clients") or {}).get(client)
     if not folder:
         raise NavBuildError(f"no client folder for {client}: pass --install")
     prefix = ((raw.get("build") or {}).get("dump_prefix") or {}).get(client)
-    return Path(folder), prefix or ("beta" if client == "forever" else "retail")
+    return Path(folder), prefix or "beta"
 
 
 def build(

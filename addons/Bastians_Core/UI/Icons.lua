@@ -67,6 +67,10 @@ local KINDS = {
   "pause",
   "stop",
   "replay",
+  -- a voice line's button: a green play to start it, a red stop while
+  -- it speaks, both round; the colours are the tiles' own
+  "voice_play",
+  "voice_stop",
   "orbit", -- Bastian's Orbiter
   -- the action pictograms of the widget set (ADR 0046, 01.11.2026), drawn like the glyphs
   "bookmark",
@@ -261,6 +265,8 @@ local GROUP = {
   tale = "tilePurple",
   keep = "tileTeal",
   buttons = "tileTeal",
+  voice_play = "tileGreen",
+  voice_stop = "tileRed",
   -- the app marks' tiles (the icon sheet's colours)
   app_suite = "tileTeal",
   app_quests = "tileGold",

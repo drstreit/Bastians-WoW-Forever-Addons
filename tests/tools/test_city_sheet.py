@@ -61,3 +61,77 @@ def test_the_same_picture_gives_the_same_bytes(tmp_path):
     first = tmp_path / "a" / "Generated" / "Cities" / "1453_0_1.blp"
     second = tmp_path / "b" / "Generated" / "Cities" / "1453_0_1.blp"
     assert first.read_bytes()[:4] == b"BLP2" and first.read_bytes() == second.read_bytes()
+
+
+def test_the_registry_lists_the_six_capitals():
+    listed = city_sheet.places()
+    assert sorted(listed) == [1453, 1454, 1455, 1456, 1457, 1458]
+    assert listed[1453]["wx"] == (-9154.17, -7995.83) and listed[1453]["look"] == "painted"
+    assert {listed[ui]["continent"] for ui in (1454, 1456, 1457)} == {1}
+    for place in listed.values():  # a Region runs from its low bound to its high one
+        assert place["wx"][0] < place["wx"][1] and place["wy"][0] < place["wy"][1]
+
+
+def pictures(tmp_path, *uis):
+    """A sheets and a paintings folder with a small picture for each named place."""
+    sheets, paintings = tmp_path / "sheets", tmp_path / "paintings"
+    sheets.mkdir(exist_ok=True)
+    paintings.mkdir(exist_ok=True)
+    for ui in uis:
+        look = city_sheet.PLACES[ui]["look"]
+        path = sheets / f"{ui}.png" if look == "painted" else paintings / f"{ui}_x4.png"
+        Image.new("RGB", (1100, 40), (ui % 255, 20, 30)).save(path)
+    return sheets, paintings
+
+
+def test_building_one_place_keeps_the_others_in_the_manifest(tmp_path):
+    addon = tmp_path / "addon"
+    sheets, paintings = pictures(tmp_path, 1453, 1454)
+    entries, _ = city_sheet.run([], addon, sheets, paintings)
+    assert [e["ui"] for e in entries] == [1453, 1454]  # the others have no picture: not listed
+    first = (addon / "Generated" / "Cities.lua").read_text(encoding="utf-8")
+    assert "ui = 1453" in first and "ui = 1454" in first and "ui = 1455" not in first
+    stormwind = (addon / "Generated" / "Cities" / "1453_0_0.blp").read_bytes()
+
+    # Stormwind's sheet is gone from this machine and only Orgrimmar is asked for: both stay
+    (sheets / "1453.png").unlink()
+    entries, lines = city_sheet.run([1454], addon, sheets, paintings)
+    assert [e["ui"] for e in entries] == [1453, 1454]
+    assert (addon / "Generated" / "Cities.lua").read_text(encoding="utf-8") == first
+    assert (addon / "Generated" / "Cities" / "1453_0_0.blp").read_bytes() == stormwind
+    assert any("1453" in line and "kept its tiles" in line for line in lines)
+    assert any("1455" in line and "NO TILES" in line for line in lines)
+
+
+def test_a_place_that_lost_a_tile_is_not_listed(tmp_path):
+    addon = tmp_path / "addon"
+    sheets, paintings = pictures(tmp_path, 1453)
+    city_sheet.run([], addon, sheets, paintings)
+    (sheets / "1453.png").unlink()
+    (addon / "Generated" / "Cities" / "1453_0_1.blp").unlink()
+    entries, _ = city_sheet.run([], addon, sheets, paintings)
+    assert entries == []
+    assert "ui = 1453" not in (addon / "Generated" / "Cities.lua").read_text(encoding="utf-8")
+
+
+def dump(tmp_path, build, rows):
+    import json
+
+    path = tmp_path / f"f{build}_UiMapAssignment.json"
+    path.write_text(json.dumps({"table": "UiMapAssignment", "rows": rows}), encoding="utf-8")
+    return path
+
+
+def test_the_bounds_are_held_against_the_newest_dump(tmp_path):
+    listed = {ui: p for ui, p in city_sheet.PLACES.items() if ui in (1453, 1454)}
+    sw = {"UiMapID": 1453, "MapID": 0, "Region": [-9154.17, -14.584, -1e6, -7995.83, 1722.92, 1e6]}
+    og = {"UiMapID": 1454, "MapID": 1, "Region": [1338.46, -5083.21, -1e6, 2273.88, -3680.6, 1e6]}
+    dump(tmp_path, 70630, [sw])
+    newest = dump(tmp_path, 70938, [sw, og])
+    assert city_sheet.newest_dump(tmp_path) == newest
+    assert city_sheet.region_problems(listed, newest) == []
+    moved = {**og, "Region": [1300.0, -5083.21, -1e6, 2273.88, -3680.6, 1e6]}  # a redrawn city
+    problems = city_sheet.region_problems(listed, dump(tmp_path, 70999, [sw, moved]))
+    assert len(problems) == 1 and "1454 Orgrimmar" in problems[0]
+    gone = city_sheet.region_problems(listed, dump(tmp_path, 71000, [sw]))
+    assert len(gone) == 1 and "0 assignments" in gone[0]

@@ -102,11 +102,9 @@ end
 -- ---------------------------------------------------------------------------------------------
 
 -- The surname a mail to one of the account's characters gets until that character has logged in
---. Forever only: retail's second name is a realm.
+--. ~~Forever only: retail's second name is a
+-- realm~~ (retail out since 15.11.2026, ADR 0037).
 function Mail.Surname()
-  if Bastians.Client ~= "forever" then
-    return nil
-  end
   return Model.SharedSurname(Helpers.Global().characters)
 end
 

@@ -80,10 +80,6 @@ def test_golds_overview_and_characters_carry_their_figures(wow: WowRuntime):
     wow.execute(f"{BR}.OpenWindow()")
     rail_click(wow, "gold")
     wow.run_frames(10)
-    if wow.client == "retail":
-        # Gold ships for Forever only (ADR 0022): the entry reads Items and shows no tiles
-        assert wow.eval(f"{BR}.Current().kind") == "list" and tiles(wow) == []
-        return
     # Gold's Overview is the section's first tab (RegisterView `first`), a view of Gold's
     assert (
         wow.eval(f"{BR}.Current().kind") == "view"

@@ -48,12 +48,9 @@ def test_a_monster_tooltip_says_target_of_and_its_best_drops(wow: WowRuntime):
     # count is not known (it read the exploration's 0/1: plan-quest-links.md S3)
     assert target == ["Target of: The Fargodeep Mine"]
     drops = [line for line in got if "%" in line]
-    if wow.made_for(GOLD):
-        # chance x price: Blood Saber (3.2 % of 50s) before Linen Cloth (45.5 % of 38c)
-        assert drops[0].startswith("Blood Saber  3.2 %  =  50s")
-        assert drops[1].startswith("Linen Cloth  45.5 %")
-    else:  # the drops are Gold's; no Gold on retail
-        assert drops == []
+    # chance x price: Blood Saber (3.2 % of 50s) before Linen Cloth (45.5 % of 38c)
+    assert drops[0].startswith("Blood Saber  3.2 %  =  50s")
+    assert drops[1].startswith("Linen Cloth  45.5 %")
     assert wow.errors == []
 
 

@@ -212,9 +212,29 @@ def _lua_list(items: list, indent: int) -> str:
     return "{\n" + "\n".join(lines) + "\n" + "  " * indent + "}"
 
 
+# Lua 5.1 holds at most 262,143 constants in one function ("constant table overflow"), and a
+# generated file is one chunk: every key and every string of its tables is a constant of it. The
+# Market pack passed that with about 130,000 rows (17.11.2026: 16.3 MB, the pack did not load).
+# A table heavier than this is therefore written in parts, each a function of its own.
+CONSTANTS_MAX = 100_000
+
+
+def _weight(value: object) -> int:
+    """About how many constants a value adds to the function it is written in."""
+    if isinstance(value, Mapping):
+        return sum(1 + _weight(v) for v in value.values() if v is not None)
+    if isinstance(value, Literal | str | int | float) or value is None:
+        return 1
+    if isinstance(value, Sequence | set | frozenset):
+        return sum(_weight(v) for v in value)
+    return 1
+
+
 def _lua_table(table: Mapping, indent: int) -> str:
     if not table:
         return "{}"
+    if len(table) > 1 and _weight(table) > CONSTANTS_MAX:
+        return _split_table(table, indent)
     pad = "  " * (indent + 1)
     lines = []
     for key in sorted(table, key=_sort_key):
@@ -225,6 +245,46 @@ def _lua_table(table: Mapping, indent: int) -> str:
     if not lines:
         return "{}"
     return "{\n" + "\n".join(lines) + "\n" + "  " * indent + "}"
+
+
+def _split_table(table: Mapping, indent: int) -> str:
+    """A table too heavy for one function: its rows in parts of at most half the limit, each
+    part returned by a function of its own (its own constants) and poured into the one table.
+    A row that is itself too heavy is written the same way and then counts as one. The loader
+    sees the same table; the text of a lighter table does not change."""
+    pad = "  " * (indent + 1)
+    inner = "  " * (indent + 2)
+    parts: list[list[str]] = [[]]
+    room = CONSTANTS_MAX // 2
+    for key in sorted(table, key=_sort_key):
+        value = table[key]
+        if value is None:
+            continue
+        weight = 1 + _weight(value)
+        if weight > CONSTANTS_MAX // 2:
+            weight = 2  # written split itself: a call, no constants of its own here
+        if parts[-1] and weight > room:
+            parts.append([])
+            room = CONSTANTS_MAX // 2
+        room -= weight
+        parts[-1].append(f"{inner}{lua_key(key)} = {lua_value(value, indent + 2)},")
+    lines = [
+        "(function()",
+        f"{pad}local t = {{}}",
+        f"{pad}local function take(part)",
+        f"{pad}  for k, v in pairs(part) do",
+        f"{pad}    t[k] = v",
+        f"{pad}  end",
+        f"{pad}end",
+    ]
+    for part in parts:
+        lines.append(f"{pad}take((function()")
+        lines.append(f"{pad}  return {{")
+        lines += part
+        lines.append(f"{pad}  }}")
+        lines.append(f"{pad}end)())")
+    lines += [f"{pad}return t", "  " * indent + "end)()"]
+    return "\n".join(lines)
 
 
 def emit_call(function: str, args: Sequence, comment: str | None = None) -> str:

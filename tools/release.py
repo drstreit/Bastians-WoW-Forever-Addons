@@ -1,7 +1,7 @@
 """Release zips (nfr.md "Release", roadmap B11.2, plan C10): one deterministic zip per addon, one
 bundle per client, and a boot of the result on the WoW mock.
 
-Usage: python tools/release.py --client forever|retail [--addons-dir addons] [--out build/release]
+Usage: python tools/release.py --client forever [--addons-dir addons] [--out build/release]
        [--generated-dir <build root>] [--only Bastians_Core,...] [--stamp 2026-11-03T20:00:00Z]
        [--verify]
 
@@ -10,9 +10,9 @@ these zips are the GitHub backup and the way to install without CurseForge). Add
 a `Generated/` file (the data packs, the Data loader's transform table, the Map's tile table and
 Map_Art's overview textures) ship that folder, which only exists after a local pipeline build for
 one client, so their zips carry the client in the name, are skipped with a note when the folder is
-empty and refused when a generated file names the other client (or none). `--generated-dir` takes
-the `Generated/` folders from another build root (`tools/build_client.py --out <root>`), so the
-Forever release is built while `addons/` holds the retail files. The bundle
+empty and refused when a generated file names another client (or none: a leftover of the retail
+builds, which ended 15.11.2026, ADR 0037). `--generated-dir` takes the `Generated/` folders from
+another build root (`tools/build_client.py --out <root>`). The bundle
 `Bastians-v<Core version>-<client>.zip` holds every zipped addon folder: unzip one file into
 `Interface/AddOns`. Zips are byte-identical for the same input (sorted entries, fixed timestamps
 and modes); `manifest.json` lists every zip with its sha256, version and the git commit.
@@ -43,7 +43,8 @@ from check_toc import parse_toc
 
 ROOT = Path(__file__).resolve().parent.parent
 ADDONS_DIR = ROOT / "addons"
-CLIENTS = ("forever", "retail")
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
 # the Library does not ship with version one;
 # after the launch it is for developers only; the Chat ships, off by default
 DEV_ONLY = {
@@ -57,7 +58,7 @@ GENERATED = "Generated"
 BUNDLE = "Bastians"  # the suite's bundle zip is listed under this name
 # the interface each client loads (ADR 0010): an addon whose TOC does not name it is not made for
 # that client and is not released for it
-INTERFACES = {"forever": "16001", "retail": "120105"}
+INTERFACES = {"forever": "16001"}
 SKIP_SUFFIXES = {".tmp", ".pyc"}
 SKIP_NAMES = {".luacheckrc", ".styluaignore", "__pycache__", ".DS_Store", "Thumbs.db"}
 DEFAULT_STAMP = (1980, 1, 1, 0, 0, 0)  # the earliest time zip files can hold
@@ -113,9 +114,10 @@ def is_per_client(folder: Path) -> bool:
 
 
 # The client name in the first lines of every generated Lua file the pipeline writes: packs ("pack
-# quests for retail, build ..."), the empty market stub ("no data in this retail build"), the tile
-# table and the overview ("minimap tiles for retail (..."), MapTransforms ("...; retail; from ...")
-# and the registered table's own `client = "retail"` field.
+# quests for forever, build ..."), the empty market stub ("no data in this forever build"), the
+# tile table and the overview ("minimap tiles for forever (..."), MapTransforms ("...; forever;
+# from ...") and the registered table's own `client = "forever"` field. "retail" is still read:
+# a file of the retail builds (until 15.11.2026) is refused by name.
 CLIENT_MARKS = (
     re.compile(r'client = "(forever|retail)"'),
     re.compile(r"; (forever|retail); "),
@@ -141,7 +143,7 @@ def meta_interface(folder: Path) -> str:
 
 
 def made_for(folder: Path, client: str) -> bool:
-    """Whether the addon's TOC names the client's interface (`## Interface: 16001, 120105`)."""
+    """Whether the addon's TOC names the client's interface (`## Interface: 16001`)."""
     toc = folder / f"{folder.name}.toc"
     meta, _ = parse_toc(toc.read_text(encoding="utf-8"))
     return INTERFACES[client] in {v.strip() for v in meta.get("Interface", "").split(",")}

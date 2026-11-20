@@ -147,6 +147,8 @@ Compat.CONTRACT = {
   GetSpellName = "spellID -> name or nil ; a recipe's name on retail, whose packs carry none",
   IsSpellKnown = "spellID -> bool or nil ; whether this character knows the spell or recipe"
     .. " (C_SpellBook.IsSpellKnown, IsSpellKnown, IsPlayerSpell); nil when the client cannot tell",
+  IsTitleKnown = "title id -> bool or nil ; whether this character has earned the title (IsTitleKnown);"
+    .. " nil when the client cannot tell (Bastian's Book, ADR 0080)",
   KnownSpells = "-> { [spellID] = true } or nil ; every spell of the character's spell book"
     .. " (C_SpellBook skill lines and items); nil when the client cannot list it",
   OpenRecipes = "-> { [recipeSpellID] = true } or nil ; the learned recipes of the profession window"

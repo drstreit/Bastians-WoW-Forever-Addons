@@ -27,13 +27,8 @@ About.SOURCES = {
       .. "the overview textures of Bastian's Map Art, read from your own installed client",
   },
   { "Everything Quests", "MIT", "quests, their places and objective points (Forever)" },
-  { "AllTheThings", "MIT", "quests, NPCs, objects, flight paths and the recipe list (retail)" },
-  {
-    "ItemDB / LibItemDB",
-    "MIT",
-    "where to get an item (retail); its places are re-expressed from the TrinityCore world "
-      .. "database (GPL-2.0)",
-  },
+  -- AllTheThings and ItemDB served the retail packs alone and left with them (15.11.2026,
+  -- ADR 0037)
   {
     "QuestieDB",
     "GPL-3.0",
@@ -65,9 +60,7 @@ About.SOURCES = {
   {
     "TrinityCore TDB",
     "GPL-2.0 or later",
-    "NPC services, levels and places, mailboxes and forges, the danger of the routes, and NPC, "
-      .. "object and quest names in every language (retail); the Korean and Chinese quest texts "
-      .. "(Forever)",
+    "the long quest texts in other languages where QuestieDB and CMaNGOS have none (Forever)",
   },
   { "AHledger", "Prices from AHledger", "market prices through the AHSync export" },
   {
@@ -92,6 +85,10 @@ About.SOURCES = {
   },
   { "Varela Round (Joe Prince, Avraham Cornfeld)", "SIL Open Font License 1.1", "a rounded font to choose" },
   { "Almendra (Ana Sanfelippo)", "SIL Open Font License 1.1", "a calligraphic font to choose" },
+  -- Bastian's Book's own faces (ADR 0081, 16.11.2026), the same in every look
+  { "IM FELL English (Igino Marini)", "SIL Open Font License 1.1", "the names in Bastian's Book" },
+  { "Alegreya Italic (Huerta Tipografica)", "SIL Open Font License 1.1", "Bastian's line in the book" },
+  { "Alegreya Sans (Huerta Tipografica)", "SIL Open Font License 1.1", "the book's labels and tabs" },
   -- Bastian's Chat's condensed fonts (Bastians_Chat/Fonts, each with its licence text beside it)
   { "Barlow Condensed SemiBold (Jeremy Tribby)", "SIL Open Font License 1.1", "the chat's heads and tabs" },
   { "Barlow Condensed", "SIL Open Font License 1.1", "a condensed font of the chat (Jeremy Tribby)" },

@@ -6,7 +6,6 @@ import re
 import sys
 from pathlib import Path
 
-import pytest
 from harness import WowRuntime
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data"))
@@ -172,8 +171,6 @@ def test_quests_offer_their_quests_timed_from_the_next_place(wow: WowRuntime):
 
 
 def test_gold_offers_its_farm_spots_by_the_hour(wow: WowRuntime):
-    if wow.client != "forever":
-        pytest.skip("Gold is Forever's only (tests/lua/gold/conftest.py)")
     wow.execute('function GetRealmName() return "Classic Beta PvE" end')
     wow.start(CORE, DATA, GOLD)
     wow.run_frames(10)

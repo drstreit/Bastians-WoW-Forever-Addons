@@ -65,7 +65,7 @@ def test_the_generated_table_registers_per_client(wow: WowRuntime):
     assert wow.eval(f"{OV}.File(0, 7, 7)") is None and wow.eval(f"{OV}.File(5, 3, 6)") is None
     assert wow.eval(f"{OV}.Note()") == "Overview cells: Eastern Kingdoms 3, Kalimdor 1"
     # a table for the other client is kept out and the note says so
-    other = "retail" if wow.client == "forever" else "forever"
+    other = "retail"  # a table of the retail builds before 15.11.2026 (ADR 0037)
     wow.execute(
         f'Bastians.Map.RegisterOverview({{ client = "{other}", span = 8, grid = 8, path = "x", continents = {{ [0] = {{ 1 }} }} }})'
     )

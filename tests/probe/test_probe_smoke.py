@@ -133,3 +133,61 @@ def test_the_chat_probes_count_and_never_name(lua):
     log = lua.globals().BastiansProbeDB.results.combatlog
     assert log.registered is True
     assert (log.count, log.done.damage, log.subevents.SPELL_DAMAGE) == (1, 37, 1)
+
+
+def test_a_new_build_is_probed_by_itself_once(lua):
+    # plan-data-quality.md E5: the first login on a build runs P1, P3 and P2 without a command
+    lua.globals().stub_drain()
+    db = lua.globals().BastiansProbeDB
+    assert db.auto.build == "70450" and db.auto.parts == "P1, P3, P2"
+    for probe in ("P1", "P2", "P3"):
+        assert db.results[probe] is not None, probe
+    assert db.results.P5 is None  # the screenshot parts still wait for a hand
+    text = "\n".join(messages(lua))
+    assert "build 70450 is new to the probe" in text and "recorded by itself" in text
+    before = len(messages(lua))
+    lua.globals().stub_fire("PLAYER_LOGIN")  # the next login on the same build: nothing
+    lua.globals().stub_drain()
+    assert not any("new to the probe" in m for m in messages(lua)[before:])
+
+
+def test_in_a_fight_the_automatic_probe_waits_for_its_end(lua):
+    lua.execute("function InCombatLockdown() return true end")
+    lua.globals().stub_drain()
+    assert lua.globals().BastiansProbeDB.auto is None
+    lua.execute("function InCombatLockdown() return false end")
+    lua.globals().stub_fire("PLAYER_REGEN_ENABLED")
+    lua.globals().stub_drain()
+    assert lua.globals().BastiansProbeDB.auto.build == "70450"
+
+
+def test_what_the_client_tells_in_play_is_kept_per_build(lua):
+    # plan-data-quality.md E6: every NPC talked to, every merchant's whole stock, no player
+    lua.execute(
+        """
+        function UnitName() return "Innkeeper Farley" end
+        function GetMerchantNumItems() return 2 end
+        C_MerchantFrame = { GetItemInfo = function(i)
+          return { price = i * 100, stackCount = i == 1 and 5 or 1, numAvailable = -1 }
+        end }
+        function GetMerchantItemLink(i) return "|cff|Hitem:" .. (2588 + i) .. "::|h[x]|h|r" end
+        """
+    )
+    fire = lua.globals().stub_fire
+    fire("GOSSIP_SHOW")
+    fire("MERCHANT_SHOW")
+    truth = lua.globals().BastiansProbeDB.truth["70450"]
+    npc = truth.npcs["npc:448"]
+    assert (npc.name, npc.map, npc.seen, npc.wx) == ("Innkeeper Farley", 1429, 2, -9460.0)
+    assert npc.kinds.gossip and npc.kinds.merchant
+    stock = truth.merchants["npc:448"]
+    assert stock["count"] == 2
+    first = stock["items"][1]
+    assert (first.item, first.price, first.stack, first.available) == (2589, 100, 5, -1)
+    lua.execute('function UnitGUID() return "GameObject-0-1-0-1-1731-0000" end')
+    fire("QUEST_DETAIL")
+    assert truth.npcs["object:1731"].kinds.quest
+    lua.execute('function UnitGUID() return "Player-1234-0ABCDEF1" end')
+    fire("GOSSIP_SHOW")
+    assert truth.count == 2  # a player is never kept
+    assert "failed" not in "\n".join(messages(lua))

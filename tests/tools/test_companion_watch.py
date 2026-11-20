@@ -120,28 +120,28 @@ def test_a_missing_required_companion_and_another_api_version_alert(tmp_path: Pa
     addon(addons, "Spoken", "3.7.0", ["Play"], api=2)
     report = cw.watch({"forever": addons}, companions, today="2026-11-01", **kw)
     assert report.alerts == ["Spoken on forever answers API 2, the suite expects 1"]
-    retail = tmp_path / "retail" / "Interface" / "AddOns"
-    retail.mkdir(parents=True)
-    report = cw.watch({"forever": addons, "retail": retail}, companions, today="2026-11-02", **kw)
+    other = tmp_path / "other" / "Interface" / "AddOns"  # a client without companions
+    other.mkdir(parents=True)
+    report = cw.watch({"forever": addons, "other": other}, companions, today="2026-11-02", **kw)
     assert report.alerts == ["Spoken on forever answers API 2, the suite expects 1"]  # Forever-only
     page = (tmp_path / "pages" / "Spoken.md").read_text(encoding="utf-8")
-    assert "| retail | missing |" in page
+    assert "| other | missing |" in page
     import shutil
 
     shutil.rmtree(addons / "Spoken")
-    report = cw.watch({"forever": addons, "retail": retail}, companions, today="2026-11-03", **kw)
+    report = cw.watch({"forever": addons, "other": other}, companions, today="2026-11-03", **kw)
     assert report.alerts == ["Spoken is missing on forever"]
     assert "! Spoken (forever): missing: the folder is gone" in report.lines
     assert "  review addons/Bastians_Voice/Bridge.lua: Spoken's surface changed" in report.lines
     # the next run says it once, not again every day (TomTom's page, 04.11.2026); the alert stays
-    report = cw.watch({"forever": addons, "retail": retail}, companions, today="2026-11-04", **kw)
+    report = cw.watch({"forever": addons, "other": other}, companions, today="2026-11-04", **kw)
     assert report.alerts == ["Spoken is missing on forever"]
     assert not any("folder is gone" in line for line in report.lines)
     page = (tmp_path / "pages" / "Spoken.md").read_text(encoding="utf-8")
     assert page.count("folder is gone") == 1
     # back again: reported as new
     addon(addons, "Spoken", "3.8.0", ["Play"])
-    report = cw.watch({"forever": addons, "retail": retail}, companions, today="2026-11-05", **kw)
+    report = cw.watch({"forever": addons, "other": other}, companions, today="2026-11-05", **kw)
     assert "! Spoken (forever): new: 3.8.0" in report.lines
 
 

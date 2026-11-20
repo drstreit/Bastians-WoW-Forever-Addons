@@ -38,13 +38,11 @@ def test_the_tab_lists_the_markets_bargains_and_a_fresh_scan_keeps_them(wow: Wow
     wow.execute(f"{BR}.Browser.ShowView('gold.bargains')")
     wow.run_frames(40)
     refs = [r.ref for r in wow.eval(f"{BR}.tree.flat").values() if r.ref]
-    if wow.client == "forever":  # Linen Cloth: lowest 20c, 30-day median 75c in the fixture
-        assert "item:2589" in refs
+    assert "item:2589" in refs  # Linen Cloth: lowest 20c, 30-day median 75c in the fixture
     # a fresh own scan: its listing against the pack's 30-day median
     scan(wow, [listing(0, 2589, 1, 30)])
     p = price(wow, 2589)
     assert p.source == "scan"
-    if wow.client == "forever":
-        assert p.median30d == 75
-        assert wow.eval(f"{BG}.Row(2589, Bastians:GetService('prices'):Price(2589)) ~= nil")
+    assert p.median30d == 75
+    assert wow.eval(f"{BG}.Row(2589, Bastians:GetService('prices'):Price(2589)) ~= nil")
     assert wow.errors == []

@@ -87,9 +87,7 @@ def test_generate_writes_files_and_is_idempotent(root):
     names = sorted(p.name for p in gen.iterdir())
     assert names == [
         "api_forever.lua",
-        "api_retail.lua",
         "globals_forever_only.lua",
-        "globals_retail_only.lua",
         "globals_shared.lua",
     ]
     snapshot = {p: p.read_bytes() for p in [*gen.iterdir(), root / ".luacheckrc"]}
@@ -123,6 +121,7 @@ def test_luacheckrc_keeps_handwritten_content(root):
     assert 'files["addons/Bastians_Core/Compat/"]' in rc
     assert 'files["addons/Bastians_Probe/"]' in rc
     assert '"C_QuestLog"' in rc
+    assert "api_retail_only" not in rc and '"C_Soulbinds"' not in rc  # retail out, 15.11.2026
 
 
 def test_update_luacheckrc_replaces_only_the_marked_section():
@@ -139,11 +138,11 @@ def test_check_detects_a_change(root, capsys):
     assert api_stubs.main(["check", *argv]) == 1  # nothing committed yet
     api_stubs.main(["generate", *argv])
     assert api_stubs.main(["check", *argv]) == 0
-    stub = root / "tests/lua/mock/Generated/api_retail.lua"
-    stub.write_bytes(stub.read_bytes().replace(b"GetActiveSoulbindID", b"GetSomethingElse"))
+    stub = root / "tests/lua/mock/Generated/api_forever.lua"
+    stub.write_bytes(stub.read_bytes().replace(b"GetAllTaxiNodes", b"GetSomethingElse"))
     capsys.readouterr()
     assert api_stubs.main(["check", *argv]) == 1
-    assert "api_retail.lua" in capsys.readouterr().out
+    assert "api_forever.lua" in capsys.readouterr().out
 
 
 def test_missing_cache_is_a_clean_error(root, tmp_path, capsys):

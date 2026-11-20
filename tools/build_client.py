@@ -1,6 +1,6 @@
 """Build everything the addons need for one client in one go: data packs, tile table, overview.
 
-Usage: python tools/build_client.py --client forever|retail [--out addons] [--dry-run]
+Usage: python tools/build_client.py --client forever [--out addons] [--dry-run]
        [--skip-mapart]
 
 Reads the client folder from .local/install.toml (tools/install.py --wow remembers it) and the
@@ -17,19 +17,18 @@ machine-specific build inputs from its optional [build] section:
     forever = ".local/sources/forever"                  #   Interface/AddOns (Forever: the beta's)
     [build.dump_prefix]
     forever = "beta"                                    # clientdump JSON prefix in .local/out
-    retail = "retail"
-    [build.tdb]                                         # retail: TrinityCore's world dump
-    retail = ".local/sources/retail/tdb/TDB_full_world_<build>.sql"  # (sources.md), or --tdb
-    [build.tdb_texts]                                   # Forever: the Korean and Chinese long
-    forever = "<the same dump>"                         #   quest texts (default: the retail one)
+    [build.tdb_texts]                                   # TrinityCore's world dump (sources.md):
+    forever = ".local/sources/retail/tdb/TDB_full_world_<build>.sql"  # the long quest texts
+    [build.tdb]                                         # ~~retail: the world dump~~; still read
+    retail = "<the same dump>"                          #   for the texts when tdb_texts is unset
 
 Then runs, in order, `python -m bastians_build data ...` (the packs, MapTransforms.lua, the report)
 and `python -m bastians_build mapart ...` (MinimapTiles.lua and Bastians_Map_Art/Generated, when
 the tile lists and overview cells of that client exist in .local/out; see tools/mapart_extract.py),
 then `python -m bastians_build nav ...` (Bastians_Data_Nav: the walk network from
 tools/nav_build.py's graphs in .local/out/nav_<client>, or a stub without them).
-`addons/` holds one client's generated files at a time: build the other client into another
-folder with --out, or rebuild afterwards.
+~~`addons/` holds one client's generated files at a time~~: Forever is the only client since
+15.11.2026 (ADR 0037).
 """
 
 from __future__ import annotations
@@ -37,6 +36,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import hashlib
+import re
 import subprocess
 import sys
 import tomllib
@@ -47,8 +47,9 @@ ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = ROOT / ".local" / "install.toml"
 DUMPS = ROOT / ".local" / "out"
 LISTFILE = ROOT / ".local" / "listfile" / "community-listfile.csv"
-CLIENTS = ("forever", "retail")
-DEFAULT_PREFIX = {"forever": "beta", "retail": "retail"}
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
+DEFAULT_PREFIX = {"forever": "beta"}
 
 
 @dataclass(frozen=True)
@@ -60,23 +61,23 @@ class BuildInputs:
     ground_truth: Path | None = None
     export: Path | None = None
     probe: Path | None = None
-    tdb: Path | None = None  # retail: TrinityCore's world dump (sources.md), [build.tdb] or --tdb
-    # Forever: the same dump for the long quest texts in Korean and Chinese ([build.tdb_texts],
-    # else [build.tdb]'s retail dump; data.md "Game data in other languages")
+    # TrinityCore's world dump (sources.md) for the long quest texts in the other languages
+    # ([build.tdb_texts], else [build.tdb]; data.md "Game data in other languages")
     tdb_texts: Path | None = None
     # the game data in other languages (ADR 0033): QuestieDB's l10n lookups, [build.l10n] or
     # .local/sources/<client>/questie-l10n (tools/fetch_questie_l10n.py) when it exists
     l10n: Path | None = None
-    # retail: ForeverDB's Dungeons.lua from the Forever sources, so the test client shows the
-    # dungeon pages too
-    dungeons: Path | None = None
-    # the dungeon floors' maps (DG2c): retail's UiMap tables in .local/out and the community
-    # listfile in .local/listfile, for both clients, when they exist
+    # the dungeon floors' maps (DG2c): the retail client's UiMap tables in .local/out
+    # (retail_*.json) and the community listfile in .local/listfile, when they exist
     floor_art: Path | None = None
     listfile: Path | None = None
     # Forever: ForeverDB's API rows as AHSync stored them ([build.foreverdb_api], else AHSync's
     # data/external/foreverdb-api/latest when it exists): seen places for gaps (data.md)
     foreverdb_api: Path | None = None
+    # why `prefix` is not the client's own build (engine_prefix), when it is not
+    prefix_note: str | None = None
+    # why `probe` is not a record of the client's own build, when it is not
+    probe_note: str | None = None
     extra: list[str] = field(default_factory=list)
 
 
@@ -146,9 +147,8 @@ def missing_inputs(inputs: BuildInputs, dumps: Path = DUMPS) -> list[str]:
     where it comes from. A missing input never stops the build (the packs carry what is there),
     but each is an alarm: the packs lose what it gives, and nothing else says so (12.11.2026:
     the notebook had no TDB dump configured since it took over, and five language packs shipped
-    without their long quest texts for two nights). Retail is the test client: none checked."""
-    if inputs.client != "forever":
-        return []
+    without their long quest texts for two nights). ~~Retail is the test client: none checked~~
+    (retail out 15.11.2026)."""
     dumped = dumps.is_dir() and any(dumps.glob(f"{inputs.prefix}_*"))
     checks = (
         (dumped, f"client dumps {inputs.prefix}_*", f"{dumps}, from tools/client_tables.py"),
@@ -161,7 +161,7 @@ def missing_inputs(inputs: BuildInputs, dumps: Path = DUMPS) -> list[str]:
         (
             _present(inputs.tdb_texts),
             "TDB world dump (the long quest texts of five languages)",
-            "[build.tdb] retail or [build.tdb_texts] forever in .local/install.toml",
+            "[build.tdb_texts] forever or [build.tdb] in .local/install.toml",
         ),
         (
             _present(inputs.foreverdb_api),
@@ -184,8 +184,10 @@ def _default_api() -> Path | None:
     return FOREVERDB_API if (FOREVERDB_API / "quests.json").is_file() else None
 
 
-def _retail_tdb(build: dict) -> Path | None:
-    """[build.tdb]'s retail dump when it exists (Forever reads its long quest texts from it)."""
+def _tdb_dump(build: dict) -> Path | None:
+    """[build.tdb]'s dump when it exists: a path, or the `retail` key the retail builds read it
+    from until 15.11.2026 (an install.toml of those days names it so); Forever reads its long
+    quest texts from it when [build.tdb_texts] names none."""
     value = build.get("tdb")
     value = value.get("retail") if isinstance(value, dict) else value
     if not value:
@@ -198,6 +200,75 @@ def _retail_tdb(build: dict) -> Path | None:
 def _default_l10n(client: str) -> Path | None:
     path = ROOT / ".local" / "sources" / client / "questie-l10n"
     return path if path.is_dir() else None
+
+
+def installed_build(client_dir: Path) -> str | None:
+    """The Forever build in `.build.info`, in the client folder or the one above it (the desktop
+    keeps it above `_forever_`, the notebook's mirror at its root); None without one."""
+    for folder in (client_dir, client_dir.parent):
+        info = folder / ".build.info"
+        if not info.is_file():
+            continue
+        rows = info.read_text(encoding="utf-8").splitlines()
+        head = [c.split("!")[0] for c in rows[0].split("|")] if rows else []
+        for row in rows[1:]:
+            cells = dict(zip(head, row.split("|"), strict=False))
+            if cells.get("Product") == "wowf" and cells.get("Version"):
+                return cells["Version"]
+    return None
+
+
+def engine_prefix(client_dir: Path, dumps: Path | None = None) -> tuple[str, str | None]:
+    """`[build.dump_prefix]` "auto" (and its absence): the dumps of the client's own build,
+    f<build>, which tools/engine.py writes on every build (plan-data-quality.md E2 to E4).
+    Without them, the newest older set, with a note saying so. -> (prefix, note or None)."""
+    dumps = dumps or DUMPS
+    build = installed_build(client_dir)
+    if build is None:
+        return DEFAULT_PREFIX["forever"], "no .build.info beside the client: the beta's dumps"
+    number = int(build.rsplit(".", 1)[-1])
+    if (dumps / f"f{number}_ItemSparse.json").is_file() and (
+        dumps / f"f{number}_Map.json"
+    ).is_file():
+        return f"f{number}", None
+    older = sorted(
+        int(p.name[1 : -len("_Map.json")])
+        for p in dumps.glob("f*_Map.json")
+        if p.name[1 : -len("_Map.json")].isdigit() and int(p.name[1 : -len("_Map.json")]) < number
+    )
+    if not older:
+        return DEFAULT_PREFIX["forever"], f"no engine dumps for {build} or before: the beta's"
+    return f"f{older[-1]}", f"no engine dumps for {build} yet: built on f{older[-1]}"
+
+
+PROBE_NAME = re.compile(r"^(\d{4}-\d{2}-\d{2})-forever-(\d+)\.lua$")
+
+
+def engine_probe(
+    client_dir: Path, folders: tuple[Path, ...] | None = None
+) -> tuple[Path | None, str | None]:
+    """`[build.probe]` "auto": the newest probe record of the client's own build, from the
+    records tools/engine.py imports (.local/probe) and the kept ones (data/probe); else the
+    newest of an older build, with a note (plan-data-quality.md E5, E7). -> (path, note)."""
+    folders = folders or (ROOT / ".local" / "probe", ROOT / "data" / "probe")
+    found = []
+    for folder in folders:
+        for path in folder.glob("*-forever-*.lua") if folder.is_dir() else ():
+            m = PROBE_NAME.match(path.name)
+            if m:
+                found.append((int(m.group(2)), m.group(1), path))
+    if not found:
+        return None, "no probe record: the build's checks against the game are missing"
+    build = installed_build(client_dir)
+    number = int(build.rsplit(".", 1)[-1]) if build else None
+    own = [f for f in found if f[0] == number]
+    if own:
+        return max(own)[2], None
+    newest = max(found)
+    return newest[2], (
+        f"the probe is of build {newest[0]} ({newest[1]}), the client {build or '?'}: "
+        "log in once with Bastians_Probe"
+    )
 
 
 def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
@@ -214,10 +285,15 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
     build = raw.get("build", {})
     if not addons.is_dir() and not (build.get("sources") or {}).get(client):
         raise BuildClientError(f"{addons} does not exist")
-    prefix = str(build.get("dump_prefix", {}).get(client, DEFAULT_PREFIX[client]))
+    pinned = str(build.get("dump_prefix", {}).get(client, "auto"))
+    prefix_note = None
+    if pinned == "auto":
+        prefix, prefix_note = engine_prefix(Path(clients[client]))
+    else:
+        prefix = pinned
 
     def optional(key: str) -> Path | None:
-        """A path for every client (string) or per client (table keyed forever/retail)."""
+        """A path for every client (string) or per client (a table keyed by the client)."""
         value = build.get(key)
         if isinstance(value, dict):
             value = value.get(client)
@@ -226,6 +302,11 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         path = Path(str(value))
         return path if path.is_absolute() else ROOT / path
 
+    probe, probe_note = optional("probe"), None
+    raw_probe = build.get("probe")
+    if (raw_probe.get(client) if isinstance(raw_probe, dict) else raw_probe) == "auto":
+        probe, probe_note = engine_probe(Path(clients[client]))
+
     # the source addons can live outside the client (24.10.2026: the Forever beta was uninstalled,
     # its EverythingQuests, ForeverDB and QuestieDB are kept in .local/sources/forever)
     sources = optional("sources")
@@ -233,31 +314,21 @@ def read_inputs(client: str, config_path: Path = CONFIG_PATH) -> BuildInputs:
         if not sources.is_dir():
             raise BuildClientError(f"[build.sources] {client}: {sources} does not exist")
         addons = sources
-    dungeons = None
-    if client == "retail":
-        forever_sources = (build.get("sources") or {}).get("forever")
-        if forever_sources:
-            candidate = Path(str(forever_sources))
-            candidate = candidate if candidate.is_absolute() else ROOT / candidate
-            candidate = candidate / "ForeverDB" / "Data" / "Dungeons.lua"
-            dungeons = candidate if candidate.is_file() else None
     return BuildInputs(
         client=client,
         addons=addons,
         prefix=prefix,
-        cmangos=optional("cmangos") if client == "forever" else None,
+        prefix_note=prefix_note,
+        cmangos=optional("cmangos"),
         ground_truth=optional("ground_truth"),
         export=optional("export"),
-        probe=optional("probe"),
-        tdb=optional("tdb") if client == "retail" else None,
-        tdb_texts=(optional("tdb_texts") or _retail_tdb(build)) if client == "forever" else None,
+        probe=probe,
+        probe_note=probe_note,
+        tdb_texts=optional("tdb_texts") or _tdb_dump(build),
         l10n=optional("l10n") or _default_l10n(client),
-        dungeons=dungeons,
         floor_art=DUMPS if (DUMPS / "retail_UiMapArtTile.json").is_file() else None,
         listfile=LISTFILE if LISTFILE.is_file() else None,
-        foreverdb_api=(optional("foreverdb_api") or _default_api())
-        if client == "forever"
-        else None,
+        foreverdb_api=optional("foreverdb_api") or _default_api(),
     )
 
 
@@ -288,14 +359,10 @@ def commands(inputs: BuildInputs, out: Path, *, skip_mapart: bool = False) -> li
         data += ["--export", str(inputs.export)]
     if inputs.probe:
         data += ["--probe", str(inputs.probe)]
-    if inputs.tdb:
-        data += ["--tdb", str(inputs.tdb)]
     if inputs.tdb_texts:
         data += ["--tdb-texts", str(inputs.tdb_texts)]
     if inputs.l10n:
         data += ["--l10n", str(inputs.l10n)]
-    if inputs.dungeons:
-        data += ["--dungeons", str(inputs.dungeons)]
     if inputs.floor_art:
         data += ["--floor-art", str(inputs.floor_art)]
     if inputs.listfile:
@@ -360,21 +427,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="print the commands only")
     parser.add_argument("--skip-mapart", action="store_true", help="data packs only")
     parser.add_argument("--config", type=Path, default=CONFIG_PATH, help=argparse.SUPPRESS)
-    parser.add_argument(
-        "--tdb", type=Path, help="retail: TrinityCore's world dump (overrides [build.tdb])"
-    )
     args = parser.parse_args(argv)
     try:
         inputs = read_inputs(args.client, args.config)
     except BuildClientError as err:
         print(f"error: {err}", file=sys.stderr)
         return 2
-    if args.tdb:
-        inputs = dataclasses.replace(inputs, tdb=args.tdb)
-    art = None
-    if args.client == "forever":
-        book, art = book_args(inputs)
-        inputs = dataclasses.replace(inputs, extra=[*inputs.extra, *book])
+    if inputs.prefix_note:
+        print(f"warning: {inputs.prefix_note}", flush=True)
+    if inputs.probe_note:
+        print(f"warning: {inputs.probe_note}", flush=True)
+    book, art = book_args(inputs)
+    inputs = dataclasses.replace(inputs, extra=[*inputs.extra, *book])
     cmds = commands(inputs, args.out, skip_mapart=args.skip_mapart)
     if not any(cmd[3] == "mapart" for cmd in cmds) and not args.skip_mapart:
         print(
@@ -389,7 +453,7 @@ def main(argv: list[str] | None = None) -> int:
         if run.returncode:
             print(f"error: {cmd[3]} exited with {run.returncode}", file=sys.stderr)
             return run.returncode
-    if args.client == "forever" and not args.dry_run:
+    if not args.dry_run:
         import book_art
 
         pictures = book_art.install(art, args.out, front=book_art.FRONT)

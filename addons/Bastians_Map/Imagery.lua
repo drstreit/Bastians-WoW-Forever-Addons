@@ -83,7 +83,7 @@ function Imagery.Zones(continent)
     return cached
   end
   local list = {}
-  local root = B.Coords.ContinentMap(continent) -- 13 on retail, 1415 on Forever (R28.4)
+  local root = B.Coords.ContinentMap(continent) -- 1415 on Forever (R28.4)
   local function add(map, depth, mapType)
     local c, x1, y1, x2, y2 = worldRect(map)
     if c ~= continent then

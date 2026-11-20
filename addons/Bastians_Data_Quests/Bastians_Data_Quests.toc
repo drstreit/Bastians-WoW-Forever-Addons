@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Quests
 ## Title-koKR: Bastian's Data: 퀘스트
 ## Title-zhCN: Bastian's Data: 任务
@@ -22,7 +22,7 @@
 ## Notes-ptBR: Pacote de dados de missões gerado (carrega ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

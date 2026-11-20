@@ -12,6 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 CREATE_ITEM = 24  # SpellEffect.Effect: the spell makes an item (a recipe's product)
+APPLY_AURA = 6  # SpellEffect.Effect: the spell puts an aura on its target
+SUMMON = 28  # SpellEffect.Effect: the spell summons a creature (a companion)
+MOUNTED = 78  # SpellEffect.EffectAura: the caster rides; the mount's creature in EffectMiscValue
 
 
 @dataclass(frozen=True)
@@ -27,6 +30,8 @@ class ClientItem:
     buy: int | None
     stack: int | None
     starts_quest: int | None
+    # how many a merchant sells for `buy` (VendorStackCount): the price is for that stack
+    vendor_stack: int | None = None
 
 
 @dataclass(frozen=True)
@@ -110,6 +115,7 @@ def read_items(dumps: Path, client: str) -> dict[int, ClientItem]:
             buy=_int(r.get("BuyPrice")),
             stack=_pos(r.get("Stackable")),
             starts_quest=_pos(r.get("StartQuestID")),
+            vendor_stack=_pos(r.get("VendorStackCount")),
         )
     return out
 
@@ -166,6 +172,52 @@ def read_recipes(dumps: Path, client: str, skill_lines: set[int]) -> list[Client
     return [out[k] for k in sorted(out)]
 
 
+def read_summons(dumps: Path, client: str) -> dict[int, int]:
+    """{ spell: creature } of every spell that summons a companion (Effect 28) or puts its caster
+    on a mount (an aura 78), the creature in EffectMiscValue[0]; the lowest effect index wins.
+    Bastian's Book shows a mount's and a pet's model with it (book.md "Pictures", BK8; measured
+    16.11.2026 on the dump of 1.60.1.70707: the Brown Horse's 458 rides creature 284, the
+    Mechanical Squirrel's 4055 summons 2671)."""
+    best: dict[int, tuple[int, int]] = {}
+    for r in _rows(table_path(dumps, client, "SpellEffect")):
+        spell, misc = r.get("SpellID"), r.get("EffectMiscValue")
+        creature = misc[0] if isinstance(misc, list) and misc else None
+        if not (isinstance(spell, int) and _pos(creature)):
+            continue
+        effect = r.get("Effect")
+        if effect != SUMMON and not (effect == APPLY_AURA and r.get("EffectAura") == MOUNTED):
+            continue
+        index = _int(r.get("EffectIndex")) or 0
+        if spell not in best or index < best[spell][0]:
+            best[spell] = (index, creature)
+    return {spell: best[spell][1] for spell in sorted(best)}
+
+
+@dataclass(frozen=True)
+class ClientIds:
+    """The ids the client's own tables hold: its items (ItemSparse) and its spells (SpellName).
+    Bastian's Book removes a wonder whose item or spell the client does not have (book.md "What
+    is obtainable", E2). The client's Creature table is no such evidence: it holds 185 rows of
+    build 1.60.1.70938, the creatures come from the server (measured 17.11.2026)."""
+
+    items: frozenset[int]
+    spells: frozenset[int]
+
+
+def read_ids(dumps: Path, client: str) -> ClientIds | None:
+    """The client's item and spell ids; None when one of the two tables is not dumped (then
+    nothing is judged against them)."""
+
+    def ids(table: str) -> frozenset[int]:
+        rows = _rows(table_path(dumps, client, table))
+        return frozenset(r["ID"] for r in rows if isinstance(r.get("ID"), int))
+
+    items, spells = ids("ItemSparse"), ids("SpellName")
+    if not items or not spells:
+        return None
+    return ClientIds(items, spells)
+
+
 def read_quest_lines(dumps: Path, client: str) -> list[list[int]]:
     """Each quest line's quests in their order (QuestLineXQuest.OrderIndex)."""
     lines: dict[int, list[tuple[int, int]]] = {}
@@ -194,26 +246,43 @@ def read_quest_areas(dumps: Path, client: str) -> list[QuestArea]:
     return out
 
 
-def read_client_tables(dumps: Path, client: str, skill_lines: set[int]) -> ClientTables | None:
+def dump_name(dumps: Path, client: str, prefix: str | None) -> str:
+    """The file prefix to read: the build's dump (``f70938_ItemSparse.json``, the same prefix as
+    the map and travel tables) when it holds the item table, else the older ``<client>_`` files.
+    Until 15.11.2026 only the latter were read, and they stayed at the build they were first
+    dumped for (plan-data-quality.md, E1)."""
+    if prefix and table_path(dumps, prefix, "ItemSparse").is_file():
+        return prefix
+    return client
+
+
+def read_client_tables(
+    dumps: Path, client: str, skill_lines: set[int], prefix: str | None = None
+) -> ClientTables | None:
     """Everything above; None when the dumps folder has no item table for the client."""
-    if not table_path(dumps, client, "ItemSparse").is_file():
+    name = dump_name(dumps, client, prefix)
+    if not table_path(dumps, name, "ItemSparse").is_file():
         return None
     t = ClientTables(
-        items=read_items(dumps, client),
-        recipes=read_recipes(dumps, client, skill_lines),
-        quest_lines=read_quest_lines(dumps, client),
-        quest_areas=read_quest_areas(dumps, client),
+        items=read_items(dumps, name),
+        recipes=read_recipes(dumps, name, skill_lines),
+        quest_lines=read_quest_lines(dumps, name),
+        quest_areas=read_quest_areas(dumps, name),
     )
-    t.sources.append(f"client tables ({client})")
+    t.sources.append(f"client tables ({name})")
     return t
 
 
-def localized_names(dumps: Path, client: str) -> dict[str, dict[str, dict[int, dict]]]:
-    """{ locale: { "item": { id: { name } } } } from every ``<client>_ItemSparse.<locale>.json``."""
+def localized_names(
+    dumps: Path, client: str, prefix: str | None = None
+) -> dict[str, dict[str, dict[int, dict]]]:
+    """{ locale: { "item": { id: { name } } } } from every ``<name>_ItemSparse.<locale>.json``,
+    ``<name>`` as `dump_name` picks it."""
+    name = dump_name(dumps, client, prefix)
     out: dict[str, dict[str, dict[int, dict]]] = {}
-    for path in sorted(dumps.glob(f"{client}_ItemSparse.*.json")):
+    for path in sorted(dumps.glob(f"{name}_ItemSparse.*.json")):
         locale = path.name.split(".")[1]
-        names = read_names(dumps, client, "ItemSparse", locale)
+        names = read_names(dumps, name, "ItemSparse", locale)
         if names:
             out[locale] = {"item": {i: {"name": n} for i, n in names.items()}}
     return out

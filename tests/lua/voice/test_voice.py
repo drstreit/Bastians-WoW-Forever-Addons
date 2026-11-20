@@ -186,6 +186,42 @@ def test_lines_of_every_kind_play_through_spoken(wow: WowRuntime):
     assert errors(wow) == []
 
 
+def test_play_is_now_and_stop_starts_no_other_line(wow: WowRuntime):
+    """a green speaker took two clicks to play, and stopping a line
+    started another, "random" one. Spoken queues a line asked for behind the one speaking, and the
+    end of the head runs the backlog. Play and stop are one click each, and nothing else follows."""
+    boot(wow)
+    play = "Bastians:GetAction('voice.play')"
+    # Spoken's backlog: another quest speaking, a third waiting, and quest 176 waiting behind them
+    wow.execute(
+        """local q = Spoken.sources.quests
+        q:Enqueue({ key = 'other', questID = 33 })
+        q:Enqueue({ key = 'third', questID = 46 })
+        q:Enqueue({ key = 'ours', questID = 176 })"""
+    )
+    # waiting is not playing: the row offers play, not stop
+    assert wow.eval(f"{play}.active('quest:176')") is False
+    # one click: the backlog goes, the line speaks at once
+    run(wow, "quest:176")
+    q = queue(wow)
+    assert len(q) == 1 and q[0].questID == 176 and q[0].origin == "Bastians_Voice"
+    assert wow.eval(f"{play}.active('quest:176')") is True
+    assert wow.eval(f"{play}.active('quest:33')") is False
+    # one click: it stops, and no other line starts
+    run(wow, "quest:176")
+    assert queue(wow) == []
+    assert wow.eval(f"{play}.active('quest:176')") is False
+    # a line Spoken queued later than ours waits behind it; stopping ours ends that one too
+    run(wow, "zone:1429")
+    wow.execute("Spoken.sources.quests:Enqueue({ key = 'later', questID = 33 })")
+    run(wow, "zone:1429")
+    assert queue(wow) == []
+    # the pictures: a green play in a circle, a red stop while the line speaks
+    icon, active_icon = wow.eval(f"{play}.icon"), wow.eval(f"{play}.activeIcon")
+    assert icon.endswith("\\Tiles\\voice_play") and active_icon.endswith("\\Tiles\\voice_stop")
+    assert errors(wow) == []
+
+
 def test_a_finished_line_is_heard_and_hosts_hear_of_it(wow: WowRuntime):
     boot(wow)
     wow.execute(

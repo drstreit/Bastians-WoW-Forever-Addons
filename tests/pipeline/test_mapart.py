@@ -68,7 +68,7 @@ def test_tables_map_directories_to_continents_and_reject_unknown_maps(tmp_path):
     assert tile_tables(find_tile_lists(tmp_path), directories) == {
         530: {"directory": "Expansion01", "tiles": {tile_key(1, 1): 5}}
     }
-    assert build_tiles("retail", tmp_path, tmp_path / "out", maps_json=maps_json)[2] == {530: 1}
+    assert build_tiles("forever", tmp_path, tmp_path / "out", maps_json=maps_json)[2] == {530: 1}
     (tmp_path / "empty").mkdir()
     with pytest.raises(MapArtError, match=r"no \*_tiles.txt"):
         find_tile_lists(tmp_path / "empty")
@@ -109,11 +109,13 @@ def test_build_is_idempotent_and_the_cli_reports(tmp_path, capsys):
     assert path == tmp_path / "Bastians_Map" / "Generated" / "MinimapTiles.lua"
     assert not build_tiles("forever", FIXTURE, tmp_path)[1]
     assert not list(path.parent.glob("*.tmp"))
-    argv = ["mapart", "--client", "retail", "--tiles", str(FIXTURE), "--out", str(tmp_path)]
+    cli = tmp_path / "cli"
+    argv = ["mapart", "--client", "forever", "--tiles", str(FIXTURE), "--out", str(cli)]
     assert main(argv) == 0
     out = capsys.readouterr().out
     assert "continent 0: 6 tiles" in out and "written:" in out
-    assert 'client = "retail"' in path.read_text(encoding="utf-8")
+    written = cli / "Bastians_Map" / "Generated" / "MinimapTiles.lua"
+    assert 'client = "forever"' in written.read_text(encoding="utf-8")
     assert main(["mapart", "--client", "forever", "--tiles", str(tmp_path / "nope")]) == 2
     assert "error:" in capsys.readouterr().err
 

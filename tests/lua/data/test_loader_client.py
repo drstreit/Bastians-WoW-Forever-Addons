@@ -1,5 +1,6 @@
-"""The Data loader and the pack's client (data.md, ADR 0010): a pack built for the other client
-loads but is flagged. The fixture packs are built for forever, so the retail run is the foreign case."""
+"""The Data loader and the pack's client (data.md, ADR 0010): a pack built for another client
+loads but is flagged. The fixture packs are built for forever; ~~the retail run is the foreign
+case~~ a registered pack of an old retail build is (Forever alone since 15.11.2026, ADR 0037)."""
 
 from harness import WowRuntime
 
@@ -12,7 +13,7 @@ def boot(wow: WowRuntime) -> WowRuntime:
     return wow
 
 
-def test_pack_from_the_other_client_loads_but_is_flagged(wow: WowRuntime):
+def test_pack_from_another_client_loads_but_is_flagged(wow: WowRuntime):
     boot(wow)
     meta = wow.eval("Bastians:GetService('data'):Meta()")
     assert meta.client == wow.client
@@ -20,16 +21,16 @@ def test_pack_from_the_other_client_loads_but_is_flagged(wow: WowRuntime):
     foreign = dict(meta.foreign)
     note = wow.eval("Bastians:GetModule('Data').options[1].text()")
     warns = [e.text for e in wow.eval("Bastians:GetLog()").values() if e.level == "warn"]
-    if wow.client == "forever":
-        assert foreign == {}
-        assert note == "Packs are built for this client."
-        assert not any("was built for" in w for w in warns)
-    else:
-        assert foreign["world"] == "forever" and foreign["quests"] == "forever"
-        assert note.startswith(
-            "Packs built for another client: items (forever), quests (forever), world (forever)."
-        )
-        assert any(w == "pack world was built for forever, this client is retail" for w in warns)
+    assert foreign == {}
+    assert note == "Packs are built for this client."
+    assert not any("was built for" in w for w in warns)
+    # a pack of another client: the retail packs were built until 15.11.2026
+    wow.execute('Bastians.Data.RegisterPack("xold", { client = "retail", schema = {} })')
+    assert dict(wow.eval("Bastians:GetService('data'):Meta()").foreign) == {"xold": "retail"}
+    note = wow.eval("Bastians:GetModule('Data').options[1].text()")
+    assert note.startswith("Packs built for another client: xold (retail).")
+    warns = [e.text for e in wow.eval("Bastians:GetLog()").values() if e.level == "warn"]
+    assert any(w == "pack xold was built for retail, this client is forever" for w in warns)
     # the data is there either way: the loader never drops a pack over its client
     assert wow.eval("Bastians:GetService('data'):Get('npc', 448).name") == "Hogger"
 

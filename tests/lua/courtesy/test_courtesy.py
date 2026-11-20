@@ -418,8 +418,7 @@ def test_decline_of_a_trade_whispers_the_whole_name(wow: WowRuntime):
     )
     assert wow.eval(f"{C}.Pending().who") == "Zug"
     click(wow, 3)
-    sep = " " if wow.eval("Bastians.Client") == "forever" else "-"
-    assert wow.eval("Mock.sentChat[1].target") == f"Zug{sep}Stonefist"
+    assert wow.eval("Mock.sentChat[1].target") == "Zug Stonefist"
     assert errors(wow) == []
 
 
@@ -680,8 +679,7 @@ def test_the_person_gets_a_whisper_by_the_whole_name(wow: WowRuntime):
         end"""
     )
     buff(wow, "nameplate3", "Thalendra")
-    sep = " " if wow.eval("Bastians.Client") == "forever" else "-"
-    whole = f"Thalendra{sep}Moonbrook"
+    whole = "Thalendra Moonbrook"
     assert wow.eval(f"{C}.Pending().full") == whole
     assert wow.eval(f"{R}.Item(1).secure") is None  # a whisper needs no secure button
     assert wow.eval(f"{R}.Item(1).tip").startswith("/w Thalendra ")
@@ -699,8 +697,7 @@ def test_a_guid_gives_the_whole_name_or_the_line_is_said_aloud(wow: WowRuntime):
     REALM' is currently playing". The GUID's seventh value is the realm, never a surname; Forever's
     sixth holds first name and surname, and its whisper takes no realm."""
     boot(wow)
-    forever = wow.eval("Bastians.Client") == "forever"
-    zara = "Zara Moonbrook" if forever else "Zara"  # the sixth value, as each client gives it
+    zara = "Zara Moonbrook"  # the sixth value, as Forever gives it
     wow.execute(
         f"""Mock.players = {{
           ['Player-2-Zara'] = {{ name = '{zara}', realm = 'OtherRealm', class = 'Mage', file = 'MAGE' }},
@@ -708,7 +705,7 @@ def test_a_guid_gives_the_whole_name_or_the_line_is_said_aloud(wow: WowRuntime):
           ['Player-2-Odo'] = {{ name = 'Odo', realm = 'OtherRealm', class = 'Mage', file = 'MAGE' }},
         }}"""
     )
-    whole = "Zara Moonbrook" if forever else "Zara-OtherRealm"
+    whole = "Zara Moonbrook"
     cast(wow, "name = 'Arcane Intellect', spellId = 11, casterGUID = 'Player-2-Zara'")
     assert wow.eval(f"{C}.Pending().full") == whole
     assert wow.eval(f"{C}.Pending().who") == "Zara"  # the first name, as a unit gives it
@@ -717,20 +714,18 @@ def test_a_guid_gives_the_whole_name_or_the_line_is_said_aloud(wow: WowRuntime):
     assert wow.eval("Mock.sentChat[1].target") == whole
     # no surname: on Forever a whisper to the first name alone finds nobody (forever-api.md)
     cast(wow, "name = 'Thorns', spellId = 13, casterGUID = 'Player-1-Ulf'")
-    assert wow.eval(f"{C}.Pending().full") == (None if forever else "Ulf")
-    assert (wow.eval(f"{R}.Item(1).secure") is None) is (not forever)
+    assert wow.eval(f"{C}.Pending().full") is None
+    assert wow.eval(f"{R}.Item(1).secure") is not None
     wow.execute(f"{C}.Hide()")
     # a first name and a realm: never "First Realm" as a whole name
     cast(wow, "name = 'Renew', spellId = 17, casterGUID = 'Player-2-Odo'")
-    assert wow.eval(f"{C}.Pending().full") == (None if forever else "Odo-OtherRealm")
+    assert wow.eval(f"{C}.Pending().full") is None
     assert errors(wow) == []
 
 
 def test_a_unit_whose_first_value_holds_both_names_gets_no_realm(wow: WowRuntime):
     """Blizzard's NameUtil.GetUnitFirstName (1.60.1.70862): "name can be both name + surname"."""
     boot(wow)
-    if wow.eval("Bastians.Client") != "forever":
-        return  # retail's names hold no space
     wow.execute(
         """local real = UnitName
         UnitName = function(u)

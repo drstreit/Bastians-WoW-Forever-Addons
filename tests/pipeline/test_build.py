@@ -211,8 +211,8 @@ def test_cli_builds_checks_and_reports_errors(tmp_path, capsys):
         == 0
     )
     assert not (tmp_path / "x").exists()
-    assert (
-        main(["data", "--client", "retail", "--fixture", str(FIXTURE), "--out", str(tmp_path)]) == 2
-    )
-    assert "is for forever" in capsys.readouterr().err
+    # ~~a fixture of another client is refused~~ the CLI knows no other client (15.11.2026)
+    with pytest.raises(SystemExit):
+        main(["data", "--client", "retail", "--fixture", str(FIXTURE), "--out", str(tmp_path)])
+    assert "invalid choice: 'retail'" in capsys.readouterr().err
     assert main(["data", "--client", "forever", "--out", str(tmp_path)]) == 2

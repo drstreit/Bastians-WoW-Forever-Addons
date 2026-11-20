@@ -112,6 +112,5 @@ def test_the_apps_offer_their_sets(wow: WowRuntime):
     wow.advance(1.5)
     names = set(wow.eval("BB.created").values())
     assert "Bastian's: quest items" in names
-    if wow.made_for("Bastians_Gold"):  # no Gold on retail (ADR 0022)
-        assert {"Bastian's: sell on AH", "Bastian's: vendor"} <= names
+    assert {"Bastian's: sell on AH", "Bastian's: vendor"} <= names
     assert wow.errors == []

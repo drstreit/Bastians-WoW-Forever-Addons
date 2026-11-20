@@ -21,6 +21,32 @@ sheetTileText = "#f3e6c8"
 badgeInk = "#050505"       # the words on a light badge (a tile's level, ADR 0056)
 badgeInkLight = "#ffffff"  # the words on a dark badge
 sheetXp = "#9a35c8"
+# Bastian's Book: its cards are paper in
+# every theme, as the quest sheet; the words on them the paper's ink
+folioPaper = "#e6d6b3"
+folioPaperEdge = "#b99e6e"
+folioInk = "#36281b"
+folioInkSoft = "#6c5539"
+folioFit = "#d8a44166"        # a level chip that fits you: the gold at 40 %
+folioFitEdge = "#b8862c"
+folioGold = "#d8a441"         # a ribbon or a word in the book's gold
+folioSeal = "#a3332b"         # the new ribbon, the seal
+folioSealText = "#f3e5c4"     # the words on the seal
+folioShade = "#090705f0"      # the hero's words fade into this
+folioShadeText = "#eadfca"    # words on the shade
+folioShadow = "#00000073"     # the soft shadow under a card
+# the book's dark table (ADR 0081, docs/addons/book-look.md section 3; "background
+# color in wow schema should be same as artifact", D2 "WoW look only"): the same in every theme,
+# painted by the book where the look is the game's; the other looks keep their own ground
+folioTable = "#120e0b"        # the shelf's ground under the tiles
+folioBand = "#1a1410"         # the filter band
+folioBar = "#1a140f"          # the bar's foot
+folioBarTop = "#2a2119"       # the bar's top: the gradient's other end
+folioRule = "#4a3b2c"         # the rules under the bar and the band, a quiet chip's edge
+folioText = "#eadfca"         # words on the dark table
+folioMuted = "#a9987d"        # labels and counts on it
+folioGoldInk = "#1b140c"      # words on a chosen chip, on the Atlas button
+folioHover = "#2a2017"        # a quiet chip's plate under the mouse
 press = "#ffffff33"
 faceHover = "#333333"
 track = "#ffffff26"
@@ -181,6 +207,7 @@ radiusSmall = 2
 action = 26
 actionRow = 22
 pill = 26
+chip = 22
 tab = 26
 row = 28
 tile = 18

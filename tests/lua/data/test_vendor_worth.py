@@ -23,7 +23,6 @@ def test_an_item_is_worth_its_vendor_price_without_gold(wow: WowRuntime):
 
 
 def test_gold_says_more_where_it_runs(wow: WowRuntime):
-    wow.needs(GOLD)
     wow.execute('function GetRealmName() return "Classic Beta PvE" end')  # the fixture market
     wow.start(CORE, DATA, BROWSER, GOLD)
     wow.run_frames(10)

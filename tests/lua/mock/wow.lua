@@ -1636,12 +1636,12 @@ function DeclineGroup()
 end
 
 -- ---------------------------------------------------------------------------------------------
--- Client facts (verified: GetBuildInfo on Forever beta 1.60.1.70450 interface 16001; retail assumed 12.1.5)
+-- Client facts (verified: GetBuildInfo on Forever beta 1.60.1.70450 interface 16001). ~~retail assumed
+-- 12.1.5~~ The retail client is out of the tests since 15.11.2026 (ADR 0037).
 -- ---------------------------------------------------------------------------------------------
 
 local builds = {
   forever = { "1.60.1", "70450", "Oct 16 2026", 16001 },
-  retail = { "12.1.5", "70448", "Oct 16 2026", 120105 },
 }
 function GetBuildInfo()
   return unpack(builds[client])
@@ -1656,7 +1656,7 @@ function GetNormalizedRealmName()
   return "MockRealm"
 end
 function GetCurrentRegion()
-  return client == "forever" and 110 or 3 -- verified 110 on the Forever beta (AHSync §20.1); retail EU = 3
+  return 110 -- verified 110 on the Forever beta (AHSync §20.1)
 end
 function UnitName(unit)
   if unit == "player" then
@@ -2112,43 +2112,22 @@ C_Reputation.GetFactionDataByID = function(id)
   end
   return { factionID = id, name = r.name, reaction = r.reaction, currentStanding = r.currentStanding }
 end
--- Professions: Forever's C_SkillInfo skill lines (documented Forever-only); retail's trade skill
--- lines. Test data: Mock.professions = { [name] = rank }.
+-- Professions: Forever's C_SkillInfo skill lines (documented Forever-only). Test data:
+-- Mock.professions = { [name] = rank }.
 Mock.professions = {}
-if client == "forever" then
-  C_SkillInfo = C_SkillInfo or {}
-  local function lines()
-    local out = { { skillName = "Professions", isHeader = true } }
-    for name, rank in pairs(Mock.professions) do
-      out[#out + 1] = { skillName = name, skillRank = rank, isHeader = false }
-    end
-    return out
+C_SkillInfo = C_SkillInfo or {}
+local function skillLines()
+  local out = { { skillName = "Professions", isHeader = true } }
+  for name, rank in pairs(Mock.professions) do
+    out[#out + 1] = { skillName = name, skillRank = rank, isHeader = false }
   end
-  C_SkillInfo.GetNumSkillLines = function()
-    return #lines()
-  end
-  C_SkillInfo.GetSkillLineInfo = function(i)
-    return lines()[i]
-  end
-else
-  C_TradeSkillUI = C_TradeSkillUI or {}
-  C_TradeSkillUI.GetAllProfessionTradeSkillLines = function()
-    local ids = {}
-    for _ in pairs(Mock.professions) do
-      ids[#ids + 1] = 100 + #ids
-    end
-    return ids
-  end
-  C_TradeSkillUI.GetProfessionInfoBySkillLineID = function(id)
-    local i = id - 100
-    local names = {}
-    for name in pairs(Mock.professions) do
-      names[#names + 1] = name
-    end
-    table.sort(names)
-    local name = names[i]
-    return name and { professionName = name, skillLevel = Mock.professions[name], maxSkillLevel = 300 } or nil
-  end
+  return out
+end
+C_SkillInfo.GetNumSkillLines = function()
+  return #skillLines()
+end
+C_SkillInfo.GetSkillLineInfo = function(i)
+  return skillLines()[i]
 end
 Mock.groupSize = 0
 function GetNumGroupMembers()
@@ -3676,8 +3655,9 @@ end
 
 -- ---------------------------------------------------------------------------------------------
 -- Trainer. Verified on Forever (forever-api.md): GetTrainerServiceInfo -> name, type, icon; the type
--- filter wants a boolean. The retail/Classic order name, subtext, type, expanded and a numeric filter
--- are assumed. C_Trainer exists only in the forever docs.
+-- filter wants a boolean. ~~The retail/Classic order name, subtext, type, expanded and a numeric
+-- filter are assumed~~ (the retail mock went 15.11.2026, ADR 0037). C_Trainer exists only in the
+-- forever docs.
 -- ---------------------------------------------------------------------------------------------
 
 -- Test data: services with kind available | unavailable | used | header (headers may be expanded =
@@ -3715,10 +3695,7 @@ function GetTrainerServiceInfo(i)
   if not s then
     return nil
   end
-  if client == "forever" then
-    return s.name, s.kind, s.icon
-  end
-  return s.name, s.subtext, s.kind, s.expanded ~= false
+  return s.name, s.kind, s.icon
 end
 function GetTrainerServiceCost(i)
   local s = visibleTrainer()[i]
@@ -3746,7 +3723,7 @@ function GetTrainerServiceTypeFilter(kind)
   return Mock.trainerFilters[kind]
 end
 function SetTrainerServiceTypeFilter(kind, on)
-  if client == "forever" and type(on) ~= "boolean" then
+  if type(on) ~= "boolean" then
     error('Usage: SetTrainerServiceTypeFilter("type", on/off): Missing on/off parameter')
   end
   Mock.trainerFilterCalls[#Mock.trainerFilterCalls + 1] = { kind = kind, on = on }
@@ -3821,17 +3798,15 @@ C_AuctionHouse.GetReplicateItemLink = function(i)
   end
   return l.link or ("|cffffffff|Hitem:" .. l.itemID .. "::::::::60|h[x]|h|r")
 end
-if client == "forever" then
-  C_Trainer = {
-    GetTrainerType = function()
-      return 0
-    end,
-    GetCategorizeTrainerUI = function()
-      return false
-    end,
-    SetCategorizeTrainerUI = function() end,
-  }
-end
+C_Trainer = {
+  GetTrainerType = function()
+    return 0
+  end,
+  GetCategorizeTrainerUI = function()
+    return false
+  end,
+  SetCategorizeTrainerUI = function() end,
+}
 
 -- ---------------------------------------------------------------------------------------------
 -- Generated stubs: every documented function on this client that is not mocked above raises

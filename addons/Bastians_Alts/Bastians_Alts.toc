@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Alts
 ## IconTexture: Interface\AddOns\Bastians_Alts\Icon
 ## Notes: Your characters' bags, bank, mail and equipment, searchable from any of them; ask one for items by mail.
@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Browser

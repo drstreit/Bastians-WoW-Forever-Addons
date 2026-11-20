@@ -1,8 +1,9 @@
 """The book's pictures (content/strategies/art/README.md): AHSync makes them with the image model
 and hands them over in its export (`art/<page id>.jpg`); this turns each one into what ships:
 
-- the game's texture: cut to 2:1 from the middle, 512 x 256, BLP2 with DXT1 and mipmaps (about
-  85 KB), in `<packs>/Bastians_Data_Strategies/Generated/Art/<page id>.blp`;
+- the game's texture: cut to 2:1 from the middle, 1024 x 512 (~~512 x 256~~ until 16.11.2026: the
+  front table's hero is a window wide), BLP2 with DXT1 and mipmaps (about 350 KB), in
+  `<packs>/Bastians_Data_Strategies/Generated/Art/<page id>.blp`;
 - the website's picture: the same cut, 1024 x 512 JPEG (tools/diary_site.py).
 
 Usage: python tools/book_art.py <art folder> [--packs build/data/packs]
@@ -35,7 +36,7 @@ FRONT_IDS = frozenset(
 WHOLE = {"world": (2048, 1024)}
 ART_DIR = Path("Generated") / "Art"
 SOURCES = (".jpg", ".png")
-GAME_SIZE = (512, 256)
+GAME_SIZE = (1024, 512)  # ~~(512, 256)~~ until 16.11.2026 (ADR 0024, point 4)
 WEB_SIZE = (1024, 512)
 JPEG_QUALITY = 84
 TRIM = 0.04  # taken off each edge before the 2:1 cut
@@ -169,7 +170,7 @@ def blp_dxt1(image) -> bytes:
 
 
 def game_texture(path: Path) -> bytes:
-    """The game's texture: 512 x 256 BLP2 (WHOLE: its own size, uncut), DXT1 with mipmaps."""
+    """The game's texture: 1024 x 512 BLP2 (WHOLE: its own size, uncut), DXT1 with mipmaps."""
     from PIL import Image
 
     if path.stem in WHOLE:

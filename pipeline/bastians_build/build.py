@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from bastians_build import links, steps
+from bastians_build import links, quality, steps
 from bastians_build.config import BuildConfig, PackConfig
 from bastians_build.emit import (
     HEADER,
@@ -50,6 +50,7 @@ class BuildResult:
     skipped: list[str] = field(default_factory=list)  # optional packs without records
     ground_truth: list[Check] | None = None  # groundtruth.compare, when a CSV was given
     probe_truth: ProbeTruth | None = None  # probetruth.check_probe, when a probe dump was given
+    quality_path: Path | None = None  # quality-<client>.json, the ledger (L1)
     steps: steps.Report | None = None  # the quests' steps as the build resolved them
     report: str = ""
     report_path: Path | None = None
@@ -63,7 +64,8 @@ class BuildResult:
 
 
 # ForeverDB's licence (GPL-3.0 section 7(b)): the line that starts "-- Data: ForeverDB.net
-# (https://foreverdb.net)" stays with its data. The market's and the book's packs hold none of it.
+# (https://foreverdb.net)" stays with its data. The market's pack holds none of it; the book's
+# holds the wonders since 16.11.2026 (ADR 0080).
 FDB_CREDIT = "Data: ForeverDB.net (https://foreverdb.net), among other sources: see the About page"
 FDB_PACKS = frozenset({"world", "quests", "items", "text"})
 
@@ -73,7 +75,8 @@ def pack_comment(name: str, world: World, localized: bool = False) -> str:
     data. The first line stays the pack's: tools/release.py reads the client from it."""
     comment = f"pack {name} for {world.client}, build {world.build}"
     has_fdb = any(source.startswith("ForeverDB") for source in world.sources)
-    if has_fdb and (name in FDB_PACKS or localized):
+    wonders = name == "book" and bool(world.records.get("wonder"))
+    if (has_fdb and (name in FDB_PACKS or localized)) or wonders:
         comment += f"\n-- {FDB_CREDIT}"
     return comment
 
@@ -194,6 +197,10 @@ def build(
             folder / f"links-unplaced-{client}.tsv",
             steps.listing(result.steps.open, reasons=True),
         )
+        # the quality ledger (plan-data-quality.md L1): what the edition keeps and the watch reads
+        ledger = quality.ledger(world, result.probe_truth)
+        result.quality_path = folder / f"quality-{client}.json"
+        write_text(result.quality_path, json.dumps(ledger, indent=1, sort_keys=True) + "\n")
     return result
 
 
@@ -347,6 +354,7 @@ def render_report(result: BuildResult) -> str:
         lines += render_section(result.ground_truth)
     if result.probe_truth is not None:
         lines += render_probe_section(result.probe_truth)
+    lines += quality.render(quality.ledger(world, result.probe_truth))
     lines += ["## Dropped rows", ""]
     if world.dropped:
         by_reason: dict[str, list] = {}

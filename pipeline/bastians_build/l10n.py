@@ -2,11 +2,11 @@
 names and texts of the records our packs carry, as `<type>_<locale>` records for the packs
 `text_<locale>`. Forever: QuestieDB's l10n lookups give the names, a quest's title and objectives;
 CMaNGOS' quest locales (German, Simplified Chinese) add the details, offer and progress texts and
-win for the objectives, which then match the English text pack's (both CMaNGOS). Retail: TDB's
-locale tables give the creatures, objects and quests in every language. Forever's languages also
-take TDB's long quest texts where its English is ours (TDB_TEXT_LOCALES; they fill only what
-QuestieDB and CMaNGOS lack). Both: the client's own tables in every installed text language name
-the items and win over the others (ADR 0035)."""
+win for the objectives, which then match the English text pack's (both CMaNGOS). ~~Retail: TDB's
+locale tables give the creatures, objects and quests in every language~~ (out 15.11.2026, ADR
+0037). Forever's languages also take TDB's long quest texts where its English is ours
+(TDB_TEXT_LOCALES; they fill only what QuestieDB and CMaNGOS lack). The client's own tables in
+every installed text language name the items and win over the others (ADR 0035)."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from bastians_build.model import World
 from bastians_build.sources.cmangos_locales import read_quest_texts
 from bastians_build.sources.questiedb_l10n import LOCALES, read_locale, source_commit
-from bastians_build.sources.tdb_locales import LATIN1_LOCALES, read_locales, to_latin1
+from bastians_build.sources.tdb_locales import LATIN1_LOCALES, to_latin1
 from bastians_build.sources.tdb_locales import read_quest_texts as read_tdb_texts
 
 # the languages that take TDB's long quest texts on Forever (the Asian ones,
@@ -45,14 +45,12 @@ def add_l10n(
     world: World,
     root: Path | None,
     cmangos: Path | None = None,
-    tdb: Path | None = None,
     client_names: dict[str, dict[str, dict[int, dict]]] | None = None,
     tdb_texts: Path | None = None,
 ) -> dict[str, int]:
     """Adds every locale that has data; returns the records added per locale."""
     added: dict[str, int] = {}
     used_cmangos = False
-    retail = read_locales(tdb, LOCALES) if tdb else {}
     english = world.records.get("questText", {})
     long_texts = read_tdb_texts(tdb_texts, TDB_TEXT_LOCALES, english) if tdb_texts else {}
     for locale in LOCALES:
@@ -63,8 +61,6 @@ def add_l10n(
         if texts:
             used_cmangos = True
             _merge(rows, {"quest": texts})
-        if retail.get(locale):
-            _merge(rows, retail[locale])
         quests = rows.setdefault("quest", {})
         for quest_id, fields in (long_texts.get(locale) or {}).items():
             quests[quest_id] = {**fields, **quests.get(quest_id, {})}  # only what the others lack
@@ -89,8 +85,6 @@ def add_l10n(
         world.sources.append(f"QuestieDB l10n {commit[:12]}" if commit else "QuestieDB l10n")
     if added and used_cmangos:
         world.sources.append("CMaNGOS quest locales")
-    if added and retail:
-        world.sources.append("TDB locales")
     if added and long_texts:
         world.sources.append(f"TDB quest texts ({', '.join(sorted(long_texts))})")
     if added and client_names:

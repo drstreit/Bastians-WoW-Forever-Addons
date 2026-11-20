@@ -246,7 +246,6 @@ def test_every_app_publishes_its_feed(wow: WowRuntime):
 
 
 def test_the_gold_feed_follows_the_money(wow: WowRuntime):
-    wow.needs("Bastians_Gold")
     wow.start("Bastians_Core", "Bastians_Data", "Bastians_Gold")
     wow.run_frames(2)
     wow.execute("Mock.money = 62345")  # the day's count starts at login with 0 copper

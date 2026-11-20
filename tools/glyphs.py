@@ -595,6 +595,15 @@ def _stop() -> Shape:  # a square
     return box(14, 14, 50, 50, 4)
 
 
+def _voice_play() -> Shape:  # a voice line to play: on a round tile,
+    # nudged right of the centre so the triangle looks centred in its circle
+    return polygon([(22, 12), (54, 32), (22, 52)])
+
+
+def _voice_stop() -> Shape:  # the voice line speaking, a click stops it: a square in the circle
+    return box(16, 16, 48, 48, 3)
+
+
 def _replay() -> Shape:  # a bar and a triangle to the left: back to the start
     return union(box(11, 11, 19, 53, 2), polygon([(53, 10), (22, 32), (53, 54)]))
 
@@ -1076,6 +1085,8 @@ GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "pause": (_pause, "pause (the Orbiter's hub)"),
     "stop": (_stop, "stop (the Orbiter's hub)"),
     "replay": (_replay, "back to the start (the Orbiter's hub)"),
+    "voice_play": (_voice_play, "a voice line to play, on a round green tile (17.11.2026)"),
+    "voice_stop": (_voice_stop, "the voice line speaking, a click stops it, round and red"),
     "orbit": (_orbit, "Bastian's Orbiter (its icon and minimap button)"),
     # the action pictograms of the widget set (ADR 0046, 01.11.2026)
     "bookmark": (_bookmark, "bookmark a page"),
@@ -1147,6 +1158,9 @@ GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
 
 TILE_SCALE = 0.66  # the symbol's size on the tile
 TILE_EDGE = 3.0  # pixels of the bright edge
+# the kinds on a round tile instead of the rounded square: the voice line's play and stop
+#
+ROUND_TILES = frozenset({"voice_play", "voice_stop"})
 
 # category colours (0..1), close to the addon icons: quests gold, map green, route blue, ...
 _GOLD, _AMBER = (0.93, 0.72, 0.18), (0.96, 0.55, 0.20)
@@ -1190,6 +1204,8 @@ TILE_COLOR: dict[str, tuple[float, float, float]] = {
     "pause": _TEAL,
     "stop": _TEAL,
     "replay": _TEAL,
+    "voice_play": _GREEN,
+    "voice_stop": _RED,
     "orbit": _PURPLE,
     # the app marks: the tile colours of the approved icon sheet (01.11.2026)
     "app_suite": _TEAL,
@@ -1219,11 +1235,19 @@ def tile(kind: str) -> bytes:
     symbol = make()
     r, g, b = TILE_COLOR.get(kind, _GREY)
     s = TILE_SCALE
-    outer = box(2, 2, SIZE - 2, SIZE - 2, 12)
-    inner = box(
-        2 + TILE_EDGE, 2 + TILE_EDGE, SIZE - 2 - TILE_EDGE, SIZE - 2 - TILE_EDGE, 12 - TILE_EDGE
-    )
     centre = SIZE / 2
+    if kind in ROUND_TILES:
+        outer = circle(centre, centre, centre - 2)
+        inner = circle(centre, centre, centre - 2 - TILE_EDGE)
+    else:
+        outer = box(2, 2, SIZE - 2, SIZE - 2, 12)
+        inner = box(
+            2 + TILE_EDGE,
+            2 + TILE_EDGE,
+            SIZE - 2 - TILE_EDGE,
+            SIZE - 2 - TILE_EDGE,
+            12 - TILE_EDGE,
+        )
 
     def sym(x: float, y: float) -> float:
         return symbol(centre + (x - centre) / s, centre + (y - centre) / s) * s

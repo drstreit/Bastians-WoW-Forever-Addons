@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Navigation
 ## Notes: Generated routing graph for Bastian's Route (loads at startup).
 ## Author: Bastian

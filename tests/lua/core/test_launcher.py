@@ -19,8 +19,7 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
     wow.start(*APPS)
     wow.run_frames(5)
     assert wow.eval("BastiansMinimapButton ~= nil") is True  # the suite's own stays
-    gold = wow.made_for("Bastians_Gold")  # no Gold on retail
-    names = ("Browser", *(["Gold"] if gold else []), "Map", "Quests")
+    names = ("Browser", "Gold", "Map", "Quests")
     for name in names:
         assert (
             wow.eval(
@@ -31,9 +30,9 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
     # each at its own place around the minimap
     angles = {wow.eval(f"{LAUNCHER}.AppSettings('{n}').angle") for n in names}
     assert len(angles) == len(names)
-    if gold:  # a click opens the app's window
-        wow.execute("BastiansMinimapButtonGold:Click('LeftButton')")
-        assert wow.eval("BastiansGoldFrame and BastiansGoldFrame:IsShown()") is True
+    # a click opens the app's window
+    wow.execute("BastiansMinimapButtonGold:Click('LeftButton')")
+    assert wow.eval("BastiansGoldFrame and BastiansGoldFrame:IsShown()") is True
     # the options window has a button of its own, toggled on the General page
     assert wow.eval("BastiansMinimapButtonOptions:IsShown()") is True
     wow.execute("BastiansMinimapButtonOptions:Click('LeftButton')")
@@ -50,7 +49,7 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
         for b in wow.eval("BastiansLauncherMenu.items").values()
         if b.IsShown(b)
     ]
-    assert "Map" in labels and ("Gold" in labels) is gold and labels[-1] == "Settings"
+    assert "Map" in labels and "Gold" in labels and labels[-1] == "Settings"
     # the switch on the app's settings page hides it, and the choice is kept
     wow.execute(f"{LAUNCHER}.SetAppButton('Map', false)")
     assert wow.eval("BastiansMinimapButtonMap:IsShown()") is False
@@ -58,9 +57,8 @@ def test_every_app_with_a_window_has_its_own_minimap_button(wow: WowRuntime):
     wow.execute(f"{LAUNCHER}.SetAppButton('Map', true)")
     assert wow.eval("BastiansMinimapButtonMap:IsShown()") is True
     # an app switched off hides its button
-    if gold:
-        wow.execute("Bastians:GetModule('Gold'):Disable()")
-        assert wow.eval("BastiansMinimapButtonGold:IsShown()") is False
+    wow.execute("Bastians:GetModule('Gold'):Disable()")
+    assert wow.eval("BastiansMinimapButtonGold:IsShown()") is False
     wow.execute("Bastians.UI.Hub.Open('Map')")
     texts = [
         w.label.GetText(w.label)
@@ -78,10 +76,7 @@ def test_a_second_click_closes_and_a_switched_off_app_opens_its_page(wow: WowRun
     app's button opens its page, where its Enabled switch is; the welcome has a button of its own
     ("I miss the intro page with wanderer and scholar")."""
     apps = ["Bastians_Core", "Bastians_Data", "Bastians_Browser", "Bastians_Gestures"]
-    apps += ["Bastians_Chat"]
-    camp = wow.made_for("Bastians_Campfire")
-    if camp:
-        apps.append("Bastians_Campfire")
+    apps += ["Bastians_Chat", "Bastians_Campfire"]
     wow.start(*apps)
     wow.run_frames(5)
     views = "Bastians:GetService('views')"
@@ -99,11 +94,11 @@ def test_a_second_click_closes_and_a_switched_off_app_opens_its_page(wow: WowRun
     assert wow.eval("Bastians.UI.Hub.Shows('Gestures')") is True
     wow.execute(f"{obj}.OnClick(nil, 'LeftButton')")
     assert wow.eval("BastiansHubFrame:IsShown()") is False
-    if camp:  # the planner in the Browser, closed by a second click
-        wow.execute("Bastians:FeedObject('Campfire').OnClick(nil, 'LeftButton')")
-        assert wow.eval(f"{views}:IsShown('campfire.planner')") is True
-        wow.execute("Bastians:FeedObject('Campfire').OnClick(nil, 'LeftButton')")
-        assert wow.eval(f"{views}:IsShown()") is False
+    # the Campfire: the planner in the Browser, closed by a second click
+    wow.execute("Bastians:FeedObject('Campfire').OnClick(nil, 'LeftButton')")
+    assert wow.eval(f"{views}:IsShown('campfire.planner')") is True
+    wow.execute("Bastians:FeedObject('Campfire').OnClick(nil, 'LeftButton')")
+    assert wow.eval(f"{views}:IsShown()") is False
     # Chat ships off: its button opens Chat's page with the switch; the Messenger's own button is
     # gone (plan-chat-one-window.md Q5, V30)
     assert wow.eval("Bastians:GetModule('Chat'):IsEnabled()") is False

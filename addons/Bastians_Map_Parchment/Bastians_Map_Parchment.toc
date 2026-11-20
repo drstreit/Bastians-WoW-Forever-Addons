@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Map: Parchment
 ## Title-koKR: Bastian's Map: 양피지
 ## Title-zhCN: Bastian's Map: 羊皮纸
@@ -22,7 +22,7 @@
 ## Notes-ptBR: O estilo de mapa em pergaminho do Bastian, em tinta, cada árvore e cada casa (opcional, cerca de 100 MB).
 ## Group: Bastians_Map
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Map
 

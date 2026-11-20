@@ -85,18 +85,14 @@ end
 -- one, a whisper went to "First Surname REALM" and found nobody. Forever's
 -- names are unique in the region and its own whisper takes "First Surname" without a realm
 -- (UnitPopupSharedUtil.GetFullPlayerName), so there the sixth value when it holds both names, else
--- nil (the first name alone finds nobody). Elsewhere "Name-Realm" or the name.
+-- nil (the first name alone finds nobody). ~~Elsewhere "Name-Realm" or the name~~ (retail,
+-- out since 15.11.2026, ADR 0037).
 function Compat.WholeNameOfGUID(guid)
-  local name, realm = select(6, Compat.Call("GetPlayerInfoByGUID", guid))
-  name, realm = Bastians.Compat.Plain(name), Bastians.Compat.Plain(realm)
+  local name = Bastians.Compat.Plain((select(6, Compat.Call("GetPlayerInfoByGUID", guid))))
   if type(name) ~= "string" or name == "" then
     return nil
-  elseif Bastians.Client == "forever" then
-    return string.find(name, " ", 1, true) and name or nil
-  elseif type(realm) ~= "string" or realm == "" then
-    return name
   end
-  return name .. "-" .. realm
+  return string.find(name, " ", 1, true) and name or nil
 end
 
 -- The weather where the player is: "clear", "rain", "snow", "sandstorm" or "other", and its

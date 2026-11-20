@@ -24,7 +24,6 @@ NEARBY, RESTING, STAMINA, MANA = 1283391, 1229739, 1230124, 1230587
 
 
 def boot(wow: WowRuntime, *addons: str) -> WowRuntime:
-    wow.needs(CAMP)  # camping is Forever's: no Campfire on retail
     wow.start(*(addons or (CORE, DATA, GESTURES, CAMP)))
     wow.run_frames(5)
     return wow

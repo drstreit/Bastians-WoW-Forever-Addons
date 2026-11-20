@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: World (fixture)
 ## Notes: Hand-written tiny world pack for tests and dev installs. Same shape as the generated pack.
 ## Version: 0.1.0

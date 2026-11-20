@@ -2,7 +2,7 @@
 
 Bastian's Suite is Azeroth, told in your own way. You might be the Wanderer, who explores this new world on their own, guided only by the voices of the land. Or you might be the Scholar, with every quest, creature, item and place one click from its page, its spot on the map and the way there.
 
-Addons for **WoW Forever** and **retail**: quests, map, browser, gold, routes, chat, the Orbiter and a
+Addons for **WoW Forever**: quests, map, browser, gold, routes, chat, the Orbiter and a
 book of gold strategies. Every app works on its own, and together they work as one system; the first
 start asks which of the two you are and switches the suite accordingly.
 
@@ -54,10 +54,10 @@ Game data first from the Blizzard client files read from the installed client (i
 quest chains and areas, names in every language, map imagery and tables); what only the servers
 hold from Everything Quests and AllTheThings (MIT), QuestieDB (GPL-3.0), Questie (GPLv3, as far as its team can grant it), Data from ForeverDB.net (https://foreverdb.net; GPL-3.0 with an
 attribution term),
-CMaNGOS classic-db (GPL-3.0), TrinityCore TDB (GPL-2.0 or later, retail; the Korean and Chinese
-quest texts on Forever), NauticusClassic (MIT,
+CMaNGOS classic-db (GPL-3.0), TrinityCore TDB (GPL-2.0 or later; the long quest texts in other
+languages), NauticusClassic (MIT,
 ferry departures), Campfire Tooltips: Forever by GideonWhitlock after Tweaks Forever by cjber
-(GPL-3.0 or later, the camp features' auras and values), ItemDB / LibItemDB (MIT, retail), auction prices from AHledger and the Blizzard Game Data API (data from Blizzard Entertainment; Blizzard does not endorse this addon), voice lines
+(GPL-3.0 or later, the camp features' auras and values), auction prices from AHledger and the Blizzard Game Data API (data from Blizzard Entertainment; Blizzard does not endorse this addon), voice lines
 through Spoken (MIT). Build tools: TACTSharp, DBCD and BLPSharp (MIT), WoWDBDefs (CC BY-SA 4.0).
 Libraries: LibStub, CallbackHandler, LibDataBroker. The book credits every traveller
 whose video or guide it retells, with the link. The book's drawings and the welcome's pictures are made with Google's

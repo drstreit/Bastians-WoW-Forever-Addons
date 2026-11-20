@@ -435,7 +435,11 @@ local function getDisplay()
   display = CreateFrame("Frame", "BastiansProbeDisplay", UIParent)
   display:SetSize(720, 520)
   display:SetPoint("CENTER")
-  display:SetFrameStrata("DIALOG")
+  -- above every window of the suite (FULLSCREEN_DIALOG, and TOOLTIP at its lowest level for a
+  -- window on top): Forever 17.11.2026, the open book covered the model and the reveal panels in
+  -- their screenshots
+  display:SetFrameStrata("TOOLTIP")
+  display:SetFrameLevel(100)
   display:SetMovable(true)
   display:EnableMouse(true)
   display:RegisterForDrag("LeftButton")
@@ -453,6 +457,12 @@ end
 local function clearDisplay(title)
   local d = getDisplay()
   d.title:SetText(title .. "   (/bprobe hide)")
+  for _, key in ipairs({ "tech", "models", "reveal" }) do
+    local part = rawget(d, key) -- rawget: a stub frame answers every name
+    if part then
+      part:Hide()
+    end
+  end
   for _, cell in ipairs(d.cells) do
     cell.tex:Hide()
     cell.label:Hide()
@@ -965,6 +975,27 @@ end
 -- readable, then listens: every book opened (ITEM_TEXT_BEGIN/READY) is recorded with its title,
 -- its length and the object under the mouse, and every event whose name holds BOOK, LIBRARY or
 -- READABLE. /reload saves; the dump goes to data/probe and forever-api.md.
+-- /bprobe wonders: what Bastian's Book asks the game to find a wonder done (book.md "The record",
+-- ADR 0080): the quest history, the bags and the bank, a known spell, a known title. Presence of
+-- each call and its answer for ids every character can answer (no name, no other player).
+local function probeWonders()
+  db.results = db.results or {}
+  local out = { at = now() }
+  db.results.wonders = out
+  out.isTitleKnown = type(rawget(_G, "IsTitleKnown"))
+  out.title1 = try(rawget(_G, "IsTitleKnown"), 1)
+  out.numTitles = try(rawget(_G, "GetNumTitles"))
+  out.questFlag = try(C_QuestLog and C_QuestLog.IsQuestFlaggedCompleted, 783)
+  local all = try(C_QuestLog and C_QuestLog.GetAllCompletedQuestIDs)
+  out.questsDone = all.ok and type(all.ret[1]) == "table" and #all.ret[1] or all
+  out.hearthstone = try(C_Item and C_Item.GetItemCount, 6948, true)
+  out.spellBrownHorse = try(C_SpellBook and C_SpellBook.IsSpellKnown, 458)
+  out.mountJournal = type(rawget(_G, "C_MountJournal"))
+  out.petJournal = type(rawget(_G, "C_PetJournal"))
+  out.numCompanions = try(rawget(_G, "GetNumCompanions"), "CRITTER")
+  say("wonders: title api %s, quests done %s; /reload to save", out.isTitleKnown, tostring(out.questsDone))
+end
+
 local booksListening = false
 local function probeBooks()
   db.results = db.results or {}
@@ -2451,6 +2482,14 @@ end
 
 local HELP = {
   "/bprobe all  - P1, P2, P3, P5, P6, P10 (automatic probes)",
+  "/bprobe resize - the drags of a window's corner recorded by themselves (the resize jump); resize clear",
+  "/bprobe booktech - a turned word, a gradient, a line: do they draw on this client (the book's look)",
+  "/bprobe booklook - Bastian's Book measured at three widths against book-look.md, with screenshots",
+  "/bprobe booklook small - the same at the scale of a 1,920 x 1,080 screen (768 units high)",
+  "/bprobe bookmodel - an object's model in a model frame, a model as a dark shape (R4.9, the album)",
+  "/bprobe bookreveal [uiMapID] - a zone as you explored it beside the zone with every overlay (R4.5)",
+  "/bprobe perf - Core's performance snapshot (taken by itself 30 s after every login)",
+  "/bprobe w2 - bookmodel, bookreveal, booklook and booklook small in a row (once by themselves)",
   "/bprobe chat - Chat version 3: the calls it needs, the item level, whisper flags (counts only)",
   "/bprobe combatlog - Forever only: may addons read the combat log, a minute of it (X11)",
   "/bprobe books - the Library books: the globals that name them, every book opened, their events (A3.2)",
@@ -2856,6 +2895,1142 @@ local function probeMinimaps(arg)
   end)
 end
 
+-- ---------------------------------------------------------------------------------------------
+-- Resize: what a suite window does when its grip is taken (plan-book-round3.md R3.1; owner,
+-- Forever 17.11.2026: "it jumps to full screen when starting to change the size"). Armed by
+-- itself: each window's grip records the frame before StartSizing, right after it, at the first
+-- size changes, when the mouse is up and half a second later; along the drag its path, every
+-- step the cursor does not explain, and each call of Lua's on the frame with its caller (the
+-- first four drags, 17.11.2026, began smoothly; in two the top left corner moved later). The
+-- last RESIZE_KEEP drags stay.
+-- ---------------------------------------------------------------------------------------------
+
+local RESIZE_KEEP = 12 -- drags kept
+local RESIZE_EVENTS = 8 -- size changes recorded while the grip is held
+local RESIZE_LATE = 4 -- and after the mouse is up
+local RESIZE_JUMP = 40 -- a first step larger than this, or a top left corner that moves, is a jump
+local RESIZE_TRAIL = 80 -- the drag's path: a point every RESIZE_TRAIL_S
+local RESIZE_TRAIL_S = 0.2
+local RESIZE_STEPS = 6 -- steps the cursor does not explain, kept with the state before
+local RESIZE_CALLS = 30 -- Lua's own calls on the frame, with their callers
+local RESIZE_METHODS =
+  { "SetSize", "SetWidth", "SetHeight", "SetPoint", "ClearAllPoints", "SetAllPoints", "SetScale" }
+local resizeArmed = {} -- [window name] = true
+
+-- obj:name() -> its first answer, nil when the call fails or answers nil.
+local function one(obj, name)
+  local r = tryMethod(obj, name)
+  if not r.ok or r.ret[1] == "<nil>" then
+    return nil
+  end
+  return r.ret[1]
+end
+
+local function windowState(win)
+  local f = win.frame
+  local out = { t = GetTime(), points = {} }
+  for i = 1, tonumber(one(f, "GetNumPoints")) or 0 do
+    local ok, point, rel, relPoint, x, y = pcall(f.GetPoint, f, i)
+    if ok then
+      local relName = "<nil>"
+      if type(rel) == "table" then
+        local okName, name = pcall(rel.GetName, rel)
+        relName = okName and name or "<unnamed>"
+      end
+      out.points[i] = { point = point, rel = relName, relPoint = relPoint, x = x, y = y }
+    end
+  end
+  out.left, out.top = one(f, "GetLeft"), one(f, "GetTop")
+  out.width, out.height = one(f, "GetWidth"), one(f, "GetHeight")
+  out.scale, out.effective = one(f, "GetScale"), one(f, "GetEffectiveScale")
+  local okCursor, cx, cy = pcall(GetCursorPosition)
+  if okCursor then
+    out.cursorX, out.cursorY = cx, cy
+  end
+  out.sizing = win.sizing == true
+  out.full = win.full ~= nil
+  out.docked = win.dock ~= nil and win.dock ~= false
+  out.gameFramed = win.gameFramed == true
+  return out
+end
+
+-- Marks the drag when `state` is far from where the window stood before the grip was taken.
+local function resizeJump(rec, state, step)
+  local b = rec.before
+  if rec.jump or not (b.width and b.height and b.left and b.top) then
+    return
+  end
+  if not (state.width and state.height and state.left and state.top) then
+    return
+  end
+  local dw, dh = state.width - b.width, state.height - b.height
+  local dl, dt = state.left - b.left, state.top - b.top
+  local grew = math.abs(dw) > RESIZE_JUMP or math.abs(dh) > RESIZE_JUMP
+  local moved = math.abs(dl) > 2 or math.abs(dt) > 2
+  if grew or moved then
+    rec.jump = { step = step, dw = dw, dh = dh, dl = dl, dt = dt, grew = grew, moved = moved }
+    say(
+      "resize: %s jumped at %s: %.0f x %.0f -> %.0f x %.0f, corner moved %.0f, %.0f",
+      tostring(rec.window),
+      step,
+      b.width,
+      b.height,
+      state.width,
+      state.height,
+      dl,
+      dt
+    )
+  end
+end
+
+local function resizeBegin(win)
+  local res = result("resize")
+  res.drags = res.drags or {}
+  local f = win.frame
+  local rec = {
+    at = now(),
+    window = win.name,
+    screen = {
+      width = one(UIParent, "GetWidth"),
+      height = one(UIParent, "GetHeight"),
+      scale = one(UIParent, "GetScale"),
+      effective = one(UIParent, "GetEffectiveScale"),
+    },
+    bounds = tryMethod(f, "GetResizeBounds"),
+    clamped = tryMethod(f, "IsClampedToScreen"),
+    userPlaced = tryMethod(f, "IsUserPlaced"),
+    before = windowState(win),
+    sizes = {},
+    late = {},
+    trail = {},
+    calls = {},
+  }
+  table.insert(res.drags, rec)
+  while #res.drags > RESIZE_KEEP do
+    table.remove(res.drags, 1)
+  end
+  win.probeDrag = rec
+  return rec
+end
+
+-- The drag's path, thinned: where the frame and the cursor were.
+local function trailPoint(s)
+  return {
+    t = s.t,
+    left = s.left,
+    top = s.top,
+    width = s.width,
+    height = s.height,
+    cursorX = s.cursorX,
+    cursorY = s.cursorY,
+  }
+end
+
+-- A size change the cursor does not explain: the top left corner moved under a grip that drags
+-- the bottom right one, or the size changed by more than the cursor went.
+local function resizeStep(rec, prev, state)
+  if not (prev.width and prev.height and prev.left and prev.top) then
+    return
+  end
+  if not (state.width and state.height and state.left and state.top) then
+    return
+  end
+  local eff = state.effective or 1
+  local dw, dh = state.width - prev.width, state.height - prev.height
+  local cx = math.abs((state.cursorX or 0) - (prev.cursorX or 0)) / eff
+  local cy = math.abs((state.cursorY or 0) - (prev.cursorY or 0)) / eff
+  local moved = math.abs(state.left - prev.left) > 1 or math.abs(state.top - prev.top) > 1
+  local grew = math.abs(dw) > cx + RESIZE_JUMP or math.abs(dh) > cy + RESIZE_JUMP
+  if not (moved or grew) then
+    return
+  end
+  rec.steps = rec.steps or {}
+  if #rec.steps < RESIZE_STEPS then
+    rec.steps[#rec.steps + 1] = { from = prev, to = state, moved = moved, grew = grew }
+  end
+  if not rec.said then
+    rec.said = true
+    say(
+      "resize: %s jumped while dragged: %.0f x %.0f at %.0f, %.0f -> %.0f x %.0f at %.0f, %.0f",
+      tostring(rec.window),
+      prev.width,
+      prev.height,
+      prev.left,
+      prev.top,
+      state.width,
+      state.height,
+      state.left,
+      state.top
+    )
+  end
+end
+
+-- An argument as the record keeps it: a frame by its name.
+local function callArg(v)
+  local kind = type(v)
+  if kind == "number" or kind == "string" or kind == "boolean" then
+    return v
+  elseif kind == "table" then
+    local ok, name = pcall(function()
+      return v:GetName()
+    end)
+    return "<" .. tostring(ok and name or "table") .. ">"
+  end
+  return "<" .. kind .. ">"
+end
+
+local function armResizeWindow(win)
+  local grip, frame = win.grip, win.frame
+  local down, up = grip:GetScript("OnMouseDown"), grip:GetScript("OnMouseUp")
+  local last -- the state at the size change before
+  grip:SetScript("OnMouseDown", function(self, ...)
+    local ok, rec = pcall(resizeBegin, win)
+    last = ok and rec and rec.before or nil
+    if down then
+      down(self, ...)
+    end
+    if ok and rec then
+      pcall(function()
+        rec.after = windowState(win)
+        resizeJump(rec, rec.after, "grip down")
+      end)
+    end
+  end)
+  grip:SetScript("OnMouseUp", function(self, ...)
+    local rec = win.probeDrag
+    if rec then
+      pcall(function()
+        rec.release = windowState(win) -- before the window's own handler runs
+      end)
+    end
+    if up then
+      up(self, ...)
+    end
+    if not rec then
+      return
+    end
+    pcall(function()
+      rec.up = windowState(win)
+    end)
+    C_Timer.After(0.5, function()
+      pcall(function()
+        rec.settled = windowState(win)
+      end)
+      if win.probeDrag == rec then
+        win.probeDrag = nil
+      end
+      if db and db.meta then
+        db.meta.updated = now()
+      end
+    end)
+  end)
+  frame:HookScript("OnSizeChanged", function()
+    local rec = win.probeDrag
+    if not rec then
+      return
+    end
+    pcall(function()
+      local state = windowState(win)
+      local list = rec.up and rec.late or rec.sizes
+      if #list < (rec.up and RESIZE_LATE or RESIZE_EVENTS) then
+        list[#list + 1] = state
+        if list == rec.sizes and #list == 1 then
+          resizeJump(rec, state, "the first size change")
+        end
+      end
+      if rec.release then
+        return -- the mouse is up: what follows is the window's own doing, kept in `late` and `calls`
+      end
+      if last then
+        resizeStep(rec, last, state)
+      end
+      last = state
+      if #rec.trail < RESIZE_TRAIL and (not rec.trailAt or state.t - rec.trailAt >= RESIZE_TRAIL_S) then
+        rec.trailAt = state.t
+        rec.trail[#rec.trail + 1] = trailPoint(state)
+      end
+    end)
+  end)
+  -- Lua's own calls on the frame while a drag is recorded, with their callers: the client's
+  -- sizing does not come through here, so each one is code of ours (or of another addon)
+  for _, name in ipairs(RESIZE_METHODS) do
+    pcall(hooksecurefunc, frame, name, function(_, ...)
+      local rec = win.probeDrag
+      if not rec or #rec.calls >= RESIZE_CALLS then
+        return
+      end
+      local args = {}
+      for i = 1, select("#", ...) do
+        args[i] = callArg((select(i, ...)))
+      end
+      local okStack, stack = pcall(debugstack, 3, 8, 0)
+      rec.calls[#rec.calls + 1] = {
+        t = GetTime(),
+        fn = name,
+        args = args,
+        phase = rec.up and "after" or (rec.release and "up handler" or "drag"),
+        stack = okStack and stack and string.sub(tostring(stack), 1, 900) or nil,
+      }
+    end)
+  end
+end
+
+-- Arms every suite window that exists by now (they are built when first opened).
+local function armResize()
+  local suite = rawget(_G, "Bastians")
+  local windows = suite and suite.UI and suite.UI.Windows
+  if type(windows) ~= "table" then
+    return 0
+  end
+  local n = 0
+  for name, win in pairs(windows) do
+    if type(win) == "table" and win.grip and win.frame then
+      if not resizeArmed[name] then
+        resizeArmed[name] = true
+        local ok, err = pcall(armResizeWindow, win)
+        if not ok then
+          say("resize: %s not armed: %s", tostring(name), tostring(err))
+        end
+      end
+      n = n + 1
+    end
+  end
+  return n
+end
+
+local function probeResize(arg)
+  local n = armResize()
+  local res = result("resize")
+  if arg == "clear" then
+    res.drags = {}
+    say("resize: the recorded drags are cleared")
+    return
+  end
+  local drags = res.drags or {}
+  say("resize: %d windows armed, %d drags recorded (the last %d are kept)", n, #drags, RESIZE_KEEP)
+  for i = math.max(1, #drags - 3), #drags do
+    local d = drags[i]
+    local b, e = d.before or {}, d.settled or d.up or d.after or {}
+    say(
+      "  %s %s: %s x %s -> %s x %s%s",
+      tostring(d.at),
+      tostring(d.window),
+      tostring(b.width and math.floor(b.width + 0.5)),
+      tostring(b.height and math.floor(b.height + 0.5)),
+      tostring(e.width and math.floor(e.width + 0.5)),
+      tostring(e.height and math.floor(e.height + 0.5)),
+      (d.jump or d.steps) and ", JUMPED" or ""
+    )
+  end
+  say("resize: drag a window's corner as usual; /reload or log out saves the record")
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Booktech: the drawing calls Bastian's Book would like and nobody has seen on Forever
+-- (docs/addons/book-look.md section 8): a turned font string (the stamp), a gradient without a
+-- texture, a line. Each is called in pcall and shown; a screenshot is taken by itself.
+-- ---------------------------------------------------------------------------------------------
+
+local function probeBookTech()
+  local out = { at = now() }
+  db.results.booktech = out
+  local d = clearDisplay("Book techniques: a turned word, a gradient, a line")
+  local tech = rawget(d, "tech")
+  if not tech then
+    tech = CreateFrame("Frame", nil, d)
+    tech:SetAllPoints(d)
+    d.tech = tech
+    tech.word = tech:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    tech.word:SetPoint("TOPLEFT", 60, -90)
+    tech.word:SetText("UNSOLVED")
+    tech.plain = tech:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    tech.plain:SetPoint("TOPLEFT", 60, -180)
+    tech.plain:SetText("UNSOLVED (not turned)")
+    tech.grad = tech:CreateTexture(nil, "ARTWORK")
+    tech.grad:SetSize(260, 120)
+    tech.grad:SetPoint("TOPLEFT", 330, -60)
+    tech.note = tech:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    tech.note:SetPoint("BOTTOMLEFT", 10, 10)
+    tech.note:SetJustifyH("LEFT")
+  end
+  tech:Show()
+  -- 1. a font string turned 12 degrees (the board's "unsolved" stamp)
+  out.rotation = {
+    set = tryMethod(tech.word, "SetRotation", math.rad(12)),
+    get = tryMethod(tech.word, "GetRotation"),
+  }
+  -- 2. a gradient on a plain colour texture (the bar: #2a2119 over #1a140f)
+  local okColor, top, foot = pcall(function()
+    return CreateColor(0.165, 0.129, 0.098, 1), CreateColor(0.102, 0.078, 0.059, 1)
+  end)
+  tryMethod(tech.grad, "SetColorTexture", 1, 1, 1, 1)
+  out.gradient = {
+    colors = okColor,
+    set = okColor and tryMethod(tech.grad, "SetGradient", "VERTICAL", foot, top)
+      or { ok = false, err = "CreateColor: " .. tostring(top) },
+  }
+  -- 3. a line (the Atlas' trails)
+  local line = rawget(tech, "line")
+  if not line then
+    local okLine, obj = pcall(function()
+      return tech:CreateLine(nil, "OVERLAY")
+    end)
+    out.lineCreate = { ok = okLine and obj ~= nil, err = not okLine and tostring(obj) or nil }
+    line = okLine and obj or nil
+    tech.line = line
+  end
+  if line then
+    out.line = {
+      color = tryMethod(line, "SetColorTexture", 0.64, 0.2, 0.17, 1),
+      thickness = tryMethod(line, "SetThickness", 3),
+      start = tryMethod(line, "SetStartPoint", "TOPLEFT", tech, 60, -320),
+      finish = tryMethod(line, "SetEndPoint", "TOPLEFT", tech, 600, -420),
+    }
+  end
+  local function word(r)
+    return r and r.ok and "ok" or ("no: " .. tostring(r and r.err))
+  end
+  local lineOk = out.line and out.line.start.ok and out.line.finish.ok
+  tech.note:SetText(
+    string.format(
+      "SetRotation %s   SetGradient %s   CreateLine %s",
+      word(out.rotation.set),
+      word(out.gradient.set),
+      lineOk and "ok" or "no"
+    )
+  )
+  say(
+    "booktech: rotation %s, gradient %s, line %s",
+    word(out.rotation.set),
+    word(out.gradient.set),
+    lineOk and "ok" or "no"
+  )
+  -- the picture is the proof: a call can succeed and draw nothing
+  C_Timer.After(0.5, function()
+    out.screenshot = try(rawget(_G, "Screenshot"))
+    say("booktech: screenshot taken; /bprobe hide closes the panel, /reload saves the record")
+  end)
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Booklook: Bastian's Book measured as the client lays it out (plan-book-round3.md M5; the owner
+-- saw every result before its author did: the mock lays no frame out from its anchors). Opens a
+-- chapter's page, sets the window to three widths and records, for each, where the head, the bar,
+-- its tabs and tools, the filter band, its chips, the slider, the switch, the result line and the
+-- first tiles stand, the faces and sizes in use and the grounds' colours; a screenshot per width.
+-- tools/book_look.py holds the record against docs/addons/book-look.md.
+-- ---------------------------------------------------------------------------------------------
+
+local BOOKLOOK_WIDTHS = { 1100, 1532, 2100 }
+local BOOKLOOK_HEIGHT = 843
+local BOOKLOOK_WAIT = 0.6 -- seconds for the book to lay itself out before it is measured
+-- `booklook small` (plan-book-round4.md D3; the owner plays at 5,120 x 2,160): a 1,920 x 1,080
+-- screen at UI scale 1 is 768 units high and about 1,365 wide. The book's window is scaled so this
+-- screen holds as many of ITS units, then measured at the widths that room allows. The layout is
+-- the small screen's; the sharpness is not (this screen draws more pixels per unit).
+
+local function probeBookLook(arg, onDone)
+  local small = arg == "small"
+  local name = small and "booklook small" or "booklook"
+  local function done()
+    if onDone then
+      onDone()
+    end
+  end
+  local suite = rawget(_G, "Bastians")
+  local okMod, mod = pcall(function()
+    return suite:GetModule("Strategies")
+  end)
+  local Window, Front = okMod and mod and mod.Window, okMod and mod and mod.Front
+  if not (Window and Front and Window.Show) then
+    say("%s: Bastian's Book is not loaded", name)
+    return done()
+  end
+  local out = { at = now(), runs = {} }
+  db.results[small and "booklookSmall" or "booklook"] = out
+  Window.Show({ kind = "shelf", id = "rares" })
+  local win, bar, view = Window.win, Window.bar, Front.view
+  if not (win and bar and view) then
+    say("%s: the book's window is not built", name)
+    return done()
+  end
+  local frame = win.frame
+  local SMALL_HEIGHT = 768
+  local widths = small and { 1100, 1365 } or BOOKLOOK_WIDTHS
+  local savedScale = one(frame, "GetScale") or 1
+  if small then
+    local factor = (one(UIParent, "GetHeight") or SMALL_HEIGHT) / SMALL_HEIGHT
+    out.small = { factor = factor, scaleBefore = savedScale, height = SMALL_HEIGHT }
+    out.small.set = tryMethod(frame, "SetScale", savedScale * factor)
+  end
+  -- the screen's room in the window's own units (a scaled window's units are larger)
+  local per = (one(frame, "GetEffectiveScale") or 1) / (one(UIParent, "GetEffectiveScale") or 1)
+  if per <= 0 then
+    per = 1
+  end
+  local roomW = (one(UIParent, "GetWidth") or 1920) / per
+  local roomH = (one(UIParent, "GetHeight") or 1080) / per
+  out.room = { width = roomW, height = roomH, unitsPerScreenUnit = per }
+  local style = suite.UI and suite.UI.Style
+  out.look = style and try(style.LookOf, frame) or nil
+  out.gameFramed = win.gameFramed == true
+  out.effective = one(frame, "GetEffectiveScale")
+  out.screen = { width = one(UIParent, "GetWidth"), height = one(UIParent, "GetHeight") }
+  local saved = { size = win.db.size, pos = win.db.pos }
+
+  -- a region's rect from the window's top left corner: left, top (down), width, height
+  local function rect(region)
+    if type(region) ~= "table" then
+      return nil
+    end
+    local l, tp = one(region, "GetLeft"), one(region, "GetTop")
+    local fl, ft = one(frame, "GetLeft"), one(frame, "GetTop")
+    if not (l and tp and fl and ft) then
+      return { shown = one(region, "IsShown") }
+    end
+    return {
+      left = l - fl,
+      top = ft - tp,
+      width = one(region, "GetWidth"),
+      height = one(region, "GetHeight"),
+      shown = one(region, "IsShown"),
+    }
+  end
+  local function face(fs)
+    if type(fs) ~= "table" then
+      return nil
+    end
+    local ok, font, size = pcall(fs.GetFont, fs)
+    return ok and { font = font, size = size, text = one(fs, "GetText") } or nil
+  end
+  local function colour(tex)
+    if type(tex) ~= "table" then
+      return nil
+    end
+    local ok, r, g, b, a = pcall(tex.GetVertexColor, tex)
+    return ok and { r = r, g = g, b = b, a = a, shown = one(tex, "IsShown") } or nil
+  end
+
+  local function measure(width)
+    local run = { width = width }
+    run.frame = rect(frame)
+    run.head = rect(win.head)
+    run.content = rect(win.content)
+    run.oneBar = bar.oneBar == true
+    run.bar = rect(bar)
+    run.tabs = rect(bar.tabs)
+    run.tab = bar.front and rect(bar.front) or nil
+    run.search = rect(bar.search)
+    run.tools = {
+      mark = rect(bar.mark),
+      record = rect(bar.record),
+      atlas = rect(bar.atlas),
+      gear = rect(bar.gear),
+      logo = rect(bar.logo),
+      portrait = rect(win.portraitButton),
+    }
+    run.barGround = rect(bar.ground)
+    run.band = rect(view.filters)
+    run.body = rect(view.body)
+    run.chips = {}
+    for _, chip in ipairs(view.pills or {}) do
+      if #run.chips < 40 and one(chip, "IsShown") then
+        local r = rect(chip)
+        r.radius = chip.face and chip.face.r
+        r.label = chip.spec and chip.spec.label
+        r.on = chip.spec and chip.spec.on and true or nil
+        run.chips[#run.chips + 1] = r
+      end
+    end
+    run.labels = {}
+    for _, fs in ipairs(view.labels or {}) do
+      if #run.labels < 12 and one(fs, "IsShown") then
+        local r = rect(fs)
+        r.text = one(fs, "GetText")
+        run.labels[#run.labels + 1] = r
+      end
+    end
+    run.separators = 0
+    for _, line in ipairs(view.seps or {}) do
+      if one(line, "IsShown") then
+        run.separators = run.separators + 1
+      end
+    end
+    run.slider = rect(view.slider)
+    run.hide = rect(view.hide)
+    run.done = rect(view.done)
+    run.rows = {}
+    local okRows, rows = pcall(function()
+      return Front.list:Rows()
+    end)
+    for _, row in ipairs(okRows and rows or {}) do
+      if #run.rows < 3 then
+        local r = rect(row)
+        r.kind = row.vlKind
+        r.tiles = {}
+        for i, tile in ipairs(row.tiles or {}) do
+          if i <= 4 and one(tile, "IsShown") then
+            r.tiles[#r.tiles + 1] = rect(tile)
+          end
+        end
+        run.rows[#run.rows + 1] = r
+      end
+    end
+    run.fonts = {
+      title = face(win.title),
+      tab = bar.front and face(bar.front.label) or nil,
+      tool = face(bar.record and bar.record.label),
+      atlas = face(bar.atlas and bar.atlas.label),
+      chip = view.pills and view.pills[1] and face(view.pills[1].label) or nil,
+      label = view.labels and face(view.labels[1]) or nil,
+    }
+    run.colours = { band = colour(view.band), rule = colour(view.rule), table = colour(view.table) }
+    return run
+  end
+
+  local i = 0
+  local function step()
+    i = i + 1
+    local width = widths[i]
+    if not width then
+      -- back to the reader's own scale, size and place
+      if small then
+        tryMethod(frame, "SetScale", savedScale)
+      end
+      win.db.size, win.db.pos = saved.size, saved.pos
+      pcall(function()
+        win:RestorePlace()
+        Window.Render()
+      end)
+      db.meta.updated = now()
+      say(
+        "%s: %d widths measured, a screenshot of each; /reload or log out saves the record",
+        name,
+        #out.runs
+      )
+      return done()
+    end
+    local w = math.min(width, math.floor(roomW - 40))
+    local ok, err = pcall(function()
+      frame:ClearAllPoints()
+      frame:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 20, -60)
+      frame:SetSize(w, math.min(BOOKLOOK_HEIGHT, math.floor(roomH - 80)))
+      Window.Render()
+    end)
+    if not ok then
+      out.error = tostring(err)
+    end
+    C_Timer.After(BOOKLOOK_WAIT, function()
+      local okRun, run = pcall(measure, w)
+      out.runs[#out.runs + 1] = okRun and run or { width = w, error = tostring(run) }
+      out.runs[#out.runs].asked = width
+      out.runs[#out.runs].screenshot = try(rawget(_G, "Screenshot"))
+      C_Timer.After(BOOKLOOK_WAIT, step) -- the screenshot is taken at the frame's end
+    end)
+  end
+  say("%s: measuring Bastian's Book at %d widths, hands off the mouse for a few seconds", name, #widths)
+  step()
+end
+
+-- The probes of the one look (plan-suite-waves.md W2) in a block of their own: Lua 5.1 allows a
+-- chunk 200 local variables, and this file had them. W2 carries what the rest needs.
+local W2 = { waiting = false }
+local events -- the probe's event frame, made below
+do
+  -- ---------------------------------------------------------------------------------------------
+  -- Perf: Core's own snapshot (`/bastians perf`, Perf.lua) taken by the probe a little after every
+  -- login, before anything is opened, so tools/perf_report.py has Core's memory in the game without
+  -- the owner typing anything (ADR 0082 decision 9: the baseline before the one look, again after W5).
+  -- ---------------------------------------------------------------------------------------------
+
+  local PERF_DELAY = 30 -- seconds after the login: the suite has started, nothing is open yet
+  local PERF_KEPT = 10
+
+  local function probePerf(note)
+    local suite = rawget(_G, "Bastians")
+    local perf = suite and rawget(suite, "Perf")
+    if not (perf and type(perf.Snapshot) == "function") then
+      say("perf: Bastian's Core is not loaded")
+      return nil
+    end
+    local ok, snap = pcall(perf.Snapshot)
+    if not (ok and type(snap) == "table") then
+      say("perf: the snapshot failed: %s", tostring(snap))
+      return nil
+    end
+    snap.by, snap.note = "probe", note -- the same table Core keeps in its saved variables
+    local total, addons = 0, 0
+    for _, kb in pairs(snap.memoryKB or {}) do
+      total = total + (tonumber(kb) or 0)
+      addons = addons + 1
+    end
+    local core = snap.memoryKB and tonumber(snap.memoryKB.Bastians_Core)
+    local list = db.results.perf or {}
+    db.results.perf = list
+    list[#list + 1] = {
+      at = now(),
+      note = note,
+      build = db.meta and db.meta.build,
+      uptime = snap.uptime,
+      coreKB = core,
+      totalKB = total,
+      addons = addons,
+      memoryKB = clean(snap.memoryKB),
+    }
+    while #list > PERF_KEPT do
+      table.remove(list, 1)
+    end
+    say(
+      "perf: %s, Core %s KB, the suite %.0f KB in %d addons; saved for tools/perf_report.py",
+      note or "a snapshot",
+      core and string.format("%.0f", core) or "?",
+      total,
+      addons
+    )
+    return list[#list]
+  end
+
+  -- ---------------------------------------------------------------------------------------------
+  -- Bookmodel (plan-book-round4.md R4.9 and the album of R4.11): can a model frame show a game
+  -- object's model, and a model as a dark shape? The camp items place objects whose templates the
+  -- server holds: their entries (612122, the Tanning Rack's) are not in the client's GameObjects
+  -- table (measured 17.11.2026, build 1.60.1.70938), so which file a camp item's object draws is not
+  -- known from the client. What the probe answers is the technique, on object models every client
+  -- has (files from GameObjectDisplayInfo), on the creature a camp item summons, and on its item.
+  -- Every call in pcall; the screenshot is the proof (a call can succeed and draw nothing).
+  -- ---------------------------------------------------------------------------------------------
+
+  local MODEL_CELL = 165
+  local MODEL_WAIT = 2.5 -- seconds: a model loads over a few frames
+  local MODEL_TESTS = {
+    { key = "file", label = "SetModel(file 197466)\na sharpening wheel", call = "SetModel", arg = 197466 },
+    {
+      key = "fileFar",
+      label = "SetModel(file 198338)\na loom, the camera back",
+      call = "SetModel",
+      arg = 198338,
+      far = true,
+    },
+    { key = "scene", label = "ModelScene actor\nfile 219412, a forge", scene = true, arg = 219412 },
+    { key = "item", label = "SetItem(279941)\nthe Tanning Rack's item", call = "SetItem", arg = 279941 },
+    { key = "creature", label = "SetCreature(254695)\nthe Repair Bot", call = "SetCreature", arg = 254695 },
+    {
+      key = "light",
+      label = "the same, lit black\n(SetLight)",
+      call = "SetCreature",
+      arg = 254695,
+      dark = "light",
+    },
+    {
+      key = "fog",
+      label = "the same, in black fog\n(SetFogColor, Near, Far)",
+      call = "SetCreature",
+      arg = 254695,
+      dark = "fog",
+    },
+    {
+      key = "grey",
+      label = "the same, grey\n(SetDesaturation)",
+      call = "SetCreature",
+      arg = 254695,
+      dark = "grey",
+    },
+  }
+
+  local function darken(model, how)
+    if how == "light" then
+      -- the retail family's table form first, the older list form second
+      local okNew, light = pcall(function()
+        return {
+          omnidirectional = false,
+          point = CreateVector3D(0, 0, 0),
+          ambientIntensity = 0,
+          ambientColor = CreateColor(0, 0, 0),
+          diffuseIntensity = 0,
+          diffuseColor = CreateColor(0, 0, 0),
+        }
+      end)
+      local out = {
+        table = okNew and tryMethod(model, "SetLight", true, light) or { ok = false, err = tostring(light) },
+      }
+      if not out.table.ok then
+        out.list = tryMethod(model, "SetLight", true, false, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+      end
+      return out
+    elseif how == "fog" then
+      return {
+        color = tryMethod(model, "SetFogColor", 0, 0, 0),
+        near = tryMethod(model, "SetFogNear", 0),
+        far = tryMethod(model, "SetFogFar", 0.01),
+      }
+    elseif how == "grey" then
+      return { set = tryMethod(model, "SetDesaturation", 1) }
+    end
+    return nil
+  end
+
+  local function probeBookModel(_, onDone)
+    local out = { at = now(), tests = {} }
+    db.results.bookmodel = out
+    local d = clearDisplay("Book models: an object's model in a model frame; a model as a dark shape")
+    local holder = rawget(d, "models")
+    if not holder then
+      holder = CreateFrame("Frame", nil, d)
+      holder:SetAllPoints(d)
+      d.models = holder
+      holder.cells = {}
+    end
+    holder:Show()
+    for i, test in ipairs(MODEL_TESTS) do
+      local rec = { label = test.label, arg = test.arg }
+      out.tests[test.key] = rec
+      local c = holder.cells[i]
+      if not c then
+        c = {}
+        holder.cells[i] = c
+        local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+        local left, top = 10 + col * (MODEL_CELL + 10), -30 - row * (MODEL_CELL + 44)
+        c.bg = holder:CreateTexture(nil, "BACKGROUND")
+        c.bg:SetColorTexture(0.9, 0.84, 0.7, 1) -- the paper: a dark shape must be seen against it
+        c.bg:SetSize(MODEL_CELL, MODEL_CELL)
+        c.bg:SetPoint("TOPLEFT", left, top)
+        c.label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        c.label:SetPoint("TOPLEFT", c.bg, "BOTTOMLEFT", 0, -2)
+        c.label:SetWidth(MODEL_CELL)
+        c.label:SetJustifyH("LEFT")
+        -- the frame is placed and sized before its subject is set (the FacePool lesson)
+        local okMake, model = pcall(CreateFrame, test.scene and "ModelScene" or "PlayerModel", nil, holder)
+        rec.created = okMake and model ~= nil
+        if rec.created then
+          model:SetSize(MODEL_CELL, MODEL_CELL)
+          model:SetPoint("TOPLEFT", left, top)
+          model:Show()
+          c.model = model
+        else
+          rec.error = tostring(model)
+        end
+      end
+      c.label:SetText(test.label)
+      local model = c.model
+      if model and test.scene then
+        rec.camera = {
+          position = tryMethod(model, "SetCameraPosition", 4, 0, 1),
+          orientation = tryMethod(model, "SetCameraOrientationByYawPitchRoll", math.pi, 0, 0),
+          fov = tryMethod(model, "SetCameraFieldOfView", 0.9),
+          light = tryMethod(model, "SetLightDirection", -0.5, 0.5, -0.7),
+        }
+        local actor = rawget(c, "actor")
+        if not actor then
+          local okActor, obj = pcall(function()
+            return model:CreateActor()
+          end)
+          rec.actor = { ok = okActor and obj ~= nil, err = not okActor and tostring(obj) or nil }
+          actor = okActor and obj or nil
+          c.actor = actor
+        end
+        if actor then
+          rec.set = tryMethod(actor, "SetModelByFileID", test.arg)
+          rec.place = tryMethod(actor, "SetPosition", 0, 0, 0)
+        end
+      elseif model then
+        tryMethod(model, "ClearModel")
+        rec.set = tryMethod(model, test.call, test.arg)
+        if test.far then
+          rec.zoom = tryMethod(model, "SetPortraitZoom", 0)
+          rec.distance = tryMethod(model, "SetCamDistanceScale", 2)
+        end
+        rec.dark = darken(model, test.dark)
+      end
+    end
+    C_Timer.After(MODEL_WAIT, function()
+      local shown = 0
+      for i, test in ipairs(MODEL_TESTS) do
+        local c, rec = holder.cells[i], out.tests[test.key]
+        local subject = rawget(c, "actor") or c.model
+        if subject then
+          rec.file = tryMethod(subject, "GetModelFileID")
+          local id = rec.file.ok and rec.file.ret[1]
+          if type(id) == "number" and id > 0 then
+            shown = shown + 1
+          end
+        end
+      end
+      out.withFile = shown
+      out.screenshot = try(rawget(_G, "Screenshot"))
+      db.meta.updated = now()
+      say(
+        "bookmodel: %d of %d cells name a model file; the screenshot says what is drawn",
+        shown,
+        #MODEL_TESTS
+      )
+      if onDone then
+        C_Timer.After(BOOKLOOK_WAIT, onDone) -- the screenshot is taken at the frame's end
+      end
+    end)
+  end
+
+  -- ---------------------------------------------------------------------------------------------
+  -- Bookreveal: a
+  -- zone drawn once as this character explored it (Core's Coords.MapArt) and once with every
+  -- overlay of the client's tables (WorldMapOverlay and WorldMapOverlayTile, build 1.60.1.70938,
+  -- through tools/mapstyle/blizzard.py), cut by Core's own Coords.OverlayTiles. Assumed until this
+  -- runs: the overlay files load by their ids as the explored ones do. Per tile the record says
+  -- whether the client holds the file (SetTexture answers true for a file it lacks; GetTexture
+  -- stays nil then, CLAUDE.md section 12).
+  -- { offsetX, offsetY, textureWidth, textureHeight, the tiles' files row by row }
+  -- ---------------------------------------------------------------------------------------------
+
+  local REVEAL_ORDER = { 1420, 1411, 1412 } -- Horde lands: the zone the character saw least of is drawn
+  local REVEAL = {
+    [1420] = { -- Tirisfal Glades: art 2126, layer 1002 x 668
+      { 335, 139, 256, 256, 7958233 },
+      { 630, 326, 256, 256, 7958234 },
+      { 584, 139, 256, 288, 7958235, 7958236 },
+      { 537, 299, 128, 256, 7958237 },
+      { 474, 327, 256, 128, 7958238 },
+      { 694, 289, 256, 128, 7958239 },
+      { 227, 328, 256, 256, 7958240 },
+      { 497, 145, 256, 256, 7958241 },
+      { 746, 125, 256, 256, 7958242 },
+      { 363, 349, 256, 256, 7958243 },
+      { 463, 361, 320, 256, 7958244, 7958245 },
+      { 689, 104, 256, 256, 7958246 },
+      { 239, 250, 256, 256, 7958247 },
+      { 395, 277, 256, 128, 7958248 },
+      { 698, 362, 256, 256, 7958249 },
+      { 757, 205, 245, 256, 7958262 },
+      { 4, 198, 335, 424, 7958263, 7958264, 7958265, 7958266 },
+    },
+    [1411] = { -- Durotar: art 2169, layer 1002 x 668
+      { 427, 78, 256, 256, 8073637 },
+      { 549, 427, 256, 241, 8074089 },
+      { 413, 476, 256, 128, 8074090 },
+      { 244, 0, 512, 256, 8074091, 8074092 },
+      { 432, 170, 256, 256, 8074093 },
+      { 301, 189, 256, 256, 8074094 },
+      { 474, 384, 256, 256, 8074095 },
+      { 464, 33, 128, 128, 8074096 },
+      { 327, 60, 256, 256, 8074097 },
+      { 462, 286, 256, 256, 8074098 },
+      { 355, 320, 256, 256, 8074099 },
+    },
+    [1412] = { -- Mulgore: art 1200, layer 1002 x 668
+      { 277, 448, 462, 210, 7938948, 7938949 },
+      { 262, 349, 171, 231, 7938946 },
+      { 357, 328, 238, 206, 7938945 },
+      { 458, 389, 121, 136, 7938961 },
+      { 494, 381, 253, 151, 7938954 },
+      { 509, 279, 227, 214, 7938955 },
+      { 451, 289, 143, 139, 7938947 },
+      { 419, 170, 220, 214, 7938953 },
+      { 369, 266, 151, 158, 7938958 },
+      { 270, 265, 194, 164, 7938944 },
+      { 250, 131, 284, 204, 7938956, 7938957 },
+      { 339, 71, 159, 157, 7938959 },
+      { 496, 119, 180, 181, 7938950 },
+      { 416, 50, 190, 183, 7938960 },
+      { 218, 0, 303, 225, 7938951, 7938952 },
+    },
+  }
+  local REVEAL_W = 345
+
+  local function revealInfos(mapID)
+    local infos = {}
+    for _, o in ipairs(REVEAL[mapID] or {}) do
+      local ids = {}
+      for i = 5, #o do
+        ids[#ids + 1] = o[i]
+      end
+      infos[#infos + 1] =
+        { offsetX = o[1], offsetY = o[2], textureWidth = o[3], textureHeight = o[4], fileDataIDs = ids }
+    end
+    return infos
+  end
+
+  local function revealPanel(holder, index, art, overlays, caption)
+    local panel = holder.panels[index]
+    if not panel then
+      panel = CreateFrame("Frame", nil, holder)
+      panel.pool = {}
+      panel.caption = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+      panel.caption:SetPoint("TOPLEFT", panel, "BOTTOMLEFT", 0, -4)
+      panel.caption:SetWidth(REVEAL_W)
+      panel.caption:SetJustifyH("LEFT")
+      holder.panels[index] = panel
+    end
+    local k = REVEAL_W / art.width
+    panel:ClearAllPoints()
+    panel:SetPoint("TOPLEFT", holder, "TOPLEFT", 10 + (index - 1) * (REVEAL_W + 10), -34)
+    panel:SetSize(REVEAL_W, art.height * k)
+    local n, loaded, missing = 0, 0, {}
+    local function draw(t, sublevel, counted)
+      n = n + 1
+      local tex = panel.pool[n]
+      if not tex then
+        tex = panel:CreateTexture(nil, "ARTWORK")
+        panel.pool[n] = tex
+      end
+      local okSet = pcall(tex.SetTexture, tex, t.file)
+      tex:SetTexCoord(0, t.tcRight, 0, t.tcBottom)
+      tex:SetDrawLayer("ARTWORK", sublevel)
+      tex:ClearAllPoints()
+      tex:SetPoint("TOPLEFT", panel, "TOPLEFT", t.px1 * k, -t.py1 * k)
+      tex:SetSize(math.max(1, (t.px2 - t.px1) * k), math.max(1, (t.py2 - t.py1) * k))
+      tex:Show()
+      if counted then
+        local okGet, got = pcall(tex.GetTexture, tex)
+        if okSet and okGet and got ~= nil then
+          loaded = loaded + 1
+        elseif #missing < 30 then
+          missing[#missing + 1] = t.file
+        end
+      end
+    end
+    for _, t in ipairs(art.tiles) do
+      draw(t, 1, false)
+    end
+    for _, t in ipairs(overlays) do
+      draw(t, t.top and 3 or 2, true)
+    end
+    for i = n + 1, #panel.pool do
+      panel.pool[i]:Hide()
+    end
+    panel.caption:SetText(string.format("%s: %d overlay tiles, %d loaded", caption, #overlays, loaded))
+    return { tiles = #overlays, loaded = loaded, missing = missing }
+  end
+
+  local function probeBookReveal(arg, onDone)
+    local function done()
+      if onDone then
+        onDone()
+      end
+    end
+    local suite = rawget(_G, "Bastians")
+    local coords = suite and rawget(suite, "Coords")
+    if not (coords and type(coords.MapArt) == "function" and type(coords.OverlayTiles) == "function") then
+      say("bookreveal: Bastian's Core is not loaded")
+      return done()
+    end
+    local out = { at = now(), zones = {} }
+    db.results.bookreveal = out
+    -- the zone this character saw least of (a zone given by hand first)
+    local mapID, art, fewest
+    local asked = tonumber(arg)
+    for _, id in ipairs(asked and REVEAL[asked] and { asked } or REVEAL_ORDER) do
+      local okArt, a = pcall(coords.MapArt, id)
+      local seen = okArt and type(a) == "table" and #(a.explored or {}) or nil
+      out.zones[id] = { art = okArt and type(a) == "table", exploredTiles = seen }
+      if seen and (fewest == nil or seen < fewest) then
+        mapID, art, fewest = id, a, seen
+      end
+    end
+    if not art then
+      say("bookreveal: no painting for any of the probe's zones")
+      return done()
+    end
+    out.map = mapID
+    local okName, info = pcall(C_Map.GetMapInfo, mapID)
+    out.name = okName and type(info) == "table" and info.name or nil
+    out.layer = { width = art.width, height = art.height, baseTiles = #art.tiles }
+    local okCut, every = pcall(coords.OverlayTiles, revealInfos(mapID))
+    if not okCut then
+      out.error = tostring(every)
+      say("bookreveal: the overlays could not be cut: %s", tostring(every))
+      return done()
+    end
+    local d = clearDisplay(string.format("Book reveal: %s (map %d)", tostring(out.name), mapID))
+    local holder = rawget(d, "reveal")
+    if not holder then
+      holder = CreateFrame("Frame", nil, d)
+      holder:SetAllPoints(d)
+      d.reveal = holder
+      holder.panels = {}
+    end
+    holder:Show()
+    out.explored = revealPanel(holder, 1, art, art.explored or {}, "as this character explored it")
+    out.revealed = revealPanel(holder, 2, art, every, "every overlay of the client's tables")
+    C_Timer.After(1.5, function()
+      out.screenshot = try(rawget(_G, "Screenshot"))
+      db.meta.updated = now()
+      say(
+        "bookreveal: %s, %d of %d overlay tiles loaded (this character had %d); screenshot taken",
+        tostring(out.name),
+        out.revealed.loaded,
+        out.revealed.tiles,
+        out.explored.tiles
+      )
+      if onDone then
+        C_Timer.After(BOOKLOOK_WAIT, onDone)
+      end
+    end)
+  end
+
+  -- ---------------------------------------------------------------------------------------------
+  -- W2's probes on one restart (plan-suite-waves.md W2, package 5): the models, the reveal, the
+  -- book at three widths and at the small screen's scale, one after the other, once, a little after
+  -- the login's perf snapshot. `/bprobe w2` runs them again by hand.
+  -- ---------------------------------------------------------------------------------------------
+
+  local W2_KEY = "w2-1"
+
+  local function w2Due()
+    return not (db.sequences and db.sequences[W2_KEY])
+  end
+
+  local function runW2()
+    if running then
+      C_Timer.After(5, runW2) -- the new build's own probes first
+      return
+    end
+    if InCombatLockdown and InCombatLockdown() then
+      W2.waiting = true
+      events:RegisterEvent("PLAYER_REGEN_ENABLED") -- after the fight
+      return
+    end
+    running = true
+    say("the one look's probes run by themselves for about half a minute: hands off the mouse")
+    local steps = {
+      function(next)
+        probeBookModel(nil, next)
+      end,
+      function(next)
+        probeBookReveal(nil, next)
+      end,
+      function(next)
+        if display then
+          display:Hide()
+        end
+        probeBookLook(nil, next)
+      end,
+      function(next)
+        probeBookLook("small", next)
+      end,
+    }
+    local i = 0
+    local function next()
+      i = i + 1
+      local step = steps[i]
+      if not step then
+        running = false
+        db.sequences = db.sequences or {}
+        db.sequences[W2_KEY] = { at = now(), build = db.meta and db.meta.build }
+        db.meta.updated = now()
+        say("the one look's probes are done: /reload or log out saves the records")
+        return
+      end
+      local ok, err = pcall(step, next)
+      if not ok then
+        say("a probe failed: %s", tostring(err))
+        next()
+      end
+    end
+    next()
+  end
+
+  W2.perf, W2.model, W2.reveal, W2.run, W2.due = probePerf, probeBookModel, probeBookReveal, runW2, w2Due
+  W2.PERF_DELAY = PERF_DELAY
+end
+
 local function command(msg)
   local cmd, arg = string.match(msg or "", "^%s*(%S*)%s*(.-)%s*$")
   cmd = string.lower(cmd or "")
@@ -2910,6 +4085,7 @@ local function command(msg)
       probeMinimaps(arg)
     end,
     books = probeBooks,
+    wonders = probeWonders,
     ground = function()
       probeGround(arg)
     end,
@@ -2925,6 +4101,23 @@ local function command(msg)
     chatbasics = function()
       probeChatBasics(arg)
     end,
+    resize = function()
+      probeResize(arg)
+    end,
+    booktech = probeBookTech,
+    booklook = function()
+      probeBookLook(arg)
+    end,
+    bookmodel = function()
+      W2.model()
+    end,
+    bookreveal = function()
+      W2.reveal(arg)
+    end,
+    perf = function()
+      W2.perf("by hand")
+    end,
+    w2 = W2.run,
   }
   local fn = probes[cmd]
   if not fn then
@@ -2941,7 +4134,160 @@ end
 -- Events
 -- ---------------------------------------------------------------------------------------------
 
-local events = CreateFrame("Frame")
+events = CreateFrame("Frame")
+
+-- The truth that grows (plan-data-quality.md E6; "we can stuff my session
+-- with automatic probes where it helps"): what the client tells in play, per build, as checks for
+-- the packs. Every NPC or object one talks to (its id, name, map and world position) and every
+-- merchant's whole stock (item, price for the vendor's stack, the stack, how many). Bounded; an
+-- NPC's or object's name only, never a player's. The current build and the one before are kept.
+local TRUTH_NPCS = 3000 -- per build
+local TRUTH_ITEMS = 200 -- per merchant
+
+local function truth()
+  local build = db.meta and db.meta.build or "?"
+  db.truth = db.truth or {}
+  local t = db.truth[build]
+  if not t then
+    local older = {}
+    for b in pairs(db.truth) do
+      older[#older + 1] = b
+    end
+    table.sort(older, function(a, b)
+      return (tonumber(a) or 0) > (tonumber(b) or 0)
+    end)
+    for i = 2, #older do -- keep the newest build before this one, drop the rest
+      db.truth[older[i]] = nil
+    end
+    t = { npcs = {}, merchants = {}, count = 0 }
+    db.truth[build] = t
+  end
+  return t
+end
+
+local function seeNpc(kind)
+  local guid = UnitGUID("npc")
+  local guidType, id = nil, nil
+  if type(guid) == "string" then
+    guidType = string.match(guid, "^(%a+)%-")
+    id = tonumber(string.match(guid, "^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)"))
+  end
+  if not id or (guidType ~= "Creature" and guidType ~= "GameObject" and guidType ~= "Vehicle") then
+    return nil
+  end
+  local t = truth()
+  local key = (guidType == "GameObject" and "object:" or "npc:") .. id
+  local rec = t.npcs[key]
+  if not rec then
+    if t.count >= TRUTH_NPCS then
+      return nil
+    end
+    local pos = playerPosition()
+    local up = pos.unitPosition
+    local okName, name = pcall(UnitName, "npc")
+    rec = {
+      name = okName and name or nil,
+      map = pos.mapID,
+      x = pos.mapX,
+      y = pos.mapY,
+      wx = up and up.ok and up.ret[1] or nil,
+      wy = up and up.ok and up.ret[2] or nil,
+      instance = up and up.ok and up.ret[4] or nil,
+      at = now(),
+      seen = 0,
+      kinds = {},
+    }
+    t.npcs[key] = rec
+    t.count = t.count + 1
+  end
+  rec.seen = rec.seen + 1
+  rec.kinds[kind] = true
+  return key
+end
+
+local function seeMerchant()
+  local key = seeNpc("merchant")
+  if not key then
+    return
+  end
+  local okNum, num = pcall(GetMerchantNumItems)
+  local count = okNum and tonumber(num) or 0
+  local items = {}
+  for i = 1, math.min(count, TRUTH_ITEMS) do
+    local okInfo, info = pcall(C_MerchantFrame.GetItemInfo, i)
+    local okLink, link = pcall(GetMerchantItemLink, i)
+    if okInfo and type(info) == "table" then
+      items[#items + 1] = {
+        item = okLink and type(link) == "string" and tonumber(string.match(link, "item:(%d+)")) or nil,
+        price = info.price, -- copper for the vendor's stack (CLAUDE.md, the merchant trap)
+        stack = info.stackCount,
+        available = info.numAvailable, -- -1: without limit
+        extended = info.hasExtendedCost or nil,
+      }
+    end
+  end
+  truth().merchants[key] = { at = now(), count = count, items = items }
+end
+
+local TRUTH_EVENTS = {
+  MERCHANT_SHOW = seeMerchant,
+  TRAINER_SHOW = function()
+    seeNpc("trainer")
+  end,
+  TAXIMAP_OPENED = function()
+    seeNpc("flight")
+  end,
+  GOSSIP_SHOW = function()
+    seeNpc("gossip")
+  end,
+  QUEST_DETAIL = function()
+    seeNpc("quest")
+  end,
+  QUEST_PROGRESS = function()
+    seeNpc("quest")
+  end,
+  QUEST_COMPLETE = function()
+    seeNpc("quest")
+  end,
+}
+
+-- The automatic probe on a new build (plan-data-quality.md E5; "yes, should
+-- run automatically. we can stuff my session with automatic probes where it helps"). At the first
+-- login on a build it holds no record of, the parts that need nobody run by themselves: P1 (the
+-- API surface), P3 (the map corners) and P2 (the quest log), sliced and out of combat, a little
+-- after the login. A /reload or a logout saves the record; tools/probe_import.py keeps it per build.
+local AUTO_DELAY = 20 -- seconds: the loading screen and the suite's own start come first
+local AUTO_PARTS = "P1, P3, P2"
+
+local function autoDue()
+  local build = db and db.meta and db.meta.build
+  return build ~= nil and not (db.auto and db.auto.build == build)
+end
+
+local function runAuto()
+  if running or not autoDue() then
+    return
+  end
+  if InCombatLockdown and InCombatLockdown() then
+    events:RegisterEvent("PLAYER_REGEN_ENABLED") -- after the fight
+    return
+  end
+  running = true
+  say("build %s is new to the probe: %s run by themselves", tostring(db.meta.build), AUTO_PARTS)
+  probeP1(function()
+    probeP3(function()
+      local ok, err = pcall(probeP2)
+      if not ok then
+        say("P2 failed: %s", tostring(err))
+      end
+      running = false
+      db.auto = { build = db.meta.build, at = now(), parts = AUTO_PARTS }
+      db.meta.updated = now()
+      say("build %s recorded by itself: /reload or log out saves it", tostring(db.meta.build))
+    end)
+  end)
+end
+
 events:RegisterEvent("ADDON_LOADED")
 events:SetScript("OnEvent", function(_, event, arg1)
   if event == "ADDON_LOADED" then
@@ -2957,6 +4303,9 @@ events:SetScript("OnEvent", function(_, event, arg1)
     events:RegisterEvent("PLAYER_CONTROL_GAINED")
     events:RegisterEvent("TRAINER_SHOW")
     events:RegisterEvent("MERCHANT_SHOW")
+    for name in pairs(TRUTH_EVENTS) do -- the truth that grows (E6)
+      events:RegisterEvent(name)
+    end
     if type(TakeTaxiNode) == "function" then
       hooksecurefunc("TakeTaxiNode", onTakeTaxiNode)
     end
@@ -2974,6 +4323,32 @@ events:SetScript("OnEvent", function(_, event, arg1)
       end
     end
     say("v%s loaded on %s %s. /bprobe help", VERSION, db.meta.client, tostring(db.meta.build))
+    -- the resize recorder (R3.1): windows are built when first opened, so look again now and then
+    if C_Timer and C_Timer.NewTicker then
+      C_Timer.NewTicker(2, armResize)
+    end
+    if autoDue() and C_Timer and C_Timer.After then
+      C_Timer.After(AUTO_DELAY, runAuto)
+    end
+    if C_Timer and C_Timer.After then
+      -- Core's memory before anything is opened, at every login; then, once, the one look's probes
+      C_Timer.After(W2.PERF_DELAY, function()
+        local ok, err = pcall(W2.perf, W2.PERF_DELAY .. " s after login")
+        if not ok then
+          say("perf failed: %s", tostring(err))
+        end
+        if W2.due() then
+          W2.run()
+        end
+      end)
+    end
+  elseif event == "PLAYER_REGEN_ENABLED" then
+    events:UnregisterEvent("PLAYER_REGEN_ENABLED")
+    runAuto()
+    if W2.waiting then
+      W2.waiting = false
+      W2.run()
+    end
   else
     local handlers = {
       TAXIMAP_OPENED = onTaxiMapOpened,
@@ -2981,12 +4356,16 @@ events:SetScript("OnEvent", function(_, event, arg1)
       TRAINER_SHOW = onTrainerShow,
       MERCHANT_SHOW = onMerchantShow,
     }
-    if not handlers[event] then
+    if not (handlers[event] or TRUTH_EVENTS[event]) then
       return -- an event of another probe's frame
     end
-    local ok, err = pcall(handlers[event])
-    if not ok then
-      say("%s handler failed: %s", event, tostring(err))
+    for _, handler in ipairs({ handlers[event] or false, TRUTH_EVENTS[event] or false }) do
+      if handler then
+        local ok, err = pcall(handler)
+        if not ok then
+          say("%s handler failed: %s", event, tostring(err))
+        end
+      end
     end
   end
 end)

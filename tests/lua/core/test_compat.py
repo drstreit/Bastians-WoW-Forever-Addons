@@ -21,9 +21,8 @@ def test_every_contract_entry_is_implemented(core: WowRuntime):
 
 def test_client_overrides_land_in_their_layer(core: WowRuntime):
     rep = report(core)
-    expected = "forever" if core.client == "forever" else "modern"
-    assert rep.SetTrainerFilter.layer == expected
-    assert rep.GetTrainerService.layer == expected
+    assert rep.SetTrainerFilter.layer == "forever"
+    assert rep.GetTrainerService.layer == "forever"
     assert rep.GetItemInfo.layer == "shared"
     assert rep.GetQuestLogEntries.layer == "modern"
 
@@ -34,7 +33,7 @@ def test_capability_flags(core: WowRuntime):
     assert has.TooltipDataProcessor is True
     assert has.ModernQuestLog is True
     assert has.ReplicateAH is True  # documented on both clients
-    assert has.TrainerType is (core.client == "forever")
+    assert has.TrainerType is True
 
 
 def test_quest_log_is_normalized(core: WowRuntime):
@@ -109,10 +108,7 @@ def test_trainer_service_has_the_same_shape_on_both_clients(core: WowRuntime):
         "name": "Frost",
         "rank": 1,
     }
-    if core.client == "forever":
-        assert first.icon == 135812 and first.subtext is None
-    else:
-        assert first.subtext == "Rank 2" and first.icon is None
+    assert first.icon == 135812 and first.subtext is None
     assert core.eval("Bastians.Compat.GetTrainerService(3)") is None
 
 
@@ -120,10 +116,7 @@ def test_trainer_filter_uses_the_form_the_client_accepts(core: WowRuntime):
     core.execute("Bastians.Compat.SetTrainerFilter('available', true)")
     core.execute("Bastians.Compat.SetTrainerFilter('used', false)")
     calls = [(c.kind, c.on) for c in core.g.Mock.trainerFilterCalls.values()]
-    if core.client == "forever":
-        assert calls == [("available", True), ("used", False)]
-    else:
-        assert calls == [("available", 1), ("used", 0)]
+    assert calls == [("available", True), ("used", False)]
     assert core.errors == []
 
 

@@ -4878,8 +4878,8 @@ function Browser.FollowTarget()
   return Browser.Open(ref)
 end
 
--- The Wowhead address of an entity: retail's site on retail, its Classic site on Forever (the
--- Classic world, the Classic ids). nil for a type Wowhead has no page for.
+-- The Wowhead address of an entity: its Classic site (Forever's world and ids are Classic's;
+-- ~~retail's site on retail~~, 15.11.2026, ADR 0037). nil for a type Wowhead has no page for.
 local WOWHEAD_TYPES = { quest = "quest", item = "item", npc = "npc", object = "object", spell = "spell" }
 function Browser.WowheadLink(ref)
   local typ, id = B.Entity.Parse(ref or "")
@@ -4887,8 +4887,7 @@ function Browser.WowheadLink(ref)
   if not (page and tonumber(id)) then
     return nil
   end
-  local site = B.Client == "forever" and "https://www.wowhead.com/classic/" or "https://www.wowhead.com/"
-  return site .. page .. "=" .. id
+  return "https://www.wowhead.com/classic/" .. page .. "=" .. id
 end
 
 function Browser.ToggleTarget()

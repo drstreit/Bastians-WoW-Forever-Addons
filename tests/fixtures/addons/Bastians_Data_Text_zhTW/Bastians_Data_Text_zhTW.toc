@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Text (zhTW)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_zhTW\Icon
 ## Notes: Generated names and quest objectives in Traditional Chinese; builds its tables only on a Traditional Chinese client.

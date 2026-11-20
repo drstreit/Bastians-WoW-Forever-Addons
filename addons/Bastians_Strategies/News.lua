@@ -5,6 +5,42 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.6.0:1",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Bastian's Book: the gold stories, secret quests, curiosities, mounts, pets, titles and rares as a picture book with a front table, a page per chapter with clickable filters, a page per wonder and your record of what you and your other characters did.",
+  },
+  {
+    id = "2.6.0:2",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Bastian's Book looks like its design: cards, cut pictures, a clearer filter, one tab bar, and back and forward by right-dragging.",
+  },
+  {
+    id = "2.6.0:3",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "The book's tiles keep their colours: no solid gold or white tile after the mouse passes.",
+  },
+  {
+    id = "2.6.0:4",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Bastian's Book lies on paper in its own typefaces, with bigger pictures and one quiet bar.",
+  },
+  {
+    id = "2.6.0:5",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Bastian's Book: a calmer filter with a level slider and a Hide done switch, on a dark table in the WoW look.",
+  },
+  {
+    id = "2.6.0:6",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Bastian's Book: a taller bar with Bastian's crest as the way back to the front table, and its buttons in the book's own style.",
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",

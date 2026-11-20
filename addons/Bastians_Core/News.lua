@@ -5,6 +5,30 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.6.0:1",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "A chosen filter chip is now filled, so it stands out from the others in every look.",
+  },
+  {
+    id = "2.6.0:2",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Filter chips are quiet until chosen, and the suite ships the typefaces of Bastian's Book.",
+  },
+  {
+    id = "2.6.0:3",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Filter chips are round at both ends in every window.",
+  },
+  {
+    id = "2.6.0:4",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Orgrimmar, Ironforge, Thunder Bluff, Darnassus and Undercity have a city map of their own, as Stormwind has.",
+  },
+  {
     id = "2.5.0:1",
     date = "2026-11-15",
     version = "2.5.0",
@@ -159,29 +183,5 @@ ns.NEWS = {
     date = "2026-11-09",
     version = "2.1.0",
     text = "A page in the Browser has its own filter: type to narrow every list on it.",
-  },
-  {
-    id = "2.1.0:13",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "The Browser's sections and tabs are coloured symbols with text instead of green buttons.",
-  },
-  {
-    id = "2.1.0:14",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "/balts opens your characters in the Browser: the list on the left, a character's tabs on the right.",
-  },
-  {
-    id = "2.1.0:15",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "The Gold Stories list shows each story as a tile with Bastian's picture and its first words.",
-  },
-  {
-    id = "2.1.0:16",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "A window you open always comes to the front, also one that was already open behind another.",
   },
 }

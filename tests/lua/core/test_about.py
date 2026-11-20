@@ -42,7 +42,7 @@ def test_about_lists_loaded_data_packs_and_flags_foreign_ones(wow: WowRuntime):
     wow.run_frames(5)
     text = "\n".join(t for _, t in lines(wow))
     assert "world: build " in text and "No data packs" not in text
-    other = "retail" if wow.client == "forever" else "forever"
+    other = "retail"  # a table of the retail builds before 15.11.2026 (ADR 0037)
     wow.execute(
         f'Bastians.Data.RegisterPack("items", {{ client = "{other}", build = "x", schema = {{}}, item = {{}} }})'
     )

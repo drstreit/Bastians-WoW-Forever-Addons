@@ -72,26 +72,6 @@ def test_cmangos_adds_the_long_quest_texts_in_german_and_chinese():
     assert "CMaNGOS quest locales" in world.sources
 
 
-def test_tdb_gives_the_retail_records_in_every_language():
-    """TDB's locale tables (retail): creatures with their title, objects and quest titles;
-    esMX only fills what esES lacks (one Spanish); a language of no pack (itIT) is skipped."""
-    from bastians_build.sources.tdb_locales import read_locales
-
-    tdb = ROOT / "fixtures" / "tdb-locales.sql"
-    got = read_locales(tdb, ("deDE", "frFR", "esES", "koKR"))
-    assert got["deDE"]["npc"][240] == {"name": "Marschall Dughan", "subname": "Marschall"}
-    assert got["esES"]["npc"][240] == {"name": "Mariscal Dughan", "subname": "Alguacil"}
-    assert got["frFR"]["object"][1734] == {"name": "Avis de recherche"}
-    # only the title: the retail packs carry no English quest texts to lie over
-    assert got["koKR"]["quest"][176] == {"name": "현상 수배: 들창코 호그"}
-    assert "itIT" not in got
-    world = read_fixture(WORLD, "forever")  # the fixture world stands in for retail here
-    add_l10n(world, None, None, tdb)
-    assert world.records["npc_deDE"][240]["subname"] == "Marschall"
-    assert world.records["quest_koKR"][176] == {"name": "현상 수배: 들창코 호그"}
-    assert "TDB locales" in world.sources
-
-
 def test_tdb_gives_the_asian_long_quest_texts_where_its_english_is_ours():
     """Forever: TDB's Korean and Traditional Chinese details, objectives, offer
     and progress texts, each only where TDB's English of that text is the one our text pack carries
@@ -115,7 +95,7 @@ def test_tdb_gives_the_asian_long_quest_texts_where_its_english_is_ours():
         "details": "霍格在艾爾文森林肆虐太久了。",
     }
     assert "zhCN" not in got  # nothing in that language
-    add_l10n(world, L10N, None, None, None, tdb)
+    add_l10n(world, L10N, tdb_texts=tdb)
     ko = world.records["quest_koKR"][176]
     assert ko["details"] == "호그가 너무 오래 날뛰었습니다."
     lookup = read_locale(L10N, "koKR").get("quest", {}).get(176, {})
@@ -144,7 +124,7 @@ def test_tdb_gives_the_latin_languages_their_long_texts_in_latin1():
     assert all(ord(c) < 256 for text in fr.values() for c in text)
     assert got["esES"][176]["details"].startswith("Hogger ha aterrorizado")  # from esMX
     world = read_fixture(WORLD, "forever")
-    add_l10n(world, L10N, CMANGOS, None, None, tdb)
+    add_l10n(world, L10N, CMANGOS, tdb_texts=tdb)
     assert world.records["quest_deDE"][176]["details"].startswith("Hogger terrorisiert")  # CMaNGOS
     assert world.records["quest_frFR"][176]["details"].startswith("Lardeur terrorise")
     assert world.records["quest_esES"][176]["objectives"].startswith("Lleva la garra")
@@ -158,6 +138,6 @@ def test_the_clients_names_in_a_latin_language_go_to_latin1_too():
         "frFR": {"item": {2589: {"name": "Sac d\u2019orge"}}},
         "koKR": {"item": {2589: {"name": "\u2019\uac00"}}},
     }
-    add_l10n(world, None, None, None, names)
+    add_l10n(world, None, client_names=names)
     assert world.records["item_frFR"][2589]["name"] == "Sac d'orge"
     assert world.records["item_koKR"][2589]["name"] == "\u2019\uac00"  # not a Latin one

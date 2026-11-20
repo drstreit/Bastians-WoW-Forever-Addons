@@ -85,8 +85,8 @@ def test_bad_rows_are_refused_with_the_reason(tmp_path, change, message):
 
 
 def test_the_shipped_tables_are_valid():
-    """Both clients' tables load; every Forever entrance lies on Eastern Kingdoms or Kalimdor."""
-    for client in ("forever", "retail"):
+    """Forever's table loads; every entrance lies on Eastern Kingdoms or Kalimdor."""
+    for client in ("forever",):
         rows = read_places(ROOT / "pipeline" / "config" / f"places_{client}.toml")["entrance"]
         assert len(rows) >= 30, client
         assert all(r["place"][0] in (0, 1) for r in rows)
@@ -176,8 +176,8 @@ def test_bad_teleports_are_refused_with_the_reason(tmp_path, change, message):
 
 
 def test_the_shipped_teleports_are_valid():
-    """Both clients' teleport rows load; every place lies on Eastern Kingdoms or Kalimdor."""
-    for client in ("forever", "retail"):
+    """Forever's teleport rows load; every place lies on Eastern Kingdoms or Kalimdor."""
+    for client in ("forever",):
         rows = read_places(ROOT / "pipeline" / "config" / f"places_{client}.toml")["teleport"]
         assert len(rows) >= 9, client
         assert all(r["place"][0] in (0, 1) for r in rows if "place" in r)

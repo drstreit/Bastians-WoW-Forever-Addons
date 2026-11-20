@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.6.0:1",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = 'In a city a pulsing button on the minimap opens the painted city map, and the game\'s own map has a "City map" button there.',
+  },
+  {
+    id = "2.6.0:2",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "On a city map your position is now marked above the pins, and a Player button centres the map on you.",
+  },
+  {
     id = "2.5.0:1",
     date = "2026-11-15",
     version = "2.5.0",
@@ -171,17 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "The map's layer bar slides, bookmarks get names, zones show their creature levels and resources, and a new route always shows on the map.",
-  },
-  {
-    id = "1.0.0-beta.13:5",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "The map switches between the physical map and Blizzard's painted maps, from the layer bar or the settings.",
-  },
-  {
-    id = "1.0.0-beta.13:6",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "Three new optional map styles, Modern, Pencil and Parchment, drawn by Bastian from the world itself, one addon each (about 100 MB); pick them in the map's style bar.",
   },
 }

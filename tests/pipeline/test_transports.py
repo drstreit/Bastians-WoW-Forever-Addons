@@ -37,7 +37,6 @@ def test_forever_table_is_valid_and_covers_both_continents():
     assert kinds == {"boat", "zeppelin", "tram", "portal"}
     assert all(r["verified"] is False for r in rows)  # nothing measured on Forever yet
     assert all(len(r["stops"]) == 2 for r in rows)
-    assert read_transports(CONFIG_DIR / "places_retail.toml") == []
 
 
 def write(tmp_path: Path, body: str) -> Path:

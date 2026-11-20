@@ -2,7 +2,7 @@
 # Forever" maps, used with his permission (02.11.2026), replace the floors of Forever's own
 # dungeons, which the client has no map of. The tiles are made by tools/dungeon_art.py into
 # addons/Bastians_Core/Media/Dungeons/<art>_1..12.blp. Read by pipeline/bastians_build/
-# dungeon_art.py for both clients (retail carries Forever's dungeons as a test client).
+# dungeon_art.py (~~for both clients~~ Forever alone since 15.11.2026, ADR 0037).
 #
 # The pins are ours, placed by hand on his maps (x, y in percent of the map, 0..100): the door is
 # his entrance swirl; a boss stands in the room the public guides name for it (warcrafttavern.com,

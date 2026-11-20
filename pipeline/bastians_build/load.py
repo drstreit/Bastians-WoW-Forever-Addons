@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,16 +18,12 @@ from bastians_build.sources import (
     questie,
     questiedb,
     questiedb_store,
-    tdb,
 )
-from bastians_build.sources.allthethings import read_allthethings
 from bastians_build.sources.everything_quests import read_everything_quests
-from bastians_build.sources.itemdb import read_itemdb
 
-# AllTheThings and ItemDB flavors per client; read for retail only (data.md "Retail data"): on
-# Forever, Everything Quests already carries ATT's quest data and ForeverDB the item names.
-ATT_FLAVOR = {"retail": "Standard"}
-ITEMDB_FLAVOR = {"retail": "Retail"}
+# ~~AllTheThings and ItemDB flavors per client; read for retail only~~: they served the retail
+# packs alone and left with them (15.11.2026, ADR 0037). On Forever, Everything Quests carries
+# ATT's quest data and ForeverDB the item names.
 
 
 @dataclass(frozen=True)
@@ -34,25 +31,19 @@ class SourcePaths:
     addons: Path | None = None  # WoW Interface/AddOns folder with the source addons
     cmangos: Path | None = None  # CMaNGOS classic-db checkout or its Full_DB/*.sql.gz
     probe: Path | None = None  # a Bastians_Probe dump (data/probe/*.lua)
-    # ForeverDB's Dungeons.lua for a client whose AddOns lack it: the retail test client shows
-    # Forever's dungeons
-    dungeons: Path | None = None
     taxi: Path | None = None  # a clientdump TaxiNodes JSON (client-extraction.md)
     dumps: Path | None = (
         None  # folder with <prefix>_UiMap.json, _UiMapAssignment.json, _TaxiNodes.json
     )
     dump_prefix: str = "beta"
     everything_quests_flavor: str = "Forever"
-    # TrinityCore's retail world database, TDB_full_world_*.sql (sources.md); its FactionTemplate
-    # and ContentTuning come from the dumps folder (<prefix>_FactionTemplate.json, ...)
-    tdb: Path | None = None
     # the navmesh folder (`clientdump navmesh`, <Map>.navmesh): the subzones' places (data.md
     # "Areas"); default <dumps>/navmesh_<client>
     navmesh: Path | None = None
-    # the dungeon floors' map art (DG2c): the folder with retail's <floor_art_prefix>_UiMap.json,
-    # _UiMapAssignment.json, _UiMapXMapArt.json and _UiMapArtTile.json (both clients read the
-    # retail tables: the Forever client has no dungeon UiMaps), and the community listfile
-    # that names the tiles for the Forever client
+    # the dungeon floors' map art (DG2c): the folder with the retail client's
+    # <floor_art_prefix>_UiMap.json, _UiMapAssignment.json, _UiMapXMapArt.json and
+    # _UiMapArtTile.json (a source of the Forever build: the Forever client has no dungeon
+    # UiMaps), and the community listfile that names the tiles for the Forever client
     floor_art: Path | None = None
     floor_art_prefix: str = "retail"
     listfile: Path | None = None
@@ -101,6 +92,17 @@ def find_dump(cmangos_dir: Path) -> Path:
     return dumps[-1]
 
 
+def dump_build(path: Path) -> str | None:
+    """The build number in a clientdump file's head ("1.60.1.70938" -> "70938"); None without."""
+    if not path.is_file():
+        return None
+    try:
+        build = json.loads(path.read_text(encoding="utf-8")).get("build")
+    except OSError, ValueError, AttributeError:
+        return None
+    return str(build).rsplit(".", 1)[-1] if build else None
+
+
 def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> Sources:
     s = Sources(client=client)
     if paths.probe and paths.probe.is_file():
@@ -118,6 +120,11 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
         s.source_names.append(f"probe {paths.probe.name}")
     if paths.dumps:
         prefix = paths.dump_prefix
+        # the packs name the engine's build they stand on, not the probe's: until 16.11.2026 every
+        # pack and the About page said 70532, the probe of 23.10, over 70938's tables (E7)
+        engine = dump_build(paths.dumps / f"{prefix}_Map.json")
+        if engine:
+            s.build = engine
         ui_map_path = paths.dumps / f"{prefix}_UiMap.json"
         assign_path = paths.dumps / f"{prefix}_UiMapAssignment.json"
         if ui_map_path.is_file() and assign_path.is_file():
@@ -162,11 +169,13 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             s.source_names.append("clientdump UiMap (retail, for maps this client lacks)")
         load_areas(s, client, paths)
         titles_path = paths.dumps / f"{prefix}_QuestV2CliTask.json"
-        if titles_path.is_file():  # retail: the client tasks' titles (D1, data.md "Retail data")
+        if titles_path.is_file():  # the client tasks' titles (D1, data.md "Retail data")
             s.quest_titles = clientdump.read_quest_titles(titles_path)
             s.source_names.append(f"clientdump QuestV2CliTask ({prefix})")
         # the client's data tables (ADR 0035): items, recipes, quest chains and areas
-        tables = client_tables.read_client_tables(paths.dumps, client, set(PROFESSION_SKILL_LINES))
+        tables = client_tables.read_client_tables(
+            paths.dumps, client, set(PROFESSION_SKILL_LINES), prefix=prefix
+        )
         if tables is not None:
             s.client_tables = tables
             s.source_names.extend(tables.sources)
@@ -221,33 +230,12 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
         if client == "forever" and (questie_dir / questie.BLACKLIST).is_file():
             s.questie_gates = questie.read_quest_gates(questie_dir)
             s.source_names.append(f"Questie {s.questie_gates.version or '?'}")
-        att_dir = paths.addons / "AllTheThings"
-        if client in ATT_FLAVOR and (att_dir / "db" / ATT_FLAVOR[client]).is_dir():
-            s.att = read_allthethings(att_dir, ATT_FLAVOR[client])
-            s.source_names.append(f"AllTheThings {s.att.version or '?'} ({s.att.flavor})")
-        idb_dir = paths.addons / "ItemDB"
-        if client in ITEMDB_FLAVOR and (idb_dir / "Data" / ITEMDB_FLAVOR[client]).is_dir():
-            s.idb = read_itemdb(idb_dir, ITEMDB_FLAVOR[client])
-            s.source_names.append(f"ItemDB {s.idb.version or '?'} ({s.idb.flavor})")
-            if s.build == "unknown" and s.idb.build:
-                s.build = s.idb.build
     if client == "forever" and paths.foreverdb_api and paths.foreverdb_api.is_dir():
         s.fdb_api = foreverdb_api.read_api(paths.foreverdb_api)
         s.source_names.append(
             f"ForeverDB API ({len(s.fdb_api.quest_places)} seen quest places, "
             f"{len(s.fdb_api.vendors)} seen vendors)"
         )
-    if not s.fdb_dungeons and paths.dungeons and paths.dungeons.is_file():
-        s.fdb_dungeons = foreverdb.read_dungeons(paths.dungeons)
-        s.source_names.append(
-            "ForeverDB Dungeons.lua (Forever's dungeons, for tests on this client)"
-        )
-        loot = paths.dungeons.with_name("Loot.lua")
-        if loot.is_file():
-            s.fdb_boss_creatures = foreverdb.read_boss_creatures(loot)
-        maps = paths.dungeons.with_name("DungeonMaps.lua")
-        if maps.is_file():
-            s.fdb_dungeon_maps = foreverdb.read_dungeon_maps(maps)
     if paths.floor_art and s.fdb_dungeon_maps:
         s.floor_art = clientdump.read_floor_art(
             paths.floor_art, paths.floor_art_prefix, paths.listfile
@@ -281,17 +269,7 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
             for prefix in (paths.dump_prefix, client):
                 factions = paths.dumps / f"{prefix}_FactionTemplate.json"
                 if factions.is_file():
-                    s.cm_factions = tdb.faction_sides(tdb.table_rows(factions))
+                    s.cm_factions = clientdump.faction_sides(clientdump.faction_rows(factions))
                     s.source_names.append(f"clientdump FactionTemplate ({prefix})")
                     break
-    if paths.tdb:
-        if not paths.dumps:
-            raise FileNotFoundError("--tdb needs --dumps (FactionTemplate and ContentTuning)")
-        prefix = paths.dump_prefix
-        s.tdb = tdb.read_tdb(
-            paths.tdb,
-            paths.dumps / f"{prefix}_FactionTemplate.json",
-            paths.dumps / f"{prefix}_ContentTuning.json",
-        )
-        s.source_names.append(f"TrinityCore {s.tdb.name}")
     return s

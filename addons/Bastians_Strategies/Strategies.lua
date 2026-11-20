@@ -309,7 +309,9 @@ local mod = B:NewModule("Strategies", {
   defaults = {
     profile = { window = {} },
     char = { bookmarks = {} }, -- bookmarks by page id
-    global = { notes = {} }, -- the reader's notes by page id, for every character
+    -- the reader's notes by page id, for every character; Bastian's Book (ADR 0080): what each
+    -- character of the account did (`record`) and the envelopes opened (`opened`)
+    global = { notes = {}, record = {}, opened = {} },
   },
   options = {
     {
@@ -513,8 +515,35 @@ local mod = B:NewModule("Strategies", {
       minLevel = 1,
       query = rumourPins,
     })
+    -- Bastian's Book (ADR 0080): this character's record, the game's answers read after login,
+    -- after a quest, a new mount, pet or title, and after the bags settle
+    ns.Record.Bind(self.db.global, (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?"), {
+      name = UnitName("player"),
+      class = select(2, UnitClass("player")),
+      faction = UnitFactionGroup("player"),
+      level = UnitLevel("player"),
+    })
+    local module = self
+    local function scan()
+      ns.Record.Scan(module, ns.Front.Entries(), Window.Schedule)
+    end
+    for _, event in ipairs({
+      "QUEST_TURNED_IN",
+      "NEW_MOUNT_ADDED",
+      "COMPANION_LEARNED",
+      "KNOWN_TITLES_UPDATE",
+    }) do
+      self:RegisterEvent(event, function()
+        module:Coalesce("book.scan", 1, scan)
+      end)
+    end
+    self:RegisterEvent("BAG_UPDATE_DELAYED", function()
+      module:Coalesce("book.scan", ns.Record.BAG_DELAY, scan)
+    end)
     self:On("BASTIANS_DATA_LOADED", function()
       placed = nil
+      ns.Front.Invalidate()
+      module:Coalesce("book.scan", 1, scan)
       B:Fire("BASTIANS_LAYER_CHANGED", "strategies.rumours")
       Window.Schedule()
     end)
@@ -531,8 +560,26 @@ mod.Strategies = Strategies
 mod.Book = Book
 mod.Window = Window
 mod.Plate = ns.Plate
+mod.Shelf = ns.Shelf
+mod.Record = ns.Record
+mod.Front = ns.Front
+mod.Wonder = ns.Wonder
+mod.Picture = ns.Picture
 
 SLASH_BASTIANSSTRATEGIES1 = "/bbook"
+-- /bbook <chapter>: a chapter's shelf (ADR 0080)
+local SHELVES = {
+  all = "all",
+  everything = "all",
+  gold = "gold",
+  secrets = "secrets",
+  collections = "collections",
+  camp = "camp",
+  rares = "rares",
+  -- the chapters of before round 4 (17.11.2026), for a macro that names one
+  treasures = "secrets",
+  curiosities = "collections",
+}
 SlashCmdList.BASTIANSSTRATEGIES = function(msg)
   if not mod:IsEnabled() then
     B:Say(L["Strategies is disabled"])
@@ -543,8 +590,20 @@ SlashCmdList.BASTIANSSTRATEGIES = function(msg)
     Window.Toggle()
   elseif cmd == "contents" or cmd == "bookmarks" or cmd == "title" then
     Window.Show({ kind = cmd })
-  elseif cmd == "map" then
-    Window.Show({ kind = "atlas" }) -- the story map (ADR 0057)
+  elseif cmd == "map" or cmd == "atlas" then
+    Window.Show({ kind = "atlas" }) -- the story map (ADR 0057), the Atlas (ADR 0080)
+  elseif cmd == "front" or cmd == "table" then
+    Window.Show({ kind = "front" })
+  elseif cmd == "record" then
+    Window.Show({ kind = "record" })
+  elseif SHELVES[cmd] then
+    Window.Show({ kind = "shelf", id = SHELVES[cmd] })
+  elseif string.match(cmd, "^simulate") then
+    -- /bbook simulate <n>: n simulated wonders for this session, to try the filters at scale
+    local n = tonumber(string.match(cmd, "^simulate%s+(%d+)$")) or 0
+    local made = ns.Front.Simulate(n)
+    B:Say(string.format(L["The book simulates %d wonders until the next reload."], made))
+    Window.Show({ kind = "shelf", id = "all" })
   elseif cmd == "search" or cmd == "index" then
     Window.Show({ kind = "search", id = "" }) -- the search page took the index's place (30.10.2026)
   elseif cmd == "news" then

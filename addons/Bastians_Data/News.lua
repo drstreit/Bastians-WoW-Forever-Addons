@@ -5,6 +5,36 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.6.0:1",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Item prices, bindings and names follow the live game build again; 118 sell prices had been out of date.",
+  },
+  {
+    id = "2.6.0:2",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "The About page names the game build the data comes from; it showed the build of 23 October.",
+  },
+  {
+    id = "2.6.0:3",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "A merchant's goods show the live game's price, and the price of one where the merchant sells a stack.",
+  },
+  {
+    id = "2.6.0:4",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "Mounts and pets in Bastian's Book show their own 3D model, and Bastian's drawings come at twice the size.",
+  },
+  {
+    id = "2.6.0:5",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "The price data keeps loading as it grows: a pack past 130,000 rows no longer fails to load.",
+  },
+  {
     id = "2.2.0:1",
     date = "2026-11-11",
     version = "2.2.0",

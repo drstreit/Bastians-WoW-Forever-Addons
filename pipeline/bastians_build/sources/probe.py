@@ -9,7 +9,7 @@ The table feeds ``Bastians.Coords`` (same row shape as Compat.SetTransformTable)
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from bastians_build.sources.luatable import safe_runtime, to_python
@@ -38,6 +38,8 @@ class ProbeDump:
     interface: int | None
     maps: dict[int, dict]
     results: dict
+    # what the client told in play, of the dump's own build (Bastians_Probe `db.truth`, E6)
+    truth: dict = field(default_factory=dict)
 
 
 def parse_probe_dump(text: str) -> ProbeDump:
@@ -57,6 +59,7 @@ def parse_probe_dump(text: str) -> ProbeDump:
         interface=meta.get("interface"),
         maps={int(k): v for k, v in maps.items()},
         results=results,
+        truth=((db.get("truth") or {}).get(str(meta.get("build"))) or {}),
     )
 
 

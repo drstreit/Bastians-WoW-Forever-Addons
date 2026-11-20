@@ -70,7 +70,7 @@ def test_the_generated_table_registers_per_client(wow: WowRuntime):
     with_margin = wow.eval(f"#{TILES}.Visible(0, -100, -150, 100, 150, 1)")
     assert with_margin == 5  # plus (33, 32); (31, 48) is far away
     # a table for the other client is kept out and the note says so
-    other = "retail" if wow.client == "forever" else "forever"
+    other = "retail"  # a table of the retail builds before 15.11.2026 (ADR 0037)
     wow.execute(
         f'Bastians.Map.RegisterTiles({{ client = "{other}", continents = {{ [0] = {{ [2015] = 1 }} }} }})'
     )

@@ -144,6 +144,11 @@ news = ["date", "text", "page", "mill", "kind", "n"]
 # the Rumour mill (ADR 0057), by claim id: per chapter what the road is saying that no page tells
 # yet, by rank; the zone, or the claim's own place without one; how many channels and claims
 mill = ["chapter", "rank", "zone", "where", "channels", "claims"]
+# Bastian's Book (ADR 0080, book.md "The data"): ForeverDB's special content by permanent id
+# `<kind>:<key>`; place = { map, x, y } in map fractions; done = how the game shows it done;
+# state = "in" or "unknown" (what is obtainable, E2); from = { { how, ref } }, the sources as
+# references (R4.3), both since 17.11.2026 and at the end, so an older suite reads the rest
+wonder = ["name", "chapter", "kind", "hook", "tale", "start", "note", "levelMin", "levelMax", "zones", "place", "side", "facets", "gives", "steps", "done", "npc", "added", "art", "state", "from"]
 
 [packs.text]
 addon = "Bastians_Data_Text_enUS"
@@ -261,8 +266,9 @@ object_zhTW = ["name"]
 # span x span cell of ADT tiles with `pixels` pixels per ADT, levels 0-2 through the mip chain. Measured
 # 20.10.2026 on clientdump output: Forever at 64 px 8.2 MB; retail (39 continents) at 32 px 19 MB, at
 # 64 px 75 MB. both clients at full resolution (64 px); the 40 MB target of
-# map.md was ours, not a client limit. The in-game cost on retail (load time, memory, VRAM) is measured
-# in the retail checklist; `pixels_retail = 32` is the fallback if it fails.
+# map.md was ours, not a client limit. ~~The in-game cost on retail (load time, memory, VRAM) is measured
+# in the retail checklist; `pixels_retail = 32` is the fallback if it fails.~~ Retail left the build
+# 15.11.2026 (ADR 0037); `pixels_<client>` still overrides `pixels` for a client.
 [mapart]
 addon = "Bastians_Map_Art"
 span = 8
@@ -308,7 +314,6 @@ old_label = "US beta"
 "forever/rppvp/alliance/us" = "US RP PvP"
 "forever/rppvp/horde/eu" = "EU RP PvP"
 "forever/rppvp/horde/us" = "US RP PvP"
-"retail/normal/neutral/eu" = "retail EU"
 
 [[market.fill]]
 to = "forever/rp/alliance/eu"

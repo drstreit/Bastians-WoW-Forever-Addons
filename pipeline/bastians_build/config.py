@@ -8,7 +8,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = ROOT / "pipeline" / "config"
-CLIENTS = ("forever", "retail")
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
 
 
 class ConfigError(ValueError):

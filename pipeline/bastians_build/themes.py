@@ -35,6 +35,7 @@ GEOMETRY_KEYS = {
     "action": (16, 40),  # an action button (pictogram and text)
     "actionRow": (14, 32),  # the same inside a row
     "pill": (16, 40),
+    "chip": (14, 32),  # a small pill: a filter's chip in Bastian's Book (book-look.md)
     "tab": (16, 40),
     "row": (16, 48),
     "tile": (10, 32),  # the kind tile in rows and pills
@@ -108,6 +109,9 @@ READABLE += (
     (CHAT_TEXT, ("bg", "panel", "card/bg", "card/panel"), 12),
     (SHEET_TEXT, (PAPER_GROUND,), 12),
     (("sheetTileText",), ("sheetTile",), 12),
+    # Bastian's Book on its dark table (book-look.md section 3): words, labels, the gold
+    (("folioText", "folioMuted", "folioGold"), ("folioTable", "folioBand", "folioBar"), 11),
+    (("folioGoldInk",), ("folioGold",), 11),
 )
 PAPER_READABLE: tuple[tuple[tuple[str, ...], tuple[str, ...], int | str], ...] = (
     (UI_TEXT, (PAPER_GROUND, "card/" + PAPER_GROUND), 12),

@@ -1,6 +1,6 @@
 """Entry point: python -m bastians_build <command> (pipeline.md).
 
-data   --client forever|retail [--addons <AddOns>] [--cmangos <dir>] [--probe <dump>]
+data   --client forever [--addons <AddOns>] [--cmangos <dir>] [--probe <dump>]
        (a probe dump also feeds the "Probe ground truth" report section: P4 landmarks and P7 taxi
        maps against the transforms, taxi nodes against the flight masters, the quest log, flights)
        [--taxi <TaxiNodes.json>] [--transports <toml>]
@@ -21,7 +21,7 @@ data   --client forever --fixture <dir>      the same from the hand-written fixt
                                              <report-dir>/book-state.json)
        [--ground-truth <csv>]              measured NPC places checked, report section (B3.8)
 check  ...                                   validate only, no output
-mapart --client forever|retail --tiles <dir> [--overview <dir>] [--maps <Map.json>] [--out addons]
+mapart --client forever --tiles <dir> [--overview <dir>] [--maps <Map.json>] [--out addons]
        Bastians_Map/Generated/MinimapTiles.lua from the clientdump tile lists (<Map>_tiles.txt);
        with --overview the stitched cells (<Map>_overview.json, clientdump overview) go into
        Bastians_Map_Art/Generated/ (Tiles/*.blp and Overview.lua)
@@ -85,7 +85,6 @@ from bastians_build.navnet import (
     read_levels,
     read_taxi_rows,
     taxi_rows,
-    tdb_danger,
 )
 from bastians_build.overview import install_overview
 from bastians_build.places import PlacesError, add_entrances, add_teleports, read_places
@@ -95,10 +94,12 @@ from bastians_build.sources import client_tables
 from bastians_build.sources.ahsync_export import ExportError, read_export
 from bastians_build.sources.clientdump import ClientDumpError
 from bastians_build.sources.fixture import FixtureError, read_fixture
+from bastians_build.sources.foreverdb_wonders import read_wonders
 from bastians_build.sources.probe import read_probe_dump, transform_table
 from bastians_build.themes import OUT as THEMES_OUT
 from bastians_build.themes import ThemeError, build_themes
 from bastians_build.transports import TransportError, add_transports, read_transports
+from bastians_build.wonders import add_wonders
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -117,11 +118,6 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--cmangos", type=Path, help="CMaNGOS classic-db checkout or Full_DB dump")
         p.add_argument("--probe", type=Path, help="Bastians_Probe dump (data/probe/*.lua)")
         p.add_argument(
-            "--dungeons",
-            type=Path,
-            help="ForeverDB's Dungeons.lua for a client whose AddOns lack it (retail tests)",
-        )
-        p.add_argument(
             "--foreverdb-api",
             type=Path,
             help="ForeverDB's API rows as AHSync stored them (quests.json, vendors.json): places "
@@ -130,8 +126,9 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument(
             "--floor-art",
             type=Path,
-            help="folder with retail's <prefix>_UiMap/_UiMapAssignment/_UiMapXMapArt/_UiMapArtTile"
-            " JSON: the dungeon floors' maps (data.md Dungeons)",
+            help="folder with the retail client's <prefix>_UiMap/_UiMapAssignment/_UiMapXMapArt/"
+            "_UiMapArtTile JSON: the dungeon floors' maps (data.md Dungeons; the Forever client "
+            "has none)",
         )
         p.add_argument("--floor-art-prefix", default="retail", help="their prefix (default retail)")
         p.add_argument(
@@ -171,6 +168,12 @@ def build_parser() -> argparse.ArgumentParser:
             "build is not a fixture; needs --export)",
         )
         p.add_argument(
+            "--wonders",
+            type=Path,
+            help="ForeverDB's Data folder for Bastian's Book's wonders (default: "
+            "<addons>/ForeverDB/Data; a fixture build names the fixture's)",
+        )
+        p.add_argument(
             "--book-previous",
             type=Path,
             help="the book state of the last sent edition: the build writes What's new entries "
@@ -195,15 +198,9 @@ def build_parser() -> argparse.ArgumentParser:
             "the fixture world carries its own)",
         )
         p.add_argument(
-            "--tdb",
-            type=Path,
-            help="TrinityCore's retail world dump TDB_full_world_*.sql (sources.md; needs --dumps "
-            "with the client's FactionTemplate and ContentTuning)",
-        )
-        p.add_argument(
             "--tdb-texts",
             type=Path,
-            help="Forever: TDB's world dump for the long quest texts in Korean and Chinese, taken "
+            help="TDB's world dump for the long quest texts in the other languages, taken "
             'where its English is ours (data.md "Game data in other languages")',
         )
         p.add_argument(
@@ -521,7 +518,6 @@ def main(argv: list[str] | None = None) -> int:
                 addons=args.addons,
                 cmangos=args.cmangos,
                 probe=args.probe,
-                dungeons=args.dungeons,
                 foreverdb_api=args.foreverdb_api,
                 floor_art=args.floor_art,
                 floor_art_prefix=args.floor_art_prefix,
@@ -529,7 +525,6 @@ def main(argv: list[str] | None = None) -> int:
                 taxi=args.taxi,
                 dumps=args.dumps,
                 dump_prefix=args.dump_prefix,
-                tdb=args.tdb,
                 navmesh=args.navmesh,
             )
             sources = load_sources(args.client, paths, eq_spawns=not args.no_eq_spawns)
@@ -543,7 +538,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             if attunements.is_file():
                 add_attunements(world, attunements)
-            # the hand-drawn dungeon maps (ADR 0048): the same file for both clients
+            # the hand-drawn dungeon maps (ADR 0048)
             dungeon_art = args.dungeon_art or (
                 (args.config or CONFIG_DIR / "build.toml").parent / "dungeon_art.toml"
             )
@@ -576,19 +571,16 @@ def main(argv: list[str] | None = None) -> int:
         export = read_export(args.export) if args.export else None
         if export:
             add_market(world, export, config.market)
-        # the client's own item names in every installed text language (ADR 0035); Forever only:
-        # the retail client names its items in its own language at runtime, and the names of every
-        # referred item made each retail language pack 10.8 MB (29.10.2026)
+        # the client's own item names in every installed text language (ADR 0035)
         client_names = (
-            client_tables.localized_names(args.dumps, args.client)
-            if args.dumps and args.client == "forever"
+            client_tables.localized_names(args.dumps, args.client, prefix=args.dump_prefix)
+            if args.dumps
             else {}
         )
-        if args.l10n or args.tdb or args.tdb_texts or client_names:
+        if args.l10n or args.tdb_texts or client_names:
             # the game data in other languages (data.md, ADR 0033): QuestieDB's l10n lookups,
-            # CMaNGOS' quest locales (German, Chinese) and TDB's long quest texts (Korean,
-            # Chinese) for Forever, TDB's locale tables for retail
-            added = add_l10n(world, args.l10n, args.cmangos, args.tdb, client_names, args.tdb_texts)
+            # CMaNGOS' quest locales (German, Chinese) and TDB's long quest texts
+            added = add_l10n(world, args.l10n, args.cmangos, client_names, args.tdb_texts)
             for locale, n in added.items():
                 print(f"l10n {locale}: {n} records")
         checks = compare(world, read_truth(args.ground_truth)) if args.ground_truth else None
@@ -604,7 +596,21 @@ def main(argv: list[str] | None = None) -> int:
         if book_dir and export:
             # the Strategies book (strategies-design.md section 6), the claims from the export
             add_book(world, export, book_dir, transforms, args.art or export.folder / "art")
-        if export and world.client == "forever":
+            fdb = args.wonders or (args.addons / "ForeverDB" / "Data" if args.addons else None)
+            if fdb and fdb.is_dir() and world.records.get("chapter"):
+                # Bastian's Book (ADR 0080): ForeverDB's secrets, collections and rares
+                # a mount's and a pet's creature from the client's spells: their models (BK8);
+                # the client's own items and spells: what is not there is out (book.md, E2)
+                dump = (
+                    client_tables.dump_name(args.dumps, args.client, args.dump_prefix)
+                    if args.dumps
+                    else None
+                )
+                summons = client_tables.read_summons(args.dumps, dump) if dump else {}
+                ids = client_tables.read_ids(args.dumps, dump) if dump else None
+                n = add_wonders(world, read_wonders(fdb), book_dir / "wonders.toml", summons, ids)
+                print(f"wonders: {n}")
+        if export:
             # the daily run's selection: the export's strategies scored (design section 7)
             found = candidates(export, world)
             report = write_report(found, args.report_dir)
@@ -642,9 +648,6 @@ def main(argv: list[str] | None = None) -> int:
             # the world graph's network (ADR 0026, W3b): danger points and the taxi paths
             danger_path = args.report_dir / f"nav-danger-{world.client}.json"
             danger = danger_points(world, transforms)
-            extra = tdb_danger(sources.tdb)  # retail: the hostile spawns stay out of the pack
-            danger["hostile"] += extra["hostile"]
-            danger["guards"] += extra["guards"]
             write_text(danger_path, json.dumps(danger, sort_keys=True) + "\n")
             if sources.taxi_paths:
                 taxi_path = args.report_dir / f"nav-taxi-{world.client}.json"

@@ -3,6 +3,8 @@ project with its own version, an unchanged one that was sent is left alone, the 
 loader and every pack, the whole install boots, and the changelog is What's new since the last
 sent edition."""
 
+import dataclasses
+import hashlib
 import json
 import shutil
 import zipfile
@@ -88,8 +90,16 @@ def test_an_edition_without_the_walk_network_is_refused(tmp_path):
 def test_the_build_runs_the_nav_step_too(tmp_path, monkeypatch):
     ran = []
     monkeypatch.setattr(data_update, "stream", lambda cmd, cwd: ran.append(cmd[3]) or 0)
+    # run_build forgets the last build's report where the build writes it; in a test that is the
+    # temp folder (until 15.11.2026 every test run deleted the checkout's build/report.md)
+    report, links = tmp_path / "report.md", tmp_path / "links-forever.json"
+    for path in (report, links):
+        path.write_text("old", encoding="utf-8")
+    monkeypatch.setattr(data_update, "REPORT", report)
+    monkeypatch.setattr(data_update, "LINKS", links)
     data_update.run_build(inputs(tmp_path), tmp_path / "packs")
     assert ran == ["data", "nav"]
+    assert not report.exists() and not links.exists()
 
 
 def test_the_suite_brings_its_data_and_the_data_its_packs():
@@ -486,6 +496,24 @@ def build_with_report(records: str):
         (packs / "report.md").write_text(REPORT % records, encoding="utf-8", newline="\n")
 
     return build
+
+
+def test_a_count_that_falls_by_design_is_a_line_and_holds_only_when_gone():
+    """20.11.2026: AHSync's farm signals end with their launch windows, so "market signal" fell
+    874 -> 400 (the 400: the avoid cap, 20 markets x 20) and the guard held five editions, each
+    waiting for --allow-drift. A count in WINDOWED is said and passes; gone altogether it holds,
+    and every other count of the same pack is held as before."""
+    assert ("market", "signal") in data_update.WINDOWED
+    sent = {"market": {"signal": 874, "price": 111765}}
+    assert data_update.drift(sent, {"market": {"signal": 400, "price": 130846}}) == (
+        [],
+        ["market price 111765 -> 130846", "market signal 874 -> 400"],
+    )
+    assert data_update.drift(sent, {"market": {"signal": 1, "price": 111765}})[0] == []
+    assert data_update.drift(sent, {"market": {"price": 111765}})[0] == ["market signal 874 -> 0"]
+    assert data_update.drift(sent, {"market": {"signal": 400, "price": 90000}})[0] == [
+        "market price 111765 -> 90000"
+    ]
 
 
 def test_an_edition_whose_rows_fell_by_a_tenth_is_held(tmp_path: Path, capsys):
@@ -976,3 +1004,218 @@ def test_the_boot_tests_suite_is_the_one_players_install_today(tmp_path: Path):
     quiet = data_update.current_suite({}, listed=lambda config, project_name: None, root=tmp_path)
     assert quiet[0] == folder / "Bastians_Suite.zip" and quiet[2] == []
     assert "were not read" in quiet[1][0]
+
+
+def source(addons: Path, folder: str, version: str, files: dict[str, str] | None = None) -> Path:
+    root = addons / folder
+    root.mkdir(parents=True, exist_ok=True)
+    (root / f"{folder}.toc").write_text(f"## Title: {folder}\n## Version: {version}\n", "utf-8")
+    for rel, text in (files or {}).items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+    return root
+
+
+def test_a_sources_hash_takes_its_files_in_posix_order_on_every_machine(tmp_path: Path):
+    """Plan-data-quality.md L2: the release checks its copy of the notebook's sources against the
+    hash the notebook wrote. Windows sorted paths without case, Linux with it, so one tree had
+    two hashes."""
+    root = source(tmp_path, "ForeverDB", "0.62.1", {"a.lua": "a", "Data/x.lua": "x", "B.lua": "b"})
+    h = hashlib.sha256()
+    for rel in ("B.lua", "Data/x.lua", "ForeverDB.toc", "a.lua"):  # Linux's order
+        h.update(rel.encode())
+        h.update(hashlib.sha256((root / rel).read_bytes()).digest())
+    assert data_update.tree_hash(root) == h.hexdigest()[:16]
+    assert data_update.toc_version(root) == "0.62.1"
+    assert data_update.toc_version(tmp_path) == "?"
+
+
+def test_an_edition_records_the_sources_and_the_engine_it_was_built_from(
+    tmp_path: Path, monkeypatch
+):
+    """Plan-data-quality.md L2: the ledger records them, so the watch and a release can say when
+    an edition's inputs are older than the edition's before."""
+    source(tmp_path, "ForeverDB", "0.62.1", {"Data/NPCs.lua": "-- npcs"})
+    source(tmp_path, "EverythingQuests", "2.11.0")
+    engine = tmp_path / "engine-forever.json"
+    engine.write_text('{"prefix": "f70938", "push": 17065422}', encoding="utf-8")
+    monkeypatch.setattr(data_update, "ENGINE_STATE", engine)
+    probe = tmp_path / "2026-11-16-forever-70938.lua"
+    built = build_client.BuildInputs(
+        client="forever", addons=tmp_path, prefix="f70938", export=inputs(tmp_path).export
+    )
+    assert data_update.engine_state(built) == {"dumps": 70938, "push": 17065422}
+    built = dataclasses.replace(built, probe=probe)
+    assert data_update.engine_state(built) == {"dumps": 70938, "push": 17065422, "probe": 70938}
+    # the push is of other dumps: unknown for these; a pinned prefix names no build
+    older = dataclasses.replace(built, prefix="f70862", probe=None)
+    assert data_update.engine_state(older) == {"dumps": 70862}
+    assert data_update.engine_state(dataclasses.replace(built, prefix="beta", probe=None)) == {}
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    edition, _ = data_update.update(
+        built,
+        tmp_path / "out",
+        ledger_path=tmp_path / "editions.json",
+        book_toml=book_toml,
+        today="2026-11-16",
+        book_states=tmp_path / "states",
+        build=fake_build(),
+        boot=False,
+    )
+    assert edition["sources"] == {
+        "EverythingQuests": {
+            "version": "2.11.0",
+            "hash": data_update.tree_hash(tmp_path / "EverythingQuests"),
+        },
+        "ForeverDB": {"version": "0.62.1", "hash": data_update.tree_hash(tmp_path / "ForeverDB")},
+    }
+    assert edition["engine"] == {"dumps": 70938, "push": 17065422, "probe": 70938}
+    kept = json.loads((tmp_path / "editions.json").read_text(encoding="utf-8"))["editions"]
+    assert kept[-1]["sources"] == edition["sources"]
+
+
+def test_behind_names_what_is_older_and_says_nothing_of_what_is_unknown():
+    old = {
+        "sources": {
+            "ForeverDB": {"version": "0.57.24"},
+            "EverythingQuests": {"version": "2.11.0"},
+            "Questie": {"version": "12.9.0"},
+        },
+        "engine": {"dumps": 70938, "push": 17065422, "probe": 70938},
+    }
+    same = {**old}
+    assert data_update.behind(old, same) == []
+    assert data_update.behind(None, old) == [] and data_update.behind(old, None) == []
+    release = {
+        "sources": {
+            "ForeverDB": {"version": "0.57.15"},  # 2.5.0's
+            "EverythingQuests": {"version": "2.12.0"},  # newer is fine
+            # Questie unknown here: says nothing
+        },
+        "engine": {"dumps": 70938, "probe": 70862},
+    }
+    assert data_update.behind(old, release) == [
+        "ForeverDB 0.57.15 (was 0.57.24)",
+        "the hotfix push none of build 70938 (was 17065422)",
+        "the probe of build 70862 (was 70938)",
+    ]
+    # a newer build with no hotfixes yet is not behind; an older build is
+    assert data_update.behind(old, {"engine": {"dumps": 71002}}) == []
+    assert data_update.behind(old, {"engine": {"dumps": 70862, "push": 99999999}}) == [
+        "the engine dumps of build 70862 (was 70938)"
+    ]
+
+
+def ledger_rows(**known: tuple[int, int, int]) -> list[dict]:
+    """A quality ledger as the build writes it: {kind: (count, known, classic)}."""
+    return [
+        {
+            "kind": kind.replace("_", " "),
+            "count": count,
+            "known": k,
+            "unknown": count - k,
+            "sources": {"classic": c, "fdb": k - c},
+        }
+        for kind, (count, k, c) in known.items()
+    ]
+
+
+def build_with_quality(tag: str, rows: list[dict] | None):
+    """The fixture packs with the build's quality ledger beside them (None: no file)."""
+    base = fake_build({"Bastians_Data_Market": [tag]})
+
+    def build(inputs: build_client.BuildInputs, packs: Path) -> None:
+        base(inputs, packs)
+        path = packs / data_update.QUALITY.name
+        path.unlink(missing_ok=True)
+        if rows is not None:
+            path.write_text(json.dumps(rows), encoding="utf-8")
+
+    return build
+
+
+def test_the_edition_keeps_the_quality_ledger_and_a_jump_holds_it(tmp_path: Path, capsys):
+    """Plan-data-quality.md L1: the edition ledger keeps the quality numbers. ADR 0073's rule
+    holds for every kind: a fall is the watch's alarm and ships; a jump (the known records of a
+    kind fell, or its Classic records rose, by more than a tenth) holds the edition unless
+    --allow-drift."""
+    drift = data_update.quality_drift
+
+    def by_kind(**known: tuple[int, int, int]) -> dict:
+        return {r["kind"]: r for r in ledger_rows(**known)}
+
+    before = by_kind(npc_places=(11523, 8487, 3779))
+    assert drift(before, by_kind(npc_places=(11523, 8400, 3779))) == (
+        [],
+        ["npc places: known 8487 -> 8400"],
+    )
+    assert drift(before, by_kind(npc_places=(11523, 7000, 3779)))[0] == [
+        "npc places: known 8487 -> 7000"
+    ]
+    assert drift(before, by_kind(npc_places=(11523, 8487, 4200)))[0] == [
+        "npc places: Classic 3779 -> 4200"
+    ]
+    # more known and less Classic is good news; a small number and a kind one side lacks say
+    # nothing
+    assert drift(before, by_kind(npc_places=(11600, 9000, 100)))[0] == []
+    small = by_kind(dungeon_bosses=(39, 27, 0))
+    assert drift(small, by_kind(dungeon_bosses=(39, 10, 0)))[0] == []
+    assert drift(None, before) == ([], []) and drift(before, small) == ([], [])
+    ledger = tmp_path / "editions.json"
+    book_toml = tmp_path / "book.toml"
+    book_toml.write_text(BOOK, encoding="utf-8")
+    common = {
+        "ledger_path": ledger,
+        "book_toml": book_toml,
+        "today": "2026-11-16",
+        "book_states": tmp_path / "states",
+        "boot": False,
+    }
+    out = tmp_path / "out"
+    vendor = (16035, 12472, 11890)
+    old, _ = data_update.update(
+        inputs(tmp_path), out, build=build_with_quality("a", None), **common
+    )
+    assert "quality" not in old  # sent before the build kept a ledger: nothing to hold against
+    data_update.mark_sent(ledger, old, 1)
+    rows = ledger_rows(npc_places=(11523, 8487, 3779), vendor_prices=vendor)
+    first, _ = data_update.update(
+        inputs(tmp_path), out, build=build_with_quality("b", rows), **common
+    )
+    assert first["quality"]["npc places"] == {
+        "count": 11523,
+        "known": 8487,
+        "unknown": 3036,
+        "sources": {"classic": 3779, "fdb": 4708},
+    }
+    data_update.mark_sent(ledger, first, 2)
+    jumped = ledger_rows(npc_places=(11523, 7000, 3779), vendor_prices=vendor)
+    with pytest.raises(
+        data_update.DataUpdateError,
+        match=r"quality ledger jumped by more than a tenth.*npc places: known 8487 -> 7000",
+    ):
+        data_update.update(inputs(tmp_path), out, build=build_with_quality("c", jumped), **common)
+    # a smaller fall ships, each change a line: the watch alarms
+    capsys.readouterr()
+    fallen = ledger_rows(npc_places=(11523, 8480, 3779), vendor_prices=vendor)
+    second, _ = data_update.update(
+        inputs(tmp_path), out, build=build_with_quality("d", fallen), **common
+    )
+    said = capsys.readouterr().out.splitlines()
+    assert [line for line in said if line.startswith("quality:")] == [
+        "quality: npc places: known 8487 -> 8480"
+    ]
+    assert second["quality"]["npc places"]["known"] == 8480
+    # the jump that is right ships with --allow-drift
+    third, _ = data_update.update(
+        inputs(tmp_path),
+        out,
+        build=build_with_quality("e", jumped),
+        allow_drift=True,
+        **common,
+    )
+    assert third["quality"]["npc places"]["known"] == 7000
+    # a build without the file is refused once a sent edition carried the ledger
+    with pytest.raises(data_update.DataUpdateError, match=r"no quality-forever\.json"):
+        data_update.update(inputs(tmp_path), out, build=build_with_quality("f", None), **common)

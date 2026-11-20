@@ -27,7 +27,7 @@ def strip(text: str) -> str:
 
 
 def signals(wow: WowRuntime) -> str:
-    market = "forever/normal/alliance/us" if wow.client == "forever" else "retail/normal/neutral/eu"
+    market = "forever/normal/alliance/us"
     return (
         "(function() local d = Bastians:GetService('data'); local out = {} "
         f"for _, k in ipairs(d:Index('signal.byMarket', '{market}')) do out[#out + 1] = d:Get('signal', k) end "
@@ -49,12 +49,6 @@ def build(wow: WowRuntime, ctx: str):
 
 def test_today_filters_capital_time_profession_and_sorts_by_gold_per_minute(wow: WowRuntime):
     boot(wow)
-    if wow.client != "forever":
-        lines, dropped, total = build(
-            wow, "{ capital = 0, minutes = 60, professions = {}, now = 1760000000 }"
-        )
-        assert lines == [("retail/normal/neutral/eu:8", "sell", 60.0)] and total == 1
-        return
     # rich, time, no professions known (nil): everything valid stays, craft lines carry a note
     lines, dropped, total = build(
         wow, "{ capital = 10000000, minutes = 120, professions = nil, now = 1760000000 }"
@@ -112,8 +106,6 @@ def test_today_filters_capital_time_profession_and_sorts_by_gold_per_minute(wow:
 
 def test_reason_lines_and_the_profession_note(wow: WowRuntime):
     boot(wow)
-    if wow.client != "forever":
-        return
     reason = lambda key, ctx: strip(  # noqa: E731
         wow.eval(
             f"{MOD}.Today.reason(({MOD}.Today.line(Bastians:GetService('data'):Get('signal', '{key}'), {ctx})))"
@@ -136,17 +128,12 @@ def test_spots_are_entities_with_gold_per_hour_and_evidence(wow: WowRuntime):
     boot(wow)
     assert wow.eval("Bastians:Entity('spot:1'):Name()") == "Hogger's camp"
     summary = strip(wow.eval("Bastians:Entity('spot:1'):Summary()"))
-    if wow.client == "forever":
-        # 30 linen at 38c = 11s 40c; the claw has no price
-        assert summary == "level 8-12, 11s/h (1 items without price), 3 channels, reach 12000"
-        assert wow.eval(f"{MOD}.Spots.GoldPerHour(Bastians:GetService('data'):Get('spot', 1))") == (
-            1140,
-            1,
-        )
-    else:
-        assert summary.startswith(
-            "level 8-12, 12s/h (1 items without price), 3 channels"
-        )  # 30 x 40c
+    # 30 linen at 38c = 11s 40c; the claw has no price
+    assert summary == "level 8-12, 11s/h (1 items without price), 3 channels, reach 12000"
+    assert wow.eval(f"{MOD}.Spots.GoldPerHour(Bastians:GetService('data'):Get('spot', 1))") == (
+        1140,
+        1,
+    )
     # no rate known: the summary does not say it, the worth column does
     assert strip(wow.eval("Bastians:Entity('spot:3'):Summary()")) == "level 10-15"
     assert wow.eval("Bastians:Entity('strategy:11'):Name()") == "Hogger's camp linen farm"
@@ -216,20 +203,12 @@ def test_window_today_spots_and_price_tabs(wow: WowRuntime):
     summary = strip(wow.eval(f"{WIN}.summary:GetText()"))
     assert texts[0] == "INCOME  gold per day" and texts[1].startswith("Today  ")  # R9, first
     texts = texts[3:]  # the income block: the section, today, the last 7 days (no character yet)
-    if wow.client == "forever":
-        assert texts[0] == "SELL  2" and texts[3] == "FARM  1" and texts[5] == "AVOID  1"
-        assert texts[1] == "Light Leather  +4s, 2 min, 2s/min, 50 %"
-        assert summary == "4 of 7 signals - 2 need more capital - capital 1s, 30 min"
-    else:
-        assert texts[0] == "SELL  1"
+    assert texts[0] == "SELL  2" and texts[3] == "FARM  1" and texts[5] == "AVOID  1"
+    assert texts[1] == "Light Leather  +4s, 2 min, 2s/min, 50 %"
+    assert summary == "4 of 7 signals - 2 need more capital - capital 1s, 30 min"
     wow.execute("Bastians:RunAction('gold.farm', 'item:2589', { source = 'test' })")
     texts = [strip(r.text) for r in wow.eval(f"{WIN}.tree.flat").values()]
     first, second = ("Fargodeep Mine", "Hogger's camp")  # Blood Saber lifts the mine to 32s/h
-    if wow.client == "retail":
-        first, second = (
-            second,
-            first,
-        )  # the retail pack prices no saber: linen only, 30 vs 20 an hour
     assert texts[0].startswith(first) and texts[1].startswith(second)
     assert strip(wow.eval(f"{WIN}.summary:GetText()")) == "2 farm spots for Linen Cloth"
     wow.execute("Bastians:RunAction('gold.prices', 'item:2589', { source = 'test' })")

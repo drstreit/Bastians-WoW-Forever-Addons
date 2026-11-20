@@ -4,7 +4,7 @@ data/captures/<client>/ (world-graph.md §9, W11; the step places: data.md "Step
 play", package QK1). Positions and times only: the account folder becomes a short hash, no name
 is written.
 
-Usage: python tools/capture_import.py --client forever|retail [--wow <client folder>]
+Usage: python tools/capture_import.py --client forever [--wow <client folder>]
        [--file <Bastians_Data.lua>] [--out data/captures]
        python tools/capture_import.py --text <file>      a player's pasted text (catalog review B5)
        python tools/capture_import.py --issue <number>   the same from a GitHub issue, through gh
@@ -244,9 +244,7 @@ def write_capture(cap: dict, out_dir: Path, tag: str) -> tuple[Path, bool]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--client", choices=("forever", "retail"), help="the client of the saved variables"
-    )
+    parser.add_argument("--client", choices=("forever",), help="the client of the saved variables")
     parser.add_argument("--text", type=Path, help="a player's pasted text (- for stdin)")
     parser.add_argument("--issue", type=int, help="a GitHub issue number with a player's text")
     parser.add_argument("--wow", help="client folder that contains Interface/AddOns (remembered)")

@@ -76,7 +76,6 @@ def test_choices_are_remembered_per_list_and_fall_back_when_empty(wow: WowRuntim
 
 
 def test_gold_sorts_npcs_by_loot_per_kill_as_a_job(wow: WowRuntime):
-    wow.needs("Bastians_Gold")  # no Gold on retail
     boot(wow)
     open_list(wow, "mob")  # the NPCs' sorts reach the Mobs list: its records are NPCs
     assert "Loot per kill" in menu(wow, TREE, "sort")

@@ -19,15 +19,10 @@ def no_real_api_rows(tmp_path: Path, monkeypatch):
 
 
 def make_config(tmp_path: Path, build: str = "") -> Path:
-    client = tmp_path / "wow" / "_retail_"
-    (client / "Interface" / "AddOns").mkdir(parents=True)
     beta = tmp_path / "wow" / "_classic_beta_"
     (beta / "Interface" / "AddOns").mkdir(parents=True)
     config = tmp_path / "install.toml"
-    config.write_text(
-        f'[clients]\nforever = "{beta.as_posix()}"\nretail = "{client.as_posix()}"\n' + build,
-        encoding="utf-8",
-    )
+    config.write_text(f'[clients]\nforever = "{beta.as_posix()}"\n' + build, encoding="utf-8")
     return config
 
 
@@ -46,16 +41,55 @@ def test_inputs_come_from_the_install_config(tmp_path):
     assert "--probe" in build_client.commands(forever, tmp_path)[0]
     assert forever.prefix == "beta2" and forever.cmangos == cmangos
     assert forever.ground_truth == ROOT / "data" / "ground-truth" / "x.csv"
-    retail = build_client.read_inputs("retail", config)
-    assert retail.prefix == "retail" and retail.cmangos is None  # CMaNGOS is Forever data only
-    assert retail.ground_truth is None  # the measured places are Forever's
     with pytest.raises(build_client.BuildClientError, match="client must be"):
-        build_client.read_inputs("classic", config)
+        build_client.read_inputs("retail", config)  # no client of ours since 15.11.2026
     with pytest.raises(build_client.BuildClientError, match="missing"):
-        build_client.read_inputs("retail", tmp_path / "nope.toml")
+        build_client.read_inputs("forever", tmp_path / "nope.toml")
     config.write_text("[clients]\n", encoding="utf-8")
     with pytest.raises(build_client.BuildClientError, match="no client folder"):
-        build_client.read_inputs("retail", config)
+        build_client.read_inputs("forever", config)
+
+
+def _engine(tmp_path: Path, monkeypatch, version: str, sets: tuple[str, ...]) -> Path:
+    """A client with `.build.info` above it (as on the desktop) and the named dump sets."""
+    config = make_config(tmp_path)
+    info = tmp_path / "wow" / ".build.info"
+    info.write_text(f"Product!STRING:0|Version!STRING:0\nwowf|{version}\n", encoding="utf-8")
+    dumps = tmp_path / "out"
+    dumps.mkdir()
+    for prefix in sets:
+        for table in ("Map", "ItemSparse"):
+            (dumps / f"{prefix}_{table}.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(build_client, "DUMPS", dumps)
+    return config
+
+
+def test_the_build_takes_the_dumps_of_the_clients_own_build(tmp_path, monkeypatch):
+    # plan-data-quality.md E2 to E4: no prefix pinned by hand; tools/engine.py writes f<build>
+    config = _engine(tmp_path, monkeypatch, "1.60.1.70938", ("f70862", "f70938"))
+    inputs = build_client.read_inputs("forever", config)
+    assert (inputs.prefix, inputs.prefix_note) == ("f70938", None)
+
+
+def test_without_the_builds_dumps_the_newest_older_set_and_a_note(tmp_path, monkeypatch):
+    config = _engine(tmp_path, monkeypatch, "1.60.1.70950", ("f70862", "f70938", "f71000"))
+    inputs = build_client.read_inputs("forever", config)
+    assert inputs.prefix == "f70938"
+    assert inputs.prefix_note == "no engine dumps for 1.60.1.70950 yet: built on f70938"
+
+
+def test_a_pinned_prefix_still_wins_and_the_mirror_keeps_build_info_at_its_root(
+    tmp_path, monkeypatch
+):
+    config = _engine(tmp_path, monkeypatch, "1.60.1.70938", ("f70938",))
+    pinned = config.read_text(encoding="utf-8") + '[build.dump_prefix]\nforever = "f70862"\n'
+    config.write_text(pinned, encoding="utf-8")
+    assert build_client.read_inputs("forever", config).prefix == "f70862"
+    mirror = tmp_path / "mirror"
+    mirror.mkdir()
+    (mirror / ".build.info").write_text("Product!STRING:0|Version!STRING:0\nwowf|1.60.1.70938\n")
+    assert build_client.engine_prefix(mirror) == ("f70938", None)
+    assert build_client.engine_prefix(tmp_path / "nowhere")[0] == "beta"
 
 
 def test_the_source_addons_can_live_outside_a_client_that_is_gone(tmp_path):
@@ -65,7 +99,6 @@ def test_the_source_addons_can_live_outside_a_client_that_is_gone(tmp_path):
     config = make_config(tmp_path, f'[build.sources]\nforever = "{kept.as_posix()}"\n')
     (tmp_path / "wow" / "_classic_beta_" / "Interface" / "AddOns").rmdir()
     assert build_client.read_inputs("forever", config).addons == kept
-    assert build_client.read_inputs("retail", config).addons.name == "AddOns"  # unchanged
     config.write_text(
         config.read_text(encoding="utf-8").replace(kept.as_posix(), (tmp_path / "x").as_posix()),
         encoding="utf-8",
@@ -109,10 +142,10 @@ def test_commands_run_data_then_mapart_when_the_extracts_exist_then_nav(tmp_path
 def test_dry_run_prints_the_commands(tmp_path, monkeypatch, capsys):
     config = make_config(tmp_path)
     monkeypatch.setattr(build_client, "DUMPS", tmp_path / "out")
-    assert build_client.main(["--client", "retail", "--dry-run", "--config", str(config)]) == 0
+    assert build_client.main(["--client", "forever", "--dry-run", "--config", str(config)]) == 0
     out = capsys.readouterr().out
-    assert "> data --client retail --addons" in out and "note: no tile lists" in out
-    assert build_client.main(["--client", "retail", "--config", str(tmp_path / "x.toml")]) == 2
+    assert "> data --client forever --addons" in out and "note: no tile lists" in out
+    assert build_client.main(["--client", "forever", "--config", str(tmp_path / "x.toml")]) == 2
 
 
 def test_a_forever_build_passes_the_books_pictures_and_last_state(tmp_path, monkeypatch, capsys):
@@ -182,7 +215,7 @@ def test_this_machines_inputs_have_a_hash_and_say_what_they_are(tmp_path: Path):
 
 def test_the_api_rows_ride_the_forever_build_when_ahsync_fetched_them(tmp_path, monkeypatch):
     """ForeverDB's API (data.md): AHSync's last complete fetch is an input of the Forever build,
-    found by itself or named in install.toml; retail never reads it."""
+    found by itself or named in install.toml."""
     monkeypatch.setattr(build_client, "DUMPS", tmp_path / "out")
     config = make_config(tmp_path)
     assert build_client.read_inputs("forever", config).foreverdb_api is None
@@ -194,4 +227,51 @@ def test_the_api_rows_ride_the_forever_build_when_ahsync_fetched_them(tmp_path, 
     assert inputs.foreverdb_api == latest
     data = build_client.commands(inputs, tmp_path / "packs", skip_mapart=True)[0]
     assert data[data.index("--foreverdb-api") + 1] == str(latest)
-    assert build_client.read_inputs("retail", config).foreverdb_api is None
+
+
+def test_the_long_texts_come_from_tdb_texts_else_the_tdb_dump(tmp_path):
+    """Forever's long quest texts (data.md "Game data in other languages"): [build.tdb_texts], else
+    [build.tdb] as a path or under the `retail` key an install.toml of the retail days names it."""
+    dump = tmp_path / "TDB_full_world.sql"
+    dump.write_text("x", encoding="utf-8")
+    for build in (
+        f'[build.tdb_texts]\nforever = "{dump.as_posix()}"\n',
+        f'[build]\ntdb = "{dump.as_posix()}"\n',
+        f'[build.tdb]\nretail = "{dump.as_posix()}"\n',
+    ):
+        config = make_config(tmp_path / str(len(build)), build)
+        inputs = build_client.read_inputs("forever", config)
+        assert inputs.tdb_texts == dump, build
+        data = build_client.commands(inputs, tmp_path / "packs", skip_mapart=True)[0]
+        assert data[data.index("--tdb-texts") + 1] == str(dump) and "--tdb" not in data
+    assert build_client.read_inputs("forever", make_config(tmp_path / "none")).tdb_texts is None
+
+
+def test_the_build_takes_the_newest_probe_of_the_clients_build(tmp_path, monkeypatch):
+    # plan-data-quality.md E5: [build.probe] "auto", the records tools/engine.py imports
+    config = _engine(tmp_path, monkeypatch, "1.60.1.70938", ("f70938",))
+    imported, kept = tmp_path / "local-probe", tmp_path / "data-probe"
+    imported.mkdir()
+    kept.mkdir()
+    for folder, name in (
+        (kept, "2026-10-23-forever-70532.lua"),
+        (imported, "2026-11-16-forever-70938.lua"),
+        (imported, "2026-11-18-forever-70938.lua"),
+    ):
+        (folder / name).write_text("BastiansProbeDB = {}\n", encoding="utf-8")
+    client = tmp_path / "wow" / "_classic_beta_"
+    path, note = build_client.engine_probe(client, (imported, kept))
+    assert path == imported / "2026-11-18-forever-70938.lua" and note is None
+    (imported / "2026-11-16-forever-70938.lua").unlink()
+    (imported / "2026-11-18-forever-70938.lua").unlink()
+    path, note = build_client.engine_probe(client, (imported, kept))
+    assert path == kept / "2026-10-23-forever-70532.lua"
+    assert note.startswith("the probe is of build 70532 (2026-10-23), the client 1.60.1.70938")
+    assert build_client.engine_probe(client, (tmp_path / "none",)) == (
+        None,
+        "no probe record: the build's checks against the game are missing",
+    )
+    config.write_text(config.read_text("utf-8") + '[build.probe]\nforever = "auto"\n', "utf-8")
+    monkeypatch.setattr(build_client, "engine_probe", lambda c: (kept / "x.lua", "a note"))
+    inputs = build_client.read_inputs("forever", config)
+    assert (inputs.probe, inputs.probe_note) == (kept / "x.lua", "a note")

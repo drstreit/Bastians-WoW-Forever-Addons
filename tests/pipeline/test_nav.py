@@ -141,7 +141,7 @@ def test_without_graphs_the_pack_is_a_stub(tmp_path, capsys):
             [
                 "nav",
                 "--client",
-                "retail",
+                "forever",
                 "--graphs",
                 str(tmp_path / "none"),
                 "--navnet",
@@ -153,7 +153,7 @@ def test_without_graphs_the_pack_is_a_stub(tmp_path, capsys):
         == 0
     )
     text = (out / "Bastians_Data_Nav" / "Generated" / "Nav.lua").read_text(encoding="utf-8")
-    assert "RegisterPack" not in text and "no walk network in this retail build" in text
+    assert "RegisterPack" not in text and "no walk network in this forever build" in text
     assert "wrote the stub" in capsys.readouterr().out
 
 

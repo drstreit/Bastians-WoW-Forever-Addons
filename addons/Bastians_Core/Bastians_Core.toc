@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Core
 ## IconTexture: Interface\AddOns\Bastians_Core\Icon
 ## Notes: Module system, message bus, registries, settings hub and UI kit for the Bastian's suite.
@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## SavedVariables: BastiansCoreDB
 ## SavedVariablesPerCharacter: BastiansCoreCharDB
@@ -50,7 +50,6 @@ Compat\Contract.lua
 Compat\Shared.lua
 Compat\Modern.lua
 Compat\Forever.lua
-Compat\Retail.lua
 Compat\Msp.lua
 Registry.lua
 Coords.lua

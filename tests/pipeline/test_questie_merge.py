@@ -256,6 +256,45 @@ def test_forever_stock_fills_an_empty_list_and_an_unknown_price_stays_unknown():
     assert w.get("npc", 3) is None
 
 
+def test_a_classic_vendor_row_takes_the_engines_price_and_stack():
+    """Plan-data-quality.md rule 3 (measured 16.11.2026: of 1,768 items seen priced at Forever's
+    merchants, the engine was right wherever it and Classic differ, 307 times, Classic never):
+    the client's BuyPrice for its VendorStackCount, with the hotfixes. The row stays CMaNGOS'
+    (who sells it); its sixth field names the price's source."""
+    from bastians_build.sources import cmangos
+    from bastians_build.sources.client_tables import ClientItem, ClientTables
+
+    def item(item_id: int, buy: int | None, stack: int | None) -> ClientItem:
+        return ClientItem(item_id, "x", 1, 1, 1, 0, 0, 1, buy, 20, None, stack)
+
+    w = world()
+    w.add("npc", 1, {"name": "Innkeeper"})
+    s = Sources(client="forever")
+    s.cm_items = cmangos.item_rows(
+        {
+            "item_template": [
+                {"entry": 159, "BuyPrice": 25},  # Refreshing Spring Water: a stack of 5
+                {"entry": 3137, "BuyPrice": 200},  # Deadly Throwing Axe: 7,593 in Forever
+                {"entry": 18, "BuyPrice": 40},  # not in this client
+                {"entry": 19, "BuyPrice": 0},
+            ]
+        }
+    )
+    s.cm_vendors = [cmangos.VendorRow(1, i, None, None) for i in (159, 3137, 18, 19)]
+    s.cm_vendors.append(cmangos.VendorRow(1, 159, 5, 9000))  # a limited row too
+    s.client_tables = ClientTables(
+        items={159: item(159, 25, 5), 3137: item(3137, 7593, 1), 19: item(19, 0, 1)}
+    )
+    merge_vendors_and_trainers(w, s)
+    assert w.get("npc", 1)["vendor"] == [
+        [159, 25, 5, False, "classic", "client"],
+        [3137, 7593, 1, False, "classic", "client"],
+        [18, 40, None, False, "classic"],  # the client lacks it: Classic's, stack unknown
+        [19, 0, None, False, "classic"],  # no price in the client: as before
+        [159, 25, 5, True, "classic", "client"],
+    ]
+
+
 def test_a_trainer_guessed_a_vendor_by_title_is_a_trainer():
     w = world()
     w.add("npc", 1, {"flags": ["vendor"]})  # Nyassa, "Alchemist": the title's guess, sells nothing
@@ -472,13 +511,3 @@ def test_an_items_spots_come_from_its_first_droppers_and_are_spread():
     spread = w.get("quest", 2)["spots"][1429]
     assert len(spread) == canon.MAX_SPOTS_PER_MAP
     assert spread[0] == [0.0, 0.5, "loot", 1, "npc:7"] and spread[1][0] == 0.39
-
-
-def test_only_a_forever_build_makes_item_spots(monkeypatch):
-    """Retail's pack has no objective spots by design: a running quest's place there is the
-    client's (data.md "Retail data")."""
-    ran = []
-    monkeypatch.setattr(canon, "merge_item_spots", lambda w: ran.append(w.client))
-    canon.build_world(Sources(client="retail"))
-    canon.build_world(Sources(client="forever"))
-    assert ran == ["forever"]

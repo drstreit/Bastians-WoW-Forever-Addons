@@ -63,3 +63,28 @@ def test_empty_and_foreign_files(tmp_path):
     other.write_text("SomethingElse = {}", encoding="utf-8")
     with pytest.raises(perf_report.PerfReportError, match="no BastiansCoreDB"):
         perf_report.read_snapshots(other)
+
+
+def test_without_a_path_the_clients_newest_saved_variables(tmp_path, monkeypatch, capsys):
+    saved = tmp_path / "client" / "WTF" / "Account" / "SOMEONE" / "SavedVariables"
+    saved.mkdir(parents=True)
+    text = FIXTURE.read_text(encoding="utf-8")
+    (saved / "Bastians_Core.lua").write_text(text, encoding="utf-8")
+    config = tmp_path / "install.toml"
+    config.write_text(
+        f'[clients]\nforever = "{(tmp_path / "client").as_posix()}"\n', encoding="utf-8"
+    )
+    assert perf_report.saved_variables(config) == saved / "Bastians_Core.lua"
+    assert perf_report.saved_variables(tmp_path / "none.toml") is None
+    monkeypatch.setattr(perf_report, "INSTALL", config)
+    assert perf_report.main(["--out", str(tmp_path / "report.md")]) == 0
+    assert "# Performance report" in capsys.readouterr().out
+    # no client known: the tool says so
+    monkeypatch.setattr(perf_report, "INSTALL", tmp_path / "none.toml")
+    assert perf_report.main(["--out", str(tmp_path / "report.md")]) == 2
+
+
+def test_a_snapshot_of_the_probe_is_named():
+    snaps = perf_report.read_snapshots(FIXTURE)
+    snaps[-1]["by"], snaps[-1]["note"] = "probe", "30 s after login"
+    assert "Taken by the probe: 30 s after login." in perf_report.render(snaps)

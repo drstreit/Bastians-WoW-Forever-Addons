@@ -282,7 +282,7 @@ function B.UI.Card(ref, ctx, sections)
       id = def.id,
       label = (active and def.activeShort) or def.short or def.label,
       tip = (def.short or def.activeShort) and def.label or nil, -- the full words after the delay
-      icon = def.icon,
+      icon = (active and def.activeIcon) or def.icon,
       active = active,
       main = isMain(def, typ),
       enabled = B:ActionEnabled(def, ref, ctx), -- false: the host draws the button greyed
@@ -897,11 +897,16 @@ local function showIconsNow(tree, frame, hovering)
     end
     b:SetSize(size, size)
     b.action = def
-    b.tex:SetTexture(def.icon or B.UI.IconTexture("other"))
     b.disabled = not B:ActionEnabled(def, row.ref, tree.ctx)
+    local on = not b.disabled and def.active and def.active(row.ref) or false
+    -- an action with a picture of its own for the on state (`activeIcon`: the voice line's red
+    -- stop, ) shows that picture in its own colours instead of the green tint
+    b.tex:SetTexture((on and def.activeIcon) or def.icon or B.UI.IconTexture("other"))
     if b.disabled then
       S.tint(b.tex, S.C.dim, 0.4) -- greyed: listed, not runnable now
-    elseif def.active and def.active(row.ref) then
+    elseif on and def.activeIcon then
+      S.untint(b.tex)
+    elseif on then
       -- the same icon in green while its state is on: a hidden quest, a tracked quest, a line
       -- playing
       S.tint(b.tex, S.C.on)

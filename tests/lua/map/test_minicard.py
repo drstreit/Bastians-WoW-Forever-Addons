@@ -60,10 +60,8 @@ def test_the_card_data_for_a_quest_pin_a_mob_and_a_node(wow: WowRuntime):
     # a mob: the loot value per kill (Gold); a label from the layer wins over the name
     m = wow.eval(f"{data}({{ ref = 'npc:448', label = 'Hogger (elite)' }})")
     assert m.name == "Hogger (elite)"
-    if wow.made_for(GOLD):  # the loot value is Gold's; no Gold on retail
-        assert strip(m.worth).endswith("per kill") or "price" in strip(m.worth)
-    else:
-        assert m.worth is None
+    # the loot value is Gold's
+    assert strip(m.worth).endswith("per kill") or "price" in strip(m.worth)
     assert m.distance is not None
     # no ref, no card
     assert wow.eval(f"{data}({{ label = 'nothing' }})") is None

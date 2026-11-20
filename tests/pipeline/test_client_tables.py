@@ -102,5 +102,46 @@ def test_the_item_names_of_every_installed_language_win_in_the_packs():
     assert any(src.startswith("client names (deDE)") for src in world.sources)
 
 
+def _build_dumps(tmp_path: Path, prefix: str, sell: int) -> Path:
+    """The fixture's dumps under their old name and, beside them, under a build's prefix with
+    Linen Cloth's sell price changed (the 70938 dump halved 118 sell prices, 15.11.2026)."""
+    import json
+    import shutil
+
+    for src in DUMPS.glob("forever_*.json"):
+        shutil.copy(src, tmp_path / src.name)
+        data = json.loads(src.read_text(encoding="utf-8"))
+        if src.name.startswith("forever_ItemSparse"):
+            rows = data["rows"]
+            for row in rows.values() if isinstance(rows, dict) else rows:
+                if row.get("ID") == 2589:
+                    row["SellPrice"] = sell
+                    if "Display_lang" in row and src.name.count(".") == 2:
+                        row["Display_lang"] = "Leinenstoff (Build)"
+        target = tmp_path / src.name.replace("forever_", f"{prefix}_", 1)
+        target.write_text(json.dumps(data), encoding="utf-8")
+    return tmp_path
+
+
+def test_the_tables_of_the_dumped_build_win_over_the_unversioned_ones(tmp_path):
+    dumps = _build_dumps(tmp_path, "f70938", sell=7)
+    t = read_client_tables(dumps, "forever", set(PROFESSION_SKILL_LINES), prefix="f70938")
+    assert t is not None
+    assert t.items[2589].sell == 7  # the build's dump, not the older file without a build
+    assert t.sources == ["client tables (f70938)"]
+    names = localized_names(dumps, "forever", prefix="f70938")
+    assert names["deDE"]["item"][2589]["name"] == "Leinenstoff (Build)"
+
+
+def test_without_the_builds_dump_the_unversioned_tables_stay(tmp_path):
+    t = read_client_tables(DUMPS, "forever", set(PROFESSION_SKILL_LINES), prefix="f70938")
+    assert t is not None
+    assert t.items[2589].sell == 13
+    assert t.sources == ["client tables (forever)"]
+    assert localized_names(DUMPS, "forever", prefix="f70938") == {
+        "deDE": {"item": {2589: {"name": "Leinenstoff (Client)"}}}
+    }
+
+
 def _classic(item_id: int) -> ItemRow:
     return ItemRow(item_id, "classic", 1, 5, 0, 7, 5, 1, 4, 20)

@@ -70,3 +70,70 @@ def test_emit_pack_has_header_and_register_call():
     assert text.endswith("}\n")
     with pytest.raises(EmitError):
         lua_value(object())
+
+
+def compiled(text: str):
+    """The pack a generated file registers, as real Lua 5.1 builds it (lupa)."""
+    from lupa import lua51
+
+    lua = lua51.LuaRuntime(unpack_returned_tuples=True)
+    lua.globals().SRC = text
+    lua.execute(
+        """
+        local f, err = loadstring(SRC, "@Pack.lua")
+        ERR = err
+        if f then
+          Bastians = nil
+          f()
+          CALL = Bastians.deferred[1]
+        end
+        """
+    )
+    return lua, lua.globals().ERR
+
+
+def test_a_pack_heavier_than_one_lua_function_holds_is_written_in_parts():
+    """Lua 5.1 holds 262,143 constants in a function and a generated file is one chunk: the
+    Market pack passed that on 17.11.2026 ("constant table overflow", the pack did not load).
+    A table that heavy is written in parts, each a function of its own; the loader sees the same
+    table, and a lighter pack's text does not change."""
+    rows = {i: {"name": f"Item {i}", "price": i * 3} for i in range(1, 150_001)}
+    realms = {f"realm-{r}": {i: [i, i + 1] for i in range(1, 30_001)} for r in range(8)}
+    pack = {"build": "x", "schema": {"item": ["name", "price"]}, "item": rows, "realm": realms}
+    text = emit_pack("market", pack)
+    lua, err = compiled(text)
+    assert err is None, err
+    assert lua.eval("CALL[1]") == "Data.RegisterPack" and lua.eval("CALL[2]") == "market"
+    lua.execute(
+        """
+        local pack = CALL[3]
+        N = 0
+        for _ in pairs(pack.item) do N = N + 1 end
+        FIRST, LAST = pack.item[1], pack.item[150000]
+        REALMS, DEEP = 0, 0
+        for _, realm in pairs(pack.realm) do
+          REALMS = REALMS + 1
+          for _ in pairs(realm) do DEEP = DEEP + 1 end
+        end
+        PAIR = pack.realm["realm-7"][30000]
+        """
+    )
+    assert lua.eval("N") == 150_000
+    # a record stays its literal, compiled on demand
+    assert lua.eval("FIRST") == '{ name = "Item 1", price = 3 }'
+    assert lua.eval("LAST") == '{ name = "Item 150000", price = 450000 }'
+    assert lua.eval("REALMS") == 8 and lua.eval("DEEP") == 240_000  # many middling tables too
+    assert list(lua.eval("PAIR").values()) == [30000, 30001]
+    assert emit_pack("market", pack) == text  # deterministic
+    # without the parts the same pack does not compile: the test holds the cause, not a guess
+    import bastians_build.emit as emit
+
+    limit, emit.CONSTANTS_MAX = emit.CONSTANTS_MAX, 10**9
+    try:
+        _, err = compiled(emit_pack("market", pack))
+    finally:
+        emit.CONSTANTS_MAX = limit
+    assert "constant table overflow" in str(err)
+    # a light pack is written as before, byte for byte
+    light = {"build": "x", "schema": {"item": ["name"]}, "item": {1: {"name": "Linen"}}}
+    assert "(function()" not in emit_pack("items", light)

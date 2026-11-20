@@ -233,7 +233,7 @@ def test_a_place_we_authored_for_the_objective_wins_over_the_quests_own_points(w
 
 
 MIRROR_LAKE = """
-local q = Bastians:GetModule('Quests').Logic.quest(76)
+local q = Mock.Keep(Bastians:GetModule('Quests').Logic.quest(76))
 q.objectives = { { 'loot', 'item:7206' } }; q.spots = nil
 Mock.questLog[#Mock.questLog + 1] = { questID = 76, title = 'Mirror Lake', level = 10,
   complete = false, objectives = { { text = 'Mirror Lake Water Sample', type = 'item',

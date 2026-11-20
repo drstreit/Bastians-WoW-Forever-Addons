@@ -184,10 +184,9 @@ local function area(t)
 end
 
 -- The continent maps of the two Azeroth continents as Forever numbers them (Classic's uiMapIDs).
--- ~~The same on Forever and retail.~~ Retail has no 1414 and 1415: its Kalimdor is 12, its Eastern
--- Kingdoms 13 (retail probe P3, 12.1.5.70575, 28.10.2026), so Coords.ContinentMap asks the client.
+-- Coords.ContinentMap asks the client whether it has them (retail, the test client until 15.11.2026,
+-- numbered them 13 and 12: retail probe P3, 12.1.5.70575, 28.10.2026).
 Coords.CONTINENT_MAPS = { [0] = 1415, [1] = 1414 }
-Coords.CONTINENT_MAPS_RETAIL = { [0] = 13, [1] = 12 }
 local UI_MAP_CONTINENT = 2 -- Enum.UIMapType.Continent
 
 local function isContinentMap(uiMapID, continent)
@@ -199,9 +198,9 @@ local function isContinentMap(uiMapID, continent)
   return c == nil or c == continent
 end
 
--- The continent's own uiMap (the painted continent, the root of its zones), or nil: a known id
--- (Forever's, then retail's) when this client has it as a continent map, else the continent map
--- above any map of the transform table on the continent (Outland, Northrend, ... on retail).
+-- The continent's own uiMap (the painted continent, the root of its zones), or nil: the known id
+-- when this client has it as a continent map, else the continent map above any map of the
+-- transform table on the continent.
 function Coords.ContinentMap(continent)
   local known = continentMaps[continent]
   if known ~= nil then
@@ -209,10 +208,8 @@ function Coords.ContinentMap(continent)
   end
   local found
   if type(C_Map.GetMapInfo) == "function" then
-    for _, ids in ipairs({ Coords.CONTINENT_MAPS, Coords.CONTINENT_MAPS_RETAIL }) do
-      if not found and isContinentMap(ids[continent], continent) then
-        found = ids[continent]
-      end
+    if isContinentMap(Coords.CONTINENT_MAPS[continent], continent) then
+      found = Coords.CONTINENT_MAPS[continent]
     end
     if not found then
       local ids = {}

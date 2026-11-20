@@ -19,10 +19,13 @@ def objective(text: str, have: int, need: int, kind: str = "monster") -> str:
 
 
 def setup(wow: WowRuntime, spots: str, *objectives: str) -> None:
-    """Quest 76 in the log, focused, with these spots on Elwynn."""
+    """Quest 76 in the log, focused, with these spots on Elwynn. The data service keeps decoded
+    records in a weak cache: the test holds the record it edits, or a garbage collection between
+    two steps decodes it again without the spots (16.11.2026, seen when the themes grew)."""
     boot(wow)
     wow.execute(
-        f"local q = {LOGIC}.quest(76); q.spots = {{ [1429] = {spots} }}; q._places = nil; "
+        f"local q = {LOGIC}.quest(76); OPEN_SPOTS_QUEST = q; "
+        f"q.spots = {{ [1429] = {spots} }}; q._places = nil; "
         "Mock.questLog[#Mock.questLog + 1] = { questID = 76, title = 'The Jasperlode Mine', "
         f"level = 9, complete = false, objectives = {{ {', '.join(objectives)} }} }}"
     )

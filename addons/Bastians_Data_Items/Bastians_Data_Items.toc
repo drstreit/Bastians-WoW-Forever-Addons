@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Items
 ## Title-koKR: Bastian's Data: 아이템
 ## Title-zhCN: Bastian's Data: 物品
@@ -22,7 +22,7 @@
 ## Notes-ptBR: Pacote de dados de itens gerado (carrega ao entrar no jogo).
 ## Group: Bastians_Data
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Data
 

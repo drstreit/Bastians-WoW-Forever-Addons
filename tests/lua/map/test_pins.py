@@ -134,10 +134,9 @@ def test_the_layer_bar_switches_every_layer_by_app_and_keeps_bookmarks(wow: WowR
     assert panel.IsShown(panel) is True  # open by default
     items = bar_items(wow)
     groups = [t for k, t, _ in items if k == "gap"]  # icons only: the apps are gaps (R27.8)
-    gold = wow.made_for(GOLD)  # the farm spots layer is Gold's; no Gold on retail (24.10.2026)
-    assert groups == [*(["Gold"] if gold else []), "Map", "Quests", "Bookmarks"]
+    assert groups == ["Gold", "Map", "Quests", "Bookmarks"]  # farm spots are Gold's
     pills = {t: on for k, t, on in items if k == "pill"}
-    assert ("Farm spots" in pills) is gold
+    assert "Farm spots" in pills
     assert pills["Quests to take"] is True and pills["Quests soon (level, prerequisite)"] is False
     # a click on a pill switches its layer
     wow.execute(

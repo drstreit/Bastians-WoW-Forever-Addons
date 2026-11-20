@@ -29,7 +29,6 @@ def test_shipped_files_parse_for_both_clients():
     ]
     assert all(a["verified"] is False for a in forever)  # nothing checked on Forever yet
     assert forever[-1]["steps"] == [["rep", 529, "Argent Dawn", 6]]
-    assert read_attunements(CONFIG_DIR / "attunements_retail.toml") == []
 
 
 def test_malformed_files_are_rejected(tmp_path):

@@ -639,6 +639,16 @@ define("shared", "IsSpellKnown", function(id)
   return nil
 end)
 
+-- A title this character has earned (Bastian's Book, ADR 0080; assumed 16.11.2026, the retail
+-- docs' IsTitleKnown(titleMaskID), the probe list): nil where the client has no answer.
+define("shared", "IsTitleKnown", function(id)
+  id = tonumber(id)
+  if not id or type(_G.IsTitleKnown) ~= "function" then
+    return nil
+  end
+  return plain(_G.IsTitleKnown(id)) == true
+end)
+
 define("shared", "KnownSpells", function()
   if
     not (has(C_SpellBook, "GetNumSpellBookSkillLines") and has(C_SpellBook, "GetSpellBookSkillLineInfo"))
@@ -1800,8 +1810,9 @@ define("shared", "CreatureTrackingOn", function()
 end)
 
 -- The whole name of a unit, for a mail or a whisper. UnitName's second value is the surname on Forever
--- (measured 08.11.2026, 1.60.1.70862; the first name alone does not deliver), a realm on retail,
--- nil for the player's own realm. A mail takes "First Surname".
+-- (measured 08.11.2026, 1.60.1.70862; the first name alone does not deliver; ~~a realm on retail~~,
+-- retail's "Name-Realm" went 15.11.2026, ADR 0037). A mail takes "First Surname" (typed by the
+-- ).
 -- Forever's first value can hold both names (Blizzard's NameUtil.GetUnitFirstName, 1.60.1.70862;
 -- assumed): then it is the whole name, and what follows is no surname.
 define("shared", "FullName", function(unit)
@@ -1812,9 +1823,6 @@ define("shared", "FullName", function(unit)
   end
   if type(second) ~= "string" or second == "" then
     return first
-  end
-  if Bastians.Client ~= "forever" then
-    return first .. "-" .. second
   end
   return string.find(first, " ", 1, true) and first or (first .. " " .. second)
 end)

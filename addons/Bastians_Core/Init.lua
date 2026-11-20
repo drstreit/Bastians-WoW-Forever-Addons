@@ -9,13 +9,13 @@ B.API_VERSION = 1
 B.VERSION = C_AddOns.GetAddOnMetadata(ADDON, "Version") or "dev"
 
 -- Bastians.Client is read only by Compat and the Data loader; apps never branch on it (ADR 0010).
+-- "forever" on Forever, "unknown" on any other client (~~"retail" for interface 100000 and up~~:
+-- the suite is Forever's alone since 15.11.2026, ADR 0037).
 local _, build, _, interface = GetBuildInfo()
 B.Build = tostring(build)
 B.Interface = interface
 if interface == 16001 then
   B.Client = "forever"
-elseif type(interface) == "number" and interface >= 100000 then
-  B.Client = "retail"
 else
   B.Client = "unknown"
 end

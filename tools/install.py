@@ -1,7 +1,7 @@
 """Link addons/* into a WoW client's Interface/AddOns folder (junctions on Windows).
 
-Usage: python tools/install.py --client forever|retail [--wow <client folder>] [--list] [--remove]
-The client folder is the one that contains Interface/AddOns, e.g. ...\\World of Warcraft\\_retail_.
+Usage: python tools/install.py --client forever [--wow <client folder>] [--list] [--remove]
+The client folder is the one that contains Interface/AddOns, e.g. ...\\World of Warcraft\\_forever_.
 """
 
 import argparse
@@ -14,7 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 ADDONS_DIR = ROOT / "addons"
 FIXTURE_ADDONS_DIR = ROOT / "tests" / "fixtures" / "addons"  # dev only, with --fixtures
 CONFIG_PATH = ROOT / ".local" / "install.toml"
-CLIENTS = ("forever", "retail")
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
 EXTENDED_PREFIX = "\\\\?\\"
 
 
@@ -83,7 +84,7 @@ def resolve_client_dir(client: str, wow: str | None, config_path: Path) -> Path:
         folder = Path(wow).expanduser().resolve()
         if not (folder / "Interface").is_dir():
             raise InstallError(
-                f"{folder} has no Interface folder. Pass the client folder, e.g. _retail_."
+                f"{folder} has no Interface folder. Pass the client folder, e.g. _forever_."
             )
         clients[client] = str(folder)
         save_config(config_path, clients)

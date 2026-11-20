@@ -551,8 +551,7 @@ def test_my_record_keeps_the_surname(wow: WowRuntime):
         Mock.Fire('ZONE_CHANGED_NEW_AREA')"""
     )
     assert wow.eval(f"{me}.name") == "Arnhild"
-    sep = " " if wow.eval("Bastians.Client") == "forever" else "-"  # a surname, or a realm
-    assert wow.eval(f"{me}.full") == f"Arnhild{sep}Farmadr"
+    assert wow.eval(f"{me}.full") == "Arnhild Farmadr"  # a surname
     assert wow.errors == []
 
 
@@ -560,8 +559,7 @@ def test_an_alt_that_has_not_logged_in_gets_my_surname_a_stranger_does_not(wow: 
     """ "I need name and surname (with a space in between)"."""
     boot(wow)
     wow.execute(
-        f"""Bastians.Client = "forever"
-        UnitName = function() return "Arnhild", "Farmadr" end
+        f"""UnitName = function() return "Arnhild", "Farmadr" end
         Mock.Fire('ZONE_CHANGED_NEW_AREA')
         for key, c in pairs({H}.Global().characters) do
           if c.name == "Mockchar" then {H}.Global().characters[key] = nil end -- the boot's name

@@ -47,7 +47,7 @@ def records(root: Path, *, log: str, attention: str | None = None) -> None:
     snaps.mkdir(parents=True)
     (snaps / "2026-11-05.json").write_text(json.dumps({"version": "0.55.0"}), encoding="utf-8")
     (snaps / "2026-11-07.json").write_text(json.dumps({"version": "0.57.0"}), encoding="utf-8")
-    gone = local / "companions" / "retail" / "Questie"
+    gone = local / "companions" / "forever" / "Questie"
     gone.mkdir(parents=True)
     (gone / "2026-11-07.json").write_text(json.dumps({"gone": True}), encoding="utf-8")
 

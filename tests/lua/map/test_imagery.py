@@ -99,33 +99,29 @@ def test_imagery_without_data_uses_the_client_names_and_no_level_range(wow: WowR
     assert wow.errors == []
 
 
-def test_retail_numbers_its_continent_maps_differently(wow: WowRuntime):
-    """(R28.4): the Blizzard style drew nothing, /bmap stats said "maps 0".
-    Retail has no uiMap 1415: its Eastern Kingdoms is 13 (probe P3, 12.1.5.70575). The continent
-    map comes from the client: the known id when it exists, else the continent map above the
-    transform table's maps."""
+def test_the_continent_map_comes_from_the_client(wow: WowRuntime):
+    """(R28.4): the Blizzard style drew nothing, /bmap stats said "maps 0":
+    retail numbered its continent maps differently (probe P3, 12.1.5.70575). The continent map
+    comes from the client: the known id when it exists, else the continent map above the
+    transform table's maps (~~retail's 13~~ retail left the suite 15.11.2026, ADR 0037)."""
     wow.start(CORE, DATA, MAP)
-    wow.execute(
-        """Mock.maps[13] = Mock.maps[1415]; Mock.maps[1415] = nil
-        for _, m in pairs(Mock.maps) do if m.parent == 1415 then m.parent = 13 end end"""
-    )
     wow.run_frames(5)
-    assert wow.eval("Bastians.Coords.ContinentMap(0)") == 13
+    assert wow.eval("Bastians.Coords.ContinentMap(0)") == 1415
+    assert wow.eval("Bastians.Coords.ContinentMap(1)") is None  # no Kalimdor maps in the mock
+    # an id the suite does not know: the continent map above the transform table's maps
+    wow.execute(
+        """Mock.maps[5000] = Mock.maps[1415]; Mock.maps[1415] = nil
+        for _, m in pairs(Mock.maps) do if m.parent == 1415 then m.parent = 5000 end end
+        Bastians.Coords.SetTransforms({ [1429] = { 0, 200, 0, -400, 200, -400, 0 } })"""
+    )
+    assert wow.eval("Bastians.Coords.ContinentMap(0)") == 5000
     wow.slash("/bmap")
     wow.execute(
         f"{MAP_}.SetStyle('blizzard'); {MAP_}.clip:SetSize(600, 400); {MAP_}.Fly(0, 0, 0, 0)"
     )
     zones = list(wow.eval(f"{IMG}.Zones(0)").values())
-    assert [(z.map, z.depth) for z in zones] == [(13, 0), (1429, 1), (1453, 1)]
+    assert [(z.map, z.depth) for z in zones] == [(5000, 0), (1429, 1), (1453, 1)]
     assert shown_textures(wow)  # the continent's painting, zoomed out
-    assert wow.eval("Bastians.Coords.ContinentMap(1)") is None  # no Kalimdor maps in the mock
-    # an id neither client is known for: the continent map above the transform table's maps
-    wow.execute(
-        """Mock.maps[5000] = Mock.maps[13]; Mock.maps[13] = nil
-        for _, m in pairs(Mock.maps) do if m.parent == 13 then m.parent = 5000 end end
-        Bastians.Coords.SetTransforms({ [1429] = { 0, 200, 0, -400, 200, -400, 0 } })"""
-    )
-    assert wow.eval("Bastians.Coords.ContinentMap(0)") == 5000
     assert wow.errors == []
 
 

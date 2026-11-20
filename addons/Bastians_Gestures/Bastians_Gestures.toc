@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Gestures
 ## IconTexture: Interface\AddOns\Bastians_Gestures\Icon
 ## Notes: A ring of emotes, your own lines and the suite's actions on one key.
@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Voice, Bastians_Map, Bastians_Route, Bastians_Notes, Bastians_Quests

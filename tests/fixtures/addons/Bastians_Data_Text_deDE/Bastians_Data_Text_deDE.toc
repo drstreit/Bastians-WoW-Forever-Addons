@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Text (deDE)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_deDE\Icon
 ## Notes: Generated names and quest objectives in German; builds its tables only on a German client.

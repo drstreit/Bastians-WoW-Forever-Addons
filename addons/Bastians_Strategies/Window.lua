@@ -212,7 +212,8 @@ Window.HeightOf = function(text, size, width)
   return heightOf(text, size, width)
 end
 
-local function addText(page, text, size, color, indent, gap)
+-- `role`: one of the book's faces (Core's S.BOOK_FONTS, ADR 0081), nil for the look's.
+local function addText(page, text, size, color, indent, gap, role)
   size = ns.Book.Size(size)
   indent = indent or 0
   page.nfs = page.nfs + 1
@@ -223,6 +224,7 @@ local function addText(page, text, size, color, indent, gap)
     fs:SetJustifyV("TOP")
     page.fs[page.nfs] = fs
   end
+  S.SetRole(fs, role)
   S.setSize(fs, size)
   S.ink(fs, color or S.C.text)
   fs:SetWidth(page.width - indent)
@@ -1002,10 +1004,19 @@ local function renderSearch(query)
   return L["Search the book"]
 end
 
--- Searches the book's text and shows the hits; an empty query shows the search page itself.
+-- Searches the book (ADR 0080: the shelf of the open chapter, Everything elsewhere); the old
+-- search page stays at /bbook search.
 function Window.Search(query)
+  return ns.Front.Search(strtrim(query or ""))
+end
+
+-- The search page of the gold book (30.10.2026): the hits with their snippets.
+function Window.SearchPage(query)
   return Window.Show({ kind = "search", id = strtrim(query or "") })
 end
+
+-- The page kit the details page of a wonder draws with (Wonder.lua).
+Window.Kit = { text = addText, row = addRow, space = addSpace, box = addBox }
 
 local function renderBookmarks()
   addPicture(left, "bookmarks")
@@ -1321,41 +1332,65 @@ local function updateBar()
   if not bar then
     return
   end
-  local unread = Book.Unread(Window.News(), db().global.seen, db().global.seenToday)
-  bar.news:SetLabel(unread > 0 and string.format(L["What's new (%d)"], unread) or L["What's new"])
-  local isPage = current.kind == "page" and get("page", current.id) ~= nil
+  local isPage = (current.kind == "page" and get("page", current.id) ~= nil)
+    or (current.kind == "wonder" and ns.Front.Find(current.id) ~= nil)
   local on = isPage and Book.IsBookmarked(db().char.bookmarks, current.id)
   bar.mark.spec.label = on and L["Bookmarked"] or L["Bookmark"]
-  bar.mark:SetOn(on) -- the look draws the state (ADR 0046)
-  bar.mark:SetEnabledFlat(isPage)
-  bar.map:SetOn(current.kind == "atlas")
-  local order = Window.Order()
-  local at
-  for i, e in ipairs(order) do
-    if same(e, current) then
-      at = i
-    end
+  bar.mark:SetOn(on)
+  bar.mark:SetShown(isPage)
+  bar.atlas:SetOn(current.kind == "atlas")
+  bar.record:SetOn(current.kind == "record")
+  local tab = current.kind == "front" and "front"
+    or (current.kind == "shelf" and (current.id or "all"))
+    or nil
+  if bar.tabs.spec.value ~= tab then
+    bar.tabs:SetValue(tab)
   end
-  folio.back:SetEnabledFlat(at ~= nil and at > 1 or current.kind ~= "title")
-  folio.next:SetEnabledFlat(at == nil or at < #order)
-  folio.label:SetText(at and string.format(L["- %d of %d -"], at, #order) or "")
+  -- a wonder, or a page opened from a shelf, turns within that shelf (book.md): browsing
+  local at, total = ns.Front.Place(current.id)
+  if not at and current.kind ~= "wonder" then
+    local order = Window.Order()
+    for i, e in ipairs(order) do
+      if same(e, current) then
+        at = i
+      end
+    end
+    total = #order
+    folio.back:SetEnabledFlat(at ~= nil and at > 1 or current.kind ~= "title")
+    folio.next:SetEnabledFlat(at == nil or at < total)
+  else
+    folio.back:SetEnabledFlat(at ~= nil and at > 1)
+    folio.next:SetEnabledFlat(at ~= nil and at < total)
+  end
+  folio.label:SetText(at and string.format(L["- %d of %d -"], at, total) or "")
 end
 
 function Window.Render()
   if not (win and win:IsShown()) then
     return
   end
-  local isMap = current.kind == "atlas" -- the map takes the place of the two pages
-  left:SetShown(not isMap)
-  right:SetShown(not isMap)
-  folio:SetShown(not isMap)
+  local kind = current.kind
+  local isMap = kind == "atlas" -- the map takes the place of the two pages
+  -- the front table, a chapter's shelf and Your record take the place of the pages (ADR 0080)
+  local isShelf = kind == "front" or kind == "shelf" or kind == "record"
+  left:SetShown(not isMap and not isShelf)
+  right:SetShown(not isMap and not isShelf)
+  folio:SetShown(not isMap and not isShelf)
   atlas:SetShown(isMap)
+  ns.Front.view:SetShown(isShelf)
+  if kind ~= "wonder" then
+    ns.Wonder.Hide(left)
+  end
   layoutPages() -- the spread's scale is the view's: one for the map, the window's for the pages
   begin(left)
   begin(right)
   local title
   if isMap then
     title = renderAtlas()
+  elseif isShelf then
+    title = ns.Front.Render(current)
+  elseif kind == "wonder" then
+    title = ns.Wonder.Render(Window.Kit, left, right, current.id)
   elseif current.kind == "title" then
     title = renderTitle()
   elseif current.kind == "contents" then
@@ -1371,10 +1406,9 @@ function Window.Render()
   end
   finish(left)
   finish(right)
-  win:SetTitle(
-    L["Bastian's Gold Adventures"]
-      .. (title and title ~= L["Bastian's Gold Adventures"] and ("  " .. S.H.muted .. title .. "|r") or "")
-  )
+  -- the book's name alone: the filled tab and the page say where you are (one bar, 16.11.2026)
+  win:SetTitle(L["Bastian's Book"])
+  Window.pageTitle = title
   updateBar()
 end
 
@@ -1384,17 +1418,40 @@ function Window.Schedule()
   end
 end
 
+-- The way back and forward ("use the same right click mouse right/left
+-- for page back and forward like we do in browser"): every page shown, the last 50; a right-button
+-- drag over the window walks it (Core's window gestures), as the Browser's history does.
+Window.HISTORY = 50
+local history, cursor = {}, 0
+
+local function remember(entry)
+  if history[cursor] and same(history[cursor], entry) then
+    return
+  end
+  for i = #history, cursor + 1, -1 do
+    history[i] = nil -- a new way forward replaces the old one
+  end
+  history[#history + 1] = { kind = entry.kind, id = entry.id }
+  while #history > Window.HISTORY do
+    table.remove(history, 1)
+  end
+  cursor = #history
+end
+
 -- Shows an entry ({ kind = "atlas" | "title" | "contents" | "index" | "bookmarks" | "page" | "search",
 -- id };
 -- a search's id is its query) and keeps it as the character's last place (strategies-design.md
--- section 7: by the page's permanent id).
-function Window.Show(entry)
+-- section 7: by the page's permanent id). `walking`: Back or Forward shows it, the history stays.
+function Window.Show(entry, walking)
   if not win then
     Window.Build()
   end
   current = entry or { kind = "title" }
   if current.kind == "index" then
     current = { kind = "search", id = "" } -- the index page went 30.10.2026: an old last place
+  end
+  if not walking then
+    remember(current)
   end
   db().char.last = { kind = current.kind, id = current.id }
   if win:IsShown() then
@@ -1413,8 +1470,37 @@ function Window.Current()
   return current
 end
 
--- Turns a page: the reading order; from the index or the bookmarks back to the contents.
+-- The page before in the history -> true when there was one.
+function Window.Back()
+  if cursor > 1 then
+    cursor = cursor - 1
+    return Window.Show(history[cursor], true)
+  end
+  return false
+end
+
+function Window.Forward()
+  if cursor < #history then
+    cursor = cursor + 1
+    return Window.Show(history[cursor], true)
+  end
+  return false
+end
+
+function Window.History()
+  return history, cursor
+end
+
+-- Turns a page: within the shelf it was opened from (a wonder, a page from a shelf: ADR 0080),
+-- else the reading order; from the index or the bookmarks back to the contents.
 function Window.Turn(step)
+  local nextEntry = ns.Front.Neighbour(current.id, step)
+  if nextEntry then
+    Window.Show({ kind = nextEntry.page and "page" or "wonder", id = nextEntry.id })
+    return
+  elseif current.kind == "wonder" then
+    return
+  end
   local order = Window.Order()
   for i, e in ipairs(order) do
     if same(e, current) then
@@ -1428,11 +1514,11 @@ function Window.Turn(step)
   Window.Show({ kind = "contents" })
 end
 
--- Opens the book on the story map, its front door ("the map is really
--- hard to find", the minimap button opens it); every page is a click from there. ~~Where the
--- character left it~~ (ADR 0057, point 4, until then). A book without pages opens on its title.
+-- Opens the book on the front table, its front door (ADR 0080, "front door is
+-- A - with newest information on the page"); the Atlas is a fixed button on every page. ~~The
+-- story map was the front door~~ (ADR 0057, point 4, 06.11 to 16.11.2026).
 function Window.Open()
-  return Window.Show({ kind = next(Window.Pages()) and "atlas" or "title" })
+  return Window.Show({ kind = "front" })
 end
 
 function Window.Toggle()
@@ -1454,7 +1540,9 @@ function Window.IsShown()
 end
 
 function Window.ToggleBookmark()
-  if current.kind == "page" and get("page", current.id) then
+  local known = (current.kind == "page" and get("page", current.id))
+    or (current.kind == "wonder" and ns.Front.Find(current.id))
+  if known then
     Book.ToggleBookmark(db().char.bookmarks, current.id)
     Window.Render()
   end
@@ -1464,10 +1552,118 @@ end
 -- the grip "enlarges the window, no scaling possible"), never below 1. The bar with the tabs
 -- never scales, and the map has its own
 -- scale (fitAtlas), so the content stays at 1 under it.
-local BAR_H = 26
+-- The bar in the concept board's numbers (docs/addons/book-look.md section 4; owner, Forever
+-- 17.11.2026: "The header feels squeezed. make it higher", "the 3 buttons top right are isolated
+-- from the rest and break the style"): a head of 50, its tabs and tools 28 high.
+local BAR_H = 28
+Window.HEAD_H = 50
+Window.LOGO = 34 -- the crest before the book's name
+Window.SEARCH_MIN = 150 -- the search box's least width on the bar
+Window.SEARCH_MAX = 230
+
+-- The room the bar takes at the content's top: none when it sits in the window's head (the
+-- filter's band lies directly under it).
+function Window.BarRoom()
+  return (bar and bar.oneBar) and 0 or (BAR_H + 10)
+end
+
+-- A tool of the bar (book-look.md section 4): words in a thin outline, 28 high; `filled` the
+-- Atlas, the book's primary plate with its pictogram. It answers SetOn and carries `spec` and
+-- `label` as Core's action does, drawn in the bar's own palette (the dark table in the WoW look).
+-- spec = { label, icon, filled, caps, on }
+local TOOL_PAD, TOOL_ICON = 10, 16
+
+local function barTool(parent, spec)
+  local b = CreateFrame("Button", nil, parent)
+  b.spec = spec
+  b.face = S.roundFill(b, S.C.accent, 4)
+  b.edges = S.roundEdges(b, S.C.line, 4)
+  b.icon = b:CreateTexture(nil, "ARTWORK")
+  b.icon:SetSize(TOOL_ICON, TOOL_ICON)
+  b.label = S.SetRole(S.text(b, 13, S.C.text), spec.caps and "bookCaps" or "bookSans")
+  b.label:SetWordWrap(false)
+  function b.Draw(self)
+    local sp = self.spec
+    local pad = sp.filled and TOOL_PAD + 2 or TOOL_PAD
+    local lit = sp.on or self.over
+    local ink
+    if sp.filled then
+      S.tint(self.face, S.Tok(self, "accent"), 1)
+      S.setEdges(self.edges, S.Tok(self, lit and "text" or "accent"), 1)
+      ink = S.Tok(self, "bg")
+    else
+      S.tint(self.face, S.Tok(self, "accent"), 0)
+      S.setEdges(self.edges, S.Tok(self, lit and "accent" or "line"), lit and 1 or nil)
+      ink = S.Tok(self, sp.on and "accent" or "text")
+    end
+    local icon = sp.icon and B.UI.Pictogram(sp.icon) or nil
+    local x = pad
+    self.icon:SetShown(icon ~= nil)
+    if icon then
+      self.icon:SetTexture(icon)
+      S.tint(self.icon, ink, 1)
+      self.icon:ClearAllPoints()
+      self.icon:SetPoint("LEFT", self, "LEFT", x, 0)
+      x = x + TOOL_ICON + 6
+    end
+    local text = sp.label or ""
+    if sp.caps then
+      text = ns.Front.SmallCaps(text)
+    end
+    self.label:SetText(text)
+    S.ink(self.label, ink)
+    self.label:ClearAllPoints()
+    self.label:SetPoint("LEFT", self, "LEFT", x, 0)
+    local w = self.label:GetStringWidth()
+    self:SetSize(x + ((w and w > 0) and w or (#text * 7)) + pad, BAR_H)
+  end
+  function b.SetOn(self, on)
+    self.spec.on = on and true or nil
+    self:Draw()
+  end
+  b:SetScript("OnEnter", function(self)
+    self.over = true
+    self:Draw()
+    S.TipEnter(self)
+  end)
+  b:SetScript("OnLeave", function(self)
+    self.over = nil
+    self:Draw()
+    S.TipLeave(self)
+  end)
+  b:Draw()
+  return b
+end
+
+-- A quiet pictogram of the bar (the options): dim, brighter under the mouse.
+local function barGlyph(parent, icon, size)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(size, size)
+  b.icon = b:CreateTexture(nil, "ARTWORK")
+  b.icon:SetAllPoints(b)
+  b.icon:SetTexture(B.UI.Pictogram(icon))
+  function b.Draw(self)
+    S.tint(self.icon, S.Tok(self, self.over and "text" or "dim"), 1)
+  end
+  b:SetScript("OnEnter", function(self)
+    self.over = true
+    self:Draw()
+    S.TipEnter(self)
+  end)
+  b:SetScript("OnLeave", function(self)
+    self.over = nil
+    self:Draw()
+    S.TipLeave(self)
+  end)
+  b:Draw()
+  return b
+end
 
 function layoutPages()
   local content = win.content
+  if bar and bar.Layout then
+    bar.Layout() -- the tabs keep their words while the window has room for them
+  end
   -- the pages are not scaled ("the font scaling of the book is too
   -- large, should follow a global setting"): a larger window gives the pages more room and the
   -- text keeps Core's text size; ~~a larger window scaled the whole spread up~~
@@ -1475,7 +1671,12 @@ function layoutPages()
   if math.abs((content:GetScale() or 1) - k) > 0.001 then
     content:SetScale(k)
   end
-  local top = -(BAR_H + 6 + 4) / k -- under the unscaled bar
+  local room = Window.BarRoom()
+  local top = -room / k -- under the unscaled bar
+  ns.Front.SetTop(room)
+  atlas:ClearAllPoints()
+  atlas:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -room)
+  atlas:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
   left:ClearAllPoints()
   right:ClearAllPoints()
   local w = (content:GetWidth() or 0) > 0 and content:GetWidth() - 12 or 900
@@ -1490,15 +1691,33 @@ end
 function Window.Build()
   win = B.UI.Window("BastiansStrategiesFrame", {
     module = "Strategies", -- the options button opens this page (R27.1)
-    title = L["Bastian's Gold Adventures"],
+    title = L["Bastian's Book"],
     width = 940,
     height = 640,
     minWidth = 660,
     minHeight = 420,
+    -- the bar: a head of 50 with pictograms for the window's own buttons; the crest is the book's
+    -- logo, in the game's frame its round portrait, and leads to the front table (owner, Forever
+    -- 17.11.2026: "Add the book bastian logo top left and make that clickable to the front page")
+    headHeight = Window.HEAD_H,
+    headIcons = true,
+    portrait = S.CREST_PORTRAIT,
+    portraitTip = L["The front table"],
+    onPortrait = function()
+      Window.Show({ kind = "front" })
+    end,
     -- as large as the reader drags it
     maxWidth = B.UI.NO_LIMIT,
     maxHeight = B.UI.NO_LIMIT,
     db = ns.mod.db.profile.window,
+    gestures = { -- a right-button drag to the left goes back, to the right forward (the Browser's)
+      back = function()
+        Window.Back()
+      end,
+      forward = function()
+        Window.Forward()
+      end,
+    },
     onShow = function()
       Window.Render()
     end,
@@ -1523,57 +1742,193 @@ function Window.Build()
   bar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
   bar:SetHeight(BAR_H)
   bar:SetFrameLevel((content:GetFrameLevel() or 0) + 2)
-  local x = 0
-  -- the tabs as declared actions with their pictograms (ADR 0046): the look sizes them; the first
-  -- is the story map (ADR 0057), any other leads into the book
-  local function tab(icon, label, tip, onClick)
-    local b = S.action(bar, { icon = icon, label = label, boxed = true })
-    b.tip = tip
-    b:SetPoint("LEFT", bar, "LEFT", x, 0)
-    b:SetScript("OnClick", onClick)
-    x = x + b:GetWidth() + 4
-    return b
+  -- the tabs: words in the book's small capitals, the shown one filled, no plate around them
+  --,
+  -- ~~a pictogram on each~~; the front table, then the chapters (ADR 0080). A window too narrow
+  -- for the words even on a row of their own keeps the pictograms, the names in the tips.
+  local items = {
+    {
+      id = "front",
+      glyph = "ledger",
+      word = L["Front table"],
+      tip = L["The newest wonders, and a strip of every chapter."],
+    },
+  }
+  for _, c in ipairs({
+    { "all", "layers" },
+    { "gold", "gold" },
+    { "secrets", "treasure" },
+    { "collections", "keep" },
+    { "camp", "campfire" },
+    { "rares", "rare" },
+  }) do
+    -- a chapter's sentence is its tab's tip (book.md "The chapters")
+    items[#items + 1] =
+      { id = c[1], glyph = c[2], word = ns.Front.ChapterName(c[1]), tip = ns.Front.ChapterLine(c[1]) }
   end
-  bar.map = tab("zone", L["Map"], L["The gold stories on the world map."], function()
+  for _, item in ipairs(items) do
+    item.label = ns.Front.SmallCaps(item.word)
+  end
+  bar.tabs = S.segmented(bar, {
+    items = items,
+    flat = true,
+    height = BAR_H, -- book-look.md section 4: 28 high, 10 beside the words, 4 between two
+    pad = 10,
+    gap = 4,
+    corners = "top", -- the shown tab stands on the bar
+    onChange = function(_, id)
+      if id == "front" then
+        Window.Show({ kind = "front" })
+      else
+        Window.Show({ kind = "shelf", id = id })
+      end
+    end,
+  })
+  for _, b in ipairs(bar.tabs.parts) do
+    S.SetRole(b.label, "bookCaps")
+    S.setSize(b.label, 13)
+  end
+  S.Draw(bar.tabs)
+  bar.front = bar.tabs:Part("front")
+  -- the tools at the bar's right end, in the bar's own style (the three
+  -- buttons "break the style"): the options a quiet pictogram, the Atlas the book's primary plate,
+  -- Your record and the bookmark words in an outline
+  bar.gear = barGlyph(bar, "settings", 20)
+  bar.gear.tip = win.options and win.options.tip -- Core's own words
+  bar.gear:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+  bar.gear:SetScript("OnClick", function()
+    if B.UI.Hub then
+      B.UI.Hub.Open("Strategies")
+    end
+  end)
+  if win.options then
+    win.options:Hide() -- the bar has its own
+  end
+  bar.atlas = barTool(bar, { icon = "zone", label = L["Atlas"], filled = true, caps = true })
+  bar.atlas.tip = L["The stories on the world map."]
+  bar.atlas:SetPoint("RIGHT", bar.gear, "LEFT", -10, 0)
+  bar.atlas:SetScript("OnClick", function()
     Window.Show({ kind = "atlas" })
   end)
-  bar.title = tab("ledger", L["Title page"], L["The title page and What's new."], function()
-    Window.Show({ kind = "title" })
+  bar.record = barTool(bar, { label = L["Your record"] })
+  bar.record.tip = L["What you kept for later, what you did, and what your other characters did."]
+  bar.record:SetPoint("RIGHT", bar.atlas, "LEFT", -8, 0)
+  bar.record:SetScript("OnClick", function()
+    Window.Show({ kind = "record" })
   end)
-  bar.contents = tab("layers", L["Contents"], L["Every chapter and its pages."], function()
-    Window.Show({ kind = "contents" })
-  end)
-  -- the search page in the index's place ("drop the index page, its
-  -- confusing; add a search page instead, full text search of all articles")
-  bar.find = tab("search", L["Search"], L["Every page of the book by its words."], function()
-    Window.Show({ kind = "search", id = "" })
-  end)
-  bar.marks = tab(
-    "bookmark",
-    L["Bookmarks"],
-    L["Your bookmarks (this character) and your notes (every character)."],
-    function()
-      Window.Show({ kind = "bookmarks" })
-    end
-  )
-  bar.news = tab(
-    "note",
-    L["What's new"],
-    L["The book is updated often: what changed, newest first."],
-    function()
-      Window.Show({ kind = "title" })
-    end
-  )
-  bar.mark = S.action(bar, { icon = "bookmark", label = L["Bookmark"], boxed = true })
-  bar.mark.tip = L["Keeps this page in your bookmarks, also when it moves to the back shelf."]
-  bar.mark:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
+  bar.mark = barTool(bar, { label = L["Bookmark"] })
+  bar.mark.tip = L["Keeps this page in Your record, also when it moves to the back shelf."]
+  bar.mark:SetPoint("RIGHT", bar.record, "LEFT", -8, 0)
   bar.mark:SetScript("OnClick", function()
     Window.ToggleBookmark()
   end)
+  -- the logo and the name (looks without the game's frame; in it the portrait and the frame's
+  -- title bar carry them): the crest in the name's ink, a click to the front table
+  S.SetRole(win.title, "bookDisplay")
+  S.setSize(win.title, 18)
+  bar.logo = CreateFrame("Button", nil, win.head)
+  bar.logo:SetSize(Window.LOGO, Window.LOGO)
+  bar.logo:SetPoint("LEFT", win.head, "LEFT", 10, 0)
+  bar.logo.icon = bar.logo:CreateTexture(nil, "ARTWORK")
+  bar.logo.icon:SetAllPoints(bar.logo)
+  bar.logo.icon:SetTexture(S.CREST)
+  S.tint(bar.logo.icon, S.C.headerText)
+  bar.logo.tip = L["The front table"]
+  bar.logo:SetScript("OnEnter", S.TipEnter)
+  bar.logo:SetScript("OnLeave", S.TipLeave)
+  bar.logo:SetScript("OnClick", function()
+    Window.Show({ kind = "front" })
+  end)
+  -- the bar's ground in the WoW look (book-look.md section 3; D2): the board's gradient from the
+  -- game frame's title bar down to the band, a rule under it; under the head's own children
+  bar.ground = CreateFrame("Frame", nil, win.frame)
+  bar.ground:SetFrameLevel(win.head:GetFrameLevel() or 1)
+  bar.ground.fill = S.fill(bar.ground, S.C.folioBar, "BACKGROUND")
+  bar.ground.rule = S.fill(bar.ground, S.C.folioRule, "BORDER")
+  bar.ground.rule:ClearAllPoints()
+  bar.ground.rule:SetPoint("BOTTOMLEFT", bar.ground, "BOTTOMLEFT", 0, 0)
+  bar.ground.rule:SetPoint("BOTTOMRIGHT", bar.ground, "BOTTOMRIGHT", 0, 0)
+  bar.ground.rule:SetHeight(1)
+  -- The palette the bar draws in and its ground: the dark table where the look is the game's.
+  local function barGround()
+    local dark = S.LookOf(win.frame) == "wow"
+    bar.palette = dark and S.FolioPalette() or nil
+    local shown = dark and win.gameFramed == true
+    bar.ground:SetShown(shown)
+    if shown then
+      bar.ground:ClearAllPoints()
+      bar.ground:SetPoint("TOPLEFT", win.frame, "TOPLEFT", win.CHROME_SIDE, -win.CHROME_TITLE)
+      bar.ground:SetPoint("BOTTOMRIGHT", win.head, "BOTTOMRIGHT", 0, 0)
+      S.gradient(bar.ground.fill, S.C.folioBar, S.C.folioBarTop)
+    end
+    for _, tool in ipairs({ bar.gear, bar.atlas, bar.record, bar.mark }) do
+      tool:Draw()
+    end
+  end
+  -- One bar where the window has room (the concept board's single
+  -- bar): the tabs, the search, the bookmark, Your record and the Atlas in the window's head,
+  -- after the book's name, before its options; ~~a title bar and a row of tabs under it~~. A
+  -- narrower window gives them a row of their own under the head.
+  local function tabWords(words)
+    for _, b in ipairs(bar.tabs.parts) do
+      local item = b.item
+      item.label = words and ns.Front.SmallCaps(item.word) or nil
+      item.icon = (not words) and item.glyph or nil
+      b.tip = item.tip or ((not words) and item.word or nil)
+    end
+    S.Draw(bar.tabs)
+  end
+  -- The window's own buttons right of the bar: its close (the game's frame has its own).
+  local function headRight()
+    if win.close and win.close:IsShown() then
+      return win.close, win.close:GetWidth() + 14
+    end
+    return nil, 8
+  end
+  function bar.Layout()
+    barGround()
+    tabWords(true)
+    local head = win.head
+    local framed = win.gameFramed -- the game's frame: its own title and portrait, none in our head
+    bar.logo:SetShown(not framed)
+    local nameX = 10 + Window.LOGO + 8
+    local titleW = framed and 4 or (nameX + (win.title:GetStringWidth() or 0) + 18)
+    local edge, rightW = headRight()
+    local tools = bar.mark:GetWidth()
+      + bar.record:GetWidth()
+      + bar.atlas:GetWidth()
+      + bar.gear:GetWidth()
+      + 36
+    local need = titleW + bar.tabs:GetWidth() + Window.SEARCH_MIN + tools + rightW
+    local headW = head:GetWidth() or 0
+    bar.oneBar = headW > 0 and need <= headW
+    bar:ClearAllPoints()
+    win.title:ClearAllPoints()
+    win.title:SetPoint("LEFT", head, "LEFT", nameX, 0)
+    if bar.oneBar then
+      bar:SetPoint("LEFT", head, "LEFT", titleW, 0)
+      bar:SetPoint("RIGHT", edge or head, edge and "LEFT" or "RIGHT", -8, 0)
+      bar:SetFrameLevel((head:GetFrameLevel() or 0) + 5)
+    else
+      win.title:SetPoint("RIGHT", edge or head, edge and "LEFT" or "RIGHT", -8, 0)
+      bar:SetPoint("TOPLEFT", win.content, "TOPLEFT", 6, -6)
+      bar:SetPoint("TOPRIGHT", win.content, "TOPRIGHT", -6, -6)
+      bar:SetFrameLevel((win.content:GetFrameLevel() or 0) + 2)
+      local room = (win.content:GetWidth() or 0) - 12 - tools - Window.SEARCH_MIN
+      if (win.content:GetWidth() or 0) > 0 and bar.tabs:GetWidth() > room then
+        tabWords(false)
+      end
+    end
+    bar.tabs:ClearAllPoints()
+    bar.tabs:SetPoint("LEFT", bar, "LEFT", 0, 0)
+    bar.tabsRight = bar.tabs:GetWidth()
+  end
+  bar.Layout()
   -- the full-text search: between the tabs and the bookmark button, as wide as the window allows
   bar.search = S.search(bar, L["Search the book"])
-  bar.search:SetPoint("LEFT", bar, "LEFT", x + 8, 0)
-  bar.search:SetPoint("RIGHT", bar.mark, "LEFT", -8, 0)
+  bar.search:SetHeight(BAR_H) -- a tool of the bar: its height
+  bar.search:SetPoint("LEFT", bar.tabs, "RIGHT", 15, 0)
+  bar.search:SetPoint("RIGHT", bar.mark, "LEFT", -15, 0)
   bar.search:SetScript("OnTextChanged", function(self, userInput)
     local text = self:GetText() or ""
     if text == "" then
@@ -1637,6 +1992,8 @@ function Window.Build()
   end)
   folio.label = S.text(folio, 11, S.C.dim)
   folio.label:SetPoint("CENTER", folio, "CENTER", 0, 0)
+  -- the front table, the shelves and Your record: one view in the pages' place (ADR 0080)
+  ns.Front.Build(content, BAR_H + 10)
   Window.win, Window.bar, Window.left, Window.right, Window.folio = win, bar, left, right, folio
   layoutPages()
 end

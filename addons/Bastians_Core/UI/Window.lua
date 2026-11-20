@@ -146,7 +146,8 @@ end
 
 -- opts: { title, width, height, minWidth, minHeight, maxWidth, maxHeight, db (table for pos and size),
 --         onShow(win), onHide(win), onResize(win), escape (default true), onTop (above every
---         other window, Window.TOP_STRATA) }
+--         other window, Window.TOP_STRATA), headHeight (a taller head), portrait (the round
+--         picture of the game's frame), onPortrait(win) with portraitTip (a click on it) }
 function B.UI.Window(name, opts)
   opts = opts or {}
   local db = opts.db or {}
@@ -203,7 +204,10 @@ function B.UI.Window(name, opts)
   local head = CreateFrame("Frame", nil, frame)
   head:SetPoint("TOPLEFT", 1, -1)
   head:SetPoint("TOPRIGHT", -1, -1)
-  head:SetHeight(HEADER_H)
+  -- `opts.headHeight`: a taller head (Bastian's Book's bar, 50: , "the
+  -- header feels squeezed. make it higher"; docs/addons/book-look.md section 4)
+  win.headH = opts.headHeight or HEADER_H
+  head:SetHeight(win.headH)
   head.bg = S.roundFill(head, S.C.header, "radius", nil, "top") -- the window's top corners
   draggable(head, win)
   win.head = head
@@ -745,6 +749,15 @@ end
 Window.CHROME_TOP = 56 -- the title bar and the band beside the portrait
 Window.CHROME_SIDE = 6
 Window.PORTRAIT_X = 58 -- the band starts right of the portrait
+Window.PORTRAIT_SIZE = 58 -- the portrait as a button (`opts.onPortrait`)
+Window.CHROME_TITLE = 22 -- the game frame's title bar, over our head
+
+-- The content's top under the game's frame: its title bar and our head (`opts.headHeight`: a
+-- head of that height directly over the content; else the band of CHROME_TOP).
+function Window:ChromeTop()
+  local own = self.opts.headHeight
+  return own and (Window.CHROME_TITLE + own) or Window.CHROME_TOP
+end
 function Window:PortraitIcon()
   if self.opts.portrait then
     return self.opts.portrait
@@ -773,6 +786,23 @@ function Window:Chrome()
       end)
       chrome:SetPortraitToAsset(self:PortraitIcon())
       chrome:SetTitle(self.title:GetText() or "")
+      -- `opts.onPortrait`: the round portrait is a button (Bastian's Book: its crest leads to
+      -- the front table; ). Assumed: the template draws the portrait
+      -- about 58 px wide over the frame's top left corner (measured on a screenshot of
+      -- 17.11.2026: from 8 left of and 7 above the corner).
+      if self.opts.onPortrait then
+        local b = CreateFrame("Button", nil, chrome)
+        b:SetSize(Window.PORTRAIT_SIZE, Window.PORTRAIT_SIZE)
+        b:SetPoint("TOPLEFT", chrome, "TOPLEFT", -8, 7)
+        b:SetFrameLevel((self.frame:GetFrameLevel() or 1) + 60)
+        b.tip = self.opts.portraitTip
+        b:SetScript("OnEnter", S.TipEnter)
+        b:SetScript("OnLeave", S.TipLeave)
+        b:SetScript("OnClick", function()
+          self.opts.onPortrait(self)
+        end)
+        self.portraitButton = b
+      end
     end
   end
   return self.chrome or nil
@@ -782,10 +812,10 @@ end
 -- side, bottom in px.
 function Window:Insets()
   if self.gameFramed then
-    return Window.CHROME_TOP, Window.CHROME_SIDE, Window.CHROME_SIDE
+    return self:ChromeTop(), Window.CHROME_SIDE, Window.CHROME_SIDE
   end
   local inset = self.framed and Window.FRAME_INSET or 1
-  return HEADER_H + inset, inset, inset
+  return self.headH + inset, inset, inset
 end
 
 -- A medium setting as this window takes it (V25): its own preset's where it names one, else the
@@ -886,9 +916,9 @@ function Window:ApplyChrome()
   head:ClearAllPoints()
   self.content:ClearAllPoints()
   if on then
-    head:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.PORTRAIT_X, -22)
-    head:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -Window.CHROME_SIDE, -22)
-    self.content:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.CHROME_SIDE, -Window.CHROME_TOP)
+    head:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.PORTRAIT_X, -Window.CHROME_TITLE)
+    head:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -Window.CHROME_SIDE, -Window.CHROME_TITLE)
+    self.content:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.CHROME_SIDE, -self:ChromeTop())
     self.content:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -Window.CHROME_SIDE, Window.CHROME_SIDE)
   else
     head:SetPoint("TOPLEFT", 1, -1)
@@ -897,7 +927,7 @@ function Window:ApplyChrome()
     self.content:SetPoint("BOTTOMRIGHT", -1, 1)
     self.framed = nil -- ApplyFrame places them again
   end
-  head:SetHeight(on and 32 or HEADER_H)
+  head:SetHeight(on and (self.opts.headHeight or 32) or self.headH)
   for _, part in ipairs({ frame.bg, frame.edges, head.bg, self.title, self.close }) do
     S.showPart(part, not on)
   end

@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Text (esES)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_esES\Icon
 ## Notes: Generated names and quest objectives in Spanish; builds its tables only on a Spanish client.

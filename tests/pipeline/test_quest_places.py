@@ -143,7 +143,7 @@ def test_bad_rows_are_refused_with_the_reason(tmp_path, change, message):
 
 def test_the_shipped_tables_are_valid():
     """A file with no row is a table too: nothing in it is read or played yet."""
-    for client in ("forever", "retail"):
+    for client in ("forever",):
         path = ROOT / "pipeline" / "config" / f"quest_places_{client}.toml"
         if path.is_file():
             assert isinstance(read_quest_places(path), list)

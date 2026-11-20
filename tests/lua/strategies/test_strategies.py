@@ -257,8 +257,8 @@ def test_bookmarks_the_last_page_and_notes_survive_a_reload(wow: WowRuntime):
     fresh = wow.reload()
     fresh.run_frames(10)
     fresh.advance(0.5)
-    fresh.slash("/bbook")  # opens on the map; the last place is still kept
-    assert fresh.eval(f"{WIN}.Current().kind") == "atlas"
+    fresh.slash("/bbook")  # opens on the front table (ADR 0080); the last place is still kept
+    assert fresh.eval(f"{WIN}.Current().kind") == "front"
     assert fresh.eval(f"{MOD}.db.global.notes['hogger-camp']") == "note"
     fresh.slash("/bbook bookmarks")
     left = texts(fresh, "left")
@@ -278,7 +278,7 @@ def test_the_back_shelf_is_found_by_the_search_with_its_flow_plate_table_and_fli
     wow.slash("/bbook search")
     shown = both(wow)
     assert shown[0] == "SEARCH THE BOOK" and any(t.startswith("Type a word above") for t in shown)
-    wow.execute(f"{WIN}.Search('leather')")
+    wow.execute(f"{WIN}.SearchPage('leather')")
     shown = both(wow)
     assert "The Leather Trick  back shelf" in shown
     click_row(wow, "left", "The Leather Trick")
@@ -351,8 +351,9 @@ def test_the_rumour_mill_is_a_plain_list_after_its_chapter(wow: WowRuntime):
     assert "This is what they're saying on the road. Make of it what you will." in shown
     # the claim told by two channels and on no page (tests/fixtures/export-mini, claim 13)
     assert "Hogger drops the Blood Saber about once in 30 kills." in shown
-    assert "Fixture Channel, 2026-10-13, at 0:40  copy the link" in shown
-    assert not any(t.startswith("Other Channel") for t in shown)  # one line per rumour
+    # the newest traveller first (the pack's three newest, 10.11.2026)
+    assert "Other Channel, 2026-10-14, at 3:20  copy the link" in shown
+    assert not any(t.startswith("Fixture Channel") for t in shown)  # one line per rumour
     assert not any("[" in t for t in shown)  # no stamps
     wow.slash("/bbook mill crafting")  # a chapter without rumours says so
     assert "Nothing in the mill for this chapter today." in both(wow)
@@ -412,22 +413,26 @@ def test_the_full_text_search_finds_words_in_the_text_and_the_names(core: WowRun
 
 def test_the_book_window_searches_its_pages(wow: WowRuntime):
     boot(wow)
-    wow.execute(f"{WIN}.Open() {WIN}.Search('gnoll camp')")
+    wow.execute(f"{WIN}.Open() {WIN}.SearchPage('gnoll camp')")
     shown = both(wow)
     assert wow.eval(f"{WIN}.Current().kind") == "search"
     assert any(t.startswith("Hogger's Camp") for t in shown)
     assert any("gnoll camp" in t for t in shown)  # the snippet around the first word
-    wow.execute(f"{WIN}.Search('linen cloth')")  # the item's name, from its token
+    wow.execute(f"{WIN}.SearchPage('linen cloth')")  # the item's name, from its token
     assert any(t.startswith("Hogger's Camp") for t in both(wow))
-    wow.execute("SlashCmdList.BASTIANSSTRATEGIES('nixie')")  # /bbook <words> searches
+    # /bbook <words> searches the book's shelf (ADR 0080): the back shelf too, by its words
+    wow.execute("SlashCmdList.BASTIANSSTRATEGIES('nixie')")
+    assert (wow.eval(f"{WIN}.Current().kind"), wow.eval(f"{WIN}.Current().id")) == ("shelf", "all")
+    assert wow.eval(f"{MOD}.Front.Place('leather-trick')") is not None
+    wow.execute(f"{WIN}.SearchPage('nixie')")
     assert any(t.startswith("The Leather Trick") and "back shelf" in t for t in both(wow))
-    wow.execute(f"{WIN}.Search('dragons')")
+    wow.execute(f"{WIN}.SearchPage('dragons')")
     assert "Nothing in the book about that." in both(wow)
-    click = f"{WIN}.Search('gnoll')"
+    click = f"{WIN}.SearchPage('gnoll')"
     wow.execute(click)
     click_row(wow, "left", "Hogger's Camp")
     assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
-    wow.execute(f"{WIN}.Search('  ')")  # an empty query: the search page itself (30.10.2026)
+    wow.execute(f"{WIN}.SearchPage('  ')")  # an empty query: the search page itself (30.10.2026)
     assert wow.eval(f"{WIN}.Current().kind") == "search" and wow.eval(f"{WIN}.Current().id") == ""
 
 

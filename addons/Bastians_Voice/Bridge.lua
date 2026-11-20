@@ -402,6 +402,12 @@ function Voice.Clips(line)
   return out
 end
 
+local function isOf(clip, line)
+  return clip.line == line.key
+    or clip.key == line.key
+    or (line.questID ~= nil and clip.questID == line.questID)
+end
+
 -- Every clip of ours or of the quests source in Spoken's queue with this line's key.
 function Voice.Queued(line)
   local Spoken = SD.Spoken()
@@ -410,11 +416,18 @@ function Voice.Queued(line)
   end
   local out = {}
   for _, clip in ipairs(Spoken:GetQueue() or {}) do
-    if clip.line == line.key or clip.key == line.key or (line.questID and clip.questID == line.questID) then
+    if isOf(clip, line) then
       out[#out + 1] = clip
     end
   end
   return out
+end
+
+-- Whether the head of Spoken's queue (speaking, paused or held) is a clip of this line.
+function Voice.AtHead(line)
+  local Spoken = SD.Spoken()
+  local head = Spoken and line and Spoken:GetCurrent() or nil
+  return head ~= nil and isOf(head, line)
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -578,7 +591,10 @@ function Voice.TtsFailed()
   end
 end
 
--- Whether a line is queued or playing.
+-- Whether a line is the one playing: the game's voice reads it, or a clip of it is the head of
+-- Spoken's queue. A clip waiting behind another is not playing (every
+-- quest with a clip anywhere in the queue showed the stop state, and a click on it only took the
+-- clip out of the queue).
 function Voice.Playing(ref)
   local line = type(ref) == "table" and ref or Voice.Line(ref)
   if not line then
@@ -587,17 +603,29 @@ function Voice.Playing(ref)
   if line.tts then
     return tts ~= nil and tts.key == line.key
   end
-  return #Voice.Queued(line) > 0
+  return Voice.AtHead(line)
 end
 
 -- Plays a line now (`queue` = true: after what plays). Returns true, or false and why ("missing":
 -- no Spoken; "noline"; "refused": the player did not take it).
+-- Now means now: Spoken's PlayNow queues a line behind the one speaking
+-- or held, so the click was silent, and that line's end started the backlog, "random voice lines".
+-- A play by hand ends everything first; a line asked for is the only one that speaks.
 function Voice.Play(line, queue)
   if type(line) == "string" then
     line = Voice.Line(line)
   end
   if not line then
     return false, "noline"
+  end
+  if queue and Voice.Playing(line) then
+    return true -- asked to queue what speaks already
+  end
+  if queue and not line.tts and #Voice.Queued(line) > 0 then
+    return true -- waiting already
+  end
+  if not queue then
+    Voice.StopAll()
   end
   if line.tts then
     return ttsSpeak(line) or false, "refused"
@@ -651,7 +679,9 @@ function Voice.Play(line, queue)
 end
 
 -- Removes a line's clips from the queue (ours through the source, a quest's through Spoken's
--- quests source).
+-- quests source). The line speaking stops with the whole queue: taking only the head out lets
+-- Spoken start the next clip waiting, a line nobody asked for ("clicking
+-- on ends the current one").
 function Voice.Stop(line)
   if type(line) == "string" then
     line = Voice.Line(line)
@@ -662,6 +692,10 @@ function Voice.Stop(line)
   local Spoken = SD.Spoken()
   if not (Spoken and line) then
     return false
+  end
+  if Voice.AtHead(line) then
+    Voice.StopAll()
+    return true
   end
   local clips = Voice.Queued(line)
   if #clips == 0 then

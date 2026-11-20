@@ -1,7 +1,11 @@
 """Performance report (nfr.md budgets, roadmap B11.1) from the snapshots `/bastians perf` saves.
 
-Usage: python tools/perf_report.py <Bastians_Core.lua saved variables> [--out build/perf-report.md]
-       [--last N] [--client forever|retail]
+Usage: python tools/perf_report.py [Bastians_Core.lua saved variables] [--out build/perf-report.md]
+       [--last N] [--client forever]
+
+Without a path: the newest `Bastians_Core.lua` under the Forever client `tools/install.py` knows
+(`.local/install.toml`). The developer probe takes a snapshot by itself 30 s after every login
+(`by = "probe"`), so the file holds one without the owner typing anything (ADR 0082, decision 9).
 
 The saved-variables file holds `BastiansCoreDB`; its `global.perf` list carries up to 20 snapshots
 (Perf.lua): time, uptime, client, build, memory per Bastians addon in KB and CPU per module (calls,
@@ -15,12 +19,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+import tomllib
 from datetime import UTC, datetime
 from pathlib import Path
 
 from lupa import lua51
 
 ROOT = Path(__file__).resolve().parent.parent
+INSTALL = ROOT / ".local" / "install.toml"  # tools/install.py: the clients' folders
 
 # nfr.md "Performance budgets". Memory has no fixed limit: it is
 # reported and its history shown; the frame times are what a player feels, and stay.
@@ -32,6 +38,17 @@ PACK_PREFIX = "Bastians_Data_"
 
 class PerfReportError(ValueError):
     pass
+
+
+def saved_variables(config: Path = INSTALL) -> Path | None:
+    """Core's newest saved variables under the Forever client; None when there are none."""
+    if not config.is_file():
+        return None
+    client = tomllib.loads(config.read_text(encoding="utf-8")).get("clients", {}).get("forever")
+    if not client:
+        return None
+    found = Path(client).glob("WTF/Account/*/SavedVariables/Bastians_Core.lua")
+    return max(found, key=lambda f: f.stat().st_mtime, default=None)
 
 
 def to_python(value):
@@ -105,7 +122,8 @@ def render(snapshots: list[dict], last: int = 1) -> str:
         "",
         f"Newest snapshot: {_when(newest)}, client {newest.get('client', '?')}, build "
         f"{newest.get('build', '?')}, {float(newest.get('uptime') or 0):.0f} s after login. "
-        f"{len(snapshots)} snapshots in the file.",
+        f"{len(snapshots)} snapshots in the file."
+        + (f" Taken by the probe: {newest['note']}." if newest.get("by") == "probe" else ""),
         "",
         "## Budgets (nfr.md)",
         "",
@@ -183,16 +201,21 @@ def main(argv: list[str] | None = None) -> int:
         description="perf report from /bastians perf snapshots (nfr.md)"
     )
     parser.add_argument(
-        "file", type=Path, help="Bastians_Core.lua from WTF/Account/<acc>/SavedVariables"
+        "file",
+        nargs="?",
+        type=Path,
+        help="Bastians_Core.lua from WTF/Account/<acc>/SavedVariables (default: the client's)",
     )
     parser.add_argument("--out", type=Path, default=ROOT / "build" / "perf-report.md")
     parser.add_argument("--last", type=int, default=0, help="history rows (default: all)")
-    parser.add_argument(
-        "--client", choices=("forever", "retail"), help="only snapshots of this client"
-    )
+    parser.add_argument("--client", choices=("forever",), help="only snapshots of this client")
     args = parser.parse_args(argv)
+    path = args.file or saved_variables(INSTALL)
+    if path is None:
+        print("error: no path, and no saved variables under the Forever client", file=sys.stderr)
+        return 2
     try:
-        snapshots = read_snapshots(args.file)
+        snapshots = read_snapshots(path)
     except PerfReportError as err:
         print(f"error: {err}", file=sys.stderr)
         return 2

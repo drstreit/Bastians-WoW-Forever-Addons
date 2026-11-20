@@ -99,6 +99,21 @@ class FlightTime:
     )
 
 
+@dataclass(frozen=True)
+class MerchantCheck:
+    """A merchant's whole stock as the probe saw it, against the pack's vendor list (E6)."""
+
+    npc_id: int
+    name: str
+    checked: int  # the items the probe saw with an id
+    ok: int  # the same price for the vendor's stack
+    differs: list[tuple[int, object, object]]  # (item, the pack's price, the client's price)
+    not_in_pack: list[int]
+    unknown_price: int  # the pack lists the item, without a price
+    not_sold: list[int]  # the pack's items the merchant did not have (whole stock seen)
+    status: str  # "ok", "differs", "no stock in pack", "missing record"
+
+
 @dataclass
 class ProbeTruth:
     points: list[PointCheck] = field(default_factory=list)
@@ -106,10 +121,20 @@ class ProbeTruth:
     quests: list[QuestCheck] = field(default_factory=list)
     flights: list[FlightTime] = field(default_factory=list)
     targets: list[TargetCheck] = field(default_factory=list)
+    talks: list[TargetCheck] = field(default_factory=list)  # the NPCs talked to in play (E6)
+    merchants: list[MerchantCheck] = field(default_factory=list)
 
     @property
     def empty(self) -> bool:
-        return not (self.points or self.nodes or self.quests or self.flights or self.targets)
+        return not (
+            self.points
+            or self.nodes
+            or self.quests
+            or self.flights
+            or self.targets
+            or self.talks
+            or self.merchants
+        )
 
 
 # ---------------------------------------------------------------------------------------------
@@ -402,6 +427,78 @@ def flight_times(
     return out
 
 
+def talk_checks(
+    dump: ProbeDump, world: World, tolerance_pct: float = TOLERANCE_PCT
+) -> list[TargetCheck]:
+    """Every NPC or object the probe saw one talk to in play (`truth.npcs`, keyed `npc:<id>` or
+    `object:<id>`): the record, its name and a spawn near where the player stood (E6)."""
+    out: list[TargetCheck] = []
+    for key, rec in sorted((dump.truth.get("npcs") or {}).items(), key=lambda kv: str(kv[0])):
+        kind, _, number = str(key).partition(":")
+        if not number.isdigit() or not isinstance(rec, dict):
+            continue
+        kinds = ", ".join(sorted(str(k) for k in (rec.get("kinds") or {})))
+        entry = {
+            "target": {"kind": kind, "id": int(number), "name": rec.get("name") or ""},
+            "mapID": rec.get("map"),
+            "mapX": rec.get("x"),
+            "mapY": rec.get("y"),
+        }
+        check = check_target(f"talked to ({kinds or '?'})", entry, world, tolerance_pct)
+        if check is not None:
+            out.append(check)
+    return out
+
+
+def merchant_checks(dump: ProbeDump, world: World) -> list[MerchantCheck]:
+    """Every merchant's stock the probe saw (`truth.merchants`) against the pack's vendor list:
+    the price for the vendor's stack item by item; with the whole stock seen, also what the pack
+    lists and the merchant no longer has (E6)."""
+    out: list[MerchantCheck] = []
+    npcs = dump.truth.get("npcs") or {}
+    for key, stock in sorted(
+        (dump.truth.get("merchants") or {}).items(), key=lambda kv: str(kv[0])
+    ):
+        kind, _, number = str(key).partition(":")
+        if kind != "npc" or not number.isdigit() or not isinstance(stock, dict):
+            continue
+        npc_id = int(number)
+        name = str((npcs.get(key) or {}).get("name") or "")
+        rec = world.records.get("npc", {}).get(npc_id)
+        if rec is None:
+            out.append(MerchantCheck(npc_id, name, 0, 0, [], [], 0, [], "missing record"))
+            continue
+        pack = {row[0]: row for row in rec.get("vendor") or [] if isinstance(row, list) and row}
+        seen_items = _items(stock.get("items"))
+        items = [i for i in seen_items if isinstance(i, dict) and isinstance(i.get("item"), int)]
+        ok = unknown = 0
+        differs: list[tuple[int, object, object]] = []
+        missing: list[int] = []
+        for it in items:
+            row = pack.get(it["item"])
+            if row is None:
+                missing.append(it["item"])
+                continue
+            price = row[1] if len(row) > 1 else None
+            if price is None:
+                unknown += 1
+            elif price == it.get("price"):
+                ok += 1
+            else:
+                differs.append((it["item"], price, it.get("price")))
+        whole = stock.get("count") == len(seen_items)
+        seen = {it["item"] for it in items}
+        not_sold = sorted(i for i in pack if i not in seen) if whole else []
+        if not pack:
+            status = "no stock in pack"
+        else:
+            status = "differs" if (differs or missing or not_sold) else "ok"
+        out.append(
+            MerchantCheck(npc_id, name, len(items), ok, differs, missing, unknown, not_sold, status)
+        )
+    return out
+
+
 def check_probe(
     dump: ProbeDump,
     world: World,
@@ -414,6 +511,8 @@ def check_probe(
         quests=quest_checks(dump, world),
         targets=target_checks(dump, world, tolerance_pct),
         flights=flight_times(dump, world, transforms),
+        talks=talk_checks(dump, world, tolerance_pct),
+        merchants=merchant_checks(dump, world),
     )
 
 
@@ -497,4 +596,60 @@ def render_probe_section(truth: ProbeTruth, tolerance_pct: float = TOLERANCE_PCT
                 f"{f.landed_at or '-'} |"
             )
         lines.append("")
+    lines += render_play_truth(truth)
+    return lines
+
+
+TRUTH_ROWS = 40  # rows of a table in the report; the counts cover the rest
+MERCHANT_STATUSES = ("ok", "differs", "no stock in pack", "missing record")
+
+
+def render_play_truth(truth: ProbeTruth) -> list[str]:
+    """What the probe saw in play (E6): the NPCs talked to and the merchants' stock."""
+    if not (truth.talks or truth.merchants):
+        return []
+    lines = ["### Seen in play", ""]
+    if truth.talks:
+        lines += [
+            f"NPCs and objects talked to against the pack records: {len(truth.talks)} checked, "
+            f"{_counts(truth.talks, TARGET_STATUSES)}.",
+            "",
+        ]
+        bad = [t for t in truth.talks if t.status != "ok"][:TRUTH_ROWS]
+        if bad:
+            lines += ["| NPC | Seen at | Map | Status | Distance (%) | Note |"]
+            lines += ["|---|---|---|---|---|---|"]
+            for t in bad:
+                distance = f"{t.distance_pct:.2f}" if t.distance_pct is not None else "-"
+                lines.append(
+                    f"| {t.kind} {t.target_id} {t.name} | {t.label} | {t.map or '-'} | "
+                    f"{t.status} | {distance} | {t.note or ''} |"
+                )
+            lines.append("")
+    if truth.merchants:
+        items = sum(m.checked for m in truth.merchants)
+        lines += [
+            f"Merchants' stock against the pack's vendor lists: {len(truth.merchants)} merchants "
+            f"({_counts(truth.merchants, MERCHANT_STATUSES)}), "
+            f"{items} items: {sum(m.ok for m in truth.merchants)} at the pack's price, "
+            f"{sum(len(m.differs) for m in truth.merchants)} at another, "
+            f"{sum(len(m.not_in_pack) for m in truth.merchants)} not in the pack, "
+            f"{sum(m.unknown_price for m in truth.merchants)} without a price in the pack; "
+            f"{sum(len(m.not_sold) for m in truth.merchants)} items the pack lists are not sold.",
+            "",
+        ]
+        bad = [m for m in truth.merchants if m.status != "ok"][:TRUTH_ROWS]
+        if bad:
+            lines += [
+                "| Merchant | Status | Prices differ (pack, client) | Not in pack | Not sold |"
+            ]
+            lines += ["|---|---|---|---|---|"]
+            for m in bad:
+                prices = ", ".join(f"{i}: {a} / {b}" for i, a, b in m.differs[:5])
+                lines.append(
+                    f"| {m.name} ({m.npc_id}) | {m.status} | {prices or '-'} | "
+                    f"{', '.join(map(str, m.not_in_pack[:8])) or '-'} | "
+                    f"{', '.join(map(str, m.not_sold[:8])) or '-'} |"
+                )
+            lines.append("")
     return lines

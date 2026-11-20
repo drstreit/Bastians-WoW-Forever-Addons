@@ -1,0 +1,3 @@
+-- Data: ForeverDB.net (https://foreverdb.net). Reuse requires this credit.
+local _, ns = ...
+ns.books={books={{203754,2,{A=79091},{{1455,75.6,10.4,31},{1429,1,1,40}},""},{215683,-1,{},{},""},{999,1,{},{},"Nowhere"}},v=1}

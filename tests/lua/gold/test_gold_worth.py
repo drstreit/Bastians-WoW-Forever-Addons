@@ -90,15 +90,11 @@ def test_the_pure_worth_lines(core: WowRuntime):
 def test_the_provider_reads_the_market_pack_and_the_own_scan(wow: WowRuntime):
     boot(wow)
     text, copper = worth(wow, "item:2589")
-    linen = 38 if wow.client == "forever" else 40  # the market pack: forever EU, retail EU
-    assert text.startswith(f"AH {linen}c") and copper == linen
+    assert text.startswith("AH 38c") and copper == 38  # the market pack
     assert "vendor 13c" in text  # Data's sell price
-    # Hogger: linen 45.5 %, Blood Saber 3.2 % (50g on Forever, no retail price)
+    # Hogger: linen 45.5 %, Blood Saber 3.2 % (50g on Forever)
     mob = worth(wow, "npc:448")[0]
-    if wow.client == "forever":
-        assert mob.startswith("~1s 77c per kill")
-    else:
-        assert mob == "~18c per kill (1 items without price)"
+    assert mob.startswith("~1s 77c per kill")
     assert worth(wow, "npc:240") is None  # no loot: no worth line for a quest giver
     assert "/h" in worth(wow, "spot:1")[0] and "verified" not in worth(wow, "spot:1")[0]
     assert worth(wow, "item:424242")[0] == "price unknown"

@@ -2,7 +2,7 @@
 versions and relations; two projects, the suite and its data, and the suite requires the data, so
 the CurseForge app installs both with one click.
 
-Usage: python tools/curseforge.py --client forever|retail [--release-dir build/release/<client>]
+Usage: python tools/curseforge.py --client forever [--release-dir build/release/<client>]
        [--only Bastians_Quests,...] [--changelog <file>] [--send]
 
 Reads `tools/curseforge.toml` and the release manifest that `tools/release.py` wrote for the
@@ -34,8 +34,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CONFIG = ROOT / "tools" / "curseforge.toml"
-CLIENTS = ("forever", "retail")
-CLIENT_NAMES = {"forever": "WoW Forever", "retail": "retail"}
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
+CLIENT_NAMES = {"forever": "WoW Forever"}
 API = "https://wow.curseforge.com"
 # the owner's upload token, outside the repo: a line API-TOKEN=<token> (the environment wins)
 SECRETS = Path.home() / ".curseforge" / ".secrets"
@@ -169,7 +170,7 @@ def release_type(version: str) -> str:
 
 def relations(config: dict, project: str, client: str) -> tuple[list[dict], list[str]]:
     """The relations of one project's file for one client, and the unverified names among them.
-    A companion that does not exist for the client is left out: retail never relates to QuestieDB.
+    A companion that does not exist for the client is left out (its `clients` in the config).
     A project of ours that CurseForge has not approved yet (`approved = false`) is left out too:
     CurseForge refuses a relation to it ("does not exist, is not accessible"); `pending` names it.
     """

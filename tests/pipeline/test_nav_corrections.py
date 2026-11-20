@@ -124,7 +124,7 @@ def test_an_end_far_from_the_network_fails_the_build(tmp_path):
 
 def test_the_shipped_tables_read():
     config = Path(__file__).resolve().parents[2] / "pipeline" / "config"
-    for client, lifts in (("forever", 7), ("retail", 5)):
+    for client, lifts in (("forever", 7),):
         rows = read_corrections(config / f"nav_corrections_{client}.toml")
         assert len(rows.lifts) == lifts
         assert all(lift.verified is False for lift in rows.lifts)  # not timed in game yet

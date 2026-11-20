@@ -72,9 +72,9 @@ end
 -- the hub lists both, the login says what is missing.
 -- ---------------------------------------------------------------------------------------------
 
-local CLIENT_NAMES = { forever = "WoW Forever", retail = "retail" }
+local CLIENT_NAMES = { forever = "WoW Forever" }
 
--- The client's name for players ("WoW Forever", "retail").
+-- The client's name for players ("WoW Forever"; another client by its key).
 function Settings_.ClientName(client)
   client = client or B.Client
   return CLIENT_NAMES[client] or tostring(client)
@@ -534,7 +534,7 @@ local function companionWhat(addon)
 end
 
 -- The companions of a client (default: this one): { addon, what, url, installed }, installed first.
--- A companion that does not exist for the client is left out: retail is never told about QuestieDB.
+-- A companion that does not exist for the client is left out (QuestieDB and Spoken: Forever).
 function Settings_.Companions(client)
   client = client or B.Client
   local list = {}
@@ -553,7 +553,7 @@ function Settings_.Companions(client)
 end
 
 -- Whether an app's optional addon applies to this client: a companion of another client is no
--- missing feature here (Quests on retail does not miss QuestieDB).
+-- missing feature here.
 function Settings_.AppliesHere(addon)
   for _, c in ipairs(B.COMPANIONS) do
     if c.addon == addon or addon:find("^" .. c.addon .. "_") then
@@ -1989,7 +1989,7 @@ local function partsRows(canvas)
       widgets[#widgets + 1] =
         Wd.Note(canvas, ("%s:%s %s"):format(p.addon, who, state), p.installed and S.C.text or nil)
     end
-    -- retail has no companions since TomTom left the list (29.10.2026)
+    -- a client without companions shows no heading
     local companions = Settings_.Companions()
     if #companions > 0 then
       widgets[#widgets + 1] =

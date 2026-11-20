@@ -691,8 +691,6 @@ local api_forever_only = {
   "UnitHasEffectivelyTankAura", "UnitHasLootInteraction", "UnitHasMouseoverHighlight",
   "UnitIsInInteractRange", "UnitResistance", "UnitUsesAmmo", "UpdateMouseoverAtPoint",
 }
-local api_retail_only = {
-}
 
 local function extend(...)
   local result = {}
@@ -706,11 +704,11 @@ end
 
 read_globals = extend(api_shared, handwritten_globals)
 
--- Compat and the probe may touch API that exists on one client only.
+-- Compat and the probe may touch API that only Forever's documentation lists.
 files["addons/Bastians_Core/Compat/"] = {
-  read_globals = extend(api_shared, handwritten_globals, api_forever_only, api_retail_only),
+  read_globals = extend(api_shared, handwritten_globals, api_forever_only),
 }
 files["addons/Bastians_Probe/"] = {
-  read_globals = extend(api_shared, handwritten_globals, api_forever_only, api_retail_only),
+  read_globals = extend(api_shared, handwritten_globals, api_forever_only),
 }
 -- END GENERATED GLOBALS

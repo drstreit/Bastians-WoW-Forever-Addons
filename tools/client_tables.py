@@ -1,6 +1,6 @@
 """Dump the client's data tables for the build (ADR 0035, "client first").
 
-Usage: python tools/client_tables.py --client forever|retail [--install <folder>] [--force]
+Usage: python tools/client_tables.py --client forever [--install <folder>] [--force]
        [--dry-run]
 
 Writes ``.local/out/<client>_<Table>.json`` for every table in TABLES and, for every text language
@@ -23,9 +23,10 @@ ROOT = Path(__file__).resolve().parent.parent
 DUMPS = ROOT / ".local" / "out"
 EXE = ROOT / "tools" / "clientdump" / "bin" / "Release" / "net10.0" / "clientdump.exe"
 DEFS = ROOT / ".local" / "WoWDBDefs" / "definitions"
-CLIENTS = ("forever", "retail")
-PRODUCTS = {"forever": "wowf", "retail": "wow"}
-FOLDERS = {"forever": "_forever_", "retail": "_retail_"}
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
+PRODUCTS = {"forever": "wowf"}
+FOLDERS = {"forever": "_forever_"}
 TABLES = (
     "ItemSparse",
     "Item",
@@ -45,7 +46,7 @@ LOCALIZED = ("ItemSparse", "SpellName", "SkillLine")
 
 def install_of(client: str) -> Path:
     """The client folder: .local/install.toml's [clients] when it names the right product, else
-    the standard folder next to the retail one."""
+    the standard folder of the World of Warcraft install."""
     cfg = ROOT / ".local" / "install.toml"
     if cfg.is_file():
         with cfg.open("rb") as fh:

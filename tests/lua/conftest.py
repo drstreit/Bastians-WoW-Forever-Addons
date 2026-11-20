@@ -1,4 +1,5 @@
-"""Fixtures for the Lua tests: one WowRuntime per client, so every module test runs on both."""
+"""Fixtures for the Lua tests: a WowRuntime of the Forever client (~~one per client, forever and
+retail~~ Forever alone since 15.11.2026, ADR 0037)."""
 
 import sys
 from pathlib import Path
@@ -16,7 +17,7 @@ FIXTURE_ADDONS = HERE.parent / "fixtures" / "addons"
 
 @pytest.fixture(params=CLIENTS)
 def wow(request) -> WowRuntime:
-    """A fresh mock client that knows the fixture addons too; one per client (forever, retail)."""
+    """A fresh mock client that knows the fixture addons too."""
     return WowRuntime(request.param, extra_dirs=(FIXTURE_ADDONS,))
 
 

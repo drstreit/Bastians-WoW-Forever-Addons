@@ -7,7 +7,6 @@ as a tour."""
 import sys
 from pathlib import Path
 
-import pytest
 from harness import WowRuntime
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "route"))
@@ -86,8 +85,6 @@ def test_the_service_plans_over_the_activities_in_reach(wow: WowRuntime):
 
 
 def test_golds_plan_is_off_by_default_shows_the_plan_and_routes_it(wow: WowRuntime):
-    if wow.client != "forever":
-        pytest.skip("Gold is Forever's only (tests/lua/gold/conftest.py)")
     boot(wow, "Bastians_Core", "Bastians_Data", "Bastians_Map", "Bastians_Route", "Bastians_Gold")
     plan = "Bastians:GetModule('Gold').Plan"
     profile = "Bastians:GetModule('Gold').db.profile"

@@ -10,7 +10,7 @@ def world(tmp_path):
     for name in ("Bastians_Core", "Bastians_Data"):
         (addons / name).mkdir(parents=True)
         (addons / name / f"{name}.toc").write_text("## Interface: 16001\n", encoding="utf-8")
-    client = tmp_path / "wow" / "_retail_"
+    client = tmp_path / "wow" / "_forever_"
     dest = client / "Interface" / "AddOns"
     dest.mkdir(parents=True)
     return addons, client, dest
@@ -87,9 +87,9 @@ def test_list(world):
 def test_config_remembers_client_folder(world, tmp_path):
     _, client, _ = world
     config = tmp_path / ".local" / "install.toml"
-    assert install.resolve_client_dir("retail", str(client), config) == client.resolve()
-    assert install.resolve_client_dir("retail", None, config) == client.resolve()
-    assert install.load_config(config) == {"retail": str(client.resolve())}
+    assert install.resolve_client_dir("forever", str(client), config) == client.resolve()
+    assert install.resolve_client_dir("forever", None, config) == client.resolve()
+    assert install.load_config(config) == {"forever": str(client.resolve())}
 
 
 def test_unknown_client_folder_is_an_error(tmp_path):

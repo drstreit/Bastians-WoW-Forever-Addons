@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Helpers
 ## IconTexture: Interface\AddOns\Bastians_Helpers\Icon
 ## Notes: The small everyday helpers: sell junk, repair, restock, take all mail, quest givers, IDs on tooltips, warnings.
@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.5.0
+## Version: 2.6.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Data, Bastians_Browser

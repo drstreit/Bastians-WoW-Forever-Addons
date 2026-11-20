@@ -3,7 +3,7 @@
 import pytest
 from harness import LuaAddonError, WowRuntime
 
-INTERFACE = {"forever": 16001, "retail": 120105}
+INTERFACE = {"forever": 16001}
 
 
 def test_core_loads_and_logs_in_on_each_client(core: WowRuntime):

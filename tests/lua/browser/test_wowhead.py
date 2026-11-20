@@ -9,11 +9,7 @@ BR = "Bastians:GetModule('Browser').Browser"
 def test_the_wowhead_link_is_offered_on_rows_and_lands_in_the_chat_input(wow: WowRuntime):
     wow.start("Bastians_Core", "Bastians_Data", "Bastians_Quests", "Bastians_Browser")
     wow.run_frames(10)
-    site = (
-        "https://www.wowhead.com/classic/"
-        if wow.client == "forever"
-        else "https://www.wowhead.com/"
-    )
+    site = "https://www.wowhead.com/classic/"
     assert wow.eval(f"{BR}.WowheadLink('quest:176')") == site + "quest=176"
     assert wow.eval(f"{BR}.WowheadLink('npc:448')") == site + "npc=448"
     assert wow.eval(f"{BR}.WowheadLink('zone:1429')") is None  # no such page

@@ -1,6 +1,6 @@
 """Copy the Bastians_Probe saved variables of a client into data/probe/<date>-<client>-<build>.lua.
 
-Usage: python tools/probe_import.py --client forever|retail [--wow <client folder>]
+Usage: python tools/probe_import.py --client forever [--wow <client folder>]
 The client folder is remembered by tools/install.py in .local/install.toml.
 """
 
@@ -62,7 +62,7 @@ def import_probe(source: Path, out_dir: Path) -> tuple[Path, bool]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Import Bastians_Probe results into data/probe.")
-    parser.add_argument("--client", required=True, choices=("forever", "retail"))
+    parser.add_argument("--client", required=True, choices=("forever",))
     parser.add_argument("--wow", help="client folder that contains Interface/AddOns (remembered)")
     args = parser.parse_args(argv)
     try:

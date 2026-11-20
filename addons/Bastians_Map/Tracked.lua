@@ -49,8 +49,8 @@ Tracked.STRIKES = 3 -- failed sweeps in a row before they rest until the next lo
 Tracked.RETRY = 30 -- seconds until the next sweep after a failed one
 Tracked.DEAF = 3 -- sweeps in a row that heard nothing before the client is asked whether it answers
 Tracked.stats = { sweeps = 0, probes = 0, known = 0, answered = 0, dots = 0, fine = 0, errors = 0 }
--- the node kinds that get a pin -> the glyph of it (the data says "mine" on Forever, "ore" on retail)
-Tracked.GLYPH = { herb = "herb", mine = "mine", ore = "mine" }
+-- the node kinds that get a pin -> the glyph of it (the data says "mine"; ~~"ore" on retail~~)
+Tracked.GLYPH = { herb = "herb", mine = "mine" }
 
 local driver -- the frame whose OnUpdate runs a sweep
 local sweep -- the sweep in progress: { points, i, hits, answered, w, continent, blind }

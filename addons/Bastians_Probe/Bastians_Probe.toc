@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Probe (developer)
 ## IconTexture: Interface\AddOns\Bastians_Probe\Icon
 ## Notes: Developer-only API probe for the Bastians suite. Never released. /bprobe help

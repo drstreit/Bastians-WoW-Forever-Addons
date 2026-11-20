@@ -55,20 +55,15 @@ function Prices.DetectMarket()
   local realm = GetRealmName() or "unknown"
   local faction = string.lower(UnitFactionGroup("player") or "neutral")
   local known = Prices.REALMS[realm]
-  local m
-  if B.Client == "retail" then
-    m = { game = "retail", ruleset = "normal", faction = "neutral", region = regionGuess() or "unknown" }
-  else
-    m = {
-      game = "forever",
-      ruleset = known and known.ruleset or rulesetGuess(realm) or "normal",
-      faction = faction,
-      region = known and known.region or regionGuess() or "unknown",
-    }
-  end
+  local m = {
+    game = "forever",
+    ruleset = known and known.ruleset or rulesetGuess(realm) or "normal",
+    faction = faction,
+    region = known and known.region or regionGuess() or "unknown",
+  }
   m.realm = realm
   m.charFaction = faction -- the scans are per character faction even where the market is neutral
-  m.known = known ~= nil or B.Client == "retail"
+  m.known = known ~= nil
   m.id = table.concat({ m.game, m.ruleset, m.faction, m.region }, "/")
   market = m
   return m

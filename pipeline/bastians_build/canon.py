@@ -11,7 +11,6 @@ Classic world positions are placed through the transform table or dropped with a
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import pairwise
 from typing import Any
@@ -30,7 +29,6 @@ from bastians_build.coords import (
 from bastians_build.internal import drop_internal
 from bastians_build.model import World
 from bastians_build.sources import cmangos, foreverdb, foreverdb_api
-from bastians_build.sources.allthethings import AllTheThings
 from bastians_build.sources.client_tables import ClientTables
 from bastians_build.sources.clientdump import (
     WHOLE_WORLD,
@@ -41,11 +39,9 @@ from bastians_build.sources.clientdump import (
     floor_for_point,
 )
 from bastians_build.sources.everything_quests import EverythingQuests
-from bastians_build.sources.itemdb import ItemDB
 from bastians_build.sources.probe import Transform
 from bastians_build.sources.questie import QuestGates
 from bastians_build.sources.questiedb_store import Store, StoreQuest
-from bastians_build.sources.tdb import Tdb
 
 # Map ids of the world graph's continents: Eastern Kingdoms, Kalimdor (ADR 0026), Zephras Isle
 GRAPH_CONTINENTS = (0, 1, 2991)
@@ -64,7 +60,8 @@ MAX_LOOT_PER_NPC = 30
 WORLD_DROP_MIN_DROPPERS = 25
 
 # The NpcFlags tables live with their sources, one per flag family: ``cmangos.NPC_FLAGS`` (Classic
-# 1.12 bits) and ``tdb.NPC_FLAGS`` (retail family). Never decode one source with the other's.
+# 1.12 bits) ~~and ``tdb.NPC_FLAGS`` (retail family)~~ (the retail world database left the build
+# 15.11.2026, ADR 0037). Never decode one source with another's.
 # titles of quests the game never finished, as QuestieDB keeps them
 NOT_A_QUEST = re.compile(r"NYI|DEPRECATED|UNUSED|\[PH\]|<TXT>|^zz", re.IGNORECASE)
 RANKS = {1: "elite", 2: "rareelite", 3: "boss", 4: "rare"}
@@ -148,7 +145,8 @@ class Sources:
     fdb_boss_creatures: foreverdb.BossCreatures | None = None  # Loot.lua (02.11.2026)
     # ForeverDB's API rows AHSync fetched (10.11.2026): places players saw, for gaps only
     fdb_api: foreverdb_api.ApiRows | None = None
-    # the client's dungeon maps by instance (retail's UiMap tables, DG2c): the floors' art
+    # the client's dungeon maps by instance (the retail client's UiMap tables, DG2c): the
+    # floors' art
     floor_art: dict[int, list[FloorArt]] = field(default_factory=dict)
     cm_quests: list[cmangos.QuestRow] = field(default_factory=list)
     cm_creatures: list[dict] = field(default_factory=list)  # creature_template rows
@@ -166,9 +164,6 @@ class Sources:
     cm_factions: dict[int, tuple[str | None, bool]] = field(default_factory=dict)
     area_to_map: dict[int, int] = field(default_factory=dict)
     questie: Store | None = None  # QuestieDB's baked store (Forever, 06.11.2026)
-    att: AllTheThings | None = None  # retail: AllTheThings db/Standard (quests, places)
-    idb: ItemDB | None = None  # retail: ItemDB names, item facts, places
-    tdb: Tdb | None = None  # retail: TrinityCore's world database (services, levels, places)
     taxi: list[TaxiNode] = field(default_factory=list)  # clientdump TaxiNodes (flight masters)
     # clientdump TaxiPath + TaxiPathNode: the flights as the client flies them (ADR 0026, W4)
     taxi_paths: list[TaxiPath] = field(default_factory=list)
@@ -381,7 +376,7 @@ def merge_creatures(world: World, s: Sources) -> None:
             rec["src"] = "forever"
     # Classic spawns through the transform table
     frame = s.transforms
-    if s.client == "forever" and frame:
+    if frame:
         frame = {k: v for k, v in frame.items() if k not in FOREVER_NEW_MAPS}
     for spawn in s.cm_spawns:
         record_type = "npc" if spawn.kind == "creature" else "object"
@@ -511,6 +506,20 @@ def assign_zones(world: World) -> None:
                 rec["zone"] = spawns[0][0]
 
 
+def engine_offer(s: Sources, item_id: int) -> tuple[int, int | None] | None:
+    """(the price, the stack it buys) of an item at a merchant as the engine holds it: the
+    client's ItemSparse `BuyPrice` for its `VendorStackCount`, with the server's hotfixes
+    (plan-data-quality.md rule 3). Measured 16.11.2026 against ForeverDB 0.62.1's merchant scans:
+    of 1,768 items seen priced in Forever, the engine and Classic agreed on 1,374, and of those
+    where they differ the engine was right for 307 and Classic for none; the stack was right for
+    all 1,768. None when the client lacks the item or names no price (0: unknown, an item paid
+    otherwise)."""
+    it = s.client_tables.items.get(item_id) if s.client_tables else None
+    if it is None or not it.buy or it.buy < 0:
+        return None
+    return it.buy, it.vendor_stack
+
+
 def merge_vendors_and_trainers(world: World, s: Sources) -> None:
     prices = {it.id: (it.buy_price, it.stackable) for it in s.cm_items}
     for v in s.cm_vendors:
@@ -518,11 +527,16 @@ def merge_vendors_and_trainers(world: World, s: Sources) -> None:
         if rec is None:
             world.drop("npc", v.npc_id, "vendor list for an unknown npc")
             continue
-        price, _stack = prices.get(v.item_id, (None, None))
-        # the merchant buy price is for the vendor stack; the dump has no stack size (CLAUDE.md §12)
-        rec.setdefault("vendor", []).append(
-            [v.item_id, price, None, v.max_count is not None, "classic"]
-        )
+        # the merchant buy price is for the vendor stack (CLAUDE.md §12): the engine knows both;
+        # CMaNGOS' dump has no stack size. The row stays CMaNGOS' (who sells it); its sixth
+        # field names where the price comes from when that is another source
+        offer = engine_offer(s, v.item_id)
+        if offer is not None:
+            row = [v.item_id, offer[0], offer[1], v.max_count is not None, "classic", "client"]
+        else:
+            price, _stack = prices.get(v.item_id, (None, None))
+            row = [v.item_id, price, None, v.max_count is not None, "classic"]
+        rec.setdefault("vendor", []).append(row)
     for t in s.cm_trainers:
         rec = world.get("npc", t.trainer_id)
         if rec is None:
@@ -1018,28 +1032,18 @@ def _level_band(world: World, droppers: set[tuple[str, int]]) -> tuple[int | Non
     return (min(lows), max(highs)) if lows else (None, None)
 
 
-def merge_loot(
-    world: World,
-    rows: list[cmangos.LootRow],
-    src: str,
-    *,
-    item_record: Callable[[int], dict | None] | None = None,
-    keep: Callable[[str, int], bool] | None = None,
-    levels: Callable[[str, int], tuple[int | None, int | None]] | None = None,
-) -> None:
-    """Drops per item (top N), loot per npc/object and world drops from loot rows of either
-    client. The shared lists a creature or object rolls are expanded: an item few reach that way
-    joins their drops, an item many reach is a world drop (WORLD_DROP_MIN_DROPPERS) with the
-    droppers' level band. `item_record(id)` makes a missing item's record (retail: the ItemDB
-    name) or gives nil; `keep(kind, entry)` limits the droppers (retail: those on the continents);
-    `levels(kind, entry)` gives a dropper's level band (else the npc record's). Drops and loot
-    already set by another source stay."""
+def merge_loot(world: World, rows: list[cmangos.LootRow], src: str) -> None:
+    """Drops per item (top N), loot per npc/object and world drops from loot rows. The shared
+    lists a creature or object rolls are expanded: an item few reach that way joins their drops,
+    an item many reach is a world drop (WORLD_DROP_MIN_DROPPERS) with the droppers' level band.
+    Drops and loot already set by another source stay. (~~`item_record`, `keep` and `levels`~~:
+    the retail loot's hooks, out 15.11.2026.)"""
     by_item: dict[int, list] = {}
     by_entry: dict[tuple[str, int], list] = {}
     shared = reference_items(rows)
     via_lists: dict[int, dict[tuple[str, int], tuple[float, bool]]] = {}
     for row in rows:
-        if row.kind == "reference" or (keep is not None and not keep(row.kind, row.entry)):
+        if row.kind == "reference":
             continue
         if row.reference_id is not None:
             factor = (row.chance_pct or 100.0) / 100.0
@@ -1061,28 +1065,11 @@ def merge_loot(
             [row.item_id, round(row.chance_pct, 2)]
         )
 
-    def item_rec(item_id: int) -> dict | None:
-        rec = world.get("item", item_id)
-        if rec is None and item_record is not None:
-            rec = item_record(item_id)
-        return rec
-
-    def band(droppers: set[tuple[str, int]]) -> tuple[int | None, int | None]:
-        if levels is None:
-            return _level_band(world, droppers)
-        lows, highs = [], []
-        for kind, entry in droppers:
-            lo, hi = levels(kind, entry)
-            if lo is not None:
-                lows.append(lo)
-                highs.append(hi if hi is not None else lo)
-        return (min(lows), max(highs)) if lows else (None, None)
-
     for item_id, droppers in sorted(via_lists.items()):
         if len(droppers) >= WORLD_DROP_MIN_DROPPERS:
-            rec = item_rec(item_id)
+            rec = world.get("item", item_id)
             if rec is not None and rec.get("worldDrop") is None:
-                lo, hi = band(set(droppers))
+                lo, hi = _level_band(world, set(droppers))
                 rec["worldDrop"] = [lo, hi, len(droppers)]
             continue
         for (kind, entry), (chance, quest) in sorted(droppers.items()):
@@ -1090,7 +1077,7 @@ def merge_loot(
             by_item.setdefault(item_id, []).append([ref, round(chance, 2), quest])
             by_entry.setdefault((kind, entry), []).append([item_id, round(chance, 2)])
     for item_id, drops in by_item.items():
-        rec = item_rec(item_id)
+        rec = world.get("item", item_id)
         if rec is None or rec.get("drops") is not None:
             continue
         drops.sort(key=lambda d: (-d[1], d[0]))
@@ -1103,46 +1090,6 @@ def merge_loot(
         loot.sort(key=lambda d: (-d[1], d[0]))
         rec["loot"] = loot[:MAX_LOOT_PER_NPC]
         rec["lootSrc"] = src
-
-
-def merge_tdb_loot(world: World, s: Sources) -> None:
-    """Retail's loot from TrinityCore's tables (28.10.2026): drops for the items ItemDB's places
-    leave without, world drops, the creatures' and chests' loot. Only droppers on Eastern Kingdoms
-    and Kalimdor; a dropped item without a record gets one from ItemDB's name and facts."""
-    t = s.tdb
-    if t is None or not t.loot:
-        return
-    placed = {("creature", sp.entry) for sp in t.spawns}
-    placed |= {("object", sp.entry) for sp in t.object_spawns}
-    idb = s.idb
-
-    def item_record(item_id: int) -> dict | None:
-        name = idb.names.get(item_id) if idb is not None else None
-        if not name:
-            return None
-        rec = _rec(world, "item", item_id)
-        _set_if_missing(rec, "name", clean_name(name))
-        core = idb.core.get(item_id) if idb is not None else None
-        if core is not None:
-            _set_if_missing(rec, "quality", core.quality)
-            _set_if_missing(rec, "level", core.item_level)
-            _set_if_missing(rec, "class", core.class_id)
-            _set_if_missing(rec, "subclass", core.subclass_id)
-        _set_if_missing(rec, "src", "tdb")
-        return rec
-
-    def levels(kind: str, entry: int) -> tuple[int | None, int | None]:
-        c = t.creatures.get(entry) if kind == "creature" else None
-        return (c.level, c.level_max) if c is not None else (None, None)
-
-    merge_loot(
-        world,
-        t.loot,
-        "tdb",
-        item_record=item_record,
-        keep=lambda kind, entry: (kind, entry) in placed,
-        levels=levels,
-    )
 
 
 def merge_items(world: World, s: Sources) -> None:
@@ -1201,107 +1148,6 @@ def merge_items(world: World, s: Sources) -> None:
         rec["src"] = "forever"
 
 
-# ---------------------------------------------------------------------------------------------
-# Retail sources: AllTheThings (quests, places) and ItemDB (names, item facts, places)
-# ---------------------------------------------------------------------------------------------
-
-# Race ids per faction on retail. Race masks are bit i-1 for race id i, and the Lua `bit` library
-# and the double-precision numbers of Lua 5.1 stop at 32 bits, so races with an id above 32
-# (Dark Iron Dwarf 34, Vulpera 35, Mag'har 36, Mechagnome 37, Dracthyr 52/70, Earthen 84/85,
-# Haranir 86/91) cannot be in the mask; a quest limited to such races keeps no race gate and the
-# build report counts them (data.md "Retail data").
-RETAIL_ALLIANCE_RACES = (1, 3, 4, 7, 11, 22, 25, 29, 30, 32)
-RETAIL_HORDE_RACES = (2, 5, 6, 8, 9, 10, 24, 26, 27, 28, 31)
-MAX_MASK_BIT = 32
-ATT_UNOBTAINABLE = {1: "AllTheThings: never implemented", 2: "AllTheThings: removed from the game"}
-NODE_KINDS = {"Herbalism": "herb", "Mining": "ore", "Fishing": "fish"}
-
-
-def id_mask(ids) -> tuple[int, int]:
-    """(bitmask of the ids within 32 bits, number of ids that do not fit)."""
-    mask, lost = 0, 0
-    for i in ids:
-        if 1 <= i <= MAX_MASK_BIT:
-            mask |= 1 << (i - 1)
-        else:
-            lost += 1
-    return mask, lost
-
-
-def faction_mask(faction: str | None) -> int:
-    if faction == "A":
-        return id_mask(RETAIL_ALLIANCE_RACES)[0]
-    if faction == "H":
-        return id_mask(RETAIL_HORDE_RACES)[0]
-    return 0
-
-
-def _place_rows(places, src: str) -> list[list]:
-    return [[p.ui_map_id, round(p.x, 4), round(p.y, 4), src] for p in places]
-
-
-def merge_att_quests(world: World, s: Sources) -> None:
-    """AllTheThings quests: places, givers, gates, chains, flags; no names (the client has them).
-    Entries ATT marks never implemented or removed are dropped with that reason."""
-    att = s.att
-    if att is None:
-        return
-    races_lost = 0
-    for quest_id, q in sorted(att.quests.items()):
-        if q.unavailable in ATT_UNOBTAINABLE:
-            world.drop("quest", quest_id, ATT_UNOBTAINABLE[q.unavailable])
-            continue
-        placed = q.givers or q.places or q.zone is not None
-        if not placed and world.get("quest", quest_id) is None:
-            # hidden tracking quests and the like: nothing to show and no name to show it under
-            world.drop("quest", quest_id, "AllTheThings: no giver, place or zone")
-            continue
-        rec = _rec(world, "quest", quest_id)
-        _set_if_missing(rec, "minLevel", q.min_level)
-        if q.races:
-            mask, lost = id_mask(q.races)
-            races_lost += lost
-        else:
-            mask = faction_mask(q.faction)
-        if mask and rec.get("races") is None:
-            rec["races"] = mask
-        if q.classes and rec.get("classes") is None:
-            rec["classes"] = id_mask(q.classes)[0] or None
-        givers = [ref for ref in q.givers if ref.split(":")[0] in ("npc", "object", "item")]
-        _set_if_missing(rec, "starts", givers or None)
-        _set_if_missing(rec, "startPlaces", _place_rows(q.places, "att") or None)
-        if q.pre:
-            if q.pre_required is not None and q.pre_required < len(q.pre):
-                _set_if_missing(rec, "preAny", list(q.pre))
-            else:
-                _set_if_missing(rec, "pre", list(q.pre))
-        _set_if_missing(rec, "excl", list(q.alt) or None)
-        flags = set(q.flags)
-        if flags & {"daily", "weekly", "monthly", "yearly"}:
-            flags.add("repeatable")
-        if flags and rec.get("flags") is None:
-            rec["flags"] = sorted(flags)
-        zone = q.zone if q.zone is not None else (q.places[0].ui_map_id if q.places else None)
-        _set_if_missing(rec, "zone", zone)
-        if q.targets and rec.get("objectives") is None:
-            rec["objectives"] = [["target", f"npc:{n}", i] for i, n in enumerate(q.targets)]
-        if q.items and rec.get("requiredItems") is None:
-            rec["requiredItems"] = [[item, None] for item in q.items]
-        if q.rewards and rec.get("rewards") is None:
-            # ATT lists the reward items without telling fixed from choice: one item counts as
-            # given, several as a choice (data.md "Retail data")
-            rows = [[item, None] for item in q.rewards]
-            rec["rewards"] = (
-                {"items": rows, "src": "att"} if len(rows) == 1 else {"choices": rows, "src": "att"}
-            )
-        _set_if_missing(rec, "src", "att")
-    if races_lost:
-        world.notes.append(
-            f"AllTheThings: {races_lost} race restrictions on race ids above {MAX_MASK_BIT} "
-            "cannot be expressed in a 32-bit mask and were not applied"
-        )
-
-
 # The professions' skill lines (SkillLine.db2 ids, the same on both clients) as Forever's recipe
 # files name them.
 PROFESSION_SKILL_LINES = {
@@ -1321,64 +1167,6 @@ PROFESSION_SKILL_LINES = {
     129: "First Aid",
     794: "Archaeology",
 }
-ATT_GONE = frozenset({1, 2})  # never implemented, removed from the game
-
-
-def merge_att_recipes(world: World, s: Sources) -> None:
-    """Retail's recipes from AllTheThings (28.10.2026: "we have no recipes"): the spell, the
-    profession, the skill it is learned at, the item that teaches it. The names come from the
-    client at runtime (Data's Names); the crafted item and the reagents are not in ATT."""
-    att = s.att
-    if att is None or s.client != "retail":
-        return
-    for rid, r in sorted(att.recipes.items()):
-        profession = PROFESSION_SKILL_LINES.get(r.skill_line or 0)
-        if profession is None or r.unavailable in ATT_GONE:
-            continue
-        rec = _rec(world, "recipe", rid)
-        _set_if_missing(rec, "profession", profession)
-        _set_if_missing(rec, "skill", r.learned_at)
-        if r.teacher_item:
-            _set_if_missing(rec, "source", "item")
-            _set_if_missing(rec, "sourceItem", r.teacher_item)
-        _set_if_missing(rec, "src", "att")
-
-
-def merge_att_places(world: World, s: Sources) -> None:
-    """AllTheThings NPC and object places, object names, and the givers' places from the quests."""
-    att = s.att
-    if att is None:
-        return
-    for record_type, placed in (("npc", att.npcs), ("object", att.objects)):
-        for record_id, p in sorted(placed.items()):
-            if p.unavailable in ATT_UNOBTAINABLE:
-                world.drop(record_type, record_id, ATT_UNOBTAINABLE[p.unavailable])
-                continue
-            rec = _rec(world, record_type, record_id)
-            for pt in p.places:
-                _add_spawn(rec, Spawn(pt.ui_map_id, pt.x, pt.y, "att"))
-            if record_type == "npc":
-                _set_if_missing(rec, "faction", p.faction)
-            if not p.places:  # with places, the zone is the first place's map (assign_zones)
-                _set_if_missing(rec, "zone", p.zone)
-            _set_if_missing(rec, "src", "att")
-    for _, q in sorted(att.quests.items()):
-        if q.unavailable in ATT_UNOBTAINABLE:
-            continue
-        for ref in q.givers:
-            kind, _, raw = ref.partition(":")
-            if kind not in ("npc", "object"):
-                continue
-            rec = _rec(world, kind, int(raw))
-            for pt in q.places:
-                _add_spawn(rec, Spawn(pt.ui_map_id, pt.x, pt.y, "att"))
-            if kind == "npc" and "questgiver" not in (rec.get("flags") or []):
-                rec["flags"] = [*(rec.get("flags") or []), "questgiver"]
-            _set_if_missing(rec, "src", "att")
-    for object_id, rec in world.records.get("object", {}).items():
-        name = att.object_names.get(object_id)
-        if name and rec.get("name") is None:
-            rec["name"] = clean_name(name)
 
 
 def merge_questie_gates(world: World, s: Sources) -> None:
@@ -1473,113 +1261,6 @@ def merge_client_quest_titles(world: World, s: Sources) -> None:
         f"QuestV2CliTask: {named} quests named from the client's task table, "
         f"{unnamed} of {len(quests)} without a name (the client supplies those at runtime)"
     )
-
-
-def merge_itemdb_places(world: World, s: Sources) -> None:
-    """ItemDB places: creature and object names, sides and spawns (from the TrinityCore world
-    database, labelled ``tdb``); objects with a gathering profession become nodes."""
-    idb = s.idb
-    if idb is None:
-        return
-    yields: dict[str, list[int]] = {}  # entity key -> item ids it yields, in file order
-    for item_id, sources in sorted(idb.places.items.items()):
-        for src in sources:
-            if src.kind in ("object", "drop"):
-                yields.setdefault(src.entity, []).append(item_id)
-    for key, e in sorted(idb.places.entities.items()):
-        if e.kind == "object" and e.profession in NODE_KINDS:
-            rec = _rec(world, "node", e.id)
-            _set_if_missing(rec, "name", clean_name(e.name))
-            rec["kind"] = NODE_KINDS[e.profession]
-            rec["profession"] = e.profession
-            items = yields.get(key) or []
-            _set_if_missing(rec, "item", items[0] if items else None)
-        else:
-            rec = _rec(world, e.kind, e.id)
-            _set_if_missing(rec, "name", clean_name(e.name))
-            if e.kind == "npc" and e.side in ("A", "H"):
-                _set_if_missing(rec, "faction", e.side)
-        for place in e.places:
-            for x, y in place.points:
-                _add_spawn(rec, Spawn(place.ui_map_id, x, y, "tdb"))
-        _set_if_missing(rec, "src", "tdb")
-
-
-def merge_itemdb_items(world: World, s: Sources) -> None:
-    """ItemDB names and facts for every item something refers to (drops, vendors, nodes, quest
-    rewards and quest items): the whole retail item list (176k names) does not fit the pack and
-    the client knows the rest at runtime (data.md "Retail data"). Drops and vendor rows come from
-    the places, labelled ``tdb``."""
-    idb = s.idb
-    if idb is None:
-        return
-    wanted: set[int] = set(idb.places.items)
-    for rec in world.records.get("quest", {}).values():
-        for row in (rec.get("rewards") or {}).get("items") or []:
-            wanted.add(int(row[0]))
-        for row in (rec.get("rewards") or {}).get("choices") or []:
-            wanted.add(int(row[0]))
-        for row in rec.get("requiredItems") or []:
-            wanted.add(int(row[0]))
-        for ref in rec.get("starts") or []:
-            if ref.startswith("item:"):
-                wanted.add(int(ref[5:]))
-    for rec in world.records.get("node", {}).values():
-        if rec.get("item"):
-            wanted.add(int(rec["item"]))
-    by_entry: dict[tuple[str, int], list] = {}
-    for item_id in sorted(wanted):
-        rec = _rec(world, "item", item_id)
-        _set_if_missing(rec, "name", clean_name(idb.names.get(item_id)))
-        core = idb.core.get(item_id)
-        if core is not None:
-            _set_if_missing(rec, "quality", core.quality)
-            _set_if_missing(rec, "level", core.item_level)
-            _set_if_missing(rec, "class", core.class_id)
-            _set_if_missing(rec, "subclass", core.subclass_id)
-        drops = []
-        for src in idb.places.items.get(item_id) or []:
-            entity = idb.places.entities.get(src.entity)
-            if entity is None:
-                continue
-            if src.kind in ("drop", "object") and src.chance is not None:
-                is_node = entity.kind == "object" and entity.profession in NODE_KINDS
-                ref = f"{'node' if is_node else entity.kind}:{entity.id}"
-                drops.append([ref, round(src.chance, 2), src.quest_only or None])
-                by_entry.setdefault((entity.kind, entity.id), []).append(
-                    [item_id, round(src.chance, 2)]
-                )
-            elif src.kind == "vendor" and entity.kind == "npc":
-                npc = world.get("npc", entity.id)
-                if npc is not None:
-                    npc.setdefault("vendor", []).append([item_id, None, None, None, "tdb"])
-                    if "vendor" not in (npc.get("flags") or []):
-                        npc["flags"] = [*(npc.get("flags") or []), "vendor"]
-        if drops and rec.get("drops") is None:
-            drops.sort(key=lambda d: (-d[1], d[0]))
-            rec["drops"] = drops[:MAX_DROPS_PER_ITEM]
-            rec["dropsSrc"] = "tdb"
-        _set_if_missing(rec, "src", "tdb")
-    for (kind, entry), loot in by_entry.items():
-        rec = world.get(kind, entry)
-        if rec is None or rec.get("loot") is not None:
-            continue
-        loot.sort(key=lambda d: (-d[1], d[0]))
-        rec["loot"] = loot[:MAX_LOOT_PER_NPC]
-        rec["lootSrc"] = "tdb"
-
-
-def merge_att_flightpaths(world: World, s: Sources) -> None:
-    """A flight master without a place from the transform table takes AllTheThings' place."""
-    att = s.att
-    if att is None:
-        return
-    for node_id, fp in sorted(att.flightpaths.items()):
-        rec = world.get("flightpath", node_id)
-        if rec is None or rec.get("spawns") or not fp.places:
-            continue
-        for pt in fp.places:
-            _add_spawn(rec, Spawn(pt.ui_map_id, pt.x, pt.y, "att"))
 
 
 def derive_dungeon_quests(world: World, s: Sources) -> int:
@@ -1765,7 +1446,8 @@ def _quest_place(world: World, ref: str) -> None:
 
 def merge_questie_vendors(world: World, s: Sources) -> int:
     """QuestieDB's item rows name who sells an item (plan-quest-links.md G7): a vendor the world
-    knows that does not list the item gets it, without a price (unknown stays unknown)."""
+    knows that does not list the item gets it, with the engine's price and stack where the client
+    knows the item, else without a price (unknown stays unknown)."""
     store = s.questie
     if store is None:
         return 0
@@ -1779,19 +1461,23 @@ def merge_questie_vendors(world: World, s: Sources) -> int:
             if npc is None or any(v[0] == item_id for v in npc.get("vendor") or ()):
                 continue
             src = "classic" if item_id in classic else "questie"
-            npc["vendor"] = [*(npc.get("vendor") or []), [item_id, None, None, None, src]]
+            offer = engine_offer(s, item_id)  # the engine's price, else unknown stays unknown
+            row = [item_id, None, None, None, src]
+            if offer is not None:
+                row = [item_id, offer[0], offer[1], None, src, "client"]
+            npc["vendor"] = [*(npc.get("vendor") or []), row]
             if "vendor" not in (npc.get("flags") or []):
                 npc["flags"] = [*(npc.get("flags") or []), "vendor"]
             added += 1
     if added:
-        world.notes.append(f"{added} vendor rows from QuestieDB's item rows (no price)")
+        world.notes.append(f"{added} vendor rows from QuestieDB's item rows")
     return added
 
 
 def _classic_frame(s: Sources) -> dict:
     """The maps a Classic world point may land on: not the zones Forever added."""
     frame = s.transforms
-    if s.client == "forever" and frame:
+    if frame:
         frame = {k: v for k, v in frame.items() if k not in FOREVER_NEW_MAPS}
     return frame or {}
 
@@ -2147,7 +1833,7 @@ def merge_flightpaths(world: World, s: Sources) -> None:
 
 
 # spawn sources that are places of the built client's own world (not converted Classic points)
-FOREVER_SPAWN_SOURCES = {"eq", "fdb", "questie", "capture", "client", "config", "att", "tdb"}
+FOREVER_SPAWN_SOURCES = {"eq", "fdb", "questie", "capture", "client", "config"}
 
 
 MAX_CLASSIC_SPAWNS_PER_MAP = (
@@ -2206,97 +1892,22 @@ def prune_classic_spawns(world: World) -> None:
             rec["spawns"] = thinned
 
 
-# Object kinds a player looks for, placed from the TDB (R25.39: retail had no object kinds)
-TDB_OBJECT_KINDS = frozenset({"mailbox", "fire and forge", "auction house", "meeting stone"})
-
-
-def _thinned(spawns: list[Spawn], limit: int) -> list[Spawn]:
-    """At most `limit` places per map, spread by farthest-point sampling (as Classic's)."""
-    by_map: dict[int, list] = {}
-    for sp in spawns:
-        by_map.setdefault(sp.ui_map_id, []).append(sp.row())
-    out = []
-    for ui_map_id in sorted(by_map):
-        rows = by_map[ui_map_id]
-        out.extend(rows if len(rows) <= limit else farthest_points(rows, limit))
-    return out
-
-
-def merge_tdb(world: World, s: Sources) -> None:
-    """TrinityCore's retail world database (sources.md): services, rank, side and level band for
-    the NPCs the retail sources know, and the NPCs with a service (vendors, trainers, innkeepers,
-    flight masters, bankers ...) with their places on Eastern Kingdoms and Kalimdor; the objects
-    a player looks for (mailboxes, forges and anvils, the auction house, meeting stones)."""
-    t = s.tdb
-    if t is None:
-        return
-    places: dict[int, list[Spawn]] = {}
-    for sp in t.spawns:
-        placed = place_world_point(s.transforms, sp.map_id, sp.x, sp.y, "tdb", sp.z)
-        if placed is not None:
-            places.setdefault(sp.entry, []).append(placed)
-    for c in sorted(t.creatures.values(), key=lambda c: c.id):
-        serves = bool(set(c.services) - {"questgiver"})
-        rec = world.get("npc", c.id)
-        if rec is None and not (serves and places.get(c.id)):
-            continue
-        rec = _rec(world, "npc", c.id)
-        _set_if_missing(rec, "name", clean_name(c.name))
-        _set_if_missing(rec, "subname", clean_name(c.subname))
-        if c.level is not None and rec.get("level") is None:
-            rec["level"], rec["levelMax"] = c.level, c.level_max
-        flags = list(rec.get("flags") or [])
-        for f in (*c.services, *((c.rank,) if c.rank else ())):
-            if f not in flags:
-                flags.append(f)
-        rec["flags"] = flags or None
-        _set_if_missing(rec, "faction", c.side)
-        _set_if_missing(rec, "src", "tdb")
-        if serves:
-            for row in _thinned(places.get(c.id, []), MAX_CLASSIC_SPAWNS_PER_MAP):
-                if row not in (rec.get("spawns") or []):
-                    rec.setdefault("spawns", []).append(row)
-    object_places: dict[int, list[Spawn]] = {}
-    for sp in t.object_spawns:
-        placed = place_world_point(s.transforms, sp.map_id, sp.x, sp.y, "tdb", sp.z)
-        if placed is not None:
-            object_places.setdefault(sp.entry, []).append(placed)
-    for entry, (type_number, name) in sorted(t.objects.items()):
-        kind = object_kind(type_number)
-        rec = world.get("object", entry)
-        wanted = kind in TDB_OBJECT_KINDS and object_places.get(entry)
-        if rec is None and not wanted:
-            continue
-        rec = _rec(world, "object", entry)
-        _set_if_missing(rec, "name", clean_name(name))
-        _set_if_missing(rec, "kind", kind)
-        _set_if_missing(rec, "src", "tdb")
-        if wanted:
-            for row in _thinned(object_places[entry], MAX_CLASSIC_SPAWNS_PER_MAP):
-                if row not in (rec.get("spawns") or []):
-                    rec.setdefault("spawns", []).append(row)
-
-
 # ---------------------------------------------------------------------------------------------
 # The client's own tables (ADR 0035, "client first"): what the client holds wins, it is the build
 # ---------------------------------------------------------------------------------------------
 
 
 def merge_client_items(world: World, s: Sources) -> None:
-    """ItemSparse and Item over the older sources (CMaNGOS' Classic values, ForeverDB, ItemDB):
-    name, quality, levels, class, prices, stack. Forever keeps every item the client has (an item
-    CMaNGOS lacks is new in Forever); retail only the items something refers to, as before (the
-    client knows the rest at runtime, recipes' products and reagents too: with them the retail
-    Items pack measured 14.5 MB, 29.10.2026)."""
+    """ItemSparse and Item over the older sources (CMaNGOS' Classic values, ForeverDB): name,
+    quality, levels, class, prices, stack. Every item the client has is kept (an item CMaNGOS
+    lacks is new in Forever); ~~retail only the items something refers to~~ (retail out
+    15.11.2026)."""
     t = s.client_tables
     if t is None:
         return
     items = world.records.setdefault("item", {})
-    wanted = set(items)
     classic = {it.id for it in s.cm_items}
     for item_id, it in sorted(t.items.items()):
-        if s.client != "forever" and item_id not in wanted:
-            continue
         if it.name is None and item_id not in items:
             continue
         rec = _rec(world, "item", item_id)
@@ -2314,24 +1925,21 @@ def merge_client_items(world: World, s: Sources) -> None:
         for key, value in values.items():
             if value is not None:
                 rec[key] = value
-        if s.client == "forever" and classic and item_id not in classic:
+        if classic and item_id not in classic:
             _set_if_missing(rec, "foreverNew", True)
-        if rec.get("src") in (None, "classic", "tdb"):
+        if rec.get("src") in (None, "classic"):
             rec["src"] = "client"
 
 
 def merge_client_recipes(world: World, s: Sources) -> None:
     """SkillLineAbility, SpellName, SpellEffect and SpellReagents: a recipe's profession, name,
-    product and reagents. Forever keeps every recipe of a profession; retail fills the recipes
-    AllTheThings lists (the client has every expansion's). The level a trainer teaches it at stays
-    the other sources' (the server holds it); the client's own rank only where none is known."""
+    product and reagents. Every recipe of a profession is kept (~~retail filled the recipes
+    AllTheThings lists~~, out 15.11.2026). The level a trainer teaches it at stays the other
+    sources' (the server holds it); the client's own rank only where none is known."""
     t = s.client_tables
     if t is None:
         return
-    known = world.records.get("recipe", {})
     for r in t.recipes:
-        if s.client != "forever" and r.spell not in known:
-            continue
         profession = PROFESSION_SKILL_LINES.get(r.skill_line)
         if profession is None:
             continue
@@ -2450,11 +2058,11 @@ def merge_dungeons(world: World, s: Sources) -> None:
                 quest["dungeon"] = d.id
                 quest["dungeonSrc"] = "forever"
     # the floors: the
-    # client's own dungeon maps from retail's UiMap tables (`floor_art`; the Forever client has
-    # the same art under its file names), the boss spots and the door placed on them through the
-    # world from ForeverDB's layout (DungeonFloor.world_point) and the floors' height bands; an
-    # instance the client has no map of (Forever's own dungeons) keeps ForeverDB's minimap plates
-    # on the Forever client, a bare plate on retail (the tiles are the Forever client's files)
+    # client's own dungeon maps from the retail client's UiMap tables (`floor_art`; the Forever
+    # client has the same art under its file names), the boss spots and the door placed on them
+    # through the world from ForeverDB's layout (DungeonFloor.world_point) and the floors' height
+    # bands; an instance the client has no map of (Forever's own dungeons) keeps ForeverDB's
+    # minimap plates (~~a bare plate on retail~~, out 15.11.2026)
     bosses_of = {d.id: d.bosses for d in s.fdb_dungeons}
     for m in s.fdb_dungeon_maps:
         rec = world.get("dungeon", m.id)
@@ -2484,7 +2092,7 @@ def merge_dungeons(world: World, s: Sources) -> None:
         floors = []
         for f in m.floors:
             row = {"n": f.name, "w": f.width, "h": f.height}
-            if f.tiles and s.client == "forever":
+            if f.tiles:
                 row["t"] = [[t.fdid, t.x, t.y, t.w, t.h, t.q] for t in f.tiles]
             floors.append(row)
         rec["floors"] = floors or None
@@ -2500,14 +2108,11 @@ def _boss_creature(
     """The creature id of a ForeverDB boss (02.11.2026): Dungeons.lua's boss numbers are not
     creature ids (Shadowfang Keep's 2748 is the creature Archaedas, Dalaran's 3298 Gabrielle
     Chase). In order: Loot.lua's creature for the boss of that instance; the CMaNGOS creature of
-    that name with a spawn on the instance's map (the Classic dungeons); on Forever, the only npc
-    of that name in the data. None when nothing names it: never a guess. Retail does not link
-    Forever's own dungeons' bosses (their ids would be retail's other creatures)."""
+    that name with a spawn on the instance's map (the Classic dungeons); the only npc of that name
+    in the data. None when nothing names it: never a guess. (~~Retail does not link Forever's own
+    dungeons' bosses~~, out 15.11.2026.)"""
     name = clean_name(b.name).lower()
     known = s.fdb_boss_creatures
-    forever_only = known is not None and d.id in known.forever
-    if s.client != "forever" and forever_only:
-        return None
     if known is not None and name in known.npcs.get(d.id, {}):
         return known.npcs[d.id][name]
     entries = {
@@ -2522,17 +2127,16 @@ def _boss_creature(
     )
     if len(spawned) == 1:
         return spawned[0]
-    if s.client == "forever":
-        same = by_name.get(name, [])
-        if len(same) == 1:
-            return same[0]
+    same = by_name.get(name, [])
+    if len(same) == 1:
+        return same[0]
     return None
 
 
 def _floor_record(f: FloorArt) -> dict:
-    """A floor as the pack carries it: `n` name, `m` the retail UiMap id (retail draws its art
-    through C_Map), `a` the tiles' path prefix with `g` = {cols, rows} (Forever draws the files),
-    `w` x `h` the visible art in pixels."""
+    """A floor as the pack carries it: `n` name, `m` the retail client's UiMap id (~~retail draws
+    its art through C_Map~~), `a` the tiles' path prefix with `g` = {cols, rows} (Forever draws
+    the files), `w` x `h` the visible art in pixels."""
     w, h = f.size
     row: dict = {"n": f.name, "m": f.ui_map_id, "w": w, "h": h}
     if f.art:
@@ -2607,20 +2211,14 @@ def build_world(s: Sources) -> World:
     merge_areas(world, s)
     merge_creatures(world, s)
     merge_questie_world(world, s)
-    merge_att_places(world, s)
-    merge_itemdb_places(world, s)
-    merge_tdb(world, s)
     merge_vendors_and_trainers(world, s)
     merge_quests(world, s)
     merge_fdb_quest_facts(world, s)
     merge_fdb_api(world, s)
-    merge_att_quests(world, s)
-    merge_att_recipes(world, s)
     merge_fdb_previous_quests(world, s)
     merge_questie_gates(world, s)
     merge_client_quest_titles(world, s)
     merge_items(world, s)
-    merge_itemdb_items(world, s)
     merge_client_recipes(world, s)
     merge_client_items(world, s)
     merge_client_quest_lines(world, s)
@@ -2631,19 +2229,16 @@ def build_world(s: Sources) -> World:
     merge_quest_links(world, s)
     merge_objective_texts(world)
     merge_client_quest_areas(world, s)
-    merge_tdb_loot(world, s)
     merge_dungeons(world, s)
     derive_dungeon_quests(world, s)
     merge_nodes(world, s)
     merge_flightpaths(world, s)
-    merge_att_flightpaths(world, s)
     prune_classic_spawns(world)
     assign_zones(world)
     fix_loot_objectives(world)
     # the internal records leave before the statistics count them (data.md "Internal records")
     drop_internal(world, {row["Entry"]: row.get("UnitFlags") for row in s.cm_creatures})
-    if s.client == "forever":  # retail's pack has no spots: its steps' places are the client's
-        merge_item_spots(world)  # last: what the other sources place stays, and who is left is real
+    merge_item_spots(world)  # last: what the other sources place stays, and who is left is real
     zone_statistics(world)
     name_unnamed_zones(world, s)
     for rows in world.records.values():

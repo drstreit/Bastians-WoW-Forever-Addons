@@ -2556,8 +2556,8 @@ mod = B:NewModule("Data", {
     registerTiles(self) -- what a tile says of a record (ADR 0056)
     registerSections(self)
     registerSearch(self)
-    -- an item's vendor price as its worth, below Gold's (priority 50): retail has no Gold since
-    -- 24.10.2026 (owner: "Gold out, vendor prices only"), so its items still say what they fetch
+    -- an item's vendor price as its worth, below Gold's (priority 50): without Gold an item still
+    -- says what it fetches (made for retail, which had no Gold from 24.10.2026 to its end)
     B:RegisterWorth(self, {
       types = { "item" },
       priority = 10,

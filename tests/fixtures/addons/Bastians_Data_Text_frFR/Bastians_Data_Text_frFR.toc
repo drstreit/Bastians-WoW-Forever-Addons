@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Text (frFR)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_frFR\Icon
 ## Notes: Generated names and quest objectives in French; builds its tables only on a French client.

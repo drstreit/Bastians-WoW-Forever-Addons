@@ -49,19 +49,16 @@ def test_the_suite_page_is_first_and_lists_every_app_of_this_client(wow: WowRunt
         for t in texts
         if t in ("Quests", "Map", "Browser", "Gold", "Route", "Strategies", "Notes", "Data")
     ]
-    if wow.client == "forever":
-        assert headers == [
-            "Quests",
-            "Map",
-            "Browser",
-            "Gold",
-            "Route",
-            "Strategies",
-            "Notes",
-            "Data",
-        ]
-    else:  # Gold and the book ship for WoW Forever only (ADR 0022): not listed on retail
-        assert headers == ["Quests", "Map", "Browser", "Route", "Notes", "Data"]
+    assert headers == [
+        "Quests",
+        "Map",
+        "Browser",
+        "Gold",
+        "Route",
+        "Strategies",
+        "Notes",
+        "Data",
+    ]
     q = texts.index("Quests")
     assert texts[q + 1].startswith("Every quest: what to do next") and texts[q + 1].endswith("/bq")
     assert texts[q + 2] == "Enabled"

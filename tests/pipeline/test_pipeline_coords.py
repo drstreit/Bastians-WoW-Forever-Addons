@@ -106,7 +106,6 @@ def test_a_point_inside_a_capital_belongs_to_the_city():
     assert city_map(TABLE, CAPITALS["forever"], 0, rim_x, rim_y) is None
     assert city_map(TABLE, CAPITALS["forever"], 0, -10000, -1500) is None
     assert city_map(TABLE, CAPITALS["forever"], 1, wx, wy) is None  # another continent
-    assert CAPITALS.get("retail", ()) == ()  # the retail test client keeps the central rule
 
 
 def test_place_world_point_keeps_the_height():

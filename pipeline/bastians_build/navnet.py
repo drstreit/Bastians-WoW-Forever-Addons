@@ -246,28 +246,6 @@ def danger_points(world, transforms: dict | None) -> dict:
     return {"hostile": hostile, "guards": guards}
 
 
-def tdb_danger(tdb) -> dict:
-    """The hostile spawns and guards of TrinityCore's retail database (sources/tdb.py), in the
-    shape of danger_points; the positions are world yards already, the map id is the continent.
-    A creature that scales counts at the lowest level of its band (retail creatures scale with the
-    player inside it, so only a character below the band meets a stronger one); an elite counts as
-    in the Monsters rule."""
-    hostile, guards = [], []
-    if tdb is None:
-        return {"hostile": hostile, "guards": guards}
-    for sp in tdb.spawns:
-        c = tdb.creatures.get(sp.entry)
-        if c is None:
-            continue
-        text = f"{c.name or ''} {c.subname or ''}"
-        if c.side and "Guard" in text:
-            guards.append([sp.map_id, round(sp.x, 1), round(sp.y, 1), c.side])
-        elif c.hostile and c.level and not c.services:
-            elite = c.rank in RANKS
-            hostile.append([sp.map_id, round(sp.x, 1), round(sp.y, 1), int(c.level), elite])
-    return {"hostile": hostile, "guards": guards}
-
-
 def _seg_dist(px: float, py: float, a: tuple, b: tuple) -> float:
     ax, ay, bx, by = a[0], a[1], b[0], b[1]
     dx, dy = bx - ax, by - ay

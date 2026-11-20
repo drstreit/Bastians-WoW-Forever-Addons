@@ -70,7 +70,9 @@ local function registerAction(self)
     label = L["Play the voice line"],
     short = L["Play"],
     activeShort = L["Stop"],
-    icon = B.UI.IconTexture("voice"),
+    -- a green play in a circle, a red stop while the line speaks
+    icon = B.UI.IconTexture("voice_play"),
+    activeIcon = B.UI.IconTexture("voice_stop"),
     types = { "quest", "zone", "area", "npc", "item", "object" },
     order = 80,
     -- only where a line exists (ADR 0013 C): `has` is the row renderers' question, `when` the

@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.6.0:1",
+    date = "2026-11-20",
+    version = "2.6.0",
+    text = "The voice button plays a quest's line with one click and stops it with the next, as a green play and a red stop, and no other line starts after a stop.",
+  },
+  {
     id = "2.5.0:1",
     date = "2026-11-15",
     version = "2.5.0",

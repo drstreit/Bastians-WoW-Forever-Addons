@@ -36,7 +36,7 @@ B.deferred[#B.deferred + 1] = {
         },
         ["retail/normal/neutral/eu"] = {
           items = 1,
-          label = "retail EU",
+          label = "retail/normal/neutral/eu",
           scanTs = 1760000000,
         },
       },
@@ -82,7 +82,7 @@ B.deferred[#B.deferred + 1] = {
     price = {
       ["forever/normal/alliance/us:1185"] = [=[{ 5000, 4500, 3, nil, nil, nil, nil, nil, 1760000000, "US normal" }]=],
       ["forever/normal/alliance/us:2589"] = [=[{ 38, 20, 7955, 42, 75, 5, 120, 21.9, 1760000000, "US normal" }]=],
-      ["retail/normal/neutral/eu:2589"] = [=[{ 40, 25, 1000, nil, nil, nil, nil, nil, 1760000000, "retail EU" }]=],
+      ["retail/normal/neutral/eu:2589"] = [=[{ 40, 25, 1000, nil, nil, nil, nil, nil, 1760000000, "retail/normal/neutral/eu" }]=],
     },
     schema = {
       price = {

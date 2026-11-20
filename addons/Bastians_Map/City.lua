@@ -11,13 +11,18 @@ local City = {}
 ns.City = City
 
 City.TILE = 1024 -- pixels of a stored tile
-City.MAX_LEVEL = 7 -- a little past the picture's own pixels (level 6.2)
+City.MAX_LEVEL = 7 -- a little past the picture's own pixels (Stormwind: level 6.2)
+City.PAST = 0.75 -- levels a smaller place may zoom past its picture's own pixels (Ironforge: 7.3)
+-- the place a first Open shows when the player stands in none: the own side's capital
+City.HOME = { Alliance = 1453, Horde = 1454 }
 City.QUERY_LEVEL = 6 -- the layers are asked as at close zoom: every level of detail, at every zoom
 City.MAX_PINS = 300 -- as the world map (map.md "Budgets")
 City.PIN = 16
 City.ROW = 22
 City.GAP = 4
 City.ARROW_EVERY = 0.05 -- seconds between the arrow's updates
+City.YOU = 40 -- the disc behind the player's arrow: it has to be found among 300 pins
+City.YOU_ZOOM = 1.5 -- levels past the whole sheet the Player button zooms to at least
 City.DRAG = 4 -- pixels a press may move and still be a click
 -- not for a sheet: the route, the zone names (the sheet has its own), a world waypoint
 City.LEFT_OUT = { ["route.path"] = true, ["map.zones"] = true, ["map.waypoint"] = true }
@@ -35,6 +40,7 @@ local camera, current
 local tiles, placeButtons, filters, pool = {}, {}, {}, {}
 local pins = {}
 local arrow, ring, arrowAt = nil, nil, 0
+local you -- the frame of the player's marker, above the pins
 local press -- { x, y, moved, button } while a mouse button is down on the sheet
 local hovered, overPin -- the house under the mouse; true while the mouse is on a pin
 local lines = {} -- the hovered house's outline
@@ -116,11 +122,18 @@ function City.FitLevel(city, width, height)
   return math.log(scale / ns.Camera.PX_PER_YARD_L0) / math.log(2)
 end
 
+-- The closest level of a place: a little past its picture's own pixels. The sheets are all as
+-- large, the places are not: a pixel is 0.43 yards in Stormwind and 0.2 in Ironforge.
+function City.MaxLevel(city)
+  local own = math.log(city.w / (city.wy[2] - city.wy[1]) / ns.Camera.PX_PER_YARD_L0) / math.log(2)
+  return math.max(City.MAX_LEVEL, own + City.PAST)
+end
+
 -- Never further out than the whole sheet, never past its edge; a sheet smaller than the view stands
 -- in its middle.
 function City.Clamp(cam, city)
   local fit = City.FitLevel(city, cam.width, cam.height)
-  cam.level = math.max(fit, math.min(cam.level, math.max(fit, City.MAX_LEVEL)))
+  cam.level = math.max(fit, math.min(cam.level, math.max(fit, City.MaxLevel(city))))
   local s = cam:Scale()
   local function axis(v, lo, hi, half)
     if hi - lo <= 2 * half then
@@ -185,14 +198,32 @@ local function updateArrow()
   end
   local continent, wx, wy = B.Coords.Player()
   if continent ~= current.continent or not inside(current, wx, wy) then
-    arrow:Hide()
+    you:Hide()
     return
   end
   local sx, sy = camera:ToScreen(wx, wy)
-  arrow:ClearAllPoints()
-  arrow:SetPoint("CENTER", clip, "TOPLEFT", sx, -sy)
+  you:ClearAllPoints()
+  you:SetPoint("CENTER", clip, "TOPLEFT", sx, -sy)
   arrow:SetRotation(B.Compat.GetPlayerFacing() or 0)
-  arrow:Show()
+  you:Show()
+end
+
+-- The place the player stands in and where, or nil: no sheet there, or no position known.
+function City.PlayerPlace()
+  local continent, wx, wy = B.Coords.Player()
+  local city = continent and City.At(continent, wx, wy)
+  if city then
+    return city, wx, wy
+  end
+  return nil
+end
+
+-- The Player button wears its colour while the player stands on a sheet.
+local function paintYou()
+  if bar and bar.you then
+    bar.you.token = City.PlayerPlace() and "good" or "dim"
+    S.tint(bar.you.face, S.C[bar.you.token], S.TILE_FACE_ALPHA)
+  end
 end
 
 -- The hovered house's real outline, one straight piece per edge.
@@ -541,7 +572,63 @@ end
 
 -- --- the window ----------------------------------------------------------------------------------
 
+-- The "More places" button wears the accent while the shown place is one of its menu's.
+local function paintMore()
+  local inMore = false
+  for _, b in ipairs(bar.hidden or {}) do
+    inMore = inMore or b.city == current
+  end
+  bar.more.token = inMore and "accent" or "dim"
+  S.tint(bar.more.face, S.C[bar.more.token], inMore and 0.75 or S.TILE_FACE_ALPHA)
+end
+
+-- The place buttons that fit left of the bar's own buttons, in the registry's order; the others
+-- go into the "More places" menu (six capitals do not fit a narrow window).
+local function layoutPlaces()
+  local own = bar.you:GetWidth() + bar.dock:GetWidth() + bar.zoomOut:GetWidth() * 2
+  own = own + bar.full:GetWidth() + 24
+  local width = bar:GetWidth() or 0
+  local room = width > 0 and width - own - City.GAP * 2 or math.huge -- not laid out yet: hide none
+  local need = 0
+  for _, b in ipairs(placeButtons) do
+    need = need + b:GetWidth() + City.GAP
+  end
+  local limit = need <= room and room or room - bar.more:GetWidth()
+  local x, hidden = 0, {}
+  for _, b in ipairs(placeButtons) do
+    if #hidden == 0 and x + b:GetWidth() + City.GAP <= limit then
+      b:ClearAllPoints()
+      b:SetPoint("LEFT", bar, "LEFT", x, 0)
+      b:Show()
+      x = x + b:GetWidth() + City.GAP
+    else
+      hidden[#hidden + 1] = b
+      b:Hide()
+    end
+  end
+  bar.hidden = hidden
+  bar.more:SetShown(#hidden > 0)
+  bar.more:ClearAllPoints()
+  bar.more:SetPoint("LEFT", bar, "LEFT", x, 0)
+  paintMore()
+end
+
+-- The places the bar has no room for, as the menu's entries.
+function City.MoreItems()
+  local items = {}
+  for _, b in ipairs(bar and bar.hidden or {}) do
+    items[#items + 1] = {
+      label = placeName(b.city),
+      onClick = function()
+        City.Show(b.city)
+      end,
+    }
+  end
+  return items
+end
+
 local function layoutBody()
+  layoutPlaces()
   local height = layoutFilters()
   clip:ClearAllPoints()
   clip:SetPoint("TOPLEFT", win.content, "TOPLEFT", 6, -(6 + City.ROW + City.GAP + height + City.GAP))
@@ -555,6 +642,7 @@ local function paintPlaces()
     b.token = on and "accent" or "dim"
     S.tint(b.face, S.C[b.token], on and 0.75 or S.TILE_FACE_ALPHA)
   end
+  paintMore()
 end
 
 -- Shows a place: its tiles (the only moment its pictures load), the whole sheet in view.
@@ -582,6 +670,7 @@ function City.Show(city)
   camera.level = 0
   camera.wx, camera.wy = (city.wx[1] + city.wx[2]) / 2, (city.wy[1] + city.wy[2]) / 2
   paintPlaces()
+  paintYou()
   viewChanged()
   drawPins()
   drawRing()
@@ -601,6 +690,7 @@ local function build()
     onShow = function()
       clip:SetScript("OnUpdate", onUpdate)
       updateDock()
+      paintYou()
       if current then
         layoutBody()
         viewChanged()
@@ -641,6 +731,11 @@ local function build()
     placeButtons[#placeButtons + 1] = b
     prev = b
   end
+  bar.more = S.tileButton(bar, L["More places"], "zone", "dim")
+  bar.more:SetScript("OnClick", function(self)
+    B.UI.Menu(self, L["More places"], City.MoreItems(), ns.mod)
+  end)
+  bar.more:Hide()
   bar.full = S.tileButton(bar, L["Full"], "zone", "accent", 76)
   bar.full.tip = L["Full screen, and back."]
   bar.full:SetPoint("RIGHT", 0, 0)
@@ -665,6 +760,15 @@ local function build()
     return L["Dock the Browser"], L["Opens the Browser beside this map at its height. Click again to undock."]
   end
   bar.dock:SetPoint("RIGHT", bar.zoomOut, "LEFT", -8, 0)
+  bar.you = S.tileButton(bar, L["Player"], "waypoint", "good")
+  bar.you.tip = function()
+    if City.PlayerPlace() then
+      return L["Player"], L["Centre the city map on you."]
+    end
+    return L["Player"], L["You are not in a city with a map."]
+  end
+  bar.you:SetPoint("RIGHT", bar.dock, "LEFT", -8, 0)
+  bar.you:SetScript("OnClick", City.ShowPlayer)
   bar.dock:SetScript("OnClick", function()
     B.UI.ToggleDock(B.UI.DOCK.city)
     updateDock()
@@ -689,16 +793,69 @@ local function build()
   S.tint(ring, S.C.accent, 0.45)
   ring:SetSize(City.PIN + 12, City.PIN + 12)
   ring:Hide()
-  arrow = clip:CreateTexture(nil, "OVERLAY")
+  -- the player's marker on a frame of its own above the pins ("I dont see my
+  -- position on these maps"; a city's pins covered the bare arrow, as once on the minimap): the
+  -- game's arrow on a dark disc with an accent rim. It takes no mouse.
+  you = CreateFrame("Frame", nil, clip)
+  you:SetSize(City.YOU, City.YOU)
+  you:SetFrameLevel((clip:GetFrameLevel() or 1) + 40)
+  you.rim = you:CreateTexture(nil, "BACKGROUND")
+  you.rim:SetTexture(S.DISC)
+  you.rim:SetAllPoints()
+  S.tint(you.rim, S.C.accent, 0.9)
+  you.face = you:CreateTexture(nil, "BORDER")
+  you.face:SetTexture(S.DISC)
+  you.face:SetPoint("TOPLEFT", 3, -3)
+  you.face:SetPoint("BOTTOMRIGHT", -3, 3)
+  S.tint(you.face, S.C.header, 0.85)
+  arrow = you:CreateTexture(nil, "OVERLAY")
   arrow:SetTexture("Interface\\Minimap\\MinimapArrow")
   arrow:SetSize(28, 28)
-  arrow:Hide()
+  arrow:SetPoint("CENTER")
+  you:Hide()
+  City.you = you
 
   camera = ns.Camera.new(0, 600, 400)
   City.win, City.clip, City.bar = win, clip, bar
 end
 
--- Opens the window on a place (the first one, or the last one shown); wx and wy centre it on a point.
+-- The place a bare Open shows: where the player stands, else the last one shown, else the own
+-- side's capital, else the first.
+function City.Default()
+  local here = B.Coords.PlayerMap and B.Coords.PlayerMap()
+  local facts = B.Compat.GetPlayerFacts and B.Compat.GetPlayerFacts()
+  local home = facts and City.HOME[facts.faction]
+  local first, own
+  for _, city in ipairs(cities()) do
+    if city.ui == here then
+      return city
+    end
+    first = first or city
+    own = own or (city.ui == home and city) or nil
+  end
+  return current or own or first
+end
+
+-- Brings the player into view: the place they stand in, centred on them, close enough to tell the
+-- streets apart (never further out than the view already is). False: the player is on no sheet.
+function City.ShowPlayer()
+  local city, wx, wy = City.PlayerPlace()
+  if not (city and win) then
+    return false
+  end
+  if city ~= current then
+    City.Show(city)
+  end
+  local close = City.FitLevel(city, camera.width, camera.height) + City.YOU_ZOOM
+  camera.level = math.max(camera.level, close)
+  camera:Center(wx, wy)
+  viewChanged()
+  drawPins()
+  drawRing()
+  return true
+end
+
+-- Opens the window on a place (without one: City.Default); wx and wy centre it on a point.
 function City.Open(city, wx, wy)
   if not City.Available() then
     return false
@@ -708,7 +865,7 @@ function City.Open(city, wx, wy)
   end
   win:Show()
   layoutBody()
-  city = city or current or cities()[1]
+  city = city or City.Default()
   if city ~= current then
     City.Show(city)
   end
@@ -778,6 +935,11 @@ table.insert(Map.onEnable, function(self)
   table.insert(Map.onFocus, function()
     if win and win:IsShown() then
       drawRing()
+    end
+  end)
+  table.insert(Map.onZone, function()
+    if win and win:IsShown() then
+      paintYou()
     end
   end)
   table.insert(Map.onLayerChanged, function()

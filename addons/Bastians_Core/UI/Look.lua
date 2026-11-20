@@ -141,6 +141,7 @@ end
 
 local MODERN_PLATE, MODERN_PLATE_HOVER, MODERN_EDGE = 0.16, 0.3, 0.6 -- the accent plate of a boxed button
 local GLASS_PLATE = 0.72 -- the plate under every text: 70 % and more (plan-round4 H4)
+S.GLASS_QUIET = 0.5 -- an unchosen pill's plate: half the glass's (quiet chips, 16.11.2026)
 local GLASS_SHEEN = 0.05
 local GLASS_RIM = 0.35 -- the light rim, on hover only
 
@@ -462,17 +463,22 @@ LOOKS.wow = {
 -- chosen one, `gold` a choice of value, `menu` a dropdown's arrow after the label, `clear` a small
 -- x after it (a button of its own: onClear, its tip clearTip, so a click on it never reaches the
 -- pill's own click). spec = { kind, label, count, on, gold, menu, clear, clearTip, onClick, onClear }
+-- A pill is round at both ends in every look (core.md "Round corners"; ~~the theme's corner
+-- radius~~ until 17.11.2026, when the owner held the book against its concept board: "the buttons
+-- are rounder"). `small` at its making: a chip, S.G.chip high with the small text (the book's
+-- filter, book-look.md section 5); a pill keeps the size it was made with.
 -- ---------------------------------------------------------------------------------------------
 
 function S.pill(parent, spec)
   spec = spec or {}
   local p = CreateFrame("Button", nil, parent)
   p.spec = spec
-  p.face = S.roundFill(p, S.C.panel, "radius")
-  p.edges = S.roundEdges(p, S.C.line, "radius")
+  p.small = spec.small and true or nil
+  p.face = S.roundFill(p, S.C.panel, "pill")
+  p.edges = S.roundEdges(p, S.C.line, "pill")
   p.tile = S.tile(p, spec.kind)
   p.tile:SetPoint("LEFT", 4, 0)
-  p.label = S.text(p, 12, S.C.text)
+  p.label = S.text(p, p.small and 11 or 12, S.C.text)
   p.label:SetJustifyH("LEFT")
   p.label:SetWordWrap(false)
   p.count = S.SetRole(S.text(p, 11, S.C.dim), "number") -- a count in the numbers' face (V17)
@@ -539,11 +545,20 @@ function S.pill(parent, spec)
   return p
 end
 
-local function layoutPill(p, h, inkTok, edgeTok, edgeAlpha)
+-- A pill's height: the look's, a chip's for one made small.
+local function pillHeight(p)
+  return p.small and (S.G.chip or 22) or S.G.pill
+end
+
+local PILL_PAD, CHIP_PAD = 10, 9 -- beside the words
+
+-- `countTok` the count's ink (dim; the ground's on a chosen pill's fill).
+local function layoutPill(p, h, inkTok, edgeTok, edgeAlpha, countTok)
   local spec = p.spec
+  local pad = p.small and CHIP_PAD or PILL_PAD
   p.tile:SetKind(spec.kind)
   p.tile:SetShown(spec.kind ~= nil)
-  local x = spec.kind and (4 + S.G.tile + S.G.gap) or 10
+  local x = spec.kind and (4 + S.G.tile + S.G.gap) or pad
   p.label:SetText(spec.label or "")
   p.label:ClearAllPoints()
   p.label:SetPoint("LEFT", x, 0)
@@ -552,10 +567,11 @@ local function layoutPill(p, h, inkTok, edgeTok, edgeAlpha)
   if spec.count ~= nil then
     p.count:SetText(tostring(spec.count))
     p.count:ClearAllPoints()
-    p.count:SetPoint("LEFT", w + 5, 0)
-    S.ink(p.count, S.Tok(p, "dim"))
+    local gap = p.small and 4 or 5
+    p.count:SetPoint("LEFT", w + gap, 0)
+    S.ink(p.count, S.Tok(p, countTok or "dim"))
     p.count:Show()
-    w = w + 5 + textWidth(p.count, tostring(spec.count))
+    w = w + gap + textWidth(p.count, tostring(spec.count))
   else
     p.count:Hide()
   end
@@ -577,28 +593,63 @@ local function layoutPill(p, h, inkTok, edgeTok, edgeAlpha)
   else
     p.clear:Hide()
   end
-  S.setEdges(p.edges, S.Tok(p, edgeTok), edgeAlpha)
-  p:SetSize(w + (spec.clear and 4 or 10), h)
+  S.setEdges(p.edges, type(edgeTok) == "table" and edgeTok or S.Tok(p, edgeTok), edgeAlpha)
+  p:SetSize(w + (spec.clear and 4 or pad), h)
+  -- round at both ends: the radius is half the height, known only now
+  if p.face.r ~= math.floor(h / 2) then
+    p.face:Layout()
+    p.edges:Layout()
+  end
+end
+
+-- The chosen pill is filled, its words in the ground's ink ("selected
+-- filter need to be dramatically different from unselected"), as the segmented switch's chosen
+-- part; ~~the chosen one in the accent's ink inside an accent edge~~ (until 16.11.2026).
+local function chosenPill(p, fill)
+  S.tint(p.face, fill, 1)
+  layoutPill(p, pillHeight(p), "bg", fill, 1, "bg")
+end
+
+-- An unchosen pill is quiet: no plate, its
+-- edge the line token at the token's own faint opacity (a choice of value: gold at QUIET_GOLD), so
+-- the chosen one is the only filled thing in a row; the plate comes back under the mouse.
+-- ~~A plate and the edge at full strength~~ (until 16.11.2026).
+S.QUIET_GOLD = 0.6
+
+local function quietPill(p, inkTok)
+  local spec = p.spec
+  S.tint(p.face, S.Tok(p, "panel"), 0)
+  if spec.gold then
+    layoutPill(p, pillHeight(p), inkTok or "gold", "gold", S.QUIET_GOLD)
+  else
+    layoutPill(p, pillHeight(p), "text", "line", nil)
+  end
 end
 
 LOOKS.modern.pill = function(p)
-  local spec = p.spec
-  local ink = spec.on and "accent" or (spec.gold and "gold" or "text")
   hideSheen(p)
-  S.tint(p.face, S.Tok(p, "panel"), 1)
-  layoutPill(p, S.G.pill, ink, spec.on and "accent" or (spec.gold and "gold" or "line"), 1)
+  if p.spec.on then
+    return chosenPill(p, S.Tok(p, "accent"))
+  end
+  quietPill(p)
 end
 
+-- A chosen pill keeps its fill under the mouse; a quiet one shows its plate while the mouse is on it.
 LOOKS.modern.pillHover = function(p, over)
-  S.tint(p.face, S.Tok(p, over and "faceHover" or "panel"), 1)
+  if not p.spec.on then
+    S.tint(p.face, S.Tok(p, over and "faceHover" or "panel"), over and 1 or 0)
+  end
 end
 
+-- The chosen one in the game's gold; inside a palette of its own (the book's dark table,
+-- S.FolioPalette) in that palette's gold.
 LOOKS.wow.pill = function(p)
-  local spec = p.spec
-  local ink = (spec.on or spec.gold) and "gold" or "text"
   hideSheen(p)
-  S.tint(p.face, S.Tok(p, "panel"), 1)
-  layoutPill(p, S.G.pill, ink, (spec.on or spec.gold) and "gold" or "line", 1)
+  if p.spec.on then
+    local own = S.PaletteOf(p)
+    return chosenPill(p, own and own.C.gold or S.Palette("blizzard").C.gold)
+  end
+  quietPill(p)
 end
 
 LOOKS.wow.pillHover = LOOKS.modern.pillHover
@@ -985,9 +1036,12 @@ LOOKS.parchment = {
   pill = function(p)
     local spec = p.spec
     hideSheen(p)
-    S.tint(p.face, S.Tok(p, "panel"), 1)
-    local ink = (spec.on or spec.gold) and "accent" or "text" -- no gold text on paper
-    layoutPill(p, S.G.pill, ink, spec.on and "accent" or "muted", spec.on and 1 or 0.7)
+    if spec.on then
+      return chosenPill(p, S.Tok(p, "accent"))
+    end
+    S.tint(p.face, S.Tok(p, "panel"), 0) -- quiet: no plate, a faint sepia edge (16.11.2026)
+    local ink = spec.gold and "accent" or "text" -- no gold text on paper
+    layoutPill(p, pillHeight(p), ink, "muted", 0.35)
   end,
   pillHover = LOOKS.modern.pillHover,
   tab = function(t)
@@ -1056,9 +1110,13 @@ LOOKS.glass = {
   end,
   pill = function(p)
     local spec = p.spec
-    glassPlate(p, "panel", GLASS_PLATE)
-    local ink = spec.on and "accent" or (spec.gold and "gold" or "text")
-    layoutPill(p, S.G.pill, ink, "bright", 0)
+    if spec.on then
+      glassPlate(p, "accent", 0.9) -- the chosen one filled, as a primary action's plate
+      return layoutPill(p, pillHeight(p), "bg", "bright", 0, "bg")
+    end
+    -- quiet (16.11.2026): the plate at half the glass's strength, the chosen one stands out
+    glassPlate(p, "panel", GLASS_PLATE * S.GLASS_QUIET)
+    layoutPill(p, pillHeight(p), spec.gold and "gold" or "text", "bright", 0)
   end,
   pillHover = function(p, over)
     glassRim(p, over)
@@ -1126,7 +1184,8 @@ function S.segmented(parent, spec)
   for i, item in ipairs(spec.items) do
     local b = CreateFrame("Button", nil, f)
     b.item = item
-    b.fill = S.roundFill(b, S.C.accent, "radiusSmall", "BORDER")
+    -- `spec.corners` ("top"): the chosen part's fill rounds only those (a tab's)
+    b.fill = S.roundFill(b, S.C.accent, "radiusSmall", "BORDER", spec.corners)
     b.icon = b:CreateTexture(nil, "ARTWORK")
     b.label = S.text(b, 12, S.C.text)
     b.label:SetJustifyH("LEFT")
@@ -1176,10 +1235,20 @@ end
 -- c = { fill, on, off, icon } (colours: a look's own or the frame's tokens).
 local function layoutSegmented(f, c)
   local G = S.G
-  local h = G.actionRow
-  local pad = 9
+  local h = f.spec.height or G.actionRow -- `spec.height`, `spec.pad`: a bar's taller, wider parts
+  local pad = f.spec.pad or 9
   local x = 0
   f.fillTok = c.fill
+  -- `spec.flat`: no plate, no edge, the chosen part alone filled (Bastian's Book's tabs, the
+  -- concept board's row of words; )
+  if f.spec.flat then
+    f.face:Hide()
+    f.edges:Hide()
+    hideSheen(f)
+  else
+    f.face:Show()
+    f.edges:Show()
+  end
   for _, b in ipairs(f.parts) do
     local item = b.item
     local on = item.id ~= nil and item.id == f.spec.value
@@ -1212,7 +1281,7 @@ local function layoutSegmented(f, c)
     else
       b.fill:Hide()
     end
-    x = x + w
+    x = x + w + (f.spec.gap or 0) -- `spec.gap`: room between the parts (words in a row)
   end
   f:SetSize(math.max(x, h), h)
 end
@@ -1253,12 +1322,15 @@ LOOKS.glass.segmented = function(f)
 end
 
 -- WoW: a dark plate with a gilt edge, the chosen part in the game's gold with dark words.
+-- Inside a palette of its own (the book's dark table, S.FolioPalette): that palette's gold, the
+-- parts not chosen in its quiet ink.
 LOOKS.wow.segmented = function(f)
   hideSheen(f)
-  local gold = S.Palette("blizzard").C.gold
+  local own = S.PaletteOf(f)
+  local gold = own and own.C.gold or S.Palette("blizzard").C.gold
   S.tint(f.face, S.Tok(f, "panel"), 1)
   S.setEdges(f.edges, gold, 0.8)
-  layoutSegmented(f, { fill = gold, on = S.Tok(f, "bg"), off = gold, icon = gold })
+  layoutSegmented(f, { fill = gold, on = S.Tok(f, "bg"), off = own and own.C.dim or gold, icon = gold })
 end
 
 -- ---------------------------------------------------------------------------------------------

@@ -20,7 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "build" / "data" / "site"
-CLIENTS = ("forever", "retail")
+# ~~forever and retail~~ Forever alone since 15.11.2026 (ADR 0037)
+CLIENTS = ("forever",)
 RUNS_SHOWN = 7
 STALE_DAYS = 3  # no run for this long: the page says so first
 LOCAL_PATH = re.compile(r"[A-Za-z]:[\\/][^\s`'\"]*")  # a machine's own paths never go public

@@ -1,6 +1,6 @@
 """Run tools/clientdump for every world continent of a client: tile lists and overview textures.
 
-Usage: python tools/mapart_extract.py --client forever|retail --prefix beta|retail
+Usage: python tools/mapart_extract.py --client forever --prefix <dump prefix>
        [--out .local/out/mm_<prefix>] [--overview .local/out/ov_<prefix>] [--only <map directory>]
        [--force] [--dry-run]
 

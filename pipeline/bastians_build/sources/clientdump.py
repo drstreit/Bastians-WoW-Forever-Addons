@@ -1,6 +1,6 @@
 """Readers for `tools/clientdump db2` JSON (client-extraction.md): TaxiNodes, TaxiPath with
-TaxiPathNode, UiMap, UiMapAssignment and AreaTable, and the dungeon floors' map art
-(UiMapXMapArt, UiMapArtTile with the community listfile).
+TaxiPathNode, UiMap, UiMapAssignment and AreaTable, the dungeon floors' map art (UiMapXMapArt,
+UiMapArtTile with the community listfile) and FactionTemplate's sides.
 
 The dump is ``{"table": "TaxiNodes", "build": "...", "rows": [ {...}, ... ]}``. A row's ``Pos``
 is the world position ``[X, Y, Z]`` with X growing north and Y growing west (coordinates.md:
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
 from itertools import pairwise
 from pathlib import Path
@@ -630,3 +631,38 @@ def floor_for_point(floors: list[FloorArt], wx: float, wy: float, z: float | Non
     if best is not None:
         return best[1]
     return next(iter(catch)) if len(catch) == 1 else None
+
+
+# ---------------------------------------------------------------------------------------------
+# FactionTemplate (moved from sources/tdb.py with the retail world database, 15.11.2026): the
+# side and hostility of CMaNGOS' creatures (guards and the danger, R26.5)
+# ---------------------------------------------------------------------------------------------
+
+# FactionTemplate's group bits: 1 players, 2 Alliance, 4 Horde (8 monsters)
+GROUP_PLAYER, GROUP_ALLIANCE, GROUP_HORDE = 1, 2, 4
+
+
+def faction_rows(path: Path) -> list[dict]:
+    """A FactionTemplate dump's rows."""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    rows = data.get("rows")
+    if isinstance(rows, dict):
+        rows = list(rows.values())
+    if not isinstance(rows, list):
+        raise ValueError(f"{path}: rows missing (FactionTemplate)")
+    return rows
+
+
+def faction_sides(rows: Iterable[dict]) -> dict[int, tuple[str | None, bool]]:
+    """FactionTemplate rows -> { id: (side, hostile) }: side "A" or "H" for a template of one
+    side's group, hostile when its enemies include the players (or both sides)."""
+    out = {}
+    for r in rows:
+        group, enemy = int(r.get("FactionGroup") or 0), int(r.get("EnemyGroup") or 0)
+        alliance, horde = bool(group & GROUP_ALLIANCE), bool(group & GROUP_HORDE)
+        side = "A" if alliance and not horde else "H" if horde and not alliance else None
+        hostile = bool(enemy & GROUP_PLAYER) or (
+            bool(enemy & GROUP_ALLIANCE) and bool(enemy & GROUP_HORDE)
+        )
+        out[int(r["ID"])] = (side, hostile)
+    return out

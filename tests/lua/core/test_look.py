@@ -195,7 +195,7 @@ def test_glass_puts_every_text_on_a_plate_and_rounds_the_corners(wow: WowRuntime
     assert wow.eval(f"{PAINTED}[LookTest.b.edges][2]") == 0.35
     wow.execute("LookTest.b:GetScript('OnLeave')(LookTest.b)")
     assert wow.eval(f"{PAINTED}[LookTest.b.edges][2]") == 0
-    assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 0.72
+    assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 0.36  # a quiet pill: half the plate
     assert wow.eval(f"{PAINTED}[LookTest.t.edges][2]") == 0  # tiles without edges
     # the window ground is capped at 75 % whatever the opacity setting
     assert wow.eval(f"{PAINTED}[LookTest.w.frame.bg][2]") == 0.75
@@ -238,6 +238,75 @@ def test_parchment_squares_the_tiles_and_writes_no_gold(wow: WowRuntime):
     assert wow.eval(f"{S}.SHAPE.tile") == 4 and wow.eval("LookTest.t.face:Radius()") == 4
     assert wow.eval(f"{S}.inked[LookTest.p.label] == {S}.C.gold") is True
     assert wow.eval("(LookTest.w.title:GetFont())") != wow.eval(f"{S}.SERIF_FONT")
+    assert wow.errors == []
+
+
+def test_a_chosen_pill_is_filled_in_every_look(wow: WowRuntime):
+    """ "selected filter need to be dramatically different from
+    unselected": the chosen pill is filled with the accent (WoW: the game's gold), its words and
+    count in the ground's ink; the mouse never takes the fill away."""
+    boot(wow)
+    wow.execute(
+        f"""
+        LookTest = {{}}
+        LookTest.on = {S}.pill(UIParent, {{ label = 'Rares', count = 4, on = true }})
+        LookTest.off = {S}.pill(UIParent, {{ label = 'Gold', count = 2 }})
+        """
+    )
+
+    def filled(fill: str) -> None:
+        assert wow.eval(f"{PAINTED}[LookTest.on.face][1] == {fill}") is True
+        assert wow.eval(f"{S}.inked[LookTest.on.label] == {S}.C.bg") is True
+        assert wow.eval(f"{S}.inked[LookTest.on.count] == {S}.C.bg") is True
+        assert wow.eval(f"{PAINTED}[LookTest.off.face][1] == {fill}") is False
+        assert wow.eval(f"{S}.inked[LookTest.off.label] == {S}.C.bg") is False
+
+    filled(f"{S}.C.accent")
+    wow.execute("LookTest.on:GetScript('OnEnter')(LookTest.on)")
+    assert wow.eval(f"{PAINTED}[LookTest.on.face][1] == {S}.C.accent") is True
+    wow.execute("LookTest.on:GetScript('OnLeave')(LookTest.on)")
+    filled(f"{S}.C.accent")
+    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'wow')") is True
+    filled(f"{S}.Palette('blizzard').C.gold")
+    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'parchment')") is True
+    filled(f"{S}.C.accent")
+    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'glass')") is True
+    filled(f"{S}.C.accent")
+    wow.execute("LookTest.on:SetOn(false)")
+    assert wow.eval(f"{PAINTED}[LookTest.on.face][1] == {S}.C.accent") is False
+    assert wow.errors == []
+
+
+def test_an_unchosen_pill_is_quiet_and_a_flat_switch_has_no_plate(wow: WowRuntime):
+    """ "quiet chips, every app": an unchosen pill has no plate and its
+    edge the line token at its own faint opacity; the plate comes under the mouse. A `flat`
+    segmented switch shows its words alone and fills the chosen part."""
+    boot(wow)
+    wow.execute(
+        f"""
+        LookTest = {{}}
+        LookTest.p = {S}.pill(UIParent, {{ label = 'Gold', count = 2 }})
+        LookTest.g = {S}.pill(UIParent, {{ label = 'my level', gold = true }})
+        LookTest.s = {S}.segmented(UIParent, {{ flat = true, value = 'a',
+          items = {{ {{ id = 'a', label = 'one' }}, {{ id = 'b', label = 'two' }} }} }})
+        """
+    )
+    for preset in ("modern-dark", "wow", "parchment"):
+        assert wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')") is True, preset
+        assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 0, preset
+        assert wow.eval(f"{S}.painted[LookTest.p.edges][2]") != 1, preset
+        assert wow.eval(f"{S}.inked[LookTest.p.label] == {S}.C.bg") is False, preset
+    wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-dark')")
+    assert wow.eval(f"{PAINTED}[LookTest.p.edges][2]") is None  # the line token's own 10 %
+    assert wow.eval(f"{PAINTED}[LookTest.g.edges][2]") == wow.eval(f"{S}.QUIET_GOLD")
+    wow.execute("LookTest.p:GetScript('OnEnter')(LookTest.p)")
+    assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 1
+    wow.execute("LookTest.p:GetScript('OnLeave')(LookTest.p)")
+    assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 0
+    assert wow.eval("LookTest.s.face:IsShown()") is False
+    assert wow.eval("LookTest.s.edges:IsShown()") is False
+    assert wow.eval("LookTest.s:Part('a').fill:IsShown()") is True
+    assert wow.eval("LookTest.s:Part('b').fill:IsShown()") is False
     assert wow.errors == []
 
 
@@ -314,4 +383,65 @@ def test_the_segmented_switch_the_flat_tab_and_the_lit_lock_in_every_look(wow: W
     wow.execute("LookTest.tab:SetOn(false)")
     assert wow.eval("LookTest.tab.under:IsShown()") is False
     assert wow.eval(f"{S}.inked[LookTest.tab.label] == {S}.C.dim") is True
+    assert wow.errors == []
+
+
+def test_a_pill_is_round_at_both_ends_and_a_chip_is_a_small_one(wow: WowRuntime):
+    """core.md "Round corners": a pill is round at both ends in every look (owner, Forever
+    17.11.2026, the book beside its concept board: "the buttons are rounder"; until then the
+    theme's corner radius). `small` makes a chip: S.G.chip high, the small text. In the WoW look
+    the chosen one is the game's gold, inside the book's dark table that table's gold."""
+    boot(wow)
+    wow.execute(
+        f"""
+        P = {S}.pill(UIParent, {{ label = 'Vendor', count = 3 }})
+        C = {S}.pill(UIParent, {{ small = true, label = 'Wetlands', count = 3, on = true }})
+        HOST = CreateFrame("Frame", nil, UIParent)
+        HOST.palette = {S}.FolioPalette()
+        F = {S}.pill(HOST, {{ small = true, label = 'farming', on = true }})
+        Q = {S}.pill(HOST, {{ small = true, label = 'fishing' }})
+        """
+    )
+    assert wow.eval(f"{S}.G.chip") == 22
+    assert wow.eval("P:GetHeight()") == 26 and wow.eval("P.face.r") == 13
+    assert wow.eval("P.edges.r") == 13
+    assert wow.eval("C:GetHeight()") == 22 and wow.eval("C.face.r") == 11
+    assert wow.eval("(select(2, C.label:GetFont()))") == 11
+    assert wow.eval("(select(2, P.label:GetFont()))") == 12
+    for preset in ("wow", "glass", "parchment"):
+        assert wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')") is True
+        assert wow.eval("P.face.r") == 13 and wow.eval("C.face.r") == 11, preset
+    wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
+    gold = f"{S}.Palette('blizzard').C.gold"
+    assert wow.eval(f"{S}.painted[C.face][1] == {gold}") is True
+    assert wow.eval(f"{S}.painted[F.face][1] == {S}.C.folioGold") is True
+    assert wow.eval(f"{S}.inked[F.label] == {S}.C.folioGoldInk") is True
+    assert wow.eval(f"{S}.inked[Q.label] == {S}.C.folioText") is True
+    assert wow.eval(f"{S}.Tok(Q, 'line') == {S}.C.folioRule") is True
+    assert wow.errors == []
+
+
+def test_a_heading_with_a_role_of_its_own_keeps_its_face_and_size(wow: WowRuntime):
+    """R4.14 (Forever, 17.11.2026: the book's name drawn in Morpheus at 17 for its display face at
+    18): a font, a text size or a look change draws a heading again; one that was given a role
+    (S.SetRole) keeps that role's face and the size set for it."""
+    boot(wow)
+    wow.execute(
+        f"""
+        local S = {S}
+        H = S.heading(UIParent, 15, 17, S.C.headerText)
+        PLAIN = S.heading(UIParent, 15, 17, S.C.headerText)
+        S.SetRole(H, "bookDisplay")
+        S.setSize(H, 18)
+        """
+    )
+    display = wow.eval(f"{S}.BOOK_FONTS.bookDisplay")
+    assert wow.eval("(H:GetFont())") == display and wow.eval("(select(2, H:GetFont()))") == 18
+    for change in (f"{S}.applyFont()", f"{SET}.ApplyPreset({CORE}, 'wow')", f"{S}.applyHeading(H)"):
+        wow.execute(change)
+        assert wow.eval("(H:GetFont())") == display, change
+        assert wow.eval("(select(2, H:GetFont()))") == 18, change
+    # a plain heading follows the look as before: the WoW look's heading font at its big size
+    assert wow.eval("(PLAIN:GetFont())") == wow.eval(f"{S}.headingFont()")
+    assert wow.eval("(select(2, PLAIN:GetFont()))") == 17
     assert wow.errors == []

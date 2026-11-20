@@ -1,4 +1,4 @@
-"""tools/book_art.py: a picture becomes a 512 x 256 BLP2 with DXT1 and its mipmaps (the header the
+"""tools/book_art.py: a picture becomes a 1024 x 512 BLP2 with DXT1 and its mipmaps (the header the
 map art's check reads, a texture Pillow decodes back to the picture) and a 1024 x 512 JPEG, both
 cut to 2:1 from the middle; only pictures of pages are installed, stale textures go, and the same
 picture gives the same bytes."""
@@ -36,15 +36,15 @@ def test_the_game_texture_is_a_dxt1_blp_with_its_mipmaps(tmp_path):
     data = book_art.game_texture(picture(tmp_path / "p.jpg"))
     blp = tmp_path / "p.blp"
     blp.write_bytes(data)
-    assert texture_size(blp) == (512, 256)
+    assert texture_size(blp) == (1024, 512)
     sizes = struct.unpack("<16I", data[20 + 64 : 20 + 128])
     assert [s for s in sizes if s] == [
-        max(1, (512 >> i) // 4) * max(1, (256 >> i) // 4) * 8 for i in range(10)
+        max(1, (1024 >> i) // 4) * max(1, (512 >> i) // 4) * 8 for i in range(11)
     ]
     with Image.open(blp) as im:
         decoded = im.convert("RGB")
-    assert decoded.size == (512, 256)
-    r, _, b = decoded.getpixel((256, 128))  # the red band survives the compression
+    assert decoded.size == (1024, 512)
+    r, _, b = decoded.getpixel((512, 256))  # the red band survives the compression
     assert r > 150 and b < 90
     assert book_art.game_texture(tmp_path / "p.jpg") == data  # deterministic
 

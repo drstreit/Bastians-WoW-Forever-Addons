@@ -132,7 +132,7 @@ def test_passive_capture_over_several_frames(wow: WowRuntime):
     assert meta.count == 600 and meta.expected == 600 and meta.ownersKnown == 600
     assert meta.trigger == "another addon's scan"
     assert (raw.realm, raw.faction) == ("Mock Realm", "Alliance")
-    assert raw.region == ("110" if wow.client == "forever" else "eu")  # recorded, never interpreted
+    assert raw.region == "110"  # recorded, never interpreted
     recs = records(raw)
     assert len(recs) == 600
     r = recs[3]
@@ -479,10 +479,7 @@ def test_trainer_reads_every_service_and_restores_the_filters(wow: WowRuntime):
     assert (got[0]["cost"], got[0]["level"]) == (10, 5)
     assert got[1]["cost"] == 0 and got[1]["itemID"] == 118 and "level" not in got[1]
     assert (got[2]["skill"], got[2]["skillLevel"], got[2]["cost"]) == ("Alchemy", 90, 900)
-    if wow.client == "forever":
-        assert "rank" not in got[0]  # Forever returns name, type, icon: no rank text
-    else:
-        assert got[0]["rank"] == "Apprentice"
+    assert "rank" not in got[0]  # Forever returns name, type, icon: no rank text
     assert dict(wow.g.Mock.trainerFilters.items()) == {
         "available": True,
         "unavailable": True,
@@ -515,10 +512,7 @@ def test_trainer_waits_for_an_empty_list_and_notes_collapsed_groups(wow: WowRunt
     wow.fire("TRAINER_SHOW")
     wow.advance(0.6)
     (t,) = db(wow).trainers.values()
-    if wow.client == "forever":
-        assert (t.count, t.collapsed) == (1, 0)  # Forever's order carries no expanded flag
-    else:
-        assert (t.count, t.collapsed) == (1, 1) and said(wow, "1 groups collapsed")
+    assert (t.count, t.collapsed) == (1, 0)  # Forever's order carries no expanded flag
 
 
 def test_trainer_without_filter_api_or_with_a_broken_one_still_reads_what_is_shown(wow: WowRuntime):

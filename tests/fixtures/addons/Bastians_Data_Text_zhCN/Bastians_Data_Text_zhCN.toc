@@ -1,4 +1,4 @@
-## Interface: 16001, 120105
+## Interface: 16001
 ## Title: Bastian's Data: Text (zhCN)
 ## IconTexture: Interface\AddOns\Bastians_Data_Text_zhCN\Icon
 ## Notes: Generated names and quest objectives in Simplified Chinese; builds its tables only on a Simplified Chinese client.

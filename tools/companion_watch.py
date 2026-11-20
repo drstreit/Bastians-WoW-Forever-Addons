@@ -2,7 +2,7 @@
 files and extracting into our node as reference, daily"; decision E: Spoken, "an addon we depend
 100% on", checked every day).
 
-Usage: python tools/companion_watch.py [--client forever|retail|all] [--today YYYY-MM-DD]
+Usage: python tools/companion_watch.py [--client forever|all] [--today YYYY-MM-DD]
        python tools/companion_watch.py --diff <old.json> <new.json>
 
 Reads the companion addons listed in `tools/companions.toml` from the clients' `Interface/AddOns`
@@ -123,18 +123,14 @@ def load_libraries(path: Path = CONFIG) -> list[Library]:
 
 
 def client_folders(install: Path = INSTALL) -> dict[str, Path]:
-    """client key -> its Interface/AddOns folder: install.toml [companions], else [clients]."""
+    """client key -> its Interface/AddOns folder: install.toml [companions], else [clients];
+    the suite's clients only (~~forever and retail, then every other key~~: Forever alone since
+    15.11.2026, ADR 0037)."""
     if not install.is_file():
         return {}
     data = tomllib.loads(install.read_text(encoding="utf-8"))
     clients = data.get("companions") or data.get("clients") or {}
-    out = {}
-    for key in ("forever", "retail"):
-        if key in clients:
-            out[key] = Path(clients[key]) / "Interface" / "AddOns"
-    for key, value in clients.items():
-        out.setdefault(key, Path(value) / "Interface" / "AddOns")
-    return out
+    return {k: Path(clients[k]) / "Interface" / "AddOns" for k in ("forever",) if k in clients}
 
 
 # -- reading an addon -----------------------------------------------------------------------------
@@ -415,7 +411,7 @@ def rules(companion: Companion, snap: dict | None, client: str) -> list[str]:
         return []
     name = companion.folder
     if snap is None:
-        # the companions ship for Forever (core.md); retail has none since 29.10.2026
+        # the companions ship for Forever (core.md)
         return [f"{name} is missing on {client}"] if client == "forever" else []
     out = []
     if companion.min and version_key(snap.get("version")) < version_key(companion.min):
@@ -634,7 +630,7 @@ def daily_lines(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--client", default="all", help="forever, retail or all (default)")
+    parser.add_argument("--client", default="all", help="forever or all (default)")
     parser.add_argument(
         "--today", help="the date written into snapshots and pages (default: today, UTC)"
     )

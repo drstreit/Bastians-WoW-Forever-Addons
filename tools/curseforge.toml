@@ -13,9 +13,9 @@
 # slug or a project id of 0 is refused, because CurseForge rejects a file whose relation names an
 # unknown project.
 
-# The clients a release uploads (CurseForge carries WoW Forever only; retail stays a
-# local test install until it is dropped, ADR 0037). curseforge.py --send and suite_release.py refuse
-# or skip the others.
+# The clients a release uploads (CurseForge carries WoW Forever only; ~~retail stays
+# a local test install until it is dropped~~ retail is dropped since 15.11.2026, ADR 0037).
+# curseforge.py --send and suite_release.py refuse or skip the others.
 release_clients = ["forever"]
 
 [game_versions]
@@ -23,7 +23,6 @@ release_clients = ["forever"]
 # WoW Forever (interface 16001): CurseForge lists the flavor "Forever" with game version 1.60.1
 # (seen 23.10.2026 on its project pages, e.g. curseforge.com/wow/addons/wow-forever-suite; that
 # the upload API knows it under this name is checked at the first upload).
-retail = ["12.1.5"]
 forever = ["1.60.1"]
 
 # ---- three projects: the apps

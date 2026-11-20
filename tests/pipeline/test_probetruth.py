@@ -185,3 +185,49 @@ def test_report_carries_the_probe_section_and_the_cli_prints_the_counts(tmp_path
     )
     report = (tmp_path / "report" / "report.md").read_text(encoding="utf-8")
     assert "## Probe ground truth" in report and "Crystal Lake shore" in report
+
+
+PLAY = """BastiansProbeDB = {
+  meta = { client = "forever", build = "70938" },
+  results = {},
+  truth = {
+    ["70938"] = {
+      npcs = {
+        ["npc:54"] = { name = "Corina Steele", map = 1429, x = 0.417, y = 0.657,
+                       seen = 2, kinds = { merchant = true, gossip = true } },
+        ["npc:999999"] = { name = "Nobody", map = 1429, x = 0.5, y = 0.5, seen = 1,
+                           kinds = { quest = true } },
+      },
+      merchants = {
+        ["npc:54"] = { count = 2, items = {
+          { item = 2589, price = 260, stack = 20, available = -1 },
+          { item = 4540, price = 25, stack = 5, available = -1 },
+        } },
+      },
+    },
+    ["70862"] = { npcs = { ["npc:54"] = { name = "an older build" } } },
+  },
+}
+"""
+
+
+def test_what_the_probe_saw_in_play_checks_the_pack():
+    # plan-data-quality.md E6: the NPCs talked to and the merchants' stock, of the dump's build
+    dump = probe.parse_probe_dump(PLAY)
+    world = read_fixture(FIXTURES / "world-mini", "forever")
+    truth = check_probe(dump, world, {})
+    talks = {t.target_id: t.status for t in truth.talks}
+    assert talks == {54: "ok", 999999: "missing record"}
+    (shop,) = truth.merchants
+    assert (shop.npc_id, shop.status, shop.ok, shop.not_in_pack, shop.not_sold) == (
+        54,
+        "differs",
+        1,
+        [4540],
+        [1185],  # the whole stock was seen: the pack's limited item is not sold any more
+    )
+    text = "\n".join(render_probe_section(truth))
+    assert "### Seen in play" in text
+    assert "NPCs and objects talked to against the pack records: 2 checked, 1 ok" in text
+    assert "2 items: 1 at the pack's price, 0 at another, 1 not in the pack" in text
+    assert "| Corina Steele (54) | differs | - | 4540 | 1185 |" in text

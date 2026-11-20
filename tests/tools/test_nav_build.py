@@ -17,12 +17,11 @@ def test_a_folder_of_the_other_client_is_refused():
     forever = "product=wowf version=1.60.1.70532 buildKey=x root=D:\\WoW"
     retail = "product=wow version=12.1.5.70575 buildKey=y root=D:\\WoW"
     assert nav_build.check_client("forever", forever) == "1.60.1.70532"
-    assert nav_build.check_client("retail", retail) == "12.1.5.70575"
     # 25.10.2026: the old beta folder lost its .flavor.info and opened retail
     with pytest.raises(nav_build.NavBuildError, match="not a forever client"):
         nav_build.check_client("forever", retail)
     with pytest.raises(nav_build.NavBuildError):
-        nav_build.check_client("retail", "no version line")
+        nav_build.check_client("forever", "no version line")
 
 
 def test_road_textures_are_the_used_ones_whose_file_name_says_road(tmp_path):
@@ -63,9 +62,9 @@ def test_liquids_by_name_and_continents_from_the_map_dump(tmp_path, monkeypatch)
         json.dumps({"rows": {"0": {"Directory": "Azeroth", "WdtFileDataID": 775971}}}),
         encoding="utf-8",
     )
-    assert nav_build.continent_maps("retail", "x") == {0: ("Azeroth", 775971)}
+    assert nav_build.continent_maps("forever", "x") == {0: ("Azeroth", 775971)}
     with pytest.raises(nav_build.NavBuildError, match="missing"):
-        nav_build.continent_maps("retail", "none")
+        nav_build.continent_maps("forever", "none")
 
 
 def test_only_a_client_with_hidden_ground_gets_a_config(tmp_path):
@@ -79,7 +78,7 @@ def test_only_a_client_with_hidden_ground_gets_a_config(tmp_path):
         "z": [40.0, 88.0],
     }
     target = tmp_path / "config.json"
-    assert nav_build.navnet_config({"hidden": {"forever": [box]}}, "retail", target) == []
+    assert nav_build.navnet_config({"hidden": {"forever": [box]}}, "other", target) == []
     assert not target.exists()
     args = nav_build.navnet_config({"hidden": {"forever": [box]}}, "forever", target)
     assert args == ["--config", str(target)]

@@ -43,8 +43,6 @@ def test_core_declares_the_cross_app_messages(wow: WowRuntime):
 
 
 def test_every_catalogue_row_is_declared_with_all_apps_loaded(wow: WowRuntime):
-    if wow.client != "forever":
-        pytest.skip("Campfire is Forever-only; the whole catalogue is checked on Forever")
     if not CONTRACTS.is_file():
         pytest.skip("core-contracts.md is private; the public snapshot has no catalogue to read")
     rows = sorted(set(ROW.findall(CONTRACTS.read_text(encoding="utf-8"))))

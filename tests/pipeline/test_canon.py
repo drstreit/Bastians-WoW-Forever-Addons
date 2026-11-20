@@ -452,11 +452,11 @@ def test_zones_carry_the_map_type_when_the_source_has_it():
     floor from a zone; None when the source has no type."""
     from bastians_build.canon import merge_zones
 
-    s = Sources(client="retail")
+    s = Sources(client="forever")
     s.map_names = {37: "Elwynn Forest", 242: "Blackrock Depths", 13: "Eastern Kingdoms"}
     s.map_parents = {37: (13, 0), 242: (32, 0), 13: (947, 0)}
     s.map_types = {37: 3, 242: 4}
-    world = World(client="retail")
+    world = World(client="forever")
     merge_zones(world, s)
     assert world.get("zone", 37)["mapType"] == 3
     assert world.get("zone", 242)["mapType"] == 4
@@ -544,10 +544,11 @@ def test_a_boss_is_its_creature_never_its_encounter_number():
     )
 
 
-def test_retail_does_not_link_forevers_own_dungeons_bosses():
-    """A creature id of a dungeon only Forever has would be another creature on retail."""
+def test_forevers_own_dungeons_bosses_link_by_their_only_npc():
+    """A dungeon only Forever has links its boss by the one npc of that name in the data
+    (~~retail did not link them: the id would be another creature there~~, retail out
+    15.11.2026)."""
     s = fixture_sources()
-    s.client = "retail"
     s.fdb_dungeons = [
         foreverdb.DungeonRow(
             2999,
@@ -565,35 +566,14 @@ def test_retail_does_not_link_forevers_own_dungeons_bosses():
     ]
     s.fdb_dungeon_maps = []
     world = build_world(s)
-    assert world.get("dungeon", 2999)["bosses"] == [[1, None, "Witherfang"]]
-    s.client = "forever"
-    world = build_world(s)
     assert world.get("dungeon", 2999)["bosses"] == [[1, 250483, "Witherfang"]]
-
-
-def test_a_client_without_foreverdb_takes_the_dungeons_file_given(tmp_path):
-    """data.md "Dungeons": the retail test client shows Forever's dungeons
-    from ForeverDB's file handed over by path; a client that has ForeverDB keeps its own."""
-    addons = tmp_path / "AddOns"
-    shutil.copytree(FIXTURES / "everything_quests", addons / "EverythingQuests")
-    paths = SourcePaths(
-        addons=addons,
-        cmangos=FIXTURES / "cmangos" / "classicdb_mini.sql.gz",
-        probe=FIXTURES / "probe" / "2026-10-19-forever-fixture.lua",
-        dungeons=FIXTURES / "foreverdb" / "Dungeons.lua",
-    )
-    s = load_sources("forever", paths)
-    assert [d.id for d in s.fdb_dungeons] == [34, 36, 249]
-    assert any(name.startswith("ForeverDB Dungeons.lua") for name in s.source_names)
-    world = build_world(s)
-    assert world.get("dungeon", 36)["name"] == "The Deadmines"
 
 
 def test_the_floors_are_the_clients_dungeon_maps_with_the_boss_spots_placed_through_the_world():
     """data.md "Dungeons": the floors come
-    from retail's UiMap tables (name, UiMap id, the art files' prefix and grid when the listfile
-    names the tiles, the visible size); ForeverDB's boss spots and the door go through the world
-    (the floor's scale and corner) onto the floor whose region and height band hold them. The
+    from the retail client's UiMap tables (name, UiMap id, the art files' prefix and grid when the
+    listfile names the tiles, the visible size); ForeverDB's boss spots and the door go through the
+    world (the floor's scale and corner) onto the floor whose region and height band hold them. The
     Deadmines: boss 1 lies on floor 1 only, boss 3 on both floors' regions and floor 1's height
     band, the door on floor 2 only."""
     world = build_world(fixture_sources())
@@ -611,8 +591,7 @@ def test_the_floors_are_the_clients_dungeon_maps_with_the_boss_spots_placed_thro
     ]
     assert d["bossSpots"] == [[1, 1, 38.59, 60.88], [3, 1, 52.7, 50.53]]
     assert d["door"] == [2, 60.22, 84.32]
-    # an instance the client has no map of keeps ForeverDB's plates: the minimap tiles on
-    # Forever, the bare plate on retail (the tiles are the Forever client's files)
+    # an instance the client has no map of keeps ForeverDB's plates with the minimap tiles
     ony = world.get("dungeon", 249)
     assert ony["floors"] == [
         {"n": "Part 1", "w": 400, "h": 300},
@@ -620,10 +599,6 @@ def test_the_floors_are_the_clients_dungeon_maps_with_the_boss_spots_placed_thro
     ]
     assert ony["bossSpots"] == [[1, 2, 50.0, 50.0]]
     assert ony.get("door") is None and any("can't be read" in n for n in world.notes)
-    s = fixture_sources()
-    s.client = "retail"
-    retail = build_world(s).get("dungeon", 249)
-    assert retail["floors"][1] == {"n": "Part 2", "w": 200, "h": 150}
 
 
 def test_a_boss_several_floors_could_show_stays_off_the_maps_with_a_note():

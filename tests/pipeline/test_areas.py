@@ -159,13 +159,13 @@ def test_areas_become_records_with_their_zone_and_map_place(navmesh: Path):
 
 def test_without_area_to_map_the_assignment_or_the_rectangle_gives_the_zone(navmesh: Path):
     block = read_area_block(navmesh)
-    world = World(client="retail")
+    world = World(client="forever")
     add_areas(world, [block], TABLE, {37: dataclasses.replace(ELWYNN, ui_map_id=37)}, {12: [37]})
     assert world.get("area", LAKE)["zone"] == 37
-    world = World(client="retail")
+    world = World(client="forever")
     add_areas(world, [block], TABLE, {1429: ELWYNN})  # no table: the containing rectangle
     assert world.get("area", LAKE)["zone"] == 1429
-    world = World(client="retail")
+    world = World(client="forever")
     add_areas(world, [block], TABLE, {})  # no transforms: no zone, no map place, never guessed
     lake = world.get("area", LAKE)
     assert lake["zone"] is None and "spawns" not in lake and lake["wx"] < 0
@@ -208,3 +208,19 @@ def test_a_build_without_navmesh_has_no_areas_and_says_so(tmp_path: Path):
     world = build_world(load_sources("forever", SourcePaths(dumps=dumps)))
     assert world.count("area") == 0
     assert any(n.startswith("areas: no navmesh files in") for n in world.notes)
+
+
+def test_the_packs_name_the_engines_build_not_the_probes(tmp_path: Path):
+    # plan-data-quality.md E7: until 16.11.2026 the packs and the About page said 70532, the
+    # probe's build of 23.10, over the tables of 70938
+    dumps = tmp_path / "out"
+    dumps.mkdir()
+    head = {"table": "Map", "build": "1.60.1.70938", "columns": ["ID"], "rows": []}
+    (dumps / "f70938_Map.json").write_text(json.dumps(head), encoding="utf-8")
+    probe = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures/sources/probe/2026-10-19-forever-fixture.lua"
+    )
+    s = load_sources("forever", SourcePaths(probe=probe, dumps=dumps, dump_prefix="f70938"))
+    assert s.build == "70938"
+    assert load_sources("forever", SourcePaths(probe=probe)).build != "70938"

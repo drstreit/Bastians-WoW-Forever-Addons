@@ -369,6 +369,17 @@ def test_tree_rows_show_action_icons_on_hover_and_on_the_focused_row(core: WowRu
     assert (r, g, b) == tuple(
         list(core.eval("Bastians.UI.Style.C.on").values())[:3]
     )  # the theme's on colour (ST3)
+    # an action with a picture for its on state shows that one, in its own colours (the voice
+    # line's red stop, ); off, the plain icon comes back
+    core.execute(
+        """local a = Bastians:GetAction('voice.play')
+        a.icon, a.activeIcon = 'play.tga', 'stop.tga'
+        tree.pool[2]:GetScript('OnEnter')(tree.pool[2])"""
+    )
+    assert core.eval("tree.pool[2].icons[2].tex:GetTexture()") == "stop.tga"
+    assert core.eval("tree.pool[2].icons[2].tex:GetVertexColor()")[:3] == (1, 1, 1)
+    core.execute("playing = nil; tree.pool[2]:GetScript('OnEnter')(tree.pool[2])")
+    assert core.eval("tree.pool[2].icons[2].tex:GetTexture()") == "play.tga"
     core.execute("tree.pool[1].icons[1]:Click()")
     assert list(core.g.ran.values())[-1] == "locate npc:448"
     # leaving hides them, unless the row is the focused one
@@ -933,8 +944,7 @@ def test_every_toolbar_button_of_the_apps_has_a_tip(wow: WowRuntime):
     wow.run_frames(10)
     wow.slash("/bb")
     wow.slash("/bmap")
-    if wow.made_for("Bastians_Gold"):  # no Gold on retail
-        wow.slash("/bgold")
+    wow.slash("/bgold")
     wow.run_frames(5)
     untipped = wow.eval(
         """(function()
@@ -1070,4 +1080,28 @@ def test_a_saved_size_beyond_the_screen_is_fitted_and_the_place_kept_on_it(core:
     )
     assert list(core.eval("okDB.size").values()) == [400, 300]
     assert core.eval("select(4, ok.frame:GetPoint(1))") == (10, -10)
+    assert core.errors == []
+
+
+def test_a_window_may_have_a_taller_head_and_a_portrait_to_click(core: WowRuntime):
+    """`opts.headHeight` (Bastian's Book's bar: , "the header feels
+    squeezed. make it higher"): the head and the content's top follow it, in the game's frame too;
+    `opts.onPortrait` makes the frame's round portrait a button. Other windows keep 30 and 56."""
+    core.execute(
+        """
+        Mock.templates.PortraitFrameTemplate = true -- the client has the game's frame
+        clicks = 0
+        tall = Bastians.UI.Window("BastiansTallHeadTest", { headHeight = 50, gameFrames = true,
+          onPortrait = function() clicks = clicks + 1 end, portraitTip = "home" })
+        plain = Bastians.UI.Window("BastiansPlainHeadTest", { gameFrames = true })
+        flat = Bastians.UI.Window("BastiansFlatHeadTest", { headHeight = 50 })
+        """
+    )
+    assert core.eval("flat.head:GetHeight()") == 50
+    assert core.eval("(flat:Insets()) - select(2, flat:Insets())") == 50  # the head over the inset
+    assert core.eval("tall.gameFramed") is True and core.eval("tall.head:GetHeight()") == 50
+    assert core.eval("(tall:Insets())") == 72 and core.eval("(plain:Insets())") == 56
+    assert core.eval("plain.head:GetHeight()") == 32 and core.eval("plain.portraitButton") is None
+    core.execute("tall.portraitButton:Click()")
+    assert core.eval("clicks") == 1 and core.eval("tall.portraitButton.tip") == "home"
     assert core.errors == []

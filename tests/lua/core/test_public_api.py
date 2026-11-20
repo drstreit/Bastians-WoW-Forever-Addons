@@ -175,7 +175,7 @@ def test_needed_items_are_what_the_open_steps_still_ask(wow: WowRuntime):
     ids = set(wow.eval("Bastians:GetModule('Quests').State.order").values())
     assert all(dict(e.items())["quest"] in ids for e in before.values())  # quests of the log
     wow.execute(
-        "local q = Bastians:GetModule('Quests').Logic.quest(76); "
+        "local q = Mock.Keep(Bastians:GetModule('Quests').Logic.quest(76)); "
         "q.objectives = { { 'loot', 'item:7206' } }; q.spots = nil; "
         "Mock.questLog[#Mock.questLog + 1] = { questID = 76, title = 'Mirror Lake', level = 10, "
         "complete = false, objectives = { { text = 'Water Sample: 1/3', type = 'item', "
@@ -205,7 +205,7 @@ def test_where_of_a_quest_is_its_next_step_or_nil(wow: WowRuntime):
     giver = [dict(p.items()) for p in wow.eval(f"{API}.Where('quest:76')").values()]
     assert len(giver) == 1 and giver[0]["uiMapID"] == 1429  # not taken: where it is given
     wow.execute(
-        "local q = Bastians:GetModule('Quests').Logic.quest(76); "
+        "local q = Mock.Keep(Bastians:GetModule('Quests').Logic.quest(76)); "
         "q.objectives = { { 'loot', 'item:7206' } }; q.spots = nil; "
         "Mock.questLog[#Mock.questLog + 1] = { questID = 76, title = 'Mirror Lake', level = 10, "
         "complete = false, objectives = { { text = 'Water Sample', type = 'item', "

@@ -147,6 +147,39 @@ function S.Palette(id)
   return palettes[id]
 end
 
+-- Bastian's Book's dark table as a palette (docs/addons/book-look.md section 3; owner
+-- 17.11.2026, D2: in the WoW look only): the tokens a widget asks for (S.Tok) answered by the
+-- book's own, so Core's pills and texts draw on the table without knowing it. The values are the
+-- theme's own tables, so a theme switch reaches them.
+local folio
+function S.FolioPalette()
+  if not folio then
+    local map = {
+      text = "folioText",
+      bright = "folioText",
+      dim = "folioMuted",
+      muted = "folioMuted",
+      line = "folioRule",
+      gold = "folioGold",
+      accent = "folioGold",
+      bg = "folioGoldInk", -- the words on a chosen pill's fill
+      panel = "folioBand",
+      faceHover = "folioHover",
+    }
+    local C, H = setmetatable({}, { __index = themeC }), setmetatable({}, { __index = themeH })
+    for token, own in pairs(map) do
+      C[token] = themeC[own]
+    end
+    setmetatable(H, {
+      __index = function(_, token)
+        return themeH[map[token] or token]
+      end,
+    })
+    folio = { id = "folio", C = C, H = H }
+  end
+  return folio
+end
+
 -- Runs fn with S.C and S.H pointing at the palette, and puts the theme back even on an error.
 function S.WithPalette(palette, fn, ...)
   if not palette or S.C == palette.C then -- the theme, or inside this palette already
@@ -459,6 +492,10 @@ function S.FontOf(region, role)
   if S.CLIENT_FONT then
     return S.font()
   end
+  local fixed = S.BOOK_FONTS and role and S.BOOK_FONTS[role]
+  if fixed then
+    return fixed -- a face of its own whatever the look (the book's, ADR 0081)
+  end
   local key = S.FONT_KEYS[role or "text"] or "font"
   local own = region and ownValues(region)
   if own then
@@ -604,7 +641,22 @@ S.ADDON_FONTS = {
 S.SANS_FONT = FONT_DIR .. "IBMPlexSans.ttf" -- the artifact's text (Bastian's Chat, V17)
 S.MONO_FONT = FONT_DIR .. "IBMPlexMono.ttf" -- the artifact's numbers (Bastian's Chat, V17)
 S.SERIF_FONT = FONT_DIR .. "Alegreya.ttf" -- the Parchment preset's headings (plan-round4 H4)
+-- Bastian's Book's own faces, the same in every look (ADR 0081, "typeface:
+-- yes"): an old-print serif for the names, an italic for Bastian's voice, small capitals for the
+-- labels, a sans serif for the book's controls. A kit text takes one with S.SetRole(fs, role);
+-- a client with S.CLIENT_FONT keeps its own font for them too.
+S.BOOK_FONTS = {
+  bookDisplay = FONT_DIR .. "IMFellEnglish.ttf",
+  bookItalic = FONT_DIR .. "AlegreyaItalic.ttf",
+  bookCaps = FONT_DIR .. "AlegreyaSansSC.ttf",
+  bookSans = FONT_DIR .. "AlegreyaSans.ttf",
+}
 S.ORNAMENT = "Interface\\AddOns\\Bastians_Core\\Media\\Ornament"
+-- Bastian's crest, a shovel on a coin (, D6: the book's logo;
+-- tools/make_media.py): white to tint, and in colour on the table's dark for the game
+-- frame's round portrait. New files: a full restart.
+S.CREST = "Interface\\AddOns\\Bastians_Core\\Media\\Crest"
+S.CREST_PORTRAIT = "Interface\\AddOns\\Bastians_Core\\Media\\CrestPortrait"
 S.GLOW = "Interface\\AddOns\\Bastians_Core\\Media\\Glow" -- a soft disc behind the plate (ADR 0038)
 -- a tileable parchment of our own (tools/make_media.py): the game's insets on a light scheme
 S.PARCHMENT = "Interface\\AddOns\\Bastians_Core\\Media\\Parchment"
@@ -850,8 +902,15 @@ function S.applyHeading(fs)
   if not h then
     return
   end
-  local font = S.FontOf(fs, "heading") -- the window's (V17), else the suite's
-  fs:SetFont(font, S.size(font ~= S.FontOf(fs, "text") and h.bigSize or h.size), "")
+  if S.roles[fs] then
+    -- a heading given a role of its own (S.SetRole: the book's name in its display face) keeps
+    -- that face and the size set for it. Until 17.11.2026 a font or look change drew it again
+    -- as a plain heading: the book's name stood in Morpheus at 17 for its 18 (Forever, R4.14)
+    S.refont(fs)
+  else
+    local font = S.FontOf(fs, "heading") -- the window's (V17), else the suite's
+    fs:SetFont(font, S.size(font ~= S.FontOf(fs, "text") and h.bigSize or h.size), "")
+  end
   S.ink(fs, h.color)
 end
 
@@ -1378,6 +1437,21 @@ local function newShape(frame, color, radius, layer, corners, outline)
   shape:Layout()
   S.tint(shape, color)
   return shape
+end
+
+-- A texture's colour running from `foot` to `top`, two tokens (the book's bar, book-look.md
+-- section 3). Texture:SetGradient with CreateColor: verified on Forever 17.11.2026, build
+-- 1.60.1.70938 (/bprobe booktech, forever-api.md).
+function S.gradient(tex, foot, top)
+  local color = _G.CreateColor -- the game's own Lua (its colour objects), not in the API list
+  if not (color and tex.SetGradient) then
+    return S.tint(tex, foot) -- a client without it: the foot's colour, flat
+  end
+  tex:SetGradient(
+    "VERTICAL",
+    color(foot[1], foot[2], foot[3], foot[4] or 1),
+    color(top[1], top[2], top[3], top[4] or 1)
+  )
 end
 
 -- A rounded fill of the frame in a token colour.

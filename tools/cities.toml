@@ -1,0 +1,125 @@
+# The City & dungeon map's places (docs/addons/map.md "City plans", ADR 0065): one [[place]] per
+# sheet. tools/city_sheet.py builds every place from this list, so the manifest never loses one.
+#
+# ui         the place's UiMap
+# name       the client's name of that UiMap (the window shows the zone's own, in the player's language)
+# continent  the Map.db2 id the place lies on
+# wx, wy     UiMapAssignment's Region of the place, world yards (wx south to north, wy east to west);
+#            the tool holds them against the newest dump in .local/out and refuses another Region
+# look       "painted": a finished sheet <sheets>/<ui>.png (the painting with the real ways, roofs,
+#            walls, water and trees; map.md "The look on the sheet")
+#            "painting": the game's own painting, cleaned and enlarged, <paintings>/<ui>_x4.png
+#            (tools/map_blizzard.py, ADR 0036); the first step for a place whose look is not built
+# seed       optional: a walked point of the place, world wx, wy, wz (its flight master in
+#            TaxiNodes). tools/city_fit.py keeps only the ground one reaches from there
+# [place.painted]  what tools/city_look.py needs to build the painted sheet; its keys are listed in
+#            map.md "The `[place.painted]` table". A place may have the table while its look is
+#            still "painting": then a candidate can be built, and nothing ships
+#
+# Regions measured 17.11.2026, Forever 1.60.1.70938 (f70938_UiMapAssignment.json, one assignment
+# per place, UiMin 0,0 and UiMax 1,1); Stormwind's as measured 08.11.2026 on 70862.
+
+[[place]]
+ui = 1453
+name = "Stormwind City"
+continent = 0
+wx = [-9154.17, -7995.83]
+wy = [-14.584, 1722.92]
+look = "painted"
+seed = [-8832.77, 478.623, 109.616]
+
+[place.painted]
+wmo = 21138
+area_wx = [-9093.75, -8015.625]
+area_wy = [308.3333, 1422.9167]
+streets = [
+  "Cathedral Square", "Dwarven District", "Mage Quarter", "Old Town", "The Canals", "The Park",
+  "Trade District", "Valley of Heroes", "Stormwind City", "Cut-Throat Alley",
+]
+districts = [
+  "Cathedral Square", "Dwarven District", "Mage Quarter", "Old Town", "The Canals", "The Park",
+  "Trade District", "Cut-Throat Alley",
+]
+banner = [1750, 0, 4008, 560]
+water_fade = [["left", 692, 260], ["top", 60, 140], ["bottom", 2530, 140]]
+green_fade = [["bottom", 2520, 170], ["right", 3240, 170], ["top", 60, 150], ["left", 700, 100]]
+district = [
+  { name = "Trade", at = [2480, 1800], roof = [0.30, 0.40, 0.52] },
+  { name = "Old", at = [3050, 1620], roof = [0.60, 0.31, 0.19] },
+  { name = "Cathedral", at = [2110, 1370], roof = [0.62, 0.46, 0.24] },
+  { name = "Dwarven", at = [2470, 950], roof = [0.42, 0.30, 0.25] },
+  { name = "Keep", at = [3400, 1130], roof = [0.25, 0.33, 0.50] },
+  { name = "Mage", at = [1800, 2230], roof = [0.44, 0.33, 0.45] },
+  { name = "Park", at = [1400, 1650], roof = [0.40, 0.46, 0.27] },
+  { name = "Valley", at = [2900, 2360], roof = [0.36, 0.42, 0.48] },
+  { name = "Harbor", at = [900, 950], roof = [0.55, 0.34, 0.22] },
+]
+
+[[place]]
+ui = 1454
+name = "Orgrimmar"
+continent = 1
+wx = [1338.4606, 2273.8772]
+wy = [-5083.2056, -3680.601]
+look = "painted"
+seed = [1677.59, -4315.71, 61.17]
+
+[place.painted]
+wmo = 21142
+kind = "canyon"
+rooms = "indoor"
+plants = "inside"
+ways = [0.92, 0.80, 0.58]
+stone = [0.62, 0.45, 0.33]
+caves = ["Cleft of Shadow"]
+streets = [
+  "Orgrimmar", "Valley of Strength", "The Drag", "Valley of Honor", "Valley of Wisdom",
+  "Cleft of Shadow", "Valley of Spirits",
+]
+banner = [[893, 547, 2413, 827], [2827, 1640, 3707, 2467]]
+keep = [[1195, 540, 2115, 762]]
+water_fade = [["left", 60, 150], ["top", 60, 150], ["right", 3948, 150], ["bottom", 2612, 150]]
+green_fade = [["left", 60, 150], ["top", 60, 150], ["right", 3948, 150], ["bottom", 2612, 150]]
+district = [
+  { name = "Strength", at = [1920, 1840], roof = [0.74, 0.40, 0.16] },
+  { name = "Drag", at = [2267, 1253], roof = [0.52, 0.17, 0.14] },
+  { name = "Wisdom", at = [1493, 1040], roof = [0.80, 0.27, 0.12] },
+  { name = "Honor", at = [2907, 773], roof = [0.66, 0.50, 0.20] },
+  { name = "Spirits", at = [1067, 1600], roof = [0.70, 0.42, 0.20] },
+  { name = "Cleft", at = [1840, 1333], roof = [0.45, 0.30, 0.42] },
+]
+
+[[place]]
+ui = 1455
+name = "Ironforge"
+continent = 0
+wx = [-5096.8457, -4569.241]
+wy = [-1504.2164, -713.5914]
+look = "painting"
+seed = [-4821.78, -1155.44, 502.21]
+
+[[place]]
+ui = 1456
+name = "Thunder Bluff"
+continent = 1
+wx = [-1545.8333, -849.99994]
+wy = [-527.0833, 516.6666]
+look = "painting"
+seed = [-1197.21, 29.71, 176.95]
+
+[[place]]
+ui = 1457
+name = "Darnassus"
+continent = 1
+wx = [9532.587, 10238.316]
+wy = [1880.0295, 2938.3628]
+look = "painting"
+
+[[place]]
+ui = 1458
+name = "Undercity"
+continent = 0
+wx = [1237.8412, 1877.9453]
+wy = [-86.1824, 873.1926]
+look = "painting"
+seed = [1568.62, 267.97, -43.1]

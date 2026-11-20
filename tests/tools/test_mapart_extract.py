@@ -48,7 +48,7 @@ def test_plan_runs_every_continent_once_and_skips_what_exists(tmp_path):
 def test_commands_name_the_map_its_wdt_and_the_resolution(tmp_path):
     job = mapart_extract.Job(0, "Eastern Kingdoms", "Azeroth", 775971, tmp_path, tmp_path, None)
     minimap, overview = mapart_extract.commands(
-        job, Path("C:/wow/_retail_"), tmp_path / "mm", tmp_path / "ov", 8, 32
+        job, Path("C:/wow/_forever_"), tmp_path / "mm", tmp_path / "ov", 8, 32
     )
     assert minimap[8] == "minimap" and overview[8] == "overview"
     assert "--wdt-fdid" in minimap and minimap[minimap.index("--wdt-fdid") + 1] == "775971"
@@ -56,12 +56,12 @@ def test_commands_name_the_map_its_wdt_and_the_resolution(tmp_path):
     assert overview[overview.index("--span") + 1] == "8"
     assert overview[overview.index("--alpha") + 1] == "dxt1"
     dxt5 = mapart_extract.commands(
-        job, Path("C:/wow/_retail_"), tmp_path / "mm", tmp_path / "ov", 8, 32, "dxt5"
+        job, Path("C:/wow/_forever_"), tmp_path / "mm", tmp_path / "ov", 8, 32, "dxt5"
     )[1]
     assert dxt5[dxt5.index("--alpha") + 1] == "dxt5"
     assert "--sea" not in dxt5  # transparent water without a sea tone
     sea = mapart_extract.commands(
-        job, Path("C:/wow/_retail_"), tmp_path / "mm", tmp_path / "ov", 8, 32, "dxt1", "b8a380"
+        job, Path("C:/wow/_forever_"), tmp_path / "mm", tmp_path / "ov", 8, 32, "dxt1", "b8a380"
     )[1]
     assert sea[sea.index("--sea") + 1] == "b8a380"  # the painted sea
     assert "--no-build" in minimap
@@ -80,11 +80,9 @@ def test_dry_run_prints_the_commands_without_a_client(tmp_path, monkeypatch, cap
         src = MAPS_JSON.with_name(f"{name}.json")
         (dumps / f"x_{name}.json").write_bytes(src.read_bytes())
     monkeypatch.setattr(mapart_extract, "DUMPS", dumps)
-    code = mapart_extract.main(
-        ["--client", "retail", "--prefix", "x", "--dry-run", "--out", str(tmp_path / "mm")]
-    )
-    out = capsys.readouterr()
-    assert code == 2 and "no client folder for retail" in out.err
+    with pytest.raises(SystemExit):  # no client of ours since 15.11.2026 (ADR 0037)
+        mapart_extract.main(["--client", "retail", "--prefix", "x", "--dry-run"])
+    capsys.readouterr()
     code = mapart_extract.main(
         ["--client", "forever", "--prefix", "x", "--dry-run", "--out", str(tmp_path / "mm")]
     )
@@ -95,7 +93,7 @@ def test_dry_run_prints_the_commands_without_a_client(tmp_path, monkeypatch, cap
     assert "next: python -m bastians_build mapart --client forever" in out
 
 
-@pytest.mark.parametrize("client", ["forever", "retail"])
+@pytest.mark.parametrize("client", ["forever"])
 def test_resolution_follows_the_client(client):
     from bastians_build.config import load_config
 
