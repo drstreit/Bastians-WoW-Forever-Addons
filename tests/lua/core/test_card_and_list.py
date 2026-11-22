@@ -81,25 +81,21 @@ def test_a_card_has_its_plate_edge_and_stripe_in_modern(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_the_card_in_wow_glass_and_parchment(wow: WowRuntime):
+def test_the_card_in_every_theme(wow: WowRuntime):
+    """One look (ADR 0084): a card's plate and edge are the theme's tokens in every theme, the
+    fresh one's edge in `cardHot`. ~~WoW's gilt edge, Glass's plate and sheen, Parchment's sepia
+    edge~~ (until 20.11.2026)."""
     boot(wow)
     wow.execute(f"CardTest = {{ c = {S}.card(UIParent, {{ stripe = 'tier1' }}) }}")
     c = "CardTest.c"
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'wow')") is True
-    assert wow.eval(f"{PAINTED}[{c}.edges][1] == {S}.Palette('blizzard').C.gold")
-    assert painted(wow, f"{c}.edges")[2] == 0.5
-    wow.execute(f"{c}:SetCard({{ stripe = 'tier1', hot = true }})")
-    assert is_token(wow, f"{c}.edges", "cardHot") and painted(wow, f"{c}.edges")[2] == 1
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'glass')") is True
-    assert painted(wow, f"{c}.face")[2] == 0.72 and wow.eval(f"{c}.sheen:IsShown()") is True
-    assert is_token(wow, f"{c}.edges", "cardHot")  # the rim in the fresh colour
-    wow.execute(f"{c}:SetCard({{ stripe = 'tier1' }})")
-    assert painted(wow, f"{c}.edges")[2] == 0  # no edge in glass
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'parchment')") is True
-    assert is_token(wow, f"{c}.edges", "muted") and painted(wow, f"{c}.edges")[2] == 0.5
-    assert wow.eval(f"{c}.sheen:IsShown()") is False
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-dark')") is True
-    assert is_token(wow, f"{c}.edges", "cardEdge")
+    for theme in ("folio", "parchment", "teal"):
+        wow.execute(f"{S}.ApplyTheme('{theme}'); {S}.ApplyLook()")
+        wow.execute(f"{c}:SetCard({{ stripe = 'tier1' }})")
+        assert is_token(wow, f"{c}.face", "card") and painted(wow, f"{c}.face")[2] == 1, theme
+        assert is_token(wow, f"{c}.edges", "cardEdge") and painted(wow, f"{c}.edges")[2] == 1, theme
+        wow.execute(f"{c}:SetCard({{ stripe = 'tier1', hot = true }})")
+        assert is_token(wow, f"{c}.edges", "cardHot"), theme
+        assert wow.eval(f"{c}.sheen") is None, theme  # no glass any more
     assert wow.errors == []
 
 

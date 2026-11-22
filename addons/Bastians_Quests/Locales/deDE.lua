@@ -100,6 +100,10 @@ ns.L:Register("deDE", {
   ["one of"] = "eine von",
   ["while in the log"] = "solange sie im Questlog ist",
   ["excludes"] = "schließt aus",
+  -- breadcrumbs (Everything Quests 2.16.0, 21.11.2026)
+  ["Turn in %s first"] = "Erst %s abgeben",
+  ["breadcrumb"] = "hinführende Quest",
+  ["Breadcrumb"] = "Hinführung",
   ["from"] = "von",
   ["Item"] = "Gegenstand",
   ["Faction"] = "Fraktion",

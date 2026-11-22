@@ -32,10 +32,14 @@ function Helpers.RecordMe(_, _, level)
   local characters, key = Helpers.Global().characters, Helpers.Key()
   local zone = B.Compat.Plain(GetZoneText())
   local before = characters[key]
+  local name = UnitName("player")
+  if name and key ~= name .. "-" then
+    characters[name .. "-"] = nil -- a session without a realm wrote this one (Helpers.Key)
+  end
   characters[key] = {
-    name = (UnitName("player")),
+    name = name,
     full = B.Compat.FullName("player"), -- what a mail needs (Forever: with the surname)
-    realm = GetRealmName(),
+    realm = Helpers.Realm() or (before and before.realm) or nil,
     faction = facts.faction,
     class = facts.class,
     className = B.Compat.Plain(facts.className),

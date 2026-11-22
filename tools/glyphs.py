@@ -399,6 +399,23 @@ def _flight() -> Shape:  # a winged boot, as Blizzard draws the flight master (o
     return union(cut(wing, boot, gap=2.5), boot)
 
 
+def _ship() -> Shape:  # a boat's stop: a hull with a mast and two sails
+    hull = polygon([(6, 40), (58, 40), (49, 55), (15, 55)])
+    mast = capsule(32, 7, 32, 40, 1.8)
+    sails = union(
+        polygon([(35.5, 9), (35.5, 35), (55, 35)]), polygon([(28.5, 14), (28.5, 35), (12, 35)])
+    )
+    return union(hull, mast, cut(sails, mast, gap=1.5))
+
+
+def _zeppelin() -> Shape:  # a zeppelin's stop: the envelope with its fins and the gondola below
+    envelope = ellipse(28, 24, 22, 12)
+    fins = union(polygon([(44, 22), (59, 11), (59, 23)]), polygon([(44, 26), (59, 37), (59, 25)]))
+    gondola = box(19, 42, 37, 51, 2.5)
+    struts = union(capsule(22, 34, 22, 43, 1.4), capsule(34, 34, 34, 43, 1.4))
+    return union(envelope, cut(fins, envelope, gap=1.5), cut(struts, envelope), gondola)
+
+
 def _banker() -> Shape:  # a bank: roof, columns, base
     roof = polygon([(6, 24), (32, 8), (58, 24)])
     base = box(6, 50, 58, 57, 1.5)
@@ -1055,6 +1072,8 @@ GLYPHS: dict[str, tuple[Callable[[], Shape], str]] = {
     "service": (_service, "other service, gossip"),
     "innkeeper": (_innkeeper, "innkeeper"),
     "flight": (_flight, "flight master"),
+    "ship": (_ship, "a boat's stop (map.md map.travel, 22.11.2026)"),
+    "zeppelin": (_zeppelin, "a zeppelin's stop"),
     "banker": (_banker, "banker"),
     "auctioneer": (_auctioneer, "auctioneer"),
     "repair": (_repair, "repair, smith"),
@@ -1189,6 +1208,8 @@ TILE_COLOR: dict[str, tuple[float, float, float]] = {
     "waypoint": _BLUE,
     "spot": _BLUE,
     "flight": _BLUE,
+    "ship": _BLUE,
+    "zeppelin": _BLUE,
     **{k: _TEAL for k in ("trainer", "vendor", "service", "innkeeper", "repair")},
     "banker": _GOLD,
     "auctioneer": _GOLD,

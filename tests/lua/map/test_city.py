@@ -249,8 +249,19 @@ def test_the_player_is_marked_above_the_pins(wow: WowRuntime):
     point = wow.eval(f"{{ {you}:GetPoint(1) }}")
     assert point[4] == pytest.approx(sx) and point[5] == pytest.approx(-sy)
     # a city's pins must not cover it
-    assert wow.eval(f"{you}:GetFrameLevel()") > wow.eval(f"{CITY}.clip:GetFrameLevel()") + 5
+    clip = wow.eval(f"{CITY}.clip:GetFrameLevel()")
+    pin = wow.eval(f"{CITY}.pool[1]:GetFrameLevel()")
+    assert pin == clip + 5
+    assert wow.eval(f"{you}:GetFrameLevel()") > pin  # the arrow above the pins
+    # nor its disc the pin the player stands on (Daryl Riknussun
+    # "missing" while the player stood at him): the disc lies under the pins, shown with the arrow
+    assert wow.eval(f"{you}.disc:GetFrameLevel()") < pin
+    assert wow.eval(f"{you}.disc:IsShown()") is True
+    assert wow.eval(f"{you}.rim:GetParent() == {you}.disc") is True
     assert wow.eval(f"{you}:IsMouseEnabled()") is not True  # a click goes through to the sheet
+    assert wow.eval(f"{you}.disc:IsMouseEnabled()") is not True
+    wow.execute(f"{you}:Hide()")
+    assert wow.eval(f"{you}.disc:IsShown()") is False
     assert wow.errors == []
 
 

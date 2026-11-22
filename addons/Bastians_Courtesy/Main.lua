@@ -29,6 +29,26 @@ local OPTIONS = {
     },
   },
   { type = "toggle", key = "courtesyInstances", label = L["Also in dungeons and battlegrounds"] },
+  {
+    type = "range",
+    key = "callSeconds",
+    label = L["How long a moment waits for your answer (seconds)"],
+    min = 15,
+    max = 300,
+    step = 15,
+  },
+  {
+    type = "toggle",
+    key = "symbol",
+    label = L["Show the symbol"],
+    desc = L["A small disc that stays; point at it for a few kind words at any time. A moment shows it anyway."], -- luacheck: ignore 631 (a locale key stays one literal)
+  },
+  {
+    type = "select",
+    key = "language",
+    label = L["The language of the lines"],
+    values = { enUS = "English", deDE = "Deutsch" },
+  },
   { type = "header", label = L["The moods it may speak in"] },
 }
 for _, mood in ipairs(MOODS) do
@@ -59,7 +79,20 @@ OPTIONS[#OPTIONS + 1] = {
   end,
 }
 
-local defaults = { courtesy = "ask", courtesyInstances = false, myLines = true }
+-- The lines' language (ADR 0088): German on a German client, else English, until the player picks.
+function Main.DefaultLanguage()
+  local locale = type(GetLocale) == "function" and GetLocale() or nil
+  return locale == "deDE" and "deDE" or "enUS"
+end
+
+local defaults = {
+  courtesy = "ask",
+  courtesyInstances = false,
+  myLines = true,
+  language = Main.DefaultLanguage(),
+  symbol = true,
+  callSeconds = ns.Medallion.CALL,
+}
 for _, mood in ipairs(MOODS) do
   defaults["mood_" .. mood[1]] = true
 end
@@ -131,6 +164,22 @@ local mod = B:NewModule("Courtesy", {
       handedOver = true
       B:AddCourtesyLines(self.db.profile.keptLines)
     end
+    ns.Voice.language = ns.Voice.PACKS[self.db.profile.language] and self.db.profile.language or "enUS"
+    self:On("BASTIANS_SETTING_CHANGED", function(_, _, name, key, value)
+      if name == self.name and key == "language" and ns.Voice.PACKS[value] then
+        ns.Voice.language = value
+      elseif name == self.name and key == "symbol" then
+        ns.Medallion.Refresh()
+      end
+    end)
+    self:On("BASTIANS_SUITE_HIDDEN", function(_, _, hidden)
+      -- the clear-screen key, only while the page "Hidden by the key" ticks Courtesy
+      local Screen = B.UI.Screen
+      if hidden and Screen and Screen.Hides and not Screen.Hides("Courtesy") then
+        return
+      end
+      ns.Medallion.HideByKey(hidden == true)
+    end)
     ns.Mine.Attach(self) -- the player's lines, and Bastians_MyLines' handed over once
     ns.Courtesy.Attach(self)
     -- the `courtesy` service (V23): Bastian's Chat's answer plates for thanks, gz and hi

@@ -152,6 +152,35 @@ def test_a_click_on_a_quest_opens_its_sheet_and_the_next_closes_it(wow: WowRunti
     assert wow.errors == []
 
 
+def test_the_sheets_buttons_wear_the_papers_ink_in_a_dark_theme(wow: WowRuntime):
+    """ "the buttons are hard to read - white on pergament". The sheet's
+    own window is paper in every theme, so its buttons take the paper's palette, as the Browser's
+    page on parchment does: dark words, a brown outline, no shadow."""
+    boot(wow)
+    assert wow.eval("Bastians.UI.Style.themeId") != "parchment"  # the default theme is dark
+    wow.execute(f"{SHEET}.Open(176)")
+    wow.execute(
+        f"""
+        local S = Bastians.UI.Style
+        local want = S.Palette("parchment").C.text
+        Inks = {{}}
+        for key, b in pairs({SHEET}.Canvas(BastiansQuestSheet).buttons) do
+          if b:IsShown() then
+            local r, g, bl = b.label:GetTextColor()
+            local sx = b.label:GetShadowOffset()
+            Inks[#Inks + 1] = {{ key, math.abs(r - want[1]) + math.abs(g - want[2])
+              + math.abs(bl - want[3]) < 0.01, sx == 0 }}
+          end
+        end
+        """
+    )
+    inks = [list(i.values()) for i in wow.eval("Inks").values()]
+    assert inks, "the sheet shows buttons"
+    assert all(ok and flat for _, ok, flat in inks), inks
+    assert wow.eval("Bastians.UI.Style.PaletteOf(BastiansQuestSheet).id") == "parchment"
+    assert wow.errors == []
+
+
 def test_the_sheet_shows_the_giver_and_the_target_as_figures(wow: WowRuntime):
     boot(wow)
     who = f"{SHEET}.TargetOf"

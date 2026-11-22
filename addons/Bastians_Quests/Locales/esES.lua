@@ -99,6 +99,10 @@ local strings = {
   ["one of"] = "una de",
   ["while in the log"] = "mientras esté en el registro",
   ["excludes"] = "excluye",
+  -- breadcrumbs (Everything Quests 2.16.0, 21.11.2026)
+  ["Turn in %s first"] = "Entrega primero %s",
+  ["breadcrumb"] = "misión introductoria",
+  ["Breadcrumb"] = "Introducción",
   ["from"] = "de",
   ["Item"] = "Objeto",
   ["Faction"] = "Facción",

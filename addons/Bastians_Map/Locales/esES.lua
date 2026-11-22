@@ -278,6 +278,11 @@ local strings = {
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "No pude leer ese tiempo. Prueba 5m, 1:30, 90s o 2h.",
   -- the route's arrow at the minimap's rim (15.11.2026)
   ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Durante una ruta, una flecha en el borde del minimapa apunta directamente al final del tramo",
+  -- a transport's stops on the map (map.md map.travel, 22.11.2026)
+  ["Boat to %s"] = "Barco a %s",
+  ["Zeppelin to %s"] = "Zepelín a %s",
+  ["Tram to %s"] = "Tranvía a %s",
+  ["Portal to %s"] = "Portal a %s",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

@@ -354,47 +354,16 @@ end
 -- that does not go away").
 -- ---------------------------------------------------------------------------------------------
 
--- Core's textures (tools/make_media.py), each path whole so the texture check can find its file
-Front.SHADOW = "Interface\\AddOns\\Bastians_Core\\Media\\FolioShadow"
-Front.DECKLE = "Interface\\AddOns\\Bastians_Core\\Media\\Deckle"
-Front.FADE = "Interface\\AddOns\\Bastians_Core\\Media\\Fade"
+-- The look's paper parts are Core's kit since W4 (ADR 0084 decision 8: S.shadow, S.deckle,
+-- S.fade); ~~the book drew Core's textures itself~~ (until 20.11.2026, a crossing of ADR 0082).
 Front.SHADOW_SPREAD = 12 -- px the shadow reaches beyond a card
 Front.SHADOW_DROP = 4 -- px it falls lower than the card
 Front.DECKLE_H = 12 -- the torn edge at a picture's foot
 Front.CHIP_H = 18 -- a chip on a card
 
--- The shadow: eight pieces of the soft square around the card (its quarters the corners, its
--- middle row and column the sides), under the card's paper.
+-- The shadow under the card's paper (book-look.md section 6).
 local function shadow(t)
-  local s, drop = Front.SHADOW_SPREAD, Front.SHADOW_DROP
-  local c = 2 * s
-  local function piece(l, r, top, bottom)
-    local tex = t:CreateTexture(nil, "BACKGROUND", nil, -8)
-    tex:SetTexture(Front.SHADOW)
-    tex:SetTexCoord(l, r, top, bottom)
-    S.tint(tex, S.C.folioShadow)
-    return tex
-  end
-  local tl, tr = piece(0, 0.5, 0, 0.5), piece(0.5, 1, 0, 0.5)
-  local bl, br = piece(0, 0.5, 0.5, 1), piece(0.5, 1, 0.5, 1)
-  for _, corner in ipairs({ tl, tr, bl, br }) do
-    corner:SetSize(c, c)
-  end
-  tl:SetPoint("TOPLEFT", t, "TOPLEFT", -s, s - drop)
-  tr:SetPoint("TOPRIGHT", t, "TOPRIGHT", s, s - drop)
-  bl:SetPoint("BOTTOMLEFT", t, "BOTTOMLEFT", -s, -s - drop)
-  br:SetPoint("BOTTOMRIGHT", t, "BOTTOMRIGHT", s, -s - drop)
-  local top, bottom = piece(0.49, 0.51, 0, 0.5), piece(0.49, 0.51, 0.5, 1)
-  local left, right = piece(0, 0.5, 0.49, 0.51), piece(0.5, 1, 0.49, 0.51)
-  top:SetPoint("TOPLEFT", tl, "TOPRIGHT")
-  top:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
-  bottom:SetPoint("TOPLEFT", bl, "TOPRIGHT")
-  bottom:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT")
-  left:SetPoint("TOPLEFT", tl, "BOTTOMLEFT")
-  left:SetPoint("BOTTOMRIGHT", bl, "TOPRIGHT")
-  right:SetPoint("TOPLEFT", tr, "BOTTOMLEFT")
-  right:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT")
-  t.shadow = { tl, tr, bl, br, top, bottom, left, right }
+  S.shadow(t, Front.SHADOW_SPREAD, Front.SHADOW_DROP)
 end
 
 -- A card's paper; under the mouse its edge in the book's gold. Drawn plain again on every fill:
@@ -471,13 +440,8 @@ local function newTile(parent)
   t.pic = Picture.New(t)
   t.pic:SetPoint("TOPLEFT", t, "TOPLEFT", 0, 0)
   -- the torn foot of the picture, in the paper's colour, over the picture and its model
-  t.tear = CreateFrame("Frame", nil, t)
-  t.tear:SetFrameLevel(t:GetFrameLevel() + 8)
+  t.tear = S.deckle(t, 8, "folioPaper")
   t.tear:SetHeight(Front.DECKLE_H)
-  t.tear.tex = t.tear:CreateTexture(nil, "ARTWORK")
-  t.tear.tex:SetTexture(Front.DECKLE)
-  t.tear.tex:SetAllPoints(t.tear)
-  S.tint(t.tear.tex, S.C.folioPaper)
   t.ribbon = CreateFrame("Frame", nil, t)
   t.ribbon:SetFrameLevel(t:GetFrameLevel() + 9)
   t.ribbon.fill = S.fill(t.ribbon, S.C.folioSeal, "BACKGROUND")
@@ -732,14 +696,9 @@ KINDS.hero = {
     local f = paperFrame(parent)
     f.pic = Picture.New(f)
     f.pic:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
-    f.shade = CreateFrame("Frame", nil, f)
-    f.shade:SetFrameLevel(f:GetFrameLevel() + 7)
+    f.shade = S.fade(f, 7, "folioShade")
     f.shade:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
     f.shade:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
-    f.shade.tex = f.shade:CreateTexture(nil, "ARTWORK")
-    f.shade.tex:SetTexture(Front.FADE)
-    f.shade.tex:SetAllPoints(f.shade)
-    S.tint(f.shade.tex, S.C.folioShade)
     f.cap = CreateFrame("Frame", nil, f)
     f.cap:SetFrameLevel(f:GetFrameLevel() + 8)
     f.hook = bookText(f.cap, 13, S.C.folioShadeText, "bookItalic", true)
@@ -845,10 +804,11 @@ local function chipHeight()
 end
 
 -- The book's ground (book-look.md section 3; "background color in wow schema
--- should be same as artifact", D2 "WoW look only"): the dark table where the look is the game's,
--- the theme's own elsewhere. The band's and the shelf's widgets ask the palette set here (S.Tok).
+-- should be same as artifact", D2): the dark table on a dark theme, the theme's own on a light one
+-- (~~where the look is the game's~~ until 20.11.2026, ADR 0084). The band's and the shelf's widgets
+-- ask the palette set here (S.Tok).
 local function ground(shelf)
-  local dark = S.LookOf(view) == "wow"
+  local dark = S.DarkTable(view)
   local own = dark and S.FolioPalette() or nil
   view.filters.palette, view.body.palette = own, own
   S.tint(view.band, dark and S.C.folioBand or S.C.panel)
@@ -1092,16 +1052,13 @@ local function newSlider(parent)
   return s
 end
 
--- Hide done as a switch (the concept board's): the bar filled while done wonders are hidden.
+-- Hide done as a switch (the concept board's): Core's switch (the book's own until W4, ADR 0084:
+-- it moved into the kit) with its words beside it; the whole row is the button.
 local function newSwitch(parent)
   local b = CreateFrame("Button", nil, parent)
-  b.bar = CreateFrame("Frame", nil, b)
-  b.bar:SetSize(28, 15)
+  b.bar = S.toggle(b, {})
   b.bar:SetPoint("LEFT", b, "LEFT", 0, 0)
-  b.bar.face = S.roundFill(b.bar, S.C.accent, "pill", "ARTWORK")
-  b.knob = CreateFrame("Frame", nil, b.bar)
-  b.knob:SetSize(11, 11)
-  b.knob.face = S.roundFill(b.knob, S.C.bg, "pill", "OVERLAY")
+  b.bar:EnableMouse(false) -- the row's click, not the switch's own
   b.words = bookText(b, 11, S.C.text, "bookSans")
   b.words:SetPoint("LEFT", b.bar, "RIGHT", 6, 0)
   b:SetScript("OnEnter", S.TipEnter)
@@ -1109,14 +1066,11 @@ local function newSwitch(parent)
   -- -> its width
   function b.Set(self, on, text)
     self.on = on and true or false
-    S.tint(self.bar.face, S.Tok(self, on and "accent" or "muted"))
-    S.tint(self.knob.face, S.Tok(self, "bg"))
-    self.knob:ClearAllPoints()
-    self.knob:SetPoint(on and "RIGHT" or "LEFT", self.bar, on and "RIGHT" or "LEFT", on and -2 or 2, 0)
+    self.bar:SetOn(self.on)
     S.ink(self.words, S.Tok(self, "text"))
     self.words:SetText(text)
     local w = self.words:GetStringWidth()
-    self:SetSize(28 + 6 + ((w and w > 0) and w or (#text * 6)), chipHeight())
+    self:SetSize(S.SWITCH_W + 6 + ((w and w > 0) and w or (#text * 6)), chipHeight())
     return self:GetWidth()
   end
   return b
@@ -1305,7 +1259,7 @@ local function layFilters(chapter, all, ctx, width, hidden)
     })
   end
   -- what nobody reported in Forever yet (E2): one chip on the level's row, off by default, with
-  -- the count it would add (the board's shelf; its dashed outline comes with the kit, W4)
+  -- the count it would add (the board's shelf), in the kit's dashed outline while off (W4)
   local unconfirmed = Shelf.UnconfirmedCount(all, f, ctx)
   if unconfirmed > 0 or f.unconfirmed then
     if fits(state, 120) then
@@ -1315,6 +1269,7 @@ local function layFilters(chapter, all, ctx, width, hidden)
       label = L["unconfirmed"],
       count = unconfirmed,
       on = f.unconfirmed or nil,
+      dashed = not f.unconfirmed or nil,
       tip = L["In the game's files, and nobody has reported it in Forever yet. It may not be there."],
       onClick = function()
         f.unconfirmed = not f.unconfirmed or nil

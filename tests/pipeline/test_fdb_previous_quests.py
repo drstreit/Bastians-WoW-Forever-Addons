@@ -59,3 +59,10 @@ def test_it_never_locks_a_quest_for_good():
 def test_an_unknown_mask_says_nothing():
     q = merged({1: {"races": 77}, 2: {}}, row(1, 2))
     assert q[1]["pre"] == [2]
+
+
+def test_a_breadcrumb_never_joins_pre():
+    """A player may skip a breadcrumb (Everything Quests' `leads`): needing it would lock the quest
+    for whoever walked in without it."""
+    q = merged({1: {}, 2: {"leads": [1]}}, row(1, 2))
+    assert q[1].get("pre") is None

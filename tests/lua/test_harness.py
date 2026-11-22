@@ -149,7 +149,9 @@ def test_saved_variables_round_trip_through_reload(wow: WowRuntime):
     assert fresh.eval("BastiansCoreCharDB.seen") is True
     fresh.fire("PLAYER_LOGOUT")
     text = fresh.saved_variables("Bastians_Core")
-    assert '["__schema"] = 3' in text  # the schema stamp (ADR 0038; 3 since ADR 0046)
+    assert (
+        '["__schema"] = 4' in text
+    )  # the schema stamp (ADR 0038; 3 since ADR 0046, 4 since ADR 0084)
     again = fresh.reload()
     again.fire("PLAYER_LOGOUT")
     assert again.saved_variables("Bastians_Core") == text  # deterministic

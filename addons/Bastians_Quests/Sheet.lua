@@ -264,6 +264,10 @@ local function build()
   frame:SetClampedToScreen(true)
   frame:SetToplevel(true)
   frame:Hide()
+  -- its widgets in the paper's palette, as the Browser's page on parchment (ADR 0054): dark words
+  -- in a brown outline, no shadow ("the buttons are hard to read -
+  -- white on pergament")
+  frame.palette = S.Palette("parchment")
   local paper = frame:CreateTexture(nil, "BACKGROUND")
   paper:SetTexture(S.PARCHMENT, "REPEAT", "REPEAT")
   paper:SetHorizTile(true)

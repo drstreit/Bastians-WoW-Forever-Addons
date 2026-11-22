@@ -5,6 +5,36 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.7.0:1",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = "One look for the whole suite: every window wears Bastian's Book's buttons, chips, tabs and switches, on the new Folio theme, in the game's frame; your saved look is carried over once.",
+  },
+  {
+    id = "2.7.0:2",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = "On the city map your marker no longer hides the pin you stand at.",
+  },
+  {
+    id = "2.7.0:3",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = "Quests knows breadcrumb quests: it says to turn the breadcrumb in first and drops a breadcrumb once you took its quest, and no longer offers quests you have outlevelled.",
+  },
+  {
+    id = "2.7.0:4",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = "The rings of Gestures and Courtesy take the book's look: dark seals with a gold edge, the chosen answer filled in gold.",
+  },
+  {
+    id = "2.7.0:5",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = 'Docks, zeppelin towers and portals on the maps show a ship or a zeppelin and say where they go, like "Boat to Auberdine".',
+  },
+  {
     id = "2.6.0:1",
     date = "2026-11-20",
     version = "2.6.0",
@@ -153,35 +183,5 @@ ns.NEWS = {
     date = "2026-11-09",
     version = "2.1.0",
     text = "The settings hub reads as a rail of apps with their one-line purpose and every option on a card.",
-  },
-  {
-    id = "2.1.0:8",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = 'Share the walks, flight times and ride waits your game learned through "Copy my captures" in the settings.',
-  },
-  {
-    id = "2.1.0:9",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "Dragging a window no longer jumps it over the top of the screen, and Dock works again after the docked Browser was closed by hand.",
-  },
-  {
-    id = "2.1.0:10",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "The people on a quest's sheet show their faces again.",
-  },
-  {
-    id = "2.1.0:11",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = 'A dungeon one level away now says "in 1 level".',
-  },
-  {
-    id = "2.1.0:12",
-    date = "2026-11-09",
-    version = "2.1.0",
-    text = "A page in the Browser has its own filter: type to narrow every list on it.",
   },
 }

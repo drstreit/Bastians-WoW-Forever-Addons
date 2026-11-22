@@ -128,6 +128,8 @@ local strings = {
   ["Click to move the Orbiter freely."] = "Haz clic para mover el Orbiter libremente.",
   ["Moves freely"] = "Se mueve libremente",
   ["Drag the Orbiter where you want it. Click to lock it in place."] = "Arrastra el Orbiter adonde quieras. Haz clic para bloquear su posición.",
+  -- a guard's many answers in pages (22.11.2026)
+  ["Page %d of %d: the other answers"] = "Página %d de %d: las demás respuestas",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

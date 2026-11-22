@@ -128,4 +128,6 @@ ns.L:Register("zhCN", {
   ["Click to move the Orbiter freely."] = "点击后可自由移动环行器。",
   ["Moves freely"] = "可自由移动",
   ["Drag the Orbiter where you want it. Click to lock it in place."] = "将环行器拖到想要的位置。点击可锁定位置。",
+  -- a guard's many answers in pages (22.11.2026)
+  ["Page %d of %d: the other answers"] = "第%d页，共%d页：其他回答",
 })

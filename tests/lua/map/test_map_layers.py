@@ -205,3 +205,50 @@ def test_a_trainer_pin_says_what_it_trains(wow: WowRuntime):
     # a subname without the word Trainer, and a vendor's, stand as they are
     labels = {ref: label for ref, label, _ in query(wow, "map.vendors", 5)}
     assert labels["npc:54"].endswith("(Weaponsmith)")
+
+
+def test_a_transport_stop_says_where_it_goes_in_its_kind_glyph(wow: WowRuntime):
+    """ "auf den Karten sind die Ankerplaetze der Schiffe mit Zielpunkt
+    nicht vermerkt". Each stop is a pin named by the other stops' places."""
+    boot(wow)
+    pins = wow.eval(f"Bastians:QueryLayer('map.travel', {WORLD % 5})")
+    tram = sorted(
+        (p.label, p.icon) for p in pins.values() if p.ref == "transport:tram-goldshire-stormwind"
+    )
+    route = wow.eval("Bastians.UI.IconTexture('route')")
+    assert tram == [("Tram to Goldshire", route), ("Tram to Stormwind", route)]
+    sizes = {p.size for p in pins.values() if p.ref == "transport:tram-goldshire-stormwind"}
+    assert sizes == {wow.eval(f"{MOD}.Layers.TRANSPORT_PIN")}  # larger than the others' 16
+    layers = f"{MOD}.Layers"
+    places = {
+        "Auberdine dock": "Auberdine",
+        "Menethil Harbor, north dock": "Menethil Harbor",
+        "Undercity zeppelin tower": "Undercity",
+        "Grom'gol Base Camp tower": "Grom'gol Base Camp",
+        "Valanaar Skydocks": "Valanaar",
+        "Rut'theran Village portal": "Rut'theran Village",
+        "Stormwind, Deeprun Tram": "Stormwind",
+        "Stormwind Harbor": "Stormwind Harbor",
+    }
+    for label, place in places.items():
+        said = wow.eval(f"{layers}.StopPlace([[{label}]])")
+        assert said == place, label
+    assert wow.eval(f"{layers}.StopPlace(nil)") is None
+    boat = (
+        "{ kind = 'boat', stops = { { 1453, 0.2, 0.5, 'Stormwind Harbor' },"
+        " { 1439, 0.3, 0.4, 'Auberdine dock' } }, world = { { 0, -8655, 1345 }, { 1, 6549, 942 } } }"
+    )
+    assert list(wow.eval(f"{{ {layers}.TransportLabel({boat}, 0, -8650, 1340) }}").values()) == [
+        "Boat to Auberdine",
+        "ship",
+    ]
+    assert list(wow.eval(f"{{ {layers}.TransportLabel({boat}, 1, 6549, 942) }}").values()) == [
+        "Boat to Stormwind Harbor",
+        "ship",
+    ]
+    # no stop on this continent, or no record: the entity's own name stands (golden rule 2)
+    assert wow.eval(f"{layers}.TransportLabel({boat}, 530, 0, 0)") == (None, "ship")
+    assert wow.eval(f"{layers}.TransportLabel(nil, 0, 0, 0)") == (None, None)
+    assert wow.eval("Bastians.UI.GLYPH_PATHS.ship") is not None
+    assert wow.eval("Bastians.UI.GLYPH_PATHS.zeppelin") is not None
+    assert wow.errors == []

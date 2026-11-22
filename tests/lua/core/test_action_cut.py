@@ -19,7 +19,7 @@ def boot(wow: WowRuntime) -> WowRuntime:
     return wow
 
 
-def test_a_fixed_width_button_cuts_its_label_in_every_look(wow: WowRuntime):
+def test_a_fixed_width_button_cuts_its_label_in_every_theme(wow: WowRuntime):
     boot(wow)
     wow.execute(
         f"""
@@ -30,8 +30,9 @@ def test_a_fixed_width_button_cuts_its_label_in_every_look(wow: WowRuntime):
         CutTest.told.tip = 'its own words'
         """
     )
-    for preset in ("modern-dark", "glass", "parchment", "wow"):
-        assert wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')") is True
+    # ~~in every look (modern-dark, glass, parchment, wow)~~ one look since 20.11.2026 (ADR 0084)
+    for preset in ("folio", "parchment", "teal"):
+        wow.execute(f"Bastians.UI.Style.ApplyTheme('{preset}'); Bastians.UI.Style.ApplyLook()")
         label = "CutTest.long.label"
         assert wow.eval(f"{label}:GetText()") == LONG, preset  # the client cuts it with "..."
         width = wow.eval(f"{label}:GetWidth()")

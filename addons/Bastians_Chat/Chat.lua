@@ -1488,10 +1488,11 @@ mod = B:NewModule("Chat", {
         },
         streams = { group = "none", guild = "none", market = "none", lfg = "none" },
       },
-      -- Chat's look (plan-chat-v3.md §9, V13): a preset of the suite's (WoW whatever the suite's;
-      -- "" follows the suite's), the fight's pop-ups (Glass), the rows' density, the cards' style
-      look = "modern-dark", -- the artifact's dark plate; WoW and the others to pick
-      toastLook = "glass",
+      -- Chat's look (plan-chat-v3.md §9, V13): a theme of the suite's ("" follows the suite's), the
+      -- fight's pop-ups, the rows' density, the cards' style. ~~A preset (modern-dark, glass)~~
+      -- until 20.11.2026: one look (ADR 0084), migration 2 maps a saved one to its theme
+      look = "folio", -- the artifact's dark plate
+      toastLook = "folio",
       -- the faces of the chat's windows (plan-chat-v3.md V17): the artifact's in Modern and Glass
       uiFont = "auto",
       labelFont = "auto",
@@ -1511,6 +1512,23 @@ mod = B:NewModule("Chat", {
     },
     char = { scrollback = {}, whispers = {}, history = {}, drafts = {} },
     global = { convos = {} },
+  },
+  -- 2 (ADR 0084, 20.11.2026): one look; the windows' presets become the themes they map to
+  migrations = {
+    [2] = function(db)
+      local sv = rawget(db, "sv")
+      local profiles = sv and sv.profiles or { db.profile }
+      local values = B.UI.Settings and B.UI.Settings.PresetValues
+      for _, p in pairs(profiles) do
+        for _, key in ipairs({ "look", "toastLook" }) do
+          local id = type(p) == "table" and rawget(p, key)
+          local v = type(id) == "string" and id ~= "" and values and values(id)
+          if v and v.theme then
+            p[key] = v.theme
+          end
+        end
+      end
+    end,
   },
   options = withParts({
     { type = "header", label = L["Chat"] },

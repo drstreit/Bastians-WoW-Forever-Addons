@@ -1,12 +1,12 @@
--- UI kit, the look engine (ADR 0046): a look is a table of draw functions, one per widget kind;
--- apps declare widgets (S.action, S.tile) and never draw them. Every widget keeps its declaration
--- (`frame.spec`) and registers in S.widgets, so a preset change redraws all of them at once
--- (S.ApplyLook, from S.ApplySkin). Four looks: `modern` (the dark and the light schemes), `wow`
--- (the game's red buttons with gold text, the tiles with a gilt edge), `parchment` (paper panels
--- with a sepia edge, square tiles, no gold text; plan-round4 H4) and `glass` (translucent plates
--- under every text, no edges, a light rim on hover, rounder corners). The sizes are the theme's
--- geometry tokens (S.G), the colours its colour tokens (S.C), never a number in an app; a look may
--- carry corner radii of its own (`shape`) and a cap on the window ground's opacity (`groundAlpha`).
+-- UI kit, the look engine (ADR 0046) in the one look (ADR 0084, W4 of plan-suite-waves.md): apps
+-- declare widgets (S.action, S.tile, ...) and never draw them; every widget keeps its declaration
+-- (`frame.spec`) and registers in S.widgets, so a theme change redraws all of them at once
+-- (S.ApplyLook, from S.ApplySkin). One renderer, the book's shape language (book-look.md): words
+-- in an outline, the primary as the one filled plate, round chips, the chosen one filled, tabs as
+-- words with the shown one filled, quiet pictograms, the book's switch and slider. A theme gives
+-- the colours (S.C), the geometry tokens the sizes (S.G); a theme never changes a shape.
+-- ~~Four looks: modern, wow, parchment, glass~~ (until 20.11.2026; a saved look is mapped once to
+-- a theme, Settings.lua migration 4).
 local _, ns = ...
 local B = ns.B
 local S = ns.Style
@@ -15,55 +15,31 @@ S.widgets = setmetatable({}, { __mode = "k" }) -- [frame] = the widget kind
 local LOOKS = {}
 S.LOOKS = LOOKS
 
--- The look in force: the preset's `look` (Settings.LOOK_KEYS, since 01.11.2026); a profile saved
--- before it has none and reads it from the game's buttons switch of ADR 0038 (on: WoW).
+-- The look in force: there is one (ADR 0084 decision 1). Kept as functions, so a caller that asks
+-- reads the same answer everywhere.
+S.LOOK = "book"
 function S.LookId()
-  local id = S.Skin("look")
-  if id and LOOKS[id] then
-    return id
-  end
-  return S.GameButtons() and "wow" or "modern"
+  return S.LOOK
 end
 
--- The look a frame draws in (ADR 0046's look per window, plan-chat-v3.md V13): its own or an
--- ancestor's (`frame.look`, set by S.SetFramePreset), else the suite's. Nothing is walked until a
--- frame took a look of its own (S.anyLook).
-function S.LookOf(frame)
-  if S.anyLook then
-    local f = frame
-    for _ = 1, 40 do
-      if not f then
-        break
-      end
-      local id = f.look
-      if id and LOOKS[id] then
-        return id
-      end
-      f = f.GetParent and f:GetParent() or nil
-    end
-  end
-  return S.LookId()
+function S.LookOf()
+  return S.LOOK
 end
 
-local function look(frame)
-  return LOOKS[frame and S.LookOf(frame) or S.LookId()] or LOOKS.modern
+local function look()
+  return LOOKS.book
 end
 
--- The look's own corner radii over the theme's (Style.applyShape reads them with every theme
--- load): Glass rounds more, Parchment squares the kind tiles (`tile`). nil: the theme's.
-function S.LookShape(frame)
-  return look(frame).shape
+-- Whether a frame draws on a dark theme: Bastian's Book lays its dark table there (book-look.md
+-- section 3; ~~in the WoW look only, D2~~ until 20.11.2026, when the WoW look went).
+function S.DarkTable(frame)
+  return not S.Light(frame)
 end
 
--- The look's cap on the window ground's opacity in percent (Glass: 75), nil for none.
-function S.LookGroundAlpha(frame)
-  return look(frame).groundAlpha
-end
-
--- Draws one widget by the look in force where it stands (a changed spec, a changed look).
+-- Draws one widget in the look, with the tokens where it stands (a changed spec, a theme).
 function S.Draw(frame)
   local kind = S.widgets[frame]
-  local draw = kind and look(frame)[kind]
+  local draw = kind and look()[kind]
   if draw then
     draw(frame)
   end
@@ -75,22 +51,16 @@ end
 
 -- A coloured symbol with its text ("remove them all with coloured
 -- symbols with text", of the Browser's green-on-green buttons): `spec.hue`, a tile token, paints
--- the pictogram on a small square of that colour, as the kind tiles are; no plate, no edge in
--- any look. `spec.primary` is the lit one: its word bright and a line of its colour under it.
+-- the pictogram on a small square of that colour, as the kind tiles are; no plate, no edge.
+-- `spec.primary` is the lit one: its word bright and a line of its colour under it.
 function S.DrawHue(b)
   local spec = b.spec
   local token = S.Tok(b, spec.hue) or S.Tok(b, "accent")
-  if S.hideGameArt then
-    S.hideGameArt(b)
-  end
   b:SetNormalTexture("")
   b:SetPushedTexture("")
   b:SetHighlightTexture("")
   S.tint(b.face, S.Tok(b, "panel"), 0)
   S.setEdges(b.edges, S.Tok(b, "line"), 0)
-  if b.sheen then
-    b.sheen:Hide()
-  end
   if not b.hueSquare then
     b.hueSquare = S.fill(b, token, "BORDER")
     b.hueLine = S.fill(b, token, "OVERLAY")
@@ -112,8 +82,8 @@ function S.DrawHue(b)
   b.hueLine:SetShown(spec.primary == true)
 end
 
--- Every live widget again: a preset or theme change. The radii first (a look may bring its own),
--- so the shapes the widgets own lay out with the right corners.
+-- Every live widget again: a theme change. The radii first, so the shapes the widgets own lay out
+-- with the theme's corners.
 function S.ApplyLook()
   S.applyShape()
   for shape in pairs(S.shapes or {}) do
@@ -124,26 +94,9 @@ function S.ApplyLook()
   end
 end
 
--- The second, lighter fill the Glass look stacks on a plate for depth; made when first drawn,
--- hidden by every other look.
-local function sheen(f)
-  if not f.sheen then
-    f.sheen = S.roundFill(f, S.C.bright, f.face.radius, "BORDER")
-  end
-  return f.sheen
-end
-
-local function hideSheen(f)
-  if f.sheen then
-    f.sheen:Hide()
-  end
-end
-
-local MODERN_PLATE, MODERN_PLATE_HOVER, MODERN_EDGE = 0.16, 0.3, 0.6 -- the accent plate of a boxed button
-local GLASS_PLATE = 0.72 -- the plate under every text: 70 % and more (plan-round4 H4)
-S.GLASS_QUIET = 0.5 -- an unchosen pill's plate: half the glass's (quiet chips, 16.11.2026)
-local GLASS_SHEEN = 0.05
-local GLASS_RIM = 0.35 -- the light rim, on hover only
+-- The one look's numbers (book-look.md section 4: a tool's side padding 10; a quiet word's 7, a
+-- pictogram alone 5).
+S.PAD_TOOL, S.PAD_QUIET, S.PAD_ONLY = 10, 7, 5
 
 local function textWidth(fs, text)
   local w = fs:GetStringWidth() or 0
@@ -388,32 +341,30 @@ local function layoutStat(f, face, edge, edgeAlpha)
 end
 
 -- ---------------------------------------------------------------------------------------------
--- Modern: quiet rounded buttons (a face only when boxed or primary), the text colour on the
--- icon, the accent for a button that is on; tiles with the theme's radius and a thin edge.
+-- The one look (ADR 0084 decision 2): the action is the book's tool. `primary` the filled plate in
+-- the accent with the ground's ink (at most one per window); `boxed` the words in an outline of
+-- the line token, the accent's edge under the mouse and while `on`; a quiet one the pictogram and
+-- the word alone, a faint plate under the mouse; `only` a quiet pictogram in the muted ink,
+-- brighter under the mouse. The tiles and the stat keep their plate and a thin edge.
 -- ---------------------------------------------------------------------------------------------
 
-LOOKS.modern = {
+LOOKS.book = {
   action = function(b)
     local spec, G = b.spec, S.G
     local h = spec.row and G.actionRow or G.action
     b:SetNormalTexture("")
     b:SetPushedTexture("")
     b:SetHighlightTexture("")
-    S.hideGameArt(b)
-    hideSheen(b)
     b.face:Show()
     b.edges:Show()
-    -- a boxed button is a tinted plate with the accent's edge, its pictogram in the accent (owner,
-    -- retail 01.11.2026: "coloured icons with text", as the map's tile buttons); a quiet one shows
-    -- the coloured pictogram and the word alone
-    local faceAlpha = spec.primary and 1 or (spec.boxed and MODERN_PLATE or 0)
-    S.tint(b.face, S.Tok(b, spec.primary and "accent" or (spec.boxed and "accent" or "panel")), faceAlpha)
-    local edge = spec.on and 1 or MODERN_EDGE
-    S.setEdges(b.edges, S.Tok(b, "accent"), spec.boxed and not spec.primary and edge or 0)
+    S.tint(b.face, S.Tok(b, spec.primary and "accent" or "panel"), spec.primary and 1 or 0)
+    local outline = spec.boxed and not spec.primary
+    S.setEdges(b.edges, S.Tok(b, spec.on and "accent" or "line"), outline and 1 or 0)
     local ink = spec.primary and "bg" or (spec.on and "accent" or "text")
     S.ink(b.label, S.Tok(b, ink))
-    S.tint(b.icon, iconInk(b), 1)
-    layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 5 or 7)
+    S.tint(b.icon, iconInk(b, spec.only and not spec.on and S.Tok(b, "muted") or nil), 1)
+    local pad = spec.only and S.PAD_ONLY or ((spec.boxed or spec.primary) and S.PAD_TOOL or S.PAD_QUIET)
+    layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, pad)
   end,
   hover = function(b, over)
     local spec = b.spec
@@ -421,9 +372,12 @@ LOOKS.modern = {
       return
     end
     if spec.boxed then
-      S.tint(b.face, S.Tok(b, "accent"), over and MODERN_PLATE_HOVER or MODERN_PLATE)
+      S.setEdges(b.edges, S.Tok(b, (over or spec.on) and "accent" or "line"), 1)
     else
       S.tint(b.face, S.Tok(b, "faceHover"), over and 1 or 0)
+    end
+    if spec.only and not spec.on then
+      S.tint(b.icon, over and S.Tok(b, "text") or iconInk(b, S.Tok(b, "muted")), 1)
     end
   end,
   tile = function(t)
@@ -431,30 +385,6 @@ LOOKS.modern = {
   end,
   stat = function(f)
     layoutStat(f, S.Tok(f, "card"), S.Tok(f, "line"), 0.6)
-  end,
-}
-
--- ---------------------------------------------------------------------------------------------
--- WoW: the game's red button textures with the pictogram and the text in the game's gold; the
--- tiles with a gilt edge. Hover is the game's highlight.
--- ---------------------------------------------------------------------------------------------
-
-LOOKS.wow = {
-  action = function(b)
-    local spec, G = b.spec, S.G
-    local h = spec.row and G.actionRow or G.action
-    hideSheen(b)
-    S.applyButton(b) -- the textures, the face and edges hidden, the gold label
-    local gold = S.Palette("blizzard").C.gold
-    S.tint(b.icon, spec.toggle and not spec.on and S.Tok(b, "dim") or gold, 1)
-    layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 6 or 9)
-    S.fitGameArt(b) -- the caps follow the size the layout gave
-  end,
-  tile = function(t)
-    layoutTile(t, t.spec.big and S.G.tileBig or S.G.tile, S.Palette("blizzard").C.gold, 0.8)
-  end,
-  stat = function(f)
-    layoutStat(f, S.Tok(f, "card"), S.Palette("blizzard").C.gold, 0.8)
   end,
 }
 
@@ -600,6 +530,45 @@ local function layoutPill(p, h, inkTok, edgeTok, edgeAlpha, countTok)
     p.face:Layout()
     p.edges:Layout()
   end
+  S.dashEdges(p)
+end
+
+-- A dashed outline (`spec.dashed`; the book's chip "unconfirmed", the board's dashed outline,
+-- book-look.md section 11; W4): the round ends stay, the straight top and bottom become dashes of
+-- DASH with DASH_GAP between, in the edge's colour. A pooled pill without it gets its lines back.
+S.DASH, S.DASH_GAP = 4, 3
+function S.dashEdges(p)
+  local dashed = p.spec.dashed == true
+  local e = p.edges
+  e:Piece(5):SetShown(not dashed)
+  e:Piece(6):SetShown(not dashed)
+  p.dashes = p.dashes or {}
+  local n = 0
+  if dashed then
+    local paint = S.painted[e] or { S.Tok(p, "line") }
+    local w, h = p:GetWidth() or 0, p:GetHeight() or 0
+    local r = e.r or math.floor(h / 2)
+    local count = math.max(0, math.floor((w - 2 * r + S.DASH_GAP) / (S.DASH + S.DASH_GAP)))
+    for _, side in ipairs({ "TOPLEFT", "BOTTOMLEFT" }) do
+      for i = 1, count do
+        n = n + 1
+        local d = p.dashes[n]
+        if not d then
+          d = p:CreateTexture(nil, "BORDER")
+          d:SetTexture(S.WHITE)
+          p.dashes[n] = d
+        end
+        d:ClearAllPoints()
+        d:SetSize(S.DASH, 1)
+        d:SetPoint(side, p, side, r + (i - 1) * (S.DASH + S.DASH_GAP), 0)
+        S.tint(d, paint[1], paint[2])
+        d:Show()
+      end
+    end
+  end
+  for i = n + 1, #p.dashes do
+    p.dashes[i]:Hide()
+  end
 end
 
 -- The chosen pill is filled, its words in the ground's ink ("selected
@@ -626,8 +595,8 @@ local function quietPill(p, inkTok)
   end
 end
 
-LOOKS.modern.pill = function(p)
-  hideSheen(p)
+-- A chip: quiet, the chosen one filled in the accent (book-look.md section 5).
+LOOKS.book.pill = function(p)
   if p.spec.on then
     return chosenPill(p, S.Tok(p, "accent"))
   end
@@ -635,24 +604,11 @@ LOOKS.modern.pill = function(p)
 end
 
 -- A chosen pill keeps its fill under the mouse; a quiet one shows its plate while the mouse is on it.
-LOOKS.modern.pillHover = function(p, over)
+LOOKS.book.pillHover = function(p, over)
   if not p.spec.on then
     S.tint(p.face, S.Tok(p, over and "faceHover" or "panel"), over and 1 or 0)
   end
 end
-
--- The chosen one in the game's gold; inside a palette of its own (the book's dark table,
--- S.FolioPalette) in that palette's gold.
-LOOKS.wow.pill = function(p)
-  hideSheen(p)
-  if p.spec.on then
-    local own = S.PaletteOf(p)
-    return chosenPill(p, own and own.C.gold or S.Palette("blizzard").C.gold)
-  end
-  quietPill(p)
-end
-
-LOOKS.wow.pillHover = LOOKS.modern.pillHover
 
 -- ---------------------------------------------------------------------------------------------
 -- The tab: a kind tile, the label, a count, a badge; `on` the shown one, `unread` lit. `line`, a
@@ -766,28 +722,23 @@ local function flatTab(t, onInk, upper)
   S.setEdges(t.edges, S.Tok(t, "accent"), 0)
 end
 
--- The chosen tab reads in the accent inside an accent frame ("hard to
--- see what is menu tabs, what is text and what is active tab"); the others in dim.
-LOOKS.modern.tab = function(t)
+-- A tab is a word (book-look.md section 4): no plate, the shown one filled in the accent with the
+-- ground's ink and its top corners round; the others in the dim ink, an unread one in the accent.
+-- ~~The chosen tab in the accent inside an accent frame~~ (until 20.11.2026, the Modern look).
+LOOKS.book.tab = function(t)
   local spec = t.spec
   if spec.line then
     return flatTab(t, "text", true)
   end
-  layoutTab(t, S.G.tab, (spec.on or spec.unread) and "accent" or "dim", spec.on and 1 or 0)
-  t.under:SetShown(spec.on == true)
-  S.tint(t.under, S.Tok(t, "accent"), 1)
-  S.setEdges(t.edges, S.Tok(t, "accent"), spec.on and 0.9 or 0)
-end
-
-LOOKS.wow.tab = function(t)
-  local spec = t.spec
-  if spec.line then
-    return flatTab(t, "gold", false)
+  local ink = spec.on and "bg" or (spec.unread and "accent" or "dim")
+  layoutTab(t, S.G.tab, ink, 0)
+  S.tint(t.face, S.Tok(t, "accent"), spec.on and 1 or 0)
+  S.tint(t.under, S.Tok(t, "accent"), 1) -- hidden, but in its window's colours (a flat tab shows it)
+  t.under:Hide()
+  S.setEdges(t.edges, S.Tok(t, "accent"), 0)
+  if t.count:IsShown() then
+    S.ink(t.count, S.Tok(t, spec.on and "bg" or "dim"))
   end
-  layoutTab(t, S.G.tab, (spec.on or spec.unread) and "gold" or "dim", spec.on and 1 or 0.6)
-  t.under:SetShown(spec.on == true)
-  S.tint(t.under, S.Palette("blizzard").C.gold, 1)
-  S.setEdges(t.edges, S.Palette("blizzard").C.gold, spec.on and 0.9 or 0)
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -837,15 +788,10 @@ local function layoutSection(s, inkTok, upper)
   S.ink(s.title, S.Tok(s, inkTok))
 end
 
-LOOKS.modern.section = function(s)
+-- A section's title: small capitals in the dim ink, no rule.
+LOOKS.book.section = function(s)
   layoutSection(s, "dim", true)
   s.rule:Hide()
-end
-
-LOOKS.wow.section = function(s)
-  layoutSection(s, "gold", false)
-  S.tint(s.rule, S.Palette("blizzard").C.gold, 0.6)
-  s.rule:Show()
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -857,10 +803,10 @@ function S.toggle(parent, spec)
   spec = spec or {}
   local t = CreateFrame("Button", nil, parent)
   t.spec = spec
-  t.track = S.roundFill(t, S.C.line, "radius")
+  t.track = S.roundFill(t, S.C.line, "pill")
   t.edges = S.roundEdges(t, S.C.line, "radius")
   t.knob = CreateFrame("Frame", nil, t)
-  t.knob.fill = S.roundFill(t.knob, S.C.bright, "radius")
+  t.knob.fill = S.roundFill(t.knob, S.C.bg, "pill")
   t.mark = S.text(t, 12, S.C.gold)
   t.mark:SetPoint("CENTER")
   t.mark:SetText("x")
@@ -879,27 +825,23 @@ function S.toggle(parent, spec)
   return t
 end
 
-LOOKS.modern.toggle = function(t)
+-- The book's switch (book-look.md section 5, Hide done): a bar of 28 x 15 round at both ends,
+-- filled in the accent while on and in the muted ink while off, its knob of 11 in the ground's
+-- colour at the side it stands for. ~~Modern's 34 x 18 track, WoW's box with a cross~~ (until
+-- 20.11.2026; the book's own switch moved here, W4).
+S.SWITCH_W, S.SWITCH_H, S.SWITCH_KNOB = 28, 15, 11
+LOOKS.book.toggle = function(t)
   local on = t.spec.on == true
-  t:SetSize(34, 18)
+  t:SetSize(S.SWITCH_W, S.SWITCH_H)
   t.track:Show()
-  S.tint(t.track, S.Tok(t, on and "accent" or "line"), 1)
+  S.tint(t.track, S.Tok(t, on and "accent" or "muted"), 1)
   S.setEdges(t.edges, S.Tok(t, "line"), 0)
-  t.knob:SetSize(14, 14)
+  t.knob:SetSize(S.SWITCH_KNOB, S.SWITCH_KNOB)
   t.knob:ClearAllPoints()
-  t.knob:SetPoint("LEFT", on and 18 or 2, 0)
+  t.knob:SetPoint(on and "RIGHT" or "LEFT", t, on and "RIGHT" or "LEFT", on and -2 or 2, 0)
+  S.tint(t.knob.fill, S.Tok(t, "bg"), 1)
   t.knob:Show()
   t.mark:Hide()
-end
-
-LOOKS.wow.toggle = function(t)
-  t:SetSize(18, 18)
-  t.track:Show()
-  S.tint(t.track, S.Tok(t, "panel"), 1)
-  S.setEdges(t.edges, S.Palette("blizzard").C.gold, 0.9)
-  t.knob:Hide()
-  S.ink(t.mark, S.Palette("blizzard").C.gold)
-  t.mark:SetShown(t.spec.on == true)
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -975,192 +917,13 @@ local function layoutCard(c, faceTok, faceAlpha, edgeTok, edgeAlpha)
   c:EnableMouse(spec.onClick ~= nil or spec.tip ~= nil)
 end
 
-LOOKS.modern.card = function(c)
-  hideSheen(c)
+LOOKS.book.card = function(c)
   local hot = c.spec.hot
   layoutCard(c, "card", 1, hot and "cardHot" or "cardEdge", 1)
 end
 
-LOOKS.modern.cardHover = function(c, over)
+LOOKS.book.cardHover = function(c, over)
   S.tint(c.face, S.Tok(c, over and "hover" or "card"), 1)
-end
-
-LOOKS.wow.card = function(c)
-  hideSheen(c)
-  local hot = c.spec.hot
-  layoutCard(c, "card", 1, hot and "cardHot" or S.Palette("blizzard").C.gold, hot and 1 or 0.5)
-end
-
-LOOKS.wow.cardHover = LOOKS.modern.cardHover
-
--- ---------------------------------------------------------------------------------------------
--- Parchment: paper panels with a sepia
--- edge on every boxed button, square kind tiles with the same edge, no gold text (a choice of
--- value reads in the accent), section titles in their own case over a sepia rule. The paper
--- itself and the brown ink are the Parchment scheme's; the serif headings the preset's font.
--- Never on the rock ground: the preset keeps the game's frames off.
--- ---------------------------------------------------------------------------------------------
-
-LOOKS.parchment = {
-  shape = { tile = 0 },
-  action = function(b)
-    local spec, G = b.spec, S.G
-    local h = spec.row and G.actionRow or G.action
-    b:SetNormalTexture("")
-    b:SetPushedTexture("")
-    b:SetHighlightTexture("")
-    S.hideGameArt(b)
-    hideSheen(b)
-    b.face:Show()
-    b.edges:Show()
-    local faceAlpha = (spec.primary or spec.boxed) and 1 or 0
-    S.tint(b.face, S.Tok(b, spec.primary and "accent" or "panel"), faceAlpha)
-    local edge = spec.on and "accent" or "muted"
-    S.setEdges(b.edges, S.Tok(b, edge), spec.boxed and not spec.primary and 0.7 or 0)
-    local ink = spec.primary and "bg" or (spec.on and "accent" or "text")
-    S.ink(b.label, S.Tok(b, ink))
-    S.tint(b.icon, iconInk(b), 1)
-    layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 5 or 7)
-  end,
-  hover = function(b, over)
-    if not b.spec.primary then
-      S.tint(b.face, S.Tok(b, over and "faceHover" or "panel"), (over or b.spec.boxed) and 1 or 0)
-    end
-  end,
-  tile = function(t)
-    layoutTile(t, t.spec.big and S.G.tileBig or S.G.tile, S.Tok(t, "muted"), 0.9)
-  end,
-  stat = function(f)
-    layoutStat(f, S.Tok(f, "card"), S.Tok(f, "muted"), 0.9)
-  end,
-  pill = function(p)
-    local spec = p.spec
-    hideSheen(p)
-    if spec.on then
-      return chosenPill(p, S.Tok(p, "accent"))
-    end
-    S.tint(p.face, S.Tok(p, "panel"), 0) -- quiet: no plate, a faint sepia edge (16.11.2026)
-    local ink = spec.gold and "accent" or "text" -- no gold text on paper
-    layoutPill(p, pillHeight(p), ink, "muted", 0.35)
-  end,
-  pillHover = LOOKS.modern.pillHover,
-  tab = function(t)
-    local spec = t.spec
-    if spec.line then
-      return flatTab(t, "text", false)
-    end
-    layoutTab(t, S.G.tab, (spec.on or spec.unread) and "accent" or "dim", spec.on and 1 or 0)
-    t.under:SetShown(spec.on == true)
-    S.tint(t.under, S.Tok(t, "accent"), 1)
-    S.setEdges(t.edges, S.Tok(t, "accent"), spec.on and 0.9 or 0)
-  end,
-  section = function(s)
-    layoutSection(s, "dim", false)
-    S.tint(s.rule, S.Tok(s, "muted"), 0.5)
-    s.rule:Show()
-  end,
-  toggle = LOOKS.modern.toggle,
-}
-
--- ---------------------------------------------------------------------------------------------
--- Glass: two stacked translucent fills under
--- every text (the plate at 72 %, a light sheen over it), no edges, a light rim on hover only, 10 px
--- corners on windows and 8 px on buttons, the window ground capped at 75 %. Dark glass on a dark
--- scheme, light glass on a light one: the scheme decides.
--- ---------------------------------------------------------------------------------------------
-
-local function glassPlate(f, tok, alpha)
-  f.face:Show()
-  S.tint(f.face, S.Tok(f, tok), alpha)
-  local veil = sheen(f)
-  veil:Show()
-  S.tint(veil, S.Tok(f, "bright"), GLASS_SHEEN)
-end
-
-local function glassRim(f, over)
-  S.setEdges(f.edges, S.Tok(f, "bright"), over and GLASS_RIM or 0)
-end
-
-LOOKS.glass = {
-  shape = { radius = 10, radiusSmall = 8 },
-  groundAlpha = 75,
-  action = function(b)
-    local spec, G = b.spec, S.G
-    local h = spec.row and G.actionRow or G.action
-    b:SetNormalTexture("")
-    b:SetPushedTexture("")
-    b:SetHighlightTexture("")
-    S.hideGameArt(b)
-    b.edges:Show()
-    glassPlate(b, spec.primary and "accent" or "panel", spec.primary and 0.9 or GLASS_PLATE)
-    glassRim(b, false)
-    local ink = spec.primary and "bg" or (spec.on and "accent" or "text")
-    S.ink(b.label, S.Tok(b, ink))
-    S.tint(b.icon, iconInk(b), 1)
-    layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, spec.only and 6 or 8)
-  end,
-  hover = function(b, over)
-    glassRim(b, over)
-  end,
-  tile = function(t)
-    layoutTile(t, t.spec.big and S.G.tileBig or S.G.tile, S.Tok(t, "line"), 0)
-  end,
-  stat = function(f)
-    layoutStat(f, S.Tok(f, "card"), S.Tok(f, "line"), 0)
-  end,
-  pill = function(p)
-    local spec = p.spec
-    if spec.on then
-      glassPlate(p, "accent", 0.9) -- the chosen one filled, as a primary action's plate
-      return layoutPill(p, pillHeight(p), "bg", "bright", 0, "bg")
-    end
-    -- quiet (16.11.2026): the plate at half the glass's strength, the chosen one stands out
-    glassPlate(p, "panel", GLASS_PLATE * S.GLASS_QUIET)
-    layoutPill(p, pillHeight(p), spec.gold and "gold" or "text", "bright", 0)
-  end,
-  pillHover = function(p, over)
-    glassRim(p, over)
-  end,
-  tab = function(t)
-    local spec = t.spec
-    if spec.line then
-      return flatTab(t, "text", true)
-    end
-    layoutTab(t, S.G.tab, (spec.on or spec.unread) and "accent" or "dim", spec.on and GLASS_PLATE or 0)
-    t.under:SetShown(spec.on == true)
-    S.tint(t.under, S.Tok(t, "accent"), 1)
-    S.setEdges(t.edges, S.Tok(t, "accent"), spec.on and 0.9 or 0)
-  end,
-  section = LOOKS.modern.section,
-  toggle = LOOKS.modern.toggle,
-}
-
--- The card in Parchment and Glass (plan-chat-v3.md §9): paper with its sepia edge; glass with its
--- plate and no edge, the rim in the fresh card's colour while it is fresh and on hover.
-LOOKS.parchment.card = function(c)
-  hideSheen(c)
-  local hot = c.spec.hot
-  layoutCard(c, "card", 1, hot and "cardHot" or "muted", hot and 1 or 0.5)
-end
-LOOKS.parchment.cardHover = function(c, over)
-  S.tint(c.face, S.Tok(c, over and "faceHover" or "card"), 1)
-end
-
-LOOKS.glass.card = function(c)
-  local hot = c.spec.hot
-  layoutCard(c, "panel", GLASS_PLATE, hot and "cardHot" or "bright", hot and 1 or 0)
-  if c.spec.flat then
-    hideSheen(c)
-  else
-    local veil = sheen(c)
-    veil:Show()
-    S.tint(veil, S.Tok(c, "bright"), GLASS_SHEEN)
-  end
-end
-LOOKS.glass.cardHover = function(c, over)
-  if not c.spec.hot then
-    glassRim(c, over)
-  end
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -1244,7 +1007,6 @@ local function layoutSegmented(f, c)
   if f.spec.flat then
     f.face:Hide()
     f.edges:Hide()
-    hideSheen(f)
   else
     f.face:Show()
     f.edges:Show()
@@ -1286,68 +1048,32 @@ local function layoutSegmented(f, c)
   f:SetSize(math.max(x, h), h)
 end
 
-LOOKS.modern.segmented = function(f)
-  hideSheen(f)
+-- The segmented switch: its parts on one plate, the chosen one filled. A flat one is a row of
+-- words (the book's tabs, book-look.md section 4): the parts not chosen in the quiet dim ink.
+LOOKS.book.segmented = function(f)
   S.tint(f.face, S.Tok(f, "panel"), 1)
   S.setEdges(f.edges, S.Tok(f, "line"), 1)
   layoutSegmented(f, {
     fill = S.Tok(f, "accent"),
     on = S.Tok(f, "bg"),
-    off = S.Tok(f, "text"),
+    off = S.Tok(f, f.spec.flat and "dim" or "text"),
     icon = S.Tok(f, "accent"),
   })
-end
-
-LOOKS.parchment.segmented = function(f)
-  hideSheen(f)
-  S.tint(f.face, S.Tok(f, "panel"), 1)
-  S.setEdges(f.edges, S.Tok(f, "muted"), 0.7)
-  layoutSegmented(f, {
-    fill = S.Tok(f, "accent"),
-    on = S.Tok(f, "bg"),
-    off = S.Tok(f, "text"),
-    icon = S.Tok(f, "accent"),
-  })
-end
-
-LOOKS.glass.segmented = function(f)
-  glassPlate(f, "panel", GLASS_PLATE)
-  glassRim(f, false)
-  layoutSegmented(f, {
-    fill = S.Tok(f, "accent"),
-    on = S.Tok(f, "bg"),
-    off = S.Tok(f, "text"),
-    icon = S.Tok(f, "accent"),
-  })
-end
-
--- WoW: a dark plate with a gilt edge, the chosen part in the game's gold with dark words.
--- Inside a palette of its own (the book's dark table, S.FolioPalette): that palette's gold, the
--- parts not chosen in its quiet ink.
-LOOKS.wow.segmented = function(f)
-  hideSheen(f)
-  local own = S.PaletteOf(f)
-  local gold = own and own.C.gold or S.Palette("blizzard").C.gold
-  S.tint(f.face, S.Tok(f, "panel"), 1)
-  S.setEdges(f.edges, gold, 0.8)
-  layoutSegmented(f, { fill = gold, on = S.Tok(f, "bg"), off = own and own.C.dim or gold, icon = gold })
 end
 
 -- ---------------------------------------------------------------------------------------------
 -- The slider (plan-chat-one-window.md §8, R1, V34; , screens 1 and 2:
 -- the flat track with a square knob, the artifact's slider): a title in the labels' face, the
 -- track filled up to the knob in the accent, a round knob, the value at the right and a line of
--- words under it ("2 . and what is yours"). The WoW look draws the game's own slider: its bar and
--- its knob. spec = { title, plain (the title as written, not in capitals), min, max, step, value,
--- words = function(v) -> the line under, number = function(v) -> the value's text (default the
--- number), onChange(self, v) }. SetValue(v, silent) moves it without the call.
+-- words under it ("2 . and what is yours"). ~~The WoW look draws the game's own slider~~ (until
+-- 20.11.2026). spec = { title, plain (the title as written, not in capitals), min, max, step,
+-- value, words = function(v) -> the line under, number = function(v) -> the value's text (default
+-- the number), onChange(self, v) }. SetValue(v, silent) moves it without the call.
 -- ---------------------------------------------------------------------------------------------
 
-S.SLIDER_KNOB = 12 -- the round knob of the flat looks
-S.SLIDER_TRACK = 4 -- the track's height in the flat looks
+S.SLIDER_KNOB = 12 -- the round knob (book-look.md section 5)
+S.SLIDER_TRACK = 4 -- the track's height
 S.SLIDER_TOP = 16 -- the track's row under the title
-S.GAME_SLIDER_BAR = "Interface\\Buttons\\UI-SliderBar-Background"
-S.GAME_SLIDER_KNOB = "Interface\\Buttons\\UI-SliderBar-Button-Horizontal"
 
 function S.slider(parent, spec)
   spec = spec or {}
@@ -1371,7 +1097,7 @@ function S.slider(parent, spec)
   slider:SetValueStep(spec.step or 1)
   slider:SetObeyStepOnDrag(true)
   f.slider = slider
-  -- the flat looks' track and its filled part, under the knob
+  -- the track and its filled part, under the knob
   f.rail = CreateFrame("Frame", nil, slider)
   f.rail:SetPoint("LEFT", slider, "LEFT", 0, 0)
   f.rail:SetPoint("RIGHT", slider, "RIGHT", 0, 0)
@@ -1381,11 +1107,6 @@ function S.slider(parent, spec)
   f.filled:SetPoint("TOPLEFT", f.rail, "TOPLEFT", 0, 0)
   f.filled:SetPoint("BOTTOMLEFT", f.rail, "BOTTOMLEFT", 0, 0)
   f.fill = S.roundFill(f.filled, S.C.accent, "pill", "BORDER")
-  -- the game's bar (the WoW look)
-  f.bar = slider:CreateTexture(nil, "BACKGROUND")
-  f.bar:SetPoint("TOPLEFT", slider, "TOPLEFT", 0, 2)
-  f.bar:SetPoint("BOTTOMRIGHT", slider, "BOTTOMRIGHT", 0, -2)
-  f.bar:Hide()
   slider:SetThumbTexture(S.DISC)
   f.knob = slider:GetThumbTexture()
   f.words = S.text(f, 11, S.C.text)
@@ -1449,9 +1170,8 @@ local function layoutSlider(f, titleTok, numberTok, wordsTok)
   return frac
 end
 
--- the flat looks: a thin track, filled up to a round knob in the accent
+-- a thin track, filled up to a round knob
 local function flatSlider(f, trackTok, fillTok, knobTok)
-  f.bar:Hide()
   f.rail:Show()
   S.tint(f.track, trackTok, 1)
   S.tint(f.fill, fillTok, 1)
@@ -1461,31 +1181,86 @@ local function flatSlider(f, trackTok, fillTok, knobTok)
   S.tint(f.knob, knobTok, 1)
 end
 
-LOOKS.modern.slider = function(f)
-  flatSlider(f, S.Tok(f, "line"), S.Tok(f, "accent"), S.Tok(f, "bright"))
-  layoutSlider(f, S.Tok(f, "muted"), S.Tok(f, "dim"), S.Tok(f, "text"))
-end
-
-LOOKS.parchment.slider = function(f)
+-- The book's slider (book-look.md section 5): a track of 4 in the line's colour, filled in the
+-- accent up to a round knob of 12 in the accent.
+LOOKS.book.slider = function(f)
   flatSlider(f, S.Tok(f, "line"), S.Tok(f, "accent"), S.Tok(f, "accent"))
   layoutSlider(f, S.Tok(f, "muted"), S.Tok(f, "dim"), S.Tok(f, "text"))
 end
 
-LOOKS.glass.slider = function(f)
-  flatSlider(f, S.Tok(f, "line"), S.Tok(f, "accent"), S.Tok(f, "bright"))
-  layoutSlider(f, S.Tok(f, "muted"), S.Tok(f, "dim"), S.Tok(f, "text"))
+-- ---------------------------------------------------------------------------------------------
+-- The look's paper (ADR 0084 decisions 2 and 8, ADR 0082 decision 5; W4, 20.11.2026): what is
+-- read lies on paper as an object with a soft shadow; a picture's foot is torn; a picture's words
+-- fade into the dark. The textures are the look's (tools/make_media.py), drawn by the kit; until
+-- 20.11.2026 the book drew them from Core's folder itself (a crossing of ADR 0082). Each path
+-- whole, so the texture check finds its file.
+-- ---------------------------------------------------------------------------------------------
+
+S.SHADOW = "Interface\\AddOns\\Bastians_Core\\Media\\FolioShadow"
+S.DECKLE = "Interface\\AddOns\\Bastians_Core\\Media\\Deckle"
+S.FADE = "Interface\\AddOns\\Bastians_Core\\Media\\Fade"
+S.SHADOW_SPREAD = 12 -- how far the shadow reaches beyond the paper
+S.SHADOW_DROP = 4 -- how much lower it falls than the paper
+S.DECKLE_H = 12 -- the torn edge's height
+
+-- The soft shadow under `frame`: eight pieces of the soft square around it (its quarters the
+-- corners, its middle row and column the sides), in the `folioShadow` token. -> the pieces, also
+-- kept as frame.shadow.
+function S.shadow(frame, spread, drop)
+  local s, d = spread or S.SHADOW_SPREAD, drop or S.SHADOW_DROP
+  local c = 2 * s
+  local function piece(l, r, top, bottom)
+    local tex = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+    tex:SetTexture(S.SHADOW)
+    tex:SetTexCoord(l, r, top, bottom)
+    S.tint(tex, S.C.folioShadow)
+    return tex
+  end
+  local tl, tr = piece(0, 0.5, 0, 0.5), piece(0.5, 1, 0, 0.5)
+  local bl, br = piece(0, 0.5, 0.5, 1), piece(0.5, 1, 0.5, 1)
+  for _, corner in ipairs({ tl, tr, bl, br }) do
+    corner:SetSize(c, c)
+  end
+  tl:SetPoint("TOPLEFT", frame, "TOPLEFT", -s, s - d)
+  tr:SetPoint("TOPRIGHT", frame, "TOPRIGHT", s, s - d)
+  bl:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", -s, -s - d)
+  br:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", s, -s - d)
+  local top, bottom = piece(0.49, 0.51, 0, 0.5), piece(0.49, 0.51, 0.5, 1)
+  local left, right = piece(0, 0.5, 0.49, 0.51), piece(0.5, 1, 0.49, 0.51)
+  top:SetPoint("TOPLEFT", tl, "TOPRIGHT")
+  top:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
+  bottom:SetPoint("TOPLEFT", bl, "TOPRIGHT")
+  bottom:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT")
+  left:SetPoint("TOPLEFT", tl, "BOTTOMLEFT")
+  left:SetPoint("BOTTOMRIGHT", bl, "TOPRIGHT")
+  right:SetPoint("TOPLEFT", tr, "BOTTOMLEFT")
+  right:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT")
+  frame.shadow = { tl, tr, bl, br, top, bottom, left, right }
+  return frame.shadow
 end
 
--- WoW: the game's own slider bar and knob, the title in the game's gold
-LOOKS.wow.slider = function(f)
-  local gold = S.Palette("blizzard").C.gold
-  f.rail:Hide()
-  f.bar:SetTexture(S.GAME_SLIDER_BAR)
-  S.untint(f.bar)
-  f.bar:Show()
-  f.knob:SetTexture(S.GAME_SLIDER_KNOB)
-  f.knob:SetTexCoord(0, 1, 0, 1)
-  f.knob:SetSize(32, 32)
-  S.untint(f.knob)
-  layoutSlider(f, gold, S.Tok(f, "dim"), S.Tok(f, "text"))
+-- A torn paper edge over `parent`'s picture, `level` frame levels above it, in the paper's colour
+-- (`token`, default folioPaper). -> its frame (`.tex` the texture), DECKLE_H high; the caller
+-- places it.
+function S.deckle(parent, level, token)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetFrameLevel(parent:GetFrameLevel() + (level or 1))
+  f:SetHeight(S.DECKLE_H)
+  f.tex = f:CreateTexture(nil, "ARTWORK")
+  f.tex:SetTexture(S.DECKLE)
+  f.tex:SetAllPoints(f)
+  S.tint(f.tex, S.C[token or "folioPaper"])
+  return f
+end
+
+-- The fade from clear at the top to `token` at the foot (words on a picture), on a frame of its
+-- own `level` levels over `parent`. -> its frame (`.tex` the texture); the caller places it.
+function S.fade(parent, level, token)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetFrameLevel(parent:GetFrameLevel() + (level or 1))
+  f.tex = f:CreateTexture(nil, "ARTWORK")
+  f.tex:SetTexture(S.FADE)
+  f.tex:SetAllPoints(f)
+  S.tint(f.tex, S.C[token or "folioShade"])
+  return f
 end

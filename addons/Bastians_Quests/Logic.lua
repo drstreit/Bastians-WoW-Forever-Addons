@@ -656,10 +656,24 @@ function Logic.isTrivial(q, state)
   return range ~= nil and level ~= nil and level > 0 and state.level - level > range
 end
 
+local function contains(list, value)
+  for i = 1, #(list or {}) do
+    if list[i] == value then
+      return true
+    end
+  end
+  return false
+end
+
 -- Status of one quest for the character, with the reason:
--- never, done, log, superseded, inactive (the game does not offer it now: the data says so or the
--- giver did not list it), prereq (second value: missing quests the character can take), skill,
--- rep, level, available.
+-- never (also past its `maxLevel`: levels only rise), done, log, superseded, inactive (the game
+-- does not offer it now: the data says so, the giver did not list it, or a breadcrumb to it is in
+-- the log: the second value lists those), prereq (second value: missing quests the character can
+-- take), skill, rep, level, available.
+-- Breadcrumbs (Everything Quests 2.16.0, 21.11.2026): `leads` on a breadcrumb names the quests it
+-- leads to, any of them taken rules it out; `crumbs` on such a quest names its breadcrumbs, none of
+-- which is a branch in its `excl` (Taking Back Silithus and Securing the Supply Lines list each
+-- other), and while one is in the log the quest is not offered.
 function Logic.status(qid, state)
   local q = quest(qid)
   if not q or not Logic.canEverTake(q, state) then
@@ -671,10 +685,16 @@ function Logic.status(qid, state)
   if state.inLog(qid) then
     return "log"
   end
+  if q.maxLevel and state.level > q.maxLevel then
+    return "never"
+  end
   local function taken(o)
     return state.done(o) or state.inLog(o)
   end
-  if anyOf(q.excl, taken) or (q.chain and taken(q.chain)) then
+  local function branchTaken(o)
+    return taken(o) and not contains(q.crumbs, o) and not contains(q.leads, o)
+  end
+  if anyOf(q.excl, branchTaken) or anyOf(q.leads, taken) or (q.chain and taken(q.chain)) then
     return "superseded"
   end
   local offered = state.offered ~= nil and state.offered(qid)
@@ -721,6 +741,17 @@ function Logic.status(qid, state)
   end
   if state.level < (q.minLevel or 0) then
     return "level"
+  end
+  if not offered and q.crumbs then
+    local held = {}
+    for _, c in ipairs(q.crumbs) do
+      if state.inLog(c) then
+        held[#held + 1] = c
+      end
+    end
+    if #held > 0 then
+      return "inactive", held
+    end
   end
   if state.notOffered and state.notOffered(qid) then
     return "inactive"

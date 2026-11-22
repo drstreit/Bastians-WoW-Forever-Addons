@@ -276,4 +276,9 @@ ns.L:Register("ruRU", {
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "Не удалось распознать это время. Попробуйте 5m, 1:30, 90s или 2h.",
   -- the route's arrow at the minimap's rim (15.11.2026)
   ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Во время маршрута стрелка у края миникарты указывает прямо на конец участка",
+  -- a transport's stops on the map (map.md map.travel, 22.11.2026)
+  ["Boat to %s"] = "Корабль до %s",
+  ["Zeppelin to %s"] = "Дирижабль до %s",
+  ["Tram to %s"] = "Подземка до %s",
+  ["Portal to %s"] = "Портал в %s",
 })

@@ -582,7 +582,7 @@ def test_the_window_lists_the_lines_offered_lately_and_switches_one_off(wow: Wow
     wow.execute(f"{ed}.rows[1].button:Click()")
     assert wow.eval(f"{MINE}.IsNever(RING[3])") is True  # newest first
     wow.execute(f"{ed}.SetView('never')")
-    assert len(wow.eval(f"{ed}.Items('never')")) == 1
+    assert len(wow.eval(f"{ed}.Items('never')")) == 1  # a pattern, whichever variant was said
     wow.execute(f"{ed}.rows[1].button:Click()")
     assert len(wow.eval(f"{ed}.Items('never')")) == 0
     assert not errors(wow)
@@ -625,6 +625,7 @@ VALUES = {
     "fight": {True, False},
     "hurt": {True, False},
     "many": {True, False},
+    "foe": {True, False},  # the other faction (ADR 0063 of 21.11.2026)
 }
 ROWS = {
     "buff",
@@ -662,13 +663,14 @@ def wanted(value) -> list:
 def test_the_matrix_has_its_rows_and_every_cell_its_lines(wow: WowRuntime):
     boot(wow)
     lines = lines_of(wow)
-    assert len(lines) >= 900
-    assert set(wow.eval(f"{V}.Situations({MOD}.CourtesyLines)").keys()) == ROWS
+    assert len(lines) >= 800  # the English patterns of 22.11.2026 (ADR 0089): 896
+    assert set(wow.eval(f"{V}.Situations({MOD}.CourtesyLines)").keys()) == ROWS | {"ambient"}
     cells = {}
     for line in lines:
         cells[(line[1], line[2])] = cells.get((line[1], line[2]), 0) + 1
     moods = set(wow.eval(f"{V}.MOODS").values())
-    thin = sorted((row, mood) for row in ROWS for mood in moods if cells.get((row, mood), 0) < 5)
+    # a cell holds patterns since ADR 0089, each of several variants: four, as the lines check asks
+    thin = sorted((row, mood) for row in ROWS for mood in moods if cells.get((row, mood), 0) < 4)
     assert thin == []
     assert not set(wow.eval(f"{V}.CONDITIONS").keys()) ^ set(VALUES)
 

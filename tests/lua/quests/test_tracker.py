@@ -79,8 +79,9 @@ def test_progress_colour_runs_from_red_to_green(core: WowRuntime):
     assert core.eval(f"{colour}(3, 4)") == "|cffbfd800"
     assert core.eval(f"{colour}(4, 4)") == "|cff40c040"  # done: the green of the rows
     assert core.eval(f"{colour}(0.5)") == "|cffffe000"  # a fraction alone
-    assert core.eval(f"{colour}(nil, nil)") == "|cffffffff"  # unknown: white, never a guess
-    assert core.eval(f"{colour}(0, 0)") == "|cffffffff"
+    bright = core.eval("Bastians.UI.Style.H.bright")  # Folio's warm white since W4 (ADR 0084)
+    assert core.eval(f"{colour}(nil, nil)") == bright  # unknown: the brightest ink, never a guess
+    assert core.eval(f"{colour}(0, 0)") == bright
 
 
 def test_objective_rows_and_the_quest_row_carry_the_progress_colour(wow: WowRuntime):

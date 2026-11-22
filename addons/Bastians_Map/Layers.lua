@@ -243,6 +243,71 @@ local function bigMapOnly(query)
   end
 end
 
+-- --- a transport's stops ("auf den Karten sind die Ankerplätze der
+-- Schiffe mit Zielpunkt nicht vermerkt"): each stop in its kind's glyph, named by where it goes ---
+
+local TRANSPORT_ICON = { boat = "ship", zeppelin = "zeppelin", tram = "route", portal = "open" }
+Layers.TRANSPORT_PIN = 22 -- px, a stop's pin (owner: "a ship and a bit larger"; others are 16)
+local TRANSPORT_WORD = {
+  boat = L["Boat to %s"],
+  zeppelin = L["Zeppelin to %s"],
+  tram = L["Tram to %s"],
+  portal = L["Portal to %s"],
+}
+-- what a stop's label says after the place: "Auberdine dock", "Undercity zeppelin tower"
+local STOP_TAILS = { "zeppelin tower", "tower", "Skydocks", "dock", "portal", "tram" }
+
+-- The place a stop's label names: "Menethil Harbor, north dock" -> "Menethil Harbor", "Auberdine
+-- dock" -> "Auberdine", "Stormwind, Deeprun Tram" -> "Stormwind". Nil for no label.
+function Layers.StopPlace(label)
+  if type(label) ~= "string" then
+    return nil
+  end
+  local place = label:gsub(",.*$", "")
+  for _, tail in ipairs(STOP_TAILS) do
+    place = place:gsub("%s+" .. tail .. "$", "")
+  end
+  place = place:match("^%s*(.-)%s*$")
+  return place ~= "" and place or nil
+end
+
+-- A transport record's pin at the stop nearest (continent, wx, wy): its label ("Boat to
+-- Auberdine": the other stops' places) and its glyph kind. Pure. Nil label when the record
+-- names no other place (golden rule 2: the entity's own name stands then).
+function Layers.TransportLabel(rec, continent, wx, wy)
+  if type(rec) ~= "table" then
+    return nil, nil
+  end
+  local icon = TRANSPORT_ICON[rec.kind]
+  local stops, world = rec.stops or {}, rec.world or {}
+  local here, best
+  for i, w in ipairs(world) do
+    if type(w) == "table" and w[1] == continent and w[2] and w[3] then
+      local d = (w[2] - wx) ^ 2 + (w[3] - wy) ^ 2
+      if not best or d < best then
+        here, best = i, d
+      end
+    end
+  end
+  if not here then
+    return nil, icon
+  end
+  local mine = Layers.StopPlace(stops[here] and stops[here][4])
+  local seen, places = {}, {}
+  for i, stop in ipairs(stops) do
+    local place = i ~= here and Layers.StopPlace(stop[4]) or nil
+    if place and place ~= mine and not seen[place] then
+      seen[place] = true
+      places[#places + 1] = place
+    end
+  end
+  local word = TRANSPORT_WORD[rec.kind]
+  if #places == 0 or not word then
+    return nil, icon
+  end
+  return string.format(word, table.concat(places, ", ")), icon
+end
+
 -- A layer's query over the zones in view: matching entities inside the view.
 Layers.AREA_MIN_YARDS = 15 -- a creature roaming at least this far gets a soft area (W5)
 
@@ -295,14 +360,21 @@ local function poiQuery(types, prefixes, fallbackIcon, priority)
           name = name .. " (" .. words .. ")"
         end
       end
+      local ride = typ == "transport" and d:Get("transport", id) or nil
       for _, p in ipairs(list) do
+        local label, kind = name, ROLE_ICON[role] or fallbackIcon
+        if ride then
+          local said, glyph = Layers.TransportLabel(ride, p.map, p.wx, p.wy)
+          label, kind = said or name, glyph or kind
+        end
         pins[#pins + 1] = {
           radius = p.r and p.r >= Layers.AREA_MIN_YARDS and p.r or nil, -- where it roams (W5)
           ref = ref,
           wx = p.wx,
           wy = p.wy,
-          icon = B.UI.IconTexture(ROLE_ICON[role] or fallbackIcon),
-          label = name,
+          icon = B.UI.IconTexture(kind),
+          size = ride and Layers.TRANSPORT_PIN or nil,
+          label = label,
           priority = priority,
           d = (p.wx - cx) ^ 2 + (p.wy - cy) ^ 2,
         }

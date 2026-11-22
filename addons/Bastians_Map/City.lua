@@ -38,6 +38,7 @@ City.OUTLINE_W = 2
 local win, clip, bar, filterRow
 local camera, current
 local tiles, placeButtons, filters, pool = {}, {}, {}, {}
+City.pool = pool -- the pin frames, for the tests and the probe
 local pins = {}
 local arrow, ring, arrowAt = nil, nil, 0
 local you -- the frame of the player's marker, above the pins
@@ -793,17 +794,31 @@ local function build()
   S.tint(ring, S.C.accent, 0.45)
   ring:SetSize(City.PIN + 12, City.PIN + 12)
   ring:Hide()
-  -- the player's marker on a frame of its own above the pins ("I dont see my
-  -- position on these maps"; a city's pins covered the bare arrow, as once on the minimap): the
-  -- game's arrow on a dark disc with an accent rim. It takes no mouse.
+  -- the player's marker ("I dont see my position on these maps"; a city's pins
+  -- covered the bare arrow, as once on the minimap): the game's arrow on a frame of its own above
+  -- the pins, on a dark disc with an accent rim. The disc lies under the pins (owner, Forever
+  -- 20.11.2026: Daryl Riknussun's pin "missing" while the player stood at him: the disc of 40 hid the
+  -- pin of 16 it stood on); ~~disc and arrow both above the pins~~ (17.11. to 20.11.2026). Neither
+  -- takes the mouse.
   you = CreateFrame("Frame", nil, clip)
   you:SetSize(City.YOU, City.YOU)
   you:SetFrameLevel((clip:GetFrameLevel() or 1) + 40)
-  you.rim = you:CreateTexture(nil, "BACKGROUND")
+  you.disc = CreateFrame("Frame", nil, clip)
+  you.disc:SetSize(City.YOU, City.YOU)
+  you.disc:SetPoint("CENTER", you, "CENTER", 0, 0)
+  you.disc:SetFrameLevel((clip:GetFrameLevel() or 1) + 2) -- the pins stand at + 5
+  you.disc:Hide()
+  you:SetScript("OnShow", function(self)
+    self.disc:Show()
+  end)
+  you:SetScript("OnHide", function(self)
+    self.disc:Hide()
+  end)
+  you.rim = you.disc:CreateTexture(nil, "BACKGROUND")
   you.rim:SetTexture(S.DISC)
   you.rim:SetAllPoints()
   S.tint(you.rim, S.C.accent, 0.9)
-  you.face = you:CreateTexture(nil, "BORDER")
+  you.face = you.disc:CreateTexture(nil, "BORDER")
   you.face:SetTexture(S.DISC)
   you.face:SetPoint("TOPLEFT", 3, -3)
   you.face:SetPoint("BOTTOMRIGHT", -3, 3)

@@ -82,22 +82,18 @@ function S.ThemeId()
   return S.themeId
 end
 
--- The corner radii: the theme's, then the look's own over them (ADR 0046: Glass rounds more,
--- Parchment squares the kind tiles); `tile` is the kind tiles' radius, the small one unless a
--- look says otherwise. Called with every theme load and every look change (S.ApplyLook).
+-- The corner radii: the theme's; `tile` is the kind tiles' radius, the small one. ~~A look's own
+-- over them (Glass rounder, Parchment's square tiles)~~ until 20.11.2026: one look (ADR 0084).
+-- Called with every theme load and every look change (S.ApplyLook).
 local themeShape = {}
 function S.applyShape()
   for key, value in pairs(themeShape) do
     S.SHAPE[key] = value
   end
   S.SHAPE.tile = S.SHAPE.radiusSmall
-  local own = S.LookShape and S.LookShape() or nil
-  for key, value in pairs(own or {}) do
-    S.SHAPE[key] = value
-  end
 end
 
--- The theme's own radii, before a look's (S.RadiusOf for a frame of a look of its own).
+-- The theme's own radii.
 function S.ThemeShape()
   return themeShape
 end
@@ -305,16 +301,15 @@ function S.Repalette(frame, from, to)
   end
 end
 
--- A frame draws in a preset of its own (ADR 0046's look per window; plan-chat-v3.md §9, V13):
--- `values` a preset's values (Bastians.UI.Settings.PresetValues), its scheme the frame's palette,
--- its renderer the frame's look; nil puts the suite's back. What the kit drew under the frame
--- takes the new tokens, its widgets and their corners draw again. For a changed option, never
--- for a layout (it walks everything the kit drew).
+-- A frame draws in values of its own (ADR 0046's look per window; plan-chat-v3.md §9, V13):
+-- `values` a theme and fonts (Bastians.UI.Settings.PresetValues), its theme the frame's palette;
+-- nil puts the suite's back. ~~Its renderer the frame's look~~ (one look since 20.11.2026). What
+-- the kit drew under the frame takes the new tokens, its widgets and their corners draw again. For
+-- a changed option, never for a layout (it walks everything the kit drew).
 function S.SetFramePreset(frame, values)
   local from = frame.palette
   local to = values and values.theme and S.Palette(values.theme) or nil
   frame.palette = to
-  frame.look = values and values.look or nil
   frame.presetValues = values or nil
   if values then
     S.anyLook = true
@@ -606,20 +601,18 @@ end
 -- the heading font, the game's buttons, the ornaments under section titles, the content switches.
 -- ---------------------------------------------------------------------------------------------
 
+-- ~~preset, look, skinFrames, gameButtons, ornaments~~: gone with the looks (ADR 0084, W4,
+-- 20.11.2026; Settings.lua migration 4 maps a saved look once).
 S.SKIN_DEFAULTS = {
-  preset = "modern-dark", -- the look as a preset (ADR 0038); headingFont nil is the text font
-  -- `look` (ADR 0046, 01.11.2026): modern | wow | parchment | glass; nil in a profile saved before
-  -- reads the game's buttons switch (S.LookId)
-  skinFrames = true, -- the game's frames are the standard
   rowPortraits = true,
   placeCuts = true,
   diorama = true,
   modelMotion = true,
   pageSounds = true,
-  gameButtons = false, -- the game's button textures on every kit button
-  ornaments = false, -- the gold ornament under section titles
   sheetParchment = true, -- a page reads on parchment (ADR 0054); off: the look's colours
-  gameFrames = false, -- the game's own windows and insets
+  -- the game's own frame around every window (ADR 0040; ADR 0084 decision 4: the optional border,
+  -- on by default, the suite's board's question 4, 17.11.2026)
+  gameFrames = true,
 }
 S.HEADING_FONT = "Fonts\\MORPHEUS.TTF"
 -- The suite's own fonts (ADR 0038, owner: "add 5 more"; 13.11.2026, plan-chat-v3.md V17: "5 new
@@ -727,9 +720,6 @@ end
 function S.KindToken(kind)
   return kind and S.KIND_TOKENS[kind] or nil
 end
-S.FRAME_BORDER = "Interface\\DialogFrame\\UI-DialogBox-Border"
-S.FRAME_BG = "Interface\\DialogFrame\\UI-DialogBox-Background" -- the Blizzard skin's window ground
-S.FRAME_INSETS = { left = 11, right = 12, top = 12, bottom = 11 } -- the border's own insets
 
 function S.Skin(key)
   local core = ns.core
@@ -741,15 +731,6 @@ function S.Skin(key)
   return v
 end
 
--- The look's parts (ADR 0038): the ornaments, the game's buttons, a heading font of its own.
-function S.Ornaments()
-  return S.Skin("ornaments") == true
-end
-
-function S.GameButtons()
-  return S.Skin("gameButtons") == true
-end
-
 -- The heading font: the profile's `headingFont`, else the text font; a client with its own script
 -- keeps its own (Morpheus and the suite's fonts carry no Hangul or Han, Cyrillic is unverified).
 function S.headingFont()
@@ -759,127 +740,13 @@ function S.headingFont()
   return S.Skin("headingFont") or S.font()
 end
 
--- The game's own type and button textures ("a style that closely reflects
--- Blizzard"): the WoW preset sets them, `gameButtons` dresses every kit button in them.
-S.BLIZZARD_FONT = "Fonts\\FRIZQT__.TTF"
-S.BUTTON_UP = "Interface\\Buttons\\UI-Panel-Button-Up"
-S.BUTTON_DOWN = "Interface\\Buttons\\UI-Panel-Button-Down"
-S.BUTTON_HIGHLIGHT = "Interface\\Buttons\\UI-Panel-Button-Highlight"
--- The used part of the game's button textures (80 x 22 of 128 x 32) in three slices, as the game's
--- UIPanelButtonTemplate draws them: the caps keep their width and only the middle stretches (owner,
--- retail 31.10.2026: one stretched texture squeezed the caps of a wide settings button).
-S.BUTTON_SLICES = { { 0, 0.09375 }, { 0.09375, 0.53125 }, { 0.53125, 0.625 } }
-S.BUTTON_BOTTOM = 0.6875
-S.BUTTON_CAP = 12 / 22 -- a cap's width per height of the button
+S.BLIZZARD_FONT = "Fonts\\FRIZQT__.TTF" -- the game's own text font (a choice of the Font select)
 
--- Every kit button, so a skin change re-dresses the ones that exist.
+-- Every kit button (S.action registers it), so the tests can list them.
 S.buttons = setmetatable({}, { __mode = "k" })
 
-local function slices(b, layer, path, blend)
-  local parts = {}
-  for i, s in ipairs(S.BUTTON_SLICES) do
-    local t = b:CreateTexture(nil, layer)
-    t:SetTexture(path)
-    t:SetTexCoord(s[1], s[2], 0, S.BUTTON_BOTTOM)
-    if blend then
-      t:SetBlendMode(blend)
-    end
-    parts[i] = t
-  end
-  parts[1]:SetPoint("TOPLEFT")
-  parts[1]:SetPoint("BOTTOMLEFT")
-  parts[3]:SetPoint("TOPRIGHT")
-  parts[3]:SetPoint("BOTTOMRIGHT")
-  parts[2]:SetPoint("TOPLEFT", parts[1], "TOPRIGHT")
-  parts[2]:SetPoint("BOTTOMRIGHT", parts[3], "BOTTOMLEFT")
-  return parts
-end
-
-local function showSlices(parts, on)
-  for _, t in ipairs(parts) do
-    t:SetShown(on)
-  end
-end
-
--- The caps follow the button's height, and never pass its middle on a narrow one.
-local function fitCaps(b)
-  local art = b.gameArt
-  local w, h = b:GetWidth() or 0, b:GetHeight() or 0
-  local cap = math.max(1, math.min(math.floor(h * S.BUTTON_CAP + 0.5), math.floor(w / 2)))
-  for _, parts in pairs(art) do
-    parts[1]:SetWidth(cap)
-    parts[3]:SetWidth(cap)
-  end
-end
-
-local function gameArt(b)
-  if b.gameArt then
-    return b.gameArt
-  end
-  b.gameArt = {
-    up = slices(b, "BACKGROUND", S.BUTTON_UP),
-    down = slices(b, "BACKGROUND", S.BUTTON_DOWN),
-    hl = slices(b, "HIGHLIGHT", S.BUTTON_HIGHLIGHT, "ADD"),
-  }
-  showSlices(b.gameArt.down, false)
-  fitCaps(b)
-  b:HookScript("OnSizeChanged", fitCaps)
-  b:HookScript("OnMouseDown", function(self)
-    if self.gameArtOn and self.enabledFlat ~= false then
-      showSlices(self.gameArt.up, false)
-      showSlices(self.gameArt.down, true)
-    end
-  end)
-  b:HookScript("OnMouseUp", function(self)
-    if self.gameArtOn then
-      showSlices(self.gameArt.down, false)
-      showSlices(self.gameArt.up, true)
-    end
-  end)
-  return b.gameArt
-end
-
--- The caps again after a look sized the button (the WoW renderer, after its layout).
-function S.fitGameArt(b)
-  if b.gameArt then
-    fitCaps(b)
-  end
-end
-
--- Hides the game's button art where a look of its own draws the button (ADR 0046's Modern,
--- Parchment and Glass renderers call it; the WoW renderer calls S.applyButton).
-function S.hideGameArt(b)
-  if b.gameArt then
-    b.gameArtOn = false
-    for _, parts in pairs(b.gameArt) do
-      showSlices(parts, false)
-    end
-  end
-end
-
-function S.applyButton(b)
-  if S.GameButtons() then
-    local art = gameArt(b)
-    b.gameArtOn = true
-    showSlices(art.up, true)
-    showSlices(art.down, false)
-    showSlices(art.hl, true)
-    b.face:Hide()
-    b.edges:Hide()
-    -- the game's red buttons carry gold words ("gray on dark red is
-    -- tricky"), whatever the scheme's text colour
-    if b.label then
-      S.ink(b.label, S.Palette("blizzard").C.gold) -- the game's own gold, on every scheme
-    end
-  else
-    S.hideGameArt(b)
-    b.face:Show()
-    b.edges:Show()
-    if b.label and b.labelToken then
-      S.ink(b.label, S.Tok(b, b.labelToken))
-    end
-  end
-end
+-- ~~The game's red button textures (`gameButtons`, S.applyButton)~~: gone with the WoW look
+-- (ADR 0084, 20.11.2026).
 
 -- A text's shadow by the scheme: none on a light ground (black under brown ink blurred the type
 -- on parchment, ), the 1 px drop on a dark one.
@@ -1026,12 +893,14 @@ function S.showPart(part, shown)
 end
 
 -- The game's inset behind a pane (InsetFrameTemplate: the bevelled edge, the marble ground; the
--- parchment ground on a light scheme so brown ink reads), shown while the look wears the game's
--- frames, the pane's own flat fill hidden then. The ground follows the window opacity.
+-- parchment ground on a light scheme so brown ink reads), the pane's own flat fill hidden then.
+-- The ground follows the window opacity. ~~Shown while the look wears the game's frames~~: since
+-- 20.11.2026 only where it is forced (the hub's, until W5 draws Core's windows); ADR 0084: the
+-- table is the ground in every theme.
 S.insets = setmetatable({}, { __mode = "k" })
 S.insetAlpha = 1
 function S.applyInset(frame)
-  local on = frame.insetForced or S.GameFrames()
+  local on = frame.insetForced == true
   if on and frame.gameInset == nil then
     frame.gameInset = B.Compat.NewInset(frame) or false
     if frame.gameInset then
@@ -1056,7 +925,7 @@ function S.applyInset(frame)
   S.showPart(frame.edges, not on)
 end
 
--- `force`: the inset shows whatever the look (the settings window's menu, always the WoW look).
+-- `force`: the inset shows (the settings window's menu, until W5); else the pane keeps its fill.
 function S.inset(frame, force)
   S.insets[frame] = true
   frame.insetForced = force or nil
@@ -1067,9 +936,6 @@ end
 function S.ApplySkin()
   for fs in pairs(S.headings) do
     S.applyHeading(fs)
-  end
-  for b in pairs(S.buttons) do
-    S.applyButton(b)
   end
   for frame in pairs(S.insets) do
     S.applyInset(frame)
@@ -1272,25 +1138,10 @@ function Shape:Radius()
   return math.max(0, r)
 end
 
--- A corner radius by its name as a frame sees it: the suite's (S.SHAPE), or for a frame of a look
--- of its own (S.SetFramePreset) the theme's radii under that look's own.
-function S.RadiusOf(frame, key)
-  local id = S.anyLook and frame and S.LookOf and S.LookOf(frame) or nil
-  if not id or id == S.LookId() then
-    return S.SHAPE[key]
-  end
-  local own = S.LOOKS[id] and S.LOOKS[id].shape or {}
-  if own[key] then
-    return own[key]
-  end
-  if key == "tile" then
-    return own.radiusSmall or themeShape.radiusSmall or S.SHAPE.radiusSmall
-  end
-  local theme = themeShape[key]
-  if theme == nil then
-    return S.SHAPE[key]
-  end
-  return theme
+-- A corner radius by its name: the suite's (S.SHAPE). One look has one set of corners (ADR 0084),
+-- ~~a frame of a look of its own took that look's~~ (until 20.11.2026).
+function S.RadiusOf(_, key)
+  return S.SHAPE[key]
 end
 
 function Shape:Rounded(corner)

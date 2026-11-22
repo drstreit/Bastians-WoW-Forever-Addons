@@ -610,6 +610,8 @@ def merge_quests(world: World, s: Sources) -> None:
             rec["excl"] = q.exclusive or None
             rec["chain"] = q.chain
             rec["parent"] = q.parent
+            rec["leads"] = q.leads or None
+            rec["maxLevel"] = q.max_level
             rec["skill"] = list(q.skill) if q.skill else None
             rec["minRep"] = list(q.min_rep) if q.min_rep else None
             flags = sorted(q.categories)
@@ -1211,10 +1213,29 @@ def _masks_meet(a: int | None, b: int | None) -> bool:
     return not a or not b or bool(a & b)
 
 
+def link_breadcrumbs(world: World) -> None:
+    """`crumbs` on a quest: the breadcrumbs whose `leads` name it (Everything Quests), so the
+    addon sees without decoding every record that the quest is not offered while one of them is in
+    the log, and that its `excl` naming one of them is the breadcrumb's link, not a branch."""
+    quests = world.records.get("quest", {})
+    crumbs: dict[int, list[int]] = {}
+    for crumb_id, rec in sorted(quests.items()):
+        for target in rec.get("leads") or []:
+            if target in quests and target != crumb_id:
+                crumbs.setdefault(target, []).append(crumb_id)
+    for target, ids in crumbs.items():
+        quests[target]["crumbs"] = ids
+    if crumbs:
+        world.notes.append(
+            f"breadcrumbs: {sum(len(v) for v in crumbs.values())} lead to {len(crumbs)} quests"
+        )
+
+
 def merge_fdb_previous_quests(world: World, s: Sources) -> None:
     """The quest players were seen to need first (ForeverDB's column since 0.57.14) joins `pre`, as
     in ForeverDB's own addon. Never where it could lock the quest for good: one already named by
-    the sources, or excluding it, one no character of this quest can take, or a cycle."""
+    the sources, or excluding it, a breadcrumb to it (a player may skip it), one no character of
+    this quest can take, or a cycle."""
     added = refused = 0
     for fq in s.fdb_quests:
         previous = fq.confirmed_previous
@@ -1227,6 +1248,7 @@ def merge_fdb_previous_quests(world: World, s: Sources) -> None:
         if (
             previous == fq.id
             or previous in (rec.get("excl") or [])
+            or fq.id in (other.get("leads") or [])
             or not _masks_meet(rec.get("races"), other.get("races"))
             or not _masks_meet(rec.get("classes"), other.get("classes"))
             or _needs(world, previous, fq.id)
@@ -2226,6 +2248,7 @@ def build_world(s: Sources) -> World:
     merge_questie_vendors(world, s)
     merge_item_ways(world, s)
     merge_questie_quests(world, s)
+    link_breadcrumbs(world)
     merge_quest_links(world, s)
     merge_objective_texts(world)
     merge_client_quest_areas(world, s)

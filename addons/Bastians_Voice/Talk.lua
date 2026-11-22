@@ -206,15 +206,56 @@ function Talk.OrbitItems(state)
       outer[#outer + 1] = a
     end
   end
-  -- the options spread over an arc centred on top, at most 240 degrees and at least 60 apart,
-  -- so their words do not meet; the name sits at the bottom
-  local m = #state.options
-  local span = math.min(240, 60 * (m - 1))
-  for i, o in ipairs(state.options) do
-    o.bearing = (-(span / 2) + (m > 1 and (i - 1) * span / (m - 1) or 0)) % 360
+  local shown = Talk.Page(state)
+  local bearings = Talk.Bearings(#shown)
+  for i, o in ipairs(shown) do
+    o.bearing = bearings[i] % 360
     outer[#outer + 1] = o
   end
   return places, outer, {}
+end
+
+-- Answers the outer orbit holds at Voice.MIN_GAP degrees, the bottom left free for the name.
+Talk.FIT = 11
+-- A page's answers when there are more: the rest wait behind "More" (a
+-- guard's fifteen directions lay two on one place, "most of the answers are doubled").
+Talk.PER_PAGE = 9
+
+-- The answers shown now: all of them while they fit, else a page of them with "More", and
+-- Farewell (the last answer) always.
+function Talk.Page(state)
+  local options = state.options
+  if #options <= Talk.FIT then
+    return options
+  end
+  local farewell = options[#options]
+  local pages = math.ceil((#options - 1) / Talk.PER_PAGE)
+  state.page = math.min(state.page or 1, pages)
+  local shown = {}
+  for i = (state.page - 1) * Talk.PER_PAGE + 1, math.min(#options - 1, state.page * Talk.PER_PAGE) do
+    shown[#shown + 1] = options[i]
+  end
+  shown[#shown + 1] = sayItem(L["More"], function()
+    state.page = state.page % pages + 1
+    Orbit.Render()
+  end, string.format(L["Page %d of %d: the other answers"], state.page, pages), "more")
+  shown[#shown + 1] = farewell
+  return shown
+end
+
+-- The bearings of n answers, left to right, on an arc centred on top: 60 degrees apart while five
+-- fit in 240, closer for more
+-- but never under Voice.MIN_GAP. Two answers that would stand closer than 20 degrees either side
+-- of the top, their words side by side above the hub, become one at the top: the arc leans half
+-- a place to the right.
+function Talk.Bearings(n)
+  local gap = n <= 5 and 60 or math.max(Voice.MIN_GAP, 240 / math.max(1, n - 1))
+  local lean = (n % 2 == 0 and gap < 40) and gap / 2 or 0
+  local out = {}
+  for i = 1, n do
+    out[i] = (i - (n + 1) / 2) * gap + lean
+  end
+  return out
 end
 
 -- ---------------------------------------------------------------------------------------------

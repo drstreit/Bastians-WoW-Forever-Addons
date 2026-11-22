@@ -14,10 +14,11 @@ local function sexWord(code)
   return code == 2 and "m" or code == 3 and "f" or nil
 end
 
--- The speaker: the character as it is.
+-- The speaker: the character as it is, in the ring's language (Voice.language).
 function Facts.Speaker()
   local shown, key = UnitRace("player")
   return {
+    lang = Voice.language,
     myName = plain((UnitName("player"))),
     myRace = plain(shown),
     myRaceKey = plain(key),

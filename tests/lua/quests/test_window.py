@@ -412,10 +412,9 @@ def test_level_colour_follows_the_classic_rule(wow: WowRuntime):
     assert color(12, 12) == "|cffffff00"
     assert color(10, 12) == "|cffffff00"
     assert color(7, 12) == "|cff40c040"  # the green range at level 12 is 6 levels
-    assert (
-        color(5, 12) == "|cff888888"
-    )  # the grey of the teal scheme (4.5:1 on the panel and on a tile over it)
-    assert color("nil", 12) == "|cffffffff"
+    # the theme's muted ink (4.5:1 on the panel and on a tile over it): Folio's since W4
+    assert color(5, 12) == wow.eval("Bastians.UI.Style.H.muted")
+    assert color("nil", 12) == wow.eval("Bastians.UI.Style.H.bright")  # unknown: the brightest ink
     assert wow.eval("Bastians:GetModule('Quests').Rows.greenRange(45)") == 10
 
 

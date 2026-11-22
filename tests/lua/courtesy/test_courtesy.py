@@ -126,6 +126,8 @@ def test_a_buff_opens_the_ring_with_three_lines_and_the_gesture(wow: WowRuntime)
 def test_the_petals_fly_out(wow: WowRuntime):
     boot(wow)
     buff(wow, "nameplate3", "Thalendra")
+    assert wow.eval(f"{R}.IsGrown()") is False  # the symbol calls; the pointer grows it
+    assert wow.eval(f"{R}.Grow()") is True
     start = wow.eval(f"select(5, {R}.Petal(1):GetPoint(1))")
     wow.run_frames(6)
     middle = wow.eval(f"select(5, {R}.Petal(1):GetPoint(1))")
@@ -175,9 +177,11 @@ def test_the_gesture_the_centre_and_the_time(wow: WowRuntime):
     wow.execute(f"{R}.Close()")
     assert wow.eval(f"{C}.Pending()") is None
     assert sent(wow) == []
-    # the twelve seconds
+    # the call lasts the setting's seconds
+    assert wow.eval(f"{MOD}.db.profile.callSeconds") == 60
+    wow.execute(f"{MOD}.db.profile.callSeconds = 30")
     buff(wow, "nameplate5", "Bob")
-    wow.advance(11)
+    wow.advance(29)
     wow.run_frames(2)
     assert wow.eval(f"{C}.IsShown()") is True
     wow.advance(2)
@@ -321,8 +325,12 @@ def test_combat_off_and_instances(wow: WowRuntime):
     boot(wow)
     buff(wow, "nameplate3", "Thalendra")
     assert wow.eval(f"{C}.IsShown()") is True
+    assert wow.eval(f"{R}.Grow()") is True
     wow.execute("Mock.SetCombat(true); Mock.Fire('PLAYER_REGEN_DISABLED')")
-    assert wow.eval(f"{C}.IsShown()") is False  # combat closes an open ring
+    assert wow.eval(f"{R}.IsGrown()") is False  # combat shrinks an open ring
+    assert wow.eval(f"{C}.Pending().who") == "Thalendra"  # the moment waits for after the fight
+    assert wow.eval(f"{R}.Grow()") is False  # and the ring does not grow in it
+    wow.execute(f"{C}.Hide()")
     buff(wow, "nameplate4", "Grimtok")
     assert wow.eval(f"{C}.IsShown()") is False
     wow.execute("Mock.SetCombat(false)")
@@ -652,6 +660,7 @@ def test_a_spoken_line_goes_through_the_games_secure_macro(wow: WowRuntime):
     """ "I clicked, nothing in chat"; the client refuses the addon's call."""
     boot(wow)
     unseen(wow)  # no name to whisper to: the line is said aloud
+    wow.execute(f"{R}.Grow()")
     button = f"{R}.Secure(1)"
     assert wow.eval(f"{button}:GetAttribute('type')") == "macro"
     # , clicking and nothing in chat: an addon's secure button follows
@@ -906,3 +915,129 @@ def test_sitting_already_at_a_login_is_no_greeting(wow: WowRuntime):
     wow.execute(CAMPS + "COMPANY = { 'Alda' }")
     wow.execute("Bastians:Fire('BASTIANS_CAMP_SAT', nil)")  # the first seconds after a login
     assert wow.eval(f"{C}.IsShown()") is False
+
+
+def symbol(wow: WowRuntime) -> str:
+    return f"{R}.Frames().symbol"
+
+
+def test_the_symbol_stays_and_grows_under_the_pointer(wow: WowRuntime):
+    """ "a permanent Courtesy in the UI"; ADR 0088."""
+    boot(wow)
+    assert wow.eval(f"{R}.IsSymbolShown()") is True  # after login, without a moment
+    assert wow.eval(f"{R}.Frames().ticker:IsShown()") is False  # at rest it runs nothing
+    wow.execute(
+        f"Mock.mouseOverFrame = {symbol(wow)}; {symbol(wow)}:GetScript('OnEnter')({symbol(wow)})"
+    )
+    wow.advance(0.5)
+    wow.run_frames(3)
+    assert wow.eval(f"{R}.IsGrown()") is True
+    assert wow.eval(f"{R}.IsSymbolShown()") is False  # the ring stands in its place
+    lines = [wow.eval(f"{R}.Item({i}).line") for i in (1, 2, 3)]
+    # English speaks in patterns too (ADR 0089): the resting ring's petals are ambient lines
+    assert all(lines) and all(line[1] == "ambient" and line.parts is None for line in lines)
+    assert wow.eval(f"{R}.Item(4).emote") == "WAVE"
+    assert wow.eval(f"{R}.Secure(1):GetAttribute('macrotext')")[:3] in ("/s ", "/e ")
+    # the pointer on the ring, then off it: it shrinks after a moment
+    wow.execute(
+        f"Mock.mouseOverFrame = nil; local r = {R}.Frames().ring; Mock.cursorX, Mock.cursorY = r.cx, r.cy"
+    )
+    wow.run_frames(3)
+    wow.execute("Mock.cursorX, Mock.cursorY = 5, 5")
+    wow.advance(0.2)
+    wow.run_frames(2)
+    assert wow.eval(f"{R}.IsGrown()") is True
+    wow.advance(0.5)
+    wow.run_frames(2)
+    assert wow.eval(f"{R}.IsGrown()") is False
+    assert wow.eval(f"{R}.IsSymbolShown()") is True
+    wow.run_frames(2)
+    assert wow.eval(f"{R}.Frames().ticker:IsShown()") is False
+    assert errors(wow) == []
+
+
+def test_a_moment_makes_the_symbol_call(wow: WowRuntime):
+    boot(wow)
+    wow.execute(f"{MOD}.db.profile.symbol = false; {R}.Refresh()")
+    assert wow.eval(f"{R}.IsSymbolShown()") is False  # switched off
+    buff(wow, "nameplate3", "Thalendra")
+    assert wow.eval(f"{R}.IsSymbolShown()") is True  # a moment shows it anyway
+    assert wow.eval(f"{R}.IsGrown()") is False  # no ring opens by itself
+    assert wow.eval(f"{R}.Frames().ticker:IsShown()") is True  # it pulses
+    assert wow.eval(f"{R}.Caption()") == "Thalendra cast Mark of the Wild on you"
+    assert wow.eval(f"{R}.Grow()") is True
+    assert wow.eval(f"{R}.ShowsMoment()") is True
+    assert wow.eval(f"{R}.Item(4).emote") == "THANK"
+    # the centre sets it aside: the general lines again, the symbol gone with the setting off
+    wow.execute(f"{R}.Frames().ring.hub:GetScript('OnClick')({R}.Frames().ring.hub, 'LeftButton')")
+    assert wow.eval(f"{C}.Pending()") is None
+    assert wow.eval(f"{R}.IsSymbolShown()") is False
+    assert errors(wow) == []
+
+
+def test_the_die_and_the_language_on_the_rim(wow: WowRuntime):
+    boot(wow)
+    buff(wow, "nameplate3", "Thalendra")
+    wow.execute(f"{R}.Grow()")
+    before = {wow.eval(f"{R}.Item({i}).line[3]") for i in (1, 2, 3)}
+    wow.execute(f"{R}.Frames().shuffle:GetScript('OnClick')({R}.Frames().shuffle)")
+    after = {wow.eval(f"{R}.Item({i}).line[3]") for i in (1, 2, 3)}
+    assert before.isdisjoint(after)  # three new lines, none just shown
+    assert wow.eval(f"{R}.ShowsMoment()") is True  # still the moment's
+    chip = f"{R}.Frames().language"
+    assert wow.eval(f"{chip}.spec.value") == "enUS"
+    assert [i.label for i in wow.eval(f"{chip}.spec.items").values()] == ["EN", "DE"]
+    wow.execute(f"local p = {chip}:Part('deDE'); p:GetScript('OnClick')(p)")
+    assert wow.eval(f"{MOD}.db.profile.language") == "deDE"
+    assert wow.eval(f"{chip}.spec.value") == "deDE"
+    assert wow.eval(f"{C}.PendingFacts().lang") == "deDE"
+    # German speaks in patterns (ADR 0089): each petal a variant of a line of the German pack
+    for i in (1, 2, 3):
+        line = f"{MOD}.Voice.Source({R}.Item({i}).line)"
+        assert (
+            wow.eval(
+                f"(function() for _, l in ipairs({MOD}.Voice.PACKS.deDE.lines) do"
+                f" if l == {line} then return true end end end)()"
+            )
+            is True
+        )
+        assert wow.eval(f"{R}.Item({i}).line.parts") is None
+    assert errors(wow) == []
+
+
+def test_the_symbol_keeps_its_place_and_goes_with_the_screen(wow: WowRuntime):
+    boot(wow)
+    s = symbol(wow)
+    wow.execute(f"{s}:GetScript('OnDragStart')({s}); {s}:GetScript('OnDragStop')({s})")
+    at = wow.eval(f"{MOD}.db.profile.symbolAt")
+    assert at.x is not None and at.y is not None
+    wow.execute("Bastians:Fire('BASTIANS_SUITE_HIDDEN', true)")
+    hides = wow.eval("Bastians.UI.Screen.Hides('Courtesy')")
+    assert wow.eval(f"{R}.IsSymbolShown()") is (not hides)
+    wow.execute("Bastians:Fire('BASTIANS_SUITE_HIDDEN', false)")
+    assert wow.eval(f"{R}.IsSymbolShown()") is True
+    wow.execute("Bastians:GetModule('Courtesy'):Disable()")
+    assert wow.eval(f"{R}.IsSymbolShown()") is False
+    assert errors(wow) == []
+
+
+def test_the_open_ring_moves_by_its_centre(wow: WowRuntime):
+    """ "the symbol must be movable"; grown at once, it moves by the hub."""
+    boot(wow)
+    s = symbol(wow)
+    assert list(wow.eval(f"{s}.drag").values()) == ["LeftButton", "RightButton"]
+    # the release of a drag is no click: the symbol does not grow from it
+    wow.execute(f"{s}:GetScript('OnDragStart')({s}); {s}:GetScript('OnDragStop')({s})")
+    wow.execute(f"{s}:GetScript('OnClick')({s}, 'LeftButton')")
+    assert wow.eval(f"{R}.IsGrown()") is False
+    buff(wow, "nameplate3", "Thalendra")
+    assert wow.eval(f"{R}.Grow()") is True
+    hub = f"{R}.Frames().ring.hub"
+    wow.execute(f"{MOD}.db.profile.symbolAt = nil")
+    wow.execute(f"{hub}:GetScript('OnDragStart')({hub}); {hub}:GetScript('OnDragStop')({hub})")
+    assert wow.eval(f"{MOD}.db.profile.symbolAt") is not None  # the new place is kept
+    wow.execute(f"{hub}:GetScript('OnClick')({hub}, 'LeftButton')")
+    assert wow.eval(f"{C}.Pending().who") == "Thalendra"  # the drag's release set nothing aside
+    # the ring's centre is where it stopped: the secure buttons are laid from it
+    assert wow.eval(f"{R}.Frames().ring.cx") == wow.eval(f"{MOD}.db.profile.symbolAt.x")
+    assert errors(wow) == []

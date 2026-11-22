@@ -17,6 +17,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 KINDS = ("breaking", "format", "feature", "fix", "none")  # the strongest first
 TRAILER = re.compile(r"^Release-note:\s*(\w+)\s*(?::\s*(.*\S))?\s*$", re.I)
+REVERTS = re.compile(r"This reverts commit ([0-9a-f]{40})")  # git revert's own line
 # the pipeline parts whose output ships in the Suite's folders (Map's tiles, Map Art's overview,
 # Core's themes); every other pipeline file writes Data's packs
 SUITE_PIPELINE = (
@@ -79,6 +80,7 @@ class Commit:
     subject: str
     date: str  # ISO-8601 with offset, the author date
     notes: list[Note] = field(default_factory=list)
+    reverts: str | None = None  # the commit git's "This reverts commit <sha>." names
 
     @property
     def classified(self) -> bool:
@@ -158,6 +160,8 @@ def commits(since: str | None, paths: list[str], root: Path = ROOT) -> list[Comm
         sha, subject, date, body = [*chunk.split(SEP), "", "", ""][:4]
         c = Commit(sha, subject, date)
         c.notes = parse_notes(sha, subject, body)
+        m = REVERTS.search(body)
+        c.reverts = m.group(1) if m else None
         found.append(c)
     return found
 
@@ -172,5 +176,7 @@ def last_change(paths: list[str], root: Path = ROOT) -> str | None:
 
 
 def player_notes(found: list[Commit]) -> list[Note]:
-    """The notes players read, oldest first (`none` left out)."""
-    return [n for c in found for n in c.notes if n.kind != "none"]
+    """The notes players read, oldest first (`none` left out). A commit taken back by a later one
+    of the same span says nothing (22.11.2026: Gestures' symbol went before a release had it)."""
+    gone = {c.reverts for c in found if c.reverts}
+    return [n for c in found if c.sha not in gone for n in c.notes if n.kind != "none"]

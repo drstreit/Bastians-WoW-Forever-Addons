@@ -1849,9 +1849,9 @@ function Window.Build()
   bar.ground.rule:SetPoint("BOTTOMLEFT", bar.ground, "BOTTOMLEFT", 0, 0)
   bar.ground.rule:SetPoint("BOTTOMRIGHT", bar.ground, "BOTTOMRIGHT", 0, 0)
   bar.ground.rule:SetHeight(1)
-  -- The palette the bar draws in and its ground: the dark table where the look is the game's.
+  -- The palette the bar draws in and its ground: the dark table on a dark theme (ADR 0084).
   local function barGround()
-    local dark = S.LookOf(win.frame) == "wow"
+    local dark = S.DarkTable(win.frame)
     bar.palette = dark and S.FolioPalette() or nil
     local shown = dark and win.gameFramed == true
     bar.ground:SetShown(shown)

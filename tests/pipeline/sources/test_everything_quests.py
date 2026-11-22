@@ -81,6 +81,9 @@ def test_assemble_is_pure_and_merges_all_tables():
             "chain": {62: 76},
             "skill": {76: 186 * 10**4 + 50},
             "minRep": {76: 72 * 10**6 + 4},
+            # EQ 2.16.0: a breadcrumb's follow-ups, and the highest level a quest is offered at
+            "leads": {62: [76], 76: 11},
+            "maxLevel": {76: 34},
         },
         turn_in={62: {1429: [240 * 10**9 + 1 * 10**8 + 4200 * 10**4 + 6500]}},
         coords={62: 142938008200},
@@ -101,6 +104,8 @@ def test_assemble_is_pure_and_merges_all_tables():
     assert q.objectives[0].npc_id == 103 and q.categories == {"event"}
     assert q.spawns[0].objective_mask == 1 and q.holiday == "Love is in the Air"
     assert data.quests[76].skill == (186, 50) and data.quests[76].min_rep == (72, 4)
+    assert data.quests[62].leads == [76] and data.quests[76].leads == [11]
+    assert data.quests[76].max_level == 34 and data.quests[62].max_level is None
     assert data.npc_names == {240: "Marshal Dughan"} and data.object_names == {}
     assert list(data.quests) == [62, 76]
 

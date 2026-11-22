@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.7.0:1",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = "Courtesy answers sound like something a person would say, in English and in German: one or two short spoken sentences, thanks first, many variants of each.",
+  },
+  {
+    id = "2.7.0:2",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = "Courtesy keeps a small symbol on the screen that you can drag anywhere: point at it for a few kind words at any time; a moment now waits a minute (adjustable) for your answer.",
+  },
+  {
     id = "2.5.0:1",
     date = "2026-11-15",
     version = "2.5.0",

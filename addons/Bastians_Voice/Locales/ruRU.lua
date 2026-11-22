@@ -126,4 +126,6 @@ ns.L:Register("ruRU", {
   ["Click to move the Orbiter freely."] = "Щёлкните, чтобы свободно перемещать Orbiter.",
   ["Moves freely"] = "Свободно перемещается",
   ["Drag the Orbiter where you want it. Click to lock it in place."] = "Перетащите Orbiter куда нужно. Щёлкните, чтобы закрепить положение.",
+  -- a guard's many answers in pages (22.11.2026)
+  ["Page %d of %d: the other answers"] = "Страница %d из %d: остальные ответы",
 })

@@ -1,13 +1,15 @@
-"""The look engine (ADR 0046, 01.11.2026): widgets declared, drawn by the look in force; the
-action button with its pictogram and text, the kind tile on the group's colour, the geometry
-tokens of the theme, a preset change redrawing every widget; the look named by the preset's
-`look`, the Glass and Parchment renderers (plan-round4 H4)."""
+"""The look engine (ADR 0046) in the one look (ADR 0084, W4 of plan-suite-waves.md, 20.11.2026):
+widgets declared by the apps, drawn by Core in the book's shape language (book-look.md), coloured
+by a theme. The renderer test draws every widget kind in each theme and holds the numbers to
+book-look.md sections 4 and 5. ~~The Modern, WoW, Glass and Parchment renderers~~ (until
+20.11.2026; their tests were replaced by these, not skipped)."""
 
+import pytest
 from harness import WowRuntime
 
 S = "Bastians.UI.Style"
-CORE = "Bastians:GetModule('Core')"
-SET = "Bastians.UI.Settings"
+PAINTED = f"{S}.painted"
+THEMES = ("folio", "parchment", "teal", "night")
 
 
 def boot(wow: WowRuntime) -> WowRuntime:
@@ -16,10 +18,52 @@ def boot(wow: WowRuntime) -> WowRuntime:
     return wow
 
 
+def theme(wow: WowRuntime, id_: str) -> None:
+    wow.execute(f"Bastians:GetModule('Core').db.profile.theme = '{id_}'; {S}.ApplyTheme('{id_}')")
+    wow.execute(f"{S}.ApplyLook()")
+
+
+def tok(wow: WowRuntime, region: str, token: str) -> bool:
+    """Whether the kit painted `region` with the theme's `token` (the table itself)."""
+    return wow.eval(f"{PAINTED}[{region}][1] == {S}.C.{token}") is True
+
+
+def ink(wow: WowRuntime, region: str, token: str) -> bool:
+    return wow.eval(f"{S}.inked[{region}] == {S}.C.{token}") is True
+
+
+def alpha(wow: WowRuntime, region: str):
+    return wow.eval(f"{PAINTED}[{region}][2]")
+
+
+WIDGETS = f"""
+W = {{ changed = {{}} }}
+W.quiet = {S}.action(UIParent, {{ icon = 'map', label = 'Map' }})
+W.tool = {S}.action(UIParent, {{ icon = 'map', label = 'Your record', boxed = true }})
+W.main = {S}.action(UIParent, {{ icon = 'map', label = 'Atlas', primary = true }})
+W.only = {S}.action(UIParent, {{ icon = 'settings', label = 'Options', only = true }})
+W.on = {S}.pill(UIParent, {{ label = 'Rares', count = 4, on = true }})
+W.off = {S}.pill(UIParent, {{ label = 'Gold', count = 2 }})
+W.chip = {S}.pill(UIParent, {{ small = true, label = 'Wetlands', count = 3 }})
+W.tab = {S}.tab(UIParent, {{ label = 'Trade', on = true }})
+W.other = {S}.tab(UIParent, {{ label = 'Guild' }})
+W.sec = {S}.section(UIParent, {{ icon = 'note', title = 'My notes' }})
+W.sw = {S}.toggle(UIParent, {{ on = true, onChange = function(_, on) table.insert(W.changed, on) end }})
+W.card = {S}.card(UIParent, {{ stripe = 'tier1' }})
+W.seg = {S}.segmented(UIParent, {{ value = 'a',
+  items = {{ {{ id = 'a', label = 'one' }}, {{ id = 'b', label = 'two' }} }} }})
+W.slider = {S}.slider(UIParent, {{ title = 'Size', min = 0, max = 10, value = 5 }})
+W.slider:SetWidth(200)
+W.stat = {S}.stat(UIParent, {{ label = 'Gold', value = 12 }})
+W.tile = {S}.tile(UIParent, 'quest')
+"""
+
+
 def test_the_theme_carries_geometry_and_tile_tokens(wow: WowRuntime):
     boot(wow)
     g = wow.eval(f"{S}.G")
     assert g.action == 26 and g.actionRow == 22 and g.tile == 18 and g.tileBig == 26 and g.gap == 6
+    assert g.chip == 22  # book-look.md section 5: a chip 22 high
     for token in (
         "tileGold",
         "tileRed",
@@ -31,7 +75,102 @@ def test_the_theme_carries_geometry_and_tile_tokens(wow: WowRuntime):
         "tileGrey",
     ):
         assert wow.eval(f"{S}.C.{token}") is not None
-    assert wow.eval(f"{S}.LookId()") == "modern"
+    assert wow.eval(f"{S}.LookId()") == "book" and wow.eval(f"{S}.LookOf(UIParent)") == "book"
+    assert sorted(wow.eval(f"{S}.LOOKS").keys()) == ["book"]  # one renderer (decision 1)
+    assert wow.errors == []
+
+
+@pytest.mark.parametrize("theme_id", THEMES)
+def test_every_widget_kind_in_the_one_look(wow: WowRuntime, theme_id: str):
+    """ADR 0084 decision 2 and its consequences ("a renderer test draws every widget kind in the
+    one look in each theme and checks the geometry against book-look.md")."""
+    boot(wow)
+    theme(wow, theme_id)
+    wow.execute(WIDGETS)
+    # the action: a quiet one the pictogram and the word alone; a tool the words in an outline of
+    # the line; the primary the one filled plate in the accent with the ground's ink
+    assert alpha(wow, "W.quiet.face") == 0 and alpha(wow, "W.quiet.edges") == 0
+    assert alpha(wow, "W.tool.face") == 0 and alpha(wow, "W.tool.edges") == 1
+    assert tok(wow, "W.tool.edges", "line") and ink(wow, "W.tool.label", "text")
+    assert tok(wow, "W.main.face", "accent") and alpha(wow, "W.main.face") == 1
+    assert alpha(wow, "W.main.edges") == 0 and ink(wow, "W.main.label", "bg")
+    assert tok(wow, "W.main.icon", "bg")
+    assert tok(wow, "W.only.icon", "muted") and wow.eval("W.only.label:GetText()") == ""  # quiet
+    assert wow.eval("W.tool:GetHeight()") == 26 and wow.eval("W.quiet:GetHeight()") == 26
+    # a tool's side padding 10 (book-look.md section 4), a quiet word's 7
+    assert wow.eval("(select(4, W.tool.icon:GetPoint(1)))") == 10
+    assert wow.eval("(select(4, W.quiet.icon:GetPoint(1)))") == 7
+    # the pill: quiet, the chosen one filled in the accent with the ground's ink; round at both ends
+    assert alpha(wow, "W.off.face") == 0 and ink(wow, "W.off.label", "text")
+    assert tok(wow, "W.on.face", "accent") and alpha(wow, "W.on.face") == 1
+    assert ink(wow, "W.on.label", "bg") and ink(wow, "W.on.count", "bg")
+    assert wow.eval("W.on.face.r") == 13 and wow.eval("W.chip.face.r") == 11
+    assert wow.eval("W.chip:GetHeight()") == 22
+    # the tab: a word; the shown one filled in the accent, top corners round; the other dim
+    assert tok(wow, "W.tab.face", "accent") and alpha(wow, "W.tab.face") == 1
+    assert ink(wow, "W.tab.label", "bg") and wow.eval("W.tab.face.corners") == "top"
+    assert alpha(wow, "W.other.face") == 0 and ink(wow, "W.other.label", "dim")
+    assert alpha(wow, "W.tab.edges") == 0 and wow.eval("W.tab.under:IsShown()") is False
+    # the section: small capitals in the dim ink, no rule
+    assert wow.eval("W.sec.title:GetText()") == "MY NOTES" and ink(wow, "W.sec.title", "dim")
+    assert wow.eval("W.sec.rule:IsShown()") is False
+    # the switch: the book's 28 x 15, a knob of 11, the accent while on, the muted ink while off
+    assert wow.eval("W.sw:GetWidth()") == 28 and wow.eval("W.sw:GetHeight()") == 15
+    assert wow.eval("W.sw.knob:GetWidth()") == 11
+    assert tok(wow, "W.sw.track", "accent") and tok(wow, "W.sw.knob.fill", "bg")
+    assert wow.eval("(W.sw.knob:GetPoint(1))") == "RIGHT"
+    assert wow.eval("W.sw.mark:IsShown()") is False  # no box with a cross
+    wow.execute("W.sw:Click()")
+    assert tok(wow, "W.sw.track", "muted") and wow.eval("(W.sw.knob:GetPoint(1))") == "LEFT"
+    assert list(wow.eval("W.changed").values()) == [False]
+    # the card: the theme's plate and edge
+    assert tok(wow, "W.card.face", "card") and tok(wow, "W.card.edges", "cardEdge")
+    # the segmented switch: the chosen part filled
+    assert wow.eval("W.seg:Part('a').fill:IsShown()") is True
+    assert wow.eval("W.seg:Part('b').fill:IsShown()") is False
+    assert ink(wow, "W.seg:Part('a').label", "bg") and ink(wow, "W.seg:Part('b').label", "text")
+    # the slider: a track of 4, a round knob of 12 in the accent, the track filled up to it
+    assert wow.eval("W.slider.rail:GetHeight()") == 4 and wow.eval("W.slider.knob:GetWidth()") == 12
+    assert tok(wow, "W.slider.knob", "accent") and tok(wow, "W.slider.fill", "accent")
+    assert tok(wow, "W.slider.track", "line")
+    # the stat and the tile keep their plate and a thin edge
+    assert tok(wow, "W.stat.face", "card") and tok(wow, "W.stat.edges", "line")
+    assert tok(wow, "W.tile.edges", "line") and wow.eval("W.tile:GetWidth()") == 18
+    assert wow.eval("W.quiet.sheen") is None and wow.eval("W.quiet.gameArt") is None
+    assert wow.errors == []
+
+
+def test_the_mouse_lights_a_tool_and_brings_a_quiet_plate(wow: WowRuntime):
+    """book-look.md section 4: a tool's edge in the accent under the mouse; a quiet pictogram
+    brighter; a quiet word on a faint plate; the primary keeps its plate."""
+    boot(wow)
+    wow.execute(WIDGETS)
+    for name in ("tool", "quiet", "only", "main"):
+        wow.execute(f"W.{name}:GetScript('OnEnter')(W.{name})")
+    assert tok(wow, "W.tool.edges", "accent")
+    assert tok(wow, "W.quiet.face", "faceHover") and alpha(wow, "W.quiet.face") == 1
+    assert tok(wow, "W.only.icon", "text")
+    assert tok(wow, "W.main.face", "accent") and alpha(wow, "W.main.face") == 1
+    for name in ("tool", "quiet", "only", "main"):
+        wow.execute(f"W.{name}:GetScript('OnLeave')(W.{name})")
+    assert tok(wow, "W.tool.edges", "line") and alpha(wow, "W.quiet.face") == 0
+    assert tok(wow, "W.only.icon", "muted")
+    wow.execute("W.tool:SetOn(true)")
+    assert tok(wow, "W.tool.edges", "accent") and ink(wow, "W.tool.label", "accent")
+    assert wow.errors == []
+
+
+def test_a_theme_change_redraws_every_widget(wow: WowRuntime):
+    """A theme changes colours, never shapes (ADR 0084 decision 5)."""
+    boot(wow)
+    wow.execute(WIDGETS)
+    sizes = {n: wow.eval(f"W.{n}:GetWidth()") for n in ("tool", "on", "tab", "sw")}
+    before = list(wow.eval("{ W.on.face:GetVertexColor() }").values())
+    theme(wow, "parchment")
+    after = list(wow.eval("{ W.on.face:GetVertexColor() }").values())
+    assert after != before and after[:3] == list(wow.eval(f"{S}.C.accent").values())[:3]
+    assert {n: wow.eval(f"W.{n}:GetWidth()") for n in sizes} == sizes
+    assert wow.eval(f"{S}.SHAPE.radius") == 6 and wow.eval(f"{S}.SHAPE.radiusSmall") == 4
     assert wow.errors == []
 
 
@@ -89,253 +228,33 @@ def test_a_tile_takes_its_groups_colour(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_pills_tabs_sections_and_toggles_in_both_looks(wow: WowRuntime):
-    boot(wow)
-    wow.execute(
-        f"""
-        LookTest = {{ changed = {{}} }}
-        LookTest.pill = {S}.pill(UIParent, {{ kind = 'vendor', label = 'Vendor', count = 145, onClick = function() LookTest.picked = true end }})
-        LookTest.tab = {S}.tab(UIParent, {{ kind = 'service', label = 'Trade', on = true }})
-        LookTest.sec = {S}.section(UIParent, {{ icon = 'note', title = 'My notes' }})
-        LookTest.tog = {S}.toggle(UIParent, {{ on = false, onChange = function(_, on) table.insert(LookTest.changed, on) end }})
-        """
-    )
-    assert wow.eval("LookTest.pill:GetHeight()") == 26
-    assert wow.eval("LookTest.pill.count:GetText()") == "145"
-    assert wow.eval("LookTest.pill.tile.spec.kind") == "vendor"
-    wow.execute("LookTest.pill:Click()")
-    assert wow.eval("LookTest.picked") is True
-    wow.execute("LookTest.pill:SetOn(true) LookTest.pill:SetCount(9)")
-    assert wow.eval("LookTest.pill.count:GetText()") == "9"
-    assert wow.eval("LookTest.tab:GetHeight()") == 26
-    assert wow.eval("LookTest.tab.under:IsShown()") is True
-    wow.execute("LookTest.tab:SetOn(false) LookTest.tab:SetBadge(3)")
-    assert wow.eval("LookTest.tab.under:IsShown()") is False
-    assert wow.eval("LookTest.tab.badge.text:GetText()") == "3"
-    assert wow.eval("LookTest.sec.title:GetText()") == "MY NOTES"  # Modern: small capitals
-    assert wow.eval("LookTest.sec.rule:IsShown()") is False
-    assert wow.eval("LookTest.tog:GetWidth()") == 34
-    wow.execute("LookTest.tog:Click()")
-    assert wow.eval("LookTest.tog.spec.on") is True
-    assert list(wow.eval("LookTest.changed").values()) == [True]
-    # the WoW look: the section's heading face and rule, the toggle as a box with a cross
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'wow')") is True
-    assert wow.eval("LookTest.sec.title:GetText()") == "My notes"
-    assert wow.eval("LookTest.sec.rule:IsShown()") is True
-    assert wow.eval("LookTest.tog:GetWidth()") == 18
-    assert wow.eval("LookTest.tog.mark:IsShown()") is True
-    assert wow.eval("LookTest.tab:GetHeight()") == 24
-    assert wow.errors == []
-
-
-def test_the_wow_preset_redraws_every_widget_and_back(wow: WowRuntime):
-    boot(wow)
-    wow.execute(
-        f"LookTest = {{}} LookTest.b = {S}.action(UIParent, {{ icon = 'map', label = 'Map' }})"
-    )
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'wow')") is True
-    assert wow.eval(f"{S}.LookId()") == "wow"
-    assert wow.eval("LookTest.b:GetHeight()") == 24  # the WoW geometry
-    assert wow.eval("LookTest.b.gameArt.up[2]:GetTexture()") == wow.eval(f"{S}.BUTTON_UP")
-    assert wow.eval("LookTest.b.gameArt.up[2]:IsShown()") is True
-    assert wow.eval("LookTest.b.face:IsShown()") is False
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-dark')") is True
-    assert wow.eval("LookTest.b:GetHeight()") == 26
-    assert wow.eval("LookTest.b.face:IsShown()") is True
-    assert (
-        wow.eval("LookTest.b.gameArt.up[2]:IsShown()") is False
-    )  # the red slices go with the look
-    assert wow.errors == []
-
-
-PAINTED = f"{S}.painted"
-
-
-def test_the_look_is_the_presets_and_an_old_profile_reads_the_buttons_switch(wow: WowRuntime):
-    boot(wow)
-    assert wow.eval(f"{S}.LookId()") == "modern"
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'wow')") is True
-    assert wow.eval(f"{CORE}.db.profile.look") == "wow" and wow.eval(f"{S}.LookId()") == "wow"
-    # a profile saved before `look` existed: the game's buttons switch decides (ADR 0038)
-    wow.execute(f"{CORE}.db.profile.look = nil")
-    assert wow.eval(f"{S}.LookId()") == "wow"
-    wow.execute(f"{CORE}.db.profile.gameButtons = false")
-    assert wow.eval(f"{S}.LookId()") == "modern"
-    wow.execute(f"{CORE}.db.profile.look = 'nonsense'")
-    assert wow.eval(f"{S}.LookId()") == "modern"  # an unknown look never breaks the drawing
-    assert wow.errors == []
-
-
-def test_glass_puts_every_text_on_a_plate_and_rounds_the_corners(wow: WowRuntime):
-    boot(wow)
-    wow.execute(
-        f"""
-        LookTest = {{}}
-        LookTest.b = {S}.action(UIParent, {{ icon = 'map', label = 'Map' }})
-        LookTest.p = {S}.pill(UIParent, {{ kind = 'vendor', label = 'Vendor', gold = true }})
-        LookTest.t = {S}.tile(UIParent, 'quest')
-        LookTest.w = Bastians.UI.Window('GlassTestFrame', {{ title = 'G' }}); LookTest.w:Show()
-        """
-    )
-    # Modern: a quiet action has no face, the theme's radii
-    assert wow.eval(f"{PAINTED}[LookTest.b.face][2]") == 0
-    assert wow.eval(f"{S}.SHAPE.radius") == 6 and wow.eval(f"{S}.SHAPE.radiusSmall") == 4
-    assert wow.eval(f"{PAINTED}[LookTest.w.frame.bg][2]") == 1
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'glass')") is True
-    assert wow.eval(f"{S}.LookId()") == "glass" and wow.eval(f"{S}.ThemeId()") == "teal"
-    # 10 px windows, 8 px buttons; the shapes laid out again with them
-    assert wow.eval(f"{S}.SHAPE.radius") == 10 and wow.eval(f"{S}.SHAPE.radiusSmall") == 8
-    assert wow.eval("LookTest.w.frame.bg:Radius()") == 10
-    # the plate at 72 % with the sheen over it, no edge until the mouse comes
-    assert wow.eval(f"{PAINTED}[LookTest.b.face][2]") == 0.72
-    assert wow.eval("LookTest.b.sheen:IsShown()") is True
-    assert wow.eval(f"{PAINTED}[LookTest.b.sheen][2]") == 0.05
-    assert wow.eval(f"{PAINTED}[LookTest.b.edges][2]") == 0
-    wow.execute("LookTest.b:GetScript('OnEnter')(LookTest.b)")
-    assert wow.eval(f"{PAINTED}[LookTest.b.edges][2]") == 0.35
-    wow.execute("LookTest.b:GetScript('OnLeave')(LookTest.b)")
-    assert wow.eval(f"{PAINTED}[LookTest.b.edges][2]") == 0
-    assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 0.36  # a quiet pill: half the plate
-    assert wow.eval(f"{PAINTED}[LookTest.t.edges][2]") == 0  # tiles without edges
-    # the window ground is capped at 75 % whatever the opacity setting
-    assert wow.eval(f"{PAINTED}[LookTest.w.frame.bg][2]") == 0.75
-    # back to Modern: the sheen hides, the theme's radii return, the ground is opaque again
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-dark')") is True
-    assert wow.eval("LookTest.b.sheen:IsShown()") is False
-    assert wow.eval(f"{S}.SHAPE.radius") == 6 and wow.eval("LookTest.w.frame.bg:Radius()") == 6
-    assert wow.eval(f"{PAINTED}[LookTest.w.frame.bg][2]") == 1
-    assert wow.errors == []
-
-
-def test_parchment_squares_the_tiles_and_writes_no_gold(wow: WowRuntime):
-    boot(wow)
-    wow.execute(
-        f"""
-        LookTest = {{}}
-        LookTest.b = {S}.action(UIParent, {{ icon = 'map', label = 'Map', boxed = true }})
-        LookTest.p = {S}.pill(UIParent, {{ kind = 'vendor', label = 'Vendor', gold = true }})
-        LookTest.t = {S}.tile(UIParent, 'quest')
-        LookTest.sec = {S}.section(UIParent, {{ icon = 'note', title = 'My notes' }})
-        LookTest.w = Bastians.UI.Window('PaperTestFrame', {{ title = 'P' }}); LookTest.w:Show()
-        """
-    )
-    assert wow.eval("LookTest.t.face:Radius()") == 4
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'parchment')") is True
-    assert wow.eval(f"{S}.LookId()") == "parchment" and wow.eval(f"{S}.ThemeId()") == "parchment"
-    assert wow.eval(f"{CORE}.db.profile.gameFrames") is False  # never on the rock ground
-    # square tiles with a sepia edge; the buttons keep the theme's small radius
-    assert wow.eval(f"{S}.SHAPE.tile") == 0 and wow.eval("LookTest.t.face:Radius()") == 0
-    assert wow.eval(f"{S}.SHAPE.radiusSmall") == 4 and wow.eval("LookTest.b.face:Radius()") == 4
-    assert wow.eval(f"{PAINTED}[LookTest.t.edges][1] == {S}.C.muted") is True
-    assert wow.eval(f"{PAINTED}[LookTest.b.edges][1] == {S}.C.muted") is True
-    # a choice of value reads in the accent, not in gold
-    assert wow.eval(f"{S}.inked[LookTest.p.label] == {S}.C.accent") is True
-    # section titles in their own case over a rule; serif headings from the preset
-    assert wow.eval("LookTest.sec.title:GetText()") == "My notes"
-    assert wow.eval("LookTest.sec.rule:IsShown()") is True
-    assert wow.eval("(LookTest.w.title:GetFont())") == wow.eval(f"{S}.SERIF_FONT")
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-light')") is True
-    assert wow.eval(f"{S}.SHAPE.tile") == 4 and wow.eval("LookTest.t.face:Radius()") == 4
-    assert wow.eval(f"{S}.inked[LookTest.p.label] == {S}.C.gold") is True
-    assert wow.eval("(LookTest.w.title:GetFont())") != wow.eval(f"{S}.SERIF_FONT")
-    assert wow.errors == []
-
-
-def test_a_chosen_pill_is_filled_in_every_look(wow: WowRuntime):
+def test_a_chosen_pill_stays_filled_under_the_mouse(wow: WowRuntime):
     """ "selected filter need to be dramatically different from
-    unselected": the chosen pill is filled with the accent (WoW: the game's gold), its words and
-    count in the ground's ink; the mouse never takes the fill away."""
+    unselected": the chosen pill is filled with the accent, its words and count in the ground's
+    ink; the mouse never takes the fill away; a quiet one shows its plate only under the mouse."""
     boot(wow)
-    wow.execute(
-        f"""
-        LookTest = {{}}
-        LookTest.on = {S}.pill(UIParent, {{ label = 'Rares', count = 4, on = true }})
-        LookTest.off = {S}.pill(UIParent, {{ label = 'Gold', count = 2 }})
-        """
-    )
-
-    def filled(fill: str) -> None:
-        assert wow.eval(f"{PAINTED}[LookTest.on.face][1] == {fill}") is True
-        assert wow.eval(f"{S}.inked[LookTest.on.label] == {S}.C.bg") is True
-        assert wow.eval(f"{S}.inked[LookTest.on.count] == {S}.C.bg") is True
-        assert wow.eval(f"{PAINTED}[LookTest.off.face][1] == {fill}") is False
-        assert wow.eval(f"{S}.inked[LookTest.off.label] == {S}.C.bg") is False
-
-    filled(f"{S}.C.accent")
-    wow.execute("LookTest.on:GetScript('OnEnter')(LookTest.on)")
-    assert wow.eval(f"{PAINTED}[LookTest.on.face][1] == {S}.C.accent") is True
-    wow.execute("LookTest.on:GetScript('OnLeave')(LookTest.on)")
-    filled(f"{S}.C.accent")
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'wow')") is True
-    filled(f"{S}.Palette('blizzard').C.gold")
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'parchment')") is True
-    filled(f"{S}.C.accent")
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'glass')") is True
-    filled(f"{S}.C.accent")
-    wow.execute("LookTest.on:SetOn(false)")
-    assert wow.eval(f"{PAINTED}[LookTest.on.face][1] == {S}.C.accent") is False
+    wow.execute(WIDGETS)
+    wow.execute("W.on:GetScript('OnEnter')(W.on)")
+    assert tok(wow, "W.on.face", "accent") and alpha(wow, "W.on.face") == 1
+    wow.execute("W.on:GetScript('OnLeave')(W.on)")
+    assert tok(wow, "W.on.face", "accent")
+    wow.execute("W.off:GetScript('OnEnter')(W.off)")
+    assert alpha(wow, "W.off.face") == 1
+    wow.execute("W.off:GetScript('OnLeave')(W.off)")
+    assert alpha(wow, "W.off.face") == 0
+    wow.execute("W.on:SetOn(false)")
+    assert alpha(wow, "W.on.face") == 0 and ink(wow, "W.on.label", "text")
+    # a choice of value: gold words in a faint gold edge
+    wow.execute(f"G = {S}.pill(UIParent, {{ label = 'my level', gold = true }})")
+    assert alpha(wow, "G.edges") == wow.eval(f"{S}.QUIET_GOLD") and ink(wow, "G.label", "gold")
     assert wow.errors == []
 
 
-def test_an_unchosen_pill_is_quiet_and_a_flat_switch_has_no_plate(wow: WowRuntime):
-    """ "quiet chips, every app": an unchosen pill has no plate and its
-    edge the line token at its own faint opacity; the plate comes under the mouse. A `flat`
-    segmented switch shows its words alone and fills the chosen part."""
-    boot(wow)
-    wow.execute(
-        f"""
-        LookTest = {{}}
-        LookTest.p = {S}.pill(UIParent, {{ label = 'Gold', count = 2 }})
-        LookTest.g = {S}.pill(UIParent, {{ label = 'my level', gold = true }})
-        LookTest.s = {S}.segmented(UIParent, {{ flat = true, value = 'a',
-          items = {{ {{ id = 'a', label = 'one' }}, {{ id = 'b', label = 'two' }} }} }})
-        """
-    )
-    for preset in ("modern-dark", "wow", "parchment"):
-        assert wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')") is True, preset
-        assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 0, preset
-        assert wow.eval(f"{S}.painted[LookTest.p.edges][2]") != 1, preset
-        assert wow.eval(f"{S}.inked[LookTest.p.label] == {S}.C.bg") is False, preset
-    wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-dark')")
-    assert wow.eval(f"{PAINTED}[LookTest.p.edges][2]") is None  # the line token's own 10 %
-    assert wow.eval(f"{PAINTED}[LookTest.g.edges][2]") == wow.eval(f"{S}.QUIET_GOLD")
-    wow.execute("LookTest.p:GetScript('OnEnter')(LookTest.p)")
-    assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 1
-    wow.execute("LookTest.p:GetScript('OnLeave')(LookTest.p)")
-    assert wow.eval(f"{PAINTED}[LookTest.p.face][2]") == 0
-    assert wow.eval("LookTest.s.face:IsShown()") is False
-    assert wow.eval("LookTest.s.edges:IsShown()") is False
-    assert wow.eval("LookTest.s:Part('a').fill:IsShown()") is True
-    assert wow.eval("LookTest.s:Part('b').fill:IsShown()") is False
-    assert wow.errors == []
-
-
-def test_the_chosen_tab_wears_the_accent_frame(wow: WowRuntime):
-    """ "hard to see what is menu tabs, what is text and what is active
-    tab": the chosen tab reads in the accent inside an accent frame, the others in dim."""
-    boot(wow)
-    wow.execute(
-        f"LookTest = {{}} LookTest.t = {S}.tab(UIParent, {{ kind = 'service', label = 'Trade', on = true }})"
-    )
-    assert wow.eval(f"{PAINTED}[LookTest.t.edges][2]") == 0.9
-    assert wow.eval(f"{S}.inked[LookTest.t.label] == {S}.C.accent") is True
-    wow.execute("LookTest.t:SetOn(false)")
-    assert wow.eval(f"{PAINTED}[LookTest.t.edges][2]") == 0
-    assert wow.eval(f"{S}.inked[LookTest.t.label] == {S}.C.dim") is True
-    # a boxed Modern action: an accent plate with the pictogram in the accent
-    wow.execute(
-        f"LookTest.b = {S}.action(UIParent, {{ icon = 'map', label = 'Map', boxed = true }})"
-    )
-    assert wow.eval(f"{PAINTED}[LookTest.b.face][1] == {S}.C.accent") is True
-    assert wow.eval(f"{PAINTED}[LookTest.b.face][2]") == 0.16
-    assert wow.eval(f"{PAINTED}[LookTest.b.icon][1] == {S}.C.accent") is True
-    assert wow.errors == []
-
-
-def test_the_segmented_switch_the_flat_tab_and_the_lit_lock_in_every_look(wow: WowRuntime):
+def test_the_segmented_switch_the_flat_tab_and_the_lit_lock(wow: WowRuntime):
     """plan-chat-v3.md V27 ("The button look all the same color - hard
     to read"): a switch whose chosen part is filled, a flat tab with a line of its colour and a
-    count, a toggle action lit while on; each drawn by every look."""
+    count, a toggle action lit while on. A flat switch is a row of words (the book's tabs): no
+    plate, the parts not chosen in the dim ink."""
     boot(wow)
     wow.execute(
         f"""
@@ -345,34 +264,29 @@ def test_the_segmented_switch_the_flat_tab_and_the_lit_lock_in_every_look(wow: W
           value = 'a',
           onChange = function(_, id) table.insert(LookTest.changed, id) end,
         }})
+        LookTest.flat = {S}.segmented(UIParent, {{ flat = true, value = 'a',
+          items = {{ {{ id = 'a', label = 'one' }}, {{ id = 'b', label = 'two' }} }} }})
         LookTest.tab = {S}.tab(UIParent, {{ label = 'Market', count = 3, line = 'tier3', on = true }})
         LookTest.lock = {S}.action(UIParent, {{ icon = 'lock', label = 'Lock', only = true, toggle = true }})
         """
     )
-    for preset in ("modern-dark", "glass", "parchment", "wow"):
-        assert wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')") is True
-        a, b = "LookTest.seg:Part('a')", "LookTest.seg:Part('b')"
-        assert wow.eval(f"{a}.fill:IsShown()") is True, preset
-        assert wow.eval(f"{b}.fill:IsShown()") is False, preset
-        assert wow.eval(f"{S}.inked[{a}.label] ~= {S}.inked[{b}.label]") is True, preset
-        width = wow.eval("LookTest.seg:GetWidth()")
-        assert width >= wow.eval(f"{a}:GetWidth()") + wow.eval(f"{b}:GetWidth()") - 0.5, preset
-        # the flat tab: no plate, no frame, the line under the chosen one, the count after it
-        assert wow.eval(f"{PAINTED}[LookTest.tab.face][2]") == 0, preset
-        assert wow.eval(f"{PAINTED}[LookTest.tab.edges][2]") == 0, preset
-        assert wow.eval("LookTest.tab.under:IsShown()") is True, preset
-        assert wow.eval(f"{PAINTED}[LookTest.tab.under][1] == {S}.Tok(LookTest.tab, 'tier3')")
-        assert wow.eval("LookTest.tab.count:GetText()") == "3", preset
-        # the lock's pictogram alone, dim while off
-        assert wow.eval("LookTest.lock.label:GetText()") == "", preset
-        assert wow.eval(f"{PAINTED}[LookTest.lock.icon][1] == {S}.Tok(LookTest.lock, 'dim')")
-    upper = {"modern-dark": "MARKET", "glass": "MARKET", "parchment": "Market", "wow": "Market"}
-    for preset, label in upper.items():
-        wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')")
-        assert wow.eval("LookTest.tab.label:GetText()") == label, preset  # capitals as the sections
-    wow.eval(f"{SET}.ApplyPreset({CORE}, 'modern-dark')")
+    a, b = "LookTest.seg:Part('a')", "LookTest.seg:Part('b')"
+    width = wow.eval("LookTest.seg:GetWidth()")
+    assert width >= wow.eval(f"{a}:GetWidth()") + wow.eval(f"{b}:GetWidth()") - 0.5
+    assert wow.eval("LookTest.flat.face:IsShown()") is False
+    assert wow.eval("LookTest.flat.edges:IsShown()") is False
+    assert ink(wow, "LookTest.flat:Part('b').label", "dim")
+    # the flat tab: no plate, no frame, the line under the chosen one, the count after it
+    assert alpha(wow, "LookTest.tab.face") == 0 and alpha(wow, "LookTest.tab.edges") == 0
+    assert wow.eval("LookTest.tab.under:IsShown()") is True
+    assert wow.eval(f"{PAINTED}[LookTest.tab.under][1] == {S}.Tok(LookTest.tab, 'tier3')")
+    assert wow.eval("LookTest.tab.count:GetText()") == "3"
+    assert wow.eval("LookTest.tab.label:GetText()") == "MARKET"  # capitals as the sections
+    # the lock's pictogram alone, dim while off, the accent while on
+    assert wow.eval("LookTest.lock.label:GetText()") == ""
+    assert tok(wow, "LookTest.lock.icon", "dim")
     wow.execute("LookTest.lock:SetOn(true)")
-    assert wow.eval(f"{PAINTED}[LookTest.lock.icon][1] == {S}.C.accent") is True
+    assert tok(wow, "LookTest.lock.icon", "accent")
     # a click on the other part chooses it and says so; on the chosen one nothing happens
     wow.execute("LookTest.seg:Part('b'):Click(); LookTest.seg:Part('b'):Click()")
     assert wow.eval("LookTest.changed[1]") == "b" and wow.eval("#LookTest.changed") == 1
@@ -382,48 +296,62 @@ def test_the_segmented_switch_the_flat_tab_and_the_lit_lock_in_every_look(wow: W
     assert wow.eval("LookTest.seg:Part('b').fill:IsShown()") is False
     wow.execute("LookTest.tab:SetOn(false)")
     assert wow.eval("LookTest.tab.under:IsShown()") is False
-    assert wow.eval(f"{S}.inked[LookTest.tab.label] == {S}.C.dim") is True
+    assert ink(wow, "LookTest.tab.label", "dim")
     assert wow.errors == []
 
 
-def test_a_pill_is_round_at_both_ends_and_a_chip_is_a_small_one(wow: WowRuntime):
-    """core.md "Round corners": a pill is round at both ends in every look (owner, Forever
-    17.11.2026, the book beside its concept board: "the buttons are rounder"; until then the
-    theme's corner radius). `small` makes a chip: S.G.chip high, the small text. In the WoW look
-    the chosen one is the game's gold, inside the book's dark table that table's gold."""
+def test_a_dashed_chip_keeps_its_round_ends(wow: WowRuntime):
+    """The board's dashed outline (book-look.md section 11, the chip "unconfirmed"; W4): the
+    straight top and bottom become dashes in the edge's colour, the round ends stay; a pooled
+    chip drawn again without it gets its lines back."""
     boot(wow)
     wow.execute(
         f"""
-        P = {S}.pill(UIParent, {{ label = 'Vendor', count = 3 }})
-        C = {S}.pill(UIParent, {{ small = true, label = 'Wetlands', count = 3, on = true }})
+        D = {S}.pill(UIParent, {{ small = true, label = 'unconfirmed', count = 200, dashed = true }})
+        """
+    )
+    shown = "(function() local n = 0 for _, d in ipairs(D.dashes) do if d:IsShown() then n = n + 1 end end return n end)()"
+    assert wow.eval("D.edges:Piece(5):IsShown()") is False
+    assert wow.eval("D.edges:Piece(6):IsShown()") is False
+    assert wow.eval("D.edges:Piece(1):IsShown()") is True  # a round end
+    width, r = wow.eval("D:GetWidth()"), wow.eval("D.edges.r")
+    per_side = int((width - 2 * r + 3) // 7)
+    assert per_side > 0 and wow.eval(shown) == 2 * per_side
+    assert wow.eval(f"{PAINTED}[D.dashes[1]][1] == {PAINTED}[D.edges][1]") is True
+    wow.execute("D.spec = { small = true, label = 'Wetlands' }; Bastians.UI.Style.Draw(D)")
+    assert wow.eval(shown) == 0 and wow.eval("D.edges:Piece(5):IsShown()") is True
+    assert wow.errors == []
+
+
+def test_a_pill_inside_the_books_table_takes_its_gold(wow: WowRuntime):
+    """core.md "Round corners": a pill is round at both ends ("the
+    buttons are rounder"); `small` makes a chip: S.G.chip high, the small text. Inside a palette
+    of its own (the book's dark table) the chosen one takes that palette's accent, its gold."""
+    boot(wow)
+    wow.execute(
+        f"""
         HOST = CreateFrame("Frame", nil, UIParent)
         HOST.palette = {S}.FolioPalette()
         F = {S}.pill(HOST, {{ small = true, label = 'farming', on = true }})
         Q = {S}.pill(HOST, {{ small = true, label = 'fishing' }})
+        P = {S}.pill(UIParent, {{ label = 'Vendor', count = 3 }})
+        C = {S}.pill(UIParent, {{ small = true, label = 'Wetlands', count = 3, on = true }})
         """
     )
-    assert wow.eval(f"{S}.G.chip") == 22
     assert wow.eval("P:GetHeight()") == 26 and wow.eval("P.face.r") == 13
     assert wow.eval("P.edges.r") == 13
     assert wow.eval("C:GetHeight()") == 22 and wow.eval("C.face.r") == 11
     assert wow.eval("(select(2, C.label:GetFont()))") == 11
     assert wow.eval("(select(2, P.label:GetFont()))") == 12
-    for preset in ("wow", "glass", "parchment"):
-        assert wow.eval(f"{SET}.ApplyPreset({CORE}, '{preset}')") is True
-        assert wow.eval("P.face.r") == 13 and wow.eval("C.face.r") == 11, preset
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
-    gold = f"{S}.Palette('blizzard').C.gold"
-    assert wow.eval(f"{S}.painted[C.face][1] == {gold}") is True
-    assert wow.eval(f"{S}.painted[F.face][1] == {S}.C.folioGold") is True
-    assert wow.eval(f"{S}.inked[F.label] == {S}.C.folioGoldInk") is True
-    assert wow.eval(f"{S}.inked[Q.label] == {S}.C.folioText") is True
+    assert tok(wow, "F.face", "folioGold") and ink(wow, "F.label", "folioGoldInk")
+    assert ink(wow, "Q.label", "folioText")
     assert wow.eval(f"{S}.Tok(Q, 'line') == {S}.C.folioRule") is True
     assert wow.errors == []
 
 
 def test_a_heading_with_a_role_of_its_own_keeps_its_face_and_size(wow: WowRuntime):
     """R4.14 (Forever, 17.11.2026: the book's name drawn in Morpheus at 17 for its display face at
-    18): a font, a text size or a look change draws a heading again; one that was given a role
+    18): a font, a text size or a theme change draws a heading again; one that was given a role
     (S.SetRole) keeps that role's face and the size set for it."""
     boot(wow)
     wow.execute(
@@ -437,11 +365,17 @@ def test_a_heading_with_a_role_of_its_own_keeps_its_face_and_size(wow: WowRuntim
     )
     display = wow.eval(f"{S}.BOOK_FONTS.bookDisplay")
     assert wow.eval("(H:GetFont())") == display and wow.eval("(select(2, H:GetFont()))") == 18
-    for change in (f"{S}.applyFont()", f"{SET}.ApplyPreset({CORE}, 'wow')", f"{S}.applyHeading(H)"):
+    core = "Bastians:GetModule('Core').db.profile"
+    for change in (
+        f"{S}.applyFont()",
+        f"{core}.headingFont = 'Fonts\\\\MORPHEUS.TTF'; {S}.ApplySkin()",
+        f"{S}.ApplyTheme('parchment')",
+        f"{S}.applyHeading(H)",
+    ):
         wow.execute(change)
         assert wow.eval("(H:GetFont())") == display, change
         assert wow.eval("(select(2, H:GetFont()))") == 18, change
-    # a plain heading follows the look as before: the WoW look's heading font at its big size
+    # a plain heading follows the setting: the heading font at its big size
     assert wow.eval("(PLAIN:GetFont())") == wow.eval(f"{S}.headingFont()")
     assert wow.eval("(select(2, PLAIN:GetFont()))") == 17
     assert wow.errors == []

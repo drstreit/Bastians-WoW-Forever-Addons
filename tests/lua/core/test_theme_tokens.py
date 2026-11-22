@@ -16,8 +16,9 @@ def rgb(wow: WowRuntime, expr: str) -> list[float]:
 
 
 def test_a_theme_switch_writes_into_the_same_tables_and_recolours(core: WowRuntime):
-    assert core.eval(f"{S}.ThemeId()") == "teal"
+    assert core.eval(f"{S}.ThemeId()") == "folio"  # the default since W4 (ADR 0084)
     assert [t.id for t in core.eval(f"{S}.Themes()").values()] == [
+        "folio",
         "teal",
         "parchment",
         "blizzard",
@@ -36,23 +37,23 @@ def test_a_theme_switch_writes_into_the_same_tables_and_recolours(core: WowRunti
         m:On("BASTIANS_THEME_CHANGED", function(_, _, id) seen[#seen + 1] = id end)
         """
     )
-    teal_accent = rgb(core, "kept")
+    first_accent = rgb(core, "kept")
     assert (
-        core.eval(f"{S}.H.muted") == "|cff888888"
-    )  # readable on the panel and on a tile over it (H2, PA7)
+        core.eval(f"{S}.H.muted") == "|cffa9987d"
+    )  # Folio's muted, readable on the panel and on a tile over it (H2, PA7)
     core.execute(f"{S}.ApplyTheme('parchment')")
     assert core.eval(f"{S}.ThemeId()") == "parchment"
-    assert rgb(core, "kept") != teal_accent  # the kept reference follows the theme
+    assert rgb(core, "kept") != first_accent  # the kept reference follows the theme
     assert rgb(core, "kept") == rgb(core, f"{S}.C.accent")
     r, g, b, _ = core.eval("fill:GetVertexColor()")
     assert [round(v, 3) for v in (r, g, b)] == rgb(core, f"{S}.C.panel")
     r, g, b, _ = core.eval("label:GetTextColor()")
     assert [round(v, 3) for v in (r, g, b)] == rgb(core, f"{S}.C.text")
-    assert core.eval(f"{S}.H.muted") != "|cff888888"  # the text codes follow too
+    assert core.eval(f"{S}.H.muted") != "|cffa9987d"  # the text codes follow too
     assert core.eval(f"{S}.SHAPE.radius") == 6
     core.execute(f"{S}.ApplyTheme('nonsense')")  # unknown: the first theme
-    assert core.eval(f"{S}.ThemeId()") == "teal" and rgb(core, "kept") == teal_accent
-    assert list(core.eval("seen").values()) == ["parchment", "teal"]
+    assert core.eval(f"{S}.ThemeId()") == "folio" and rgb(core, "kept") == first_accent
+    assert list(core.eval("seen").values()) == ["parchment", "folio"]
     assert core.errors == []
 
 
@@ -77,7 +78,7 @@ def test_the_general_page_keeps_the_scheme_per_profile(core: WowRuntime):
     assert core.eval(f"{S}.ThemeId()") == "contrast"
     assert core.eval("Bastians:GetModule('Core').db.profile.theme") == "contrast"
     core.execute("Bastians:SetProfile('Second')")
-    assert core.eval(f"{S}.ThemeId()") == "teal"  # a new profile starts on the default
+    assert core.eval(f"{S}.ThemeId()") == "folio"  # a new profile starts on the default
     core.execute("Bastians:SetProfile('Default')")
     assert core.eval(f"{S}.ThemeId()") == "contrast"
     assert core.errors == []

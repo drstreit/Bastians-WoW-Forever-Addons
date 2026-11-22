@@ -74,8 +74,10 @@ indexes = [
 # steps (data.md "A quest's `steps`", package QD3, 11.11.2026): the things to do as the build
 # resolved them, rows { n, kind, ref, count, how, via, places = { [uiMapID] = { {x, y, ref} } },
 # src, nth, more }; gives = { {itemID, count} }, what the giver hands over. `objectives` and
-# `spots` stay beside them for the suites that do not read `steps` (shape 2)
-quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "skill", "minRep", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon", "dungeonSrc", "steps", "gives"]
+# `spots` stay beside them for the suites that do not read `steps` (shape 2). leads (on a breadcrumb:
+# the quests it leads to), crumbs (on such a quest: its breadcrumbs) and maxLevel (the highest
+# character level it is offered at) from Everything Quests 2.16.0, 21.11.2026
+quest = ["name", "level", "minLevel", "qtype", "races", "classes", "starts", "startPlaces", "ends", "endPlaces", "pre", "preAny", "excl", "chain", "parent", "leads", "crumbs", "skill", "minRep", "maxLevel", "flags", "holiday", "foreverOnly", "zone", "objectives", "spots", "rewards", "requiredItems", "seenBy", "src", "dungeon", "dungeonSrc", "steps", "gives"]
 # attunements (quests.md): hand-written lists from pipeline/config/attunements_<client>.toml; steps are
 # [kind, id, label(, standing)] with kind "quest" | "rep" | "item"
 attunement = ["name", "faction", "verified", "note", "steps", "src", "instance"]

@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.7.0:1",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = 'The Orbiter no longer stacks a guard\'s answers on top of each other; long lists come in pages behind "More".',
+  },
+  {
     id = "2.6.0:1",
     date = "2026-11-20",
     version = "2.6.0",

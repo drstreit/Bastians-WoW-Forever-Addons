@@ -398,3 +398,75 @@ def test_a_book_in_the_bags_is_no_longer_offered_where_it_lay(wow: WowRuntime):
     assert wow.eval(f"{taken}({only}, 'object:1', {held})") is False  # nowhere else to get it
     assert wow.eval(f"{taken}(nil, 'object:1', {held})") is False
     assert wow.errors == []
+
+
+def with_fields(wow: WowRuntime, fields: dict[int, str]) -> None:
+    """The fixture's quests with more fields, seen through the Logic layer's data."""
+    rows = ", ".join(f"[{qid}] = {{ {text} }}" for qid, text in fields.items())
+    wow.execute(
+        f"""
+        local d = Bastians:GetService("data")
+        local extra = {{ {rows} }}
+        local proxy = setmetatable({{
+          Get = function(_, kind, id)
+            local r = d:Get(kind, id)
+            if kind == "quest" and r and extra[id] then
+              local copy = {{}}
+              for k, v in pairs(r) do copy[k] = v end
+              for k, v in pairs(extra[id]) do copy[k] = v end
+              return copy
+            end
+            return r
+          end,
+        }}, {{ __index = function(_, k)
+          local v = d[k]
+          if type(v) == "function" then
+            return function(_, ...) return v(d, ...) end
+          end
+          return v
+        end }})
+        Bastians:GetModule('Quests').Logic.SetData(proxy)
+        """
+    )
+
+
+def test_a_breadcrumb_and_the_quest_it_leads_to(wow: WowRuntime):
+    """Everything Quests 2.16.0 (21.11.2026): a breadcrumb is ruled out once a quest it leads to
+    is taken or done; that quest is not offered while the breadcrumb is in the log, and its `excl`
+    naming the breadcrumb is the breadcrumb's link, not a branch."""
+    boot(wow)
+    with_fields(wow, {176: "leads = { 62 }", 62: "crumbs = { 176 }, excl = { 176 }"})
+    state(wow, level=12)
+    assert logic(wow, "status(62, state)") == "available"
+    state(wow, level=12, log=(176,))
+    st, held = logic(wow, "status(62, state)")
+    assert st == "inactive" and list(held.values()) == [176]
+    state(wow, level=12, done=(176,))
+    assert logic(wow, "status(62, state)") == "available"  # the breadcrumb done opens it
+    state(wow, level=12, log=(62,))
+    assert logic(wow, "status(176, state)") == "superseded"
+    state(wow, level=12, done=(62,))
+    assert logic(wow, "status(176, state)") == "superseded"
+    # the giver listed it: the client knows better than the rule
+    state(wow, level=12, log=(176,))
+    wow.execute("state.offered = function(id) return id == 62 end")
+    assert logic(wow, "status(62, state)") == "available"
+    # an `excl` that is no breadcrumb's link still rules the quest out
+    with_fields(wow, {62: "excl = { 176 }"})
+    state(wow, level=12, done=(176,))
+    assert logic(wow, "status(62, state)") == "superseded"
+    assert wow.errors == []
+
+
+def test_a_quest_past_its_max_level_is_never_offered(wow: WowRuntime):
+    boot(wow)
+    with_fields(wow, {62: "maxLevel = 11"})
+    state(wow, level=11)
+    assert logic(wow, "status(62, state)") == "available"
+    state(wow, level=12)
+    assert logic(wow, "status(62, state)") == "never"
+    state(wow, level=12, log=(62,))
+    assert logic(wow, "status(62, state)") == "log"  # taken in time, it stays in the log
+    state(wow, level=12, done=(62,))
+    assert logic(wow, "status(62, state)") == "done"
+    assert wow.errors == []

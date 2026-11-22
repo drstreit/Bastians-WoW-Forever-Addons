@@ -74,11 +74,14 @@ def test_every_menu_entry_takes_the_font_the_player_picks(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_a_preset_a_profile_and_a_closed_hub_change_every_entry(wow: WowRuntime):
+def test_a_font_a_profile_and_a_closed_hub_change_every_entry(wow: WowRuntime):
+    # ~~a preset (WoW: Friz Quadrata; Parchment: the default font)~~ until 20.11.2026 (ADR 0084)
     boot(wow)
-    wow.execute(f"Bastians.UI.Settings.ApplyPreset({CORE}, 'wow')")  # Friz Quadrata
+    wow.execute(f"{CORE}.db.profile.font = 'Fonts\\\\FRIZQT__.TTF'")
+    wow.execute("Bastians.UI.Style.applyFont()")
     assert_all(wow, FRIZ, "Notes")
-    wow.execute(f"Bastians.UI.Settings.ApplyPreset({CORE}, 'parchment')")  # the default font
+    wow.execute(f"{CORE}.db.profile.font = Bastians.UI.Style.DEFAULT_FONT")
+    wow.execute("Bastians.UI.Style.applyFont()")
     assert_all(wow, DEFAULT, "Notes")
     wow.execute(f"{CORE}.db.profile.font = 'Fonts\\\\MORPHEUS.TTF'")
     wow.execute("Bastians.UI.Style.applyFont()")

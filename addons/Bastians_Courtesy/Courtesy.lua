@@ -27,7 +27,8 @@ local mod
 local state = { seen = {} }
 local recent = {} -- the lines of this session (Voice.Remember)
 local shown = {} -- the lines offered lately and not taken (Voice.SHOWN of them)
-local pending, pendingFacts -- the moment the ring shows
+local pending, pendingFacts, pendingMood -- the moment the symbol calls for
+local ambientFacts -- the facts of the general lines the open ring shows
 
 -- What an offer keeps out while it can: the lines said lately and the lines offered lately.
 local function avoidance()
@@ -51,8 +52,8 @@ function Courtesy.RecentLines()
     local order = memory.order or {}
     for i = #order, 1, -1 do
       local line = order[i]
-      if not seen[line] then
-        seen[line] = true
+      if not seen[Voice.Source(line)] then
+        seen[Voice.Source(line)] = true
         out[#out + 1] = line
       end
     end
@@ -199,7 +200,8 @@ function Courtesy.Lines(facts, count, onlyMood, via)
       break
     end
     out[#out + 1] = line
-    avoid[line], inRing[line] = true, true
+    local source = Voice.Source(line) -- a pattern once a ring, whichever variant (ADR 0089)
+    avoid[source], inRing[source] = true, true
     left[line[2]] = nil
   end
   for _, line in ipairs(out) do
@@ -371,7 +373,7 @@ function Courtesy.Show(event, facts, onlyMood, id)
   facts = facts or Facts.Moment(event)
   -- an aloud moment (the fire) is never whispered, also when the host's whole name is known
   event.full = event.who and not event.aloud and wholeName(event) or nil
-  pending, pendingFacts = event, facts
+  pending, pendingFacts, pendingMood = event, facts, onlyMood
   if not id then
     momentSeq = momentSeq + 1
     id = momentSeq
@@ -385,7 +387,7 @@ function Courtesy.Show(event, facts, onlyMood, id)
   B:Fire("BASTIANS_MOMENT", id, event.kind, event.who)
   local items = Courtesy.IsRequest(event) and requestItems(event) or kindItems(event, facts, onlyMood)
   Medallion.Open(items, Courtesy.Words(event), Courtesy.Fire, function()
-    pending, pendingFacts = nil, nil
+    pending, pendingFacts, pendingMood = nil, nil, nil
     if moment == m and not m.done then
       momentDone("expired")
     end
@@ -407,8 +409,122 @@ function Courtesy.Reopen(_, _, id)
 end
 
 function Courtesy.Hide()
-  pending, pendingFacts = nil, nil
+  pending, pendingFacts, pendingMood = nil, nil, nil
   Medallion.Close()
+end
+
+-- -------------------------------------------------------------------------------------------------
+-- Without a moment (ADR 0088): the general lines the symbol offers when it grows, about the world
+-- around the player, said aloud through the petals' secure buttons; the die and the language.
+-- -------------------------------------------------------------------------------------------------
+
+local function targetPlayer()
+  return UnitExists("target") and UnitIsPlayer("target") and "target" or nil
+end
+
+-- The facts of the moment's world: the place, the hour, the weather, how the player fares; no one
+-- to name.
+function Courtesy.AmbientFacts()
+  local facts = Facts.Surroundings(Facts.Speaker())
+  facts.situation = "ambient"
+  return Voice.Complete(facts)
+end
+
+-- The open ring's petals without a moment: three lines of different moods and a wave. -> items,
+-- fire, secured (Medallion.Grow).
+function Courtesy.Ambient()
+  ambientFacts = Courtesy.AmbientFacts()
+  local items = {}
+  for i, line in ipairs(Courtesy.Lines(ambientFacts, 3, nil, nil)) do
+    items[i] = {
+      icon = line.act and "app_gestures" or "app_chat",
+      label = MOOD_WORD[line[2]],
+      tip = preview(line, ambientFacts),
+      line = line,
+      secure = Courtesy.Macro(line, ambientFacts),
+    }
+  end
+  for i = #items + 1, 3 do
+    items[i] = false
+  end
+  local unit = targetPlayer()
+  local who = unit and Compat.UnitPlayerName(unit) or nil
+  items[4] = { icon = "app_gestures", label = L["Gesture"], tip = "/wave " .. (who or ""), emote = "WAVE" }
+  return items, Courtesy.FireAmbient, Courtesy.FiredAmbient
+end
+
+-- A petal of the general lines was clicked: the wave, or a line without a secure button.
+function Courtesy.FireAmbient(_, item)
+  local out = false
+  if item and item.emote and not item.line then
+    out = emoteAt({ unit = targetPlayer() }, item.emote)
+  elseif item and item.line and ambientFacts then
+    out = Courtesy.Say(item.line, ambientFacts, { unit = targetPlayer() })
+  end
+  Medallion.Shrink()
+  return out
+end
+
+-- A general line's secure button has run it.
+function Courtesy.FiredAmbient(_, item)
+  if item and item.line then
+    Voice.Remember(recent, item.line)
+    local words = ambientFacts and Voice.Words(item.line, ambientFacts, "say") or nil
+    if words then
+      saying(Voice.Channel(item.line), nil, words)
+    end
+    if item.line.emote then
+      emoteAt({ unit = targetPlayer() }, item.line.emote)
+    end
+  end
+  Medallion.Shrink()
+end
+
+-- The die: three new lines for what the ring shows, none of the three just offered.
+function Courtesy.Shuffle()
+  if Medallion.ShowsMoment() then
+    if pending and not Courtesy.IsRequest(pending) then
+      Medallion.Relay(kindItems(pending, pendingFacts, pendingMood))
+    end
+  elseif Medallion.IsGrown() then
+    local items, fire, secured = Courtesy.Ambient()
+    Medallion.Relay(items, { fire = fire, secured = secured })
+  end
+end
+
+-- The language on the rim: the one chosen (else the next), the petals drawn again in it.
+function Courtesy.Switch(chosen)
+  local list = Voice.LANGUAGES
+  local at = 1
+  for i, lang in ipairs(list) do
+    if lang == Voice.language then
+      at = i
+    end
+  end
+  local lang = Voice.PACKS[chosen] and chosen or list[at % #list + 1]
+  Voice.language = lang
+  if mod then
+    mod.db.profile.language = lang
+  end
+  if pendingFacts then
+    pendingFacts.lang = lang
+    Voice.Complete(pendingFacts)
+  end
+  Courtesy.Shuffle()
+end
+
+-- The rim's chip: each language by its two letters.
+function Courtesy.Languages()
+  local out = {}
+  for _, lang in ipairs(Voice.LANGUAGES) do
+    local pack = Voice.Pack(lang)
+    out[#out + 1] = { id = lang, label = pack and pack.short or lang, tip = pack and pack.name or nil }
+  end
+  return out
+end
+
+function Courtesy.Language()
+  return Voice.language
 end
 
 function Courtesy.IsShown()
@@ -568,10 +684,11 @@ end
 function Courtesy.OnFight()
   blindSince = blindSince or now()
   fought = true
-  Courtesy.Hide()
+  Medallion.Fight(true) -- the ring shrinks; a moment goes on calling, to be answered after it
 end
 
 function Courtesy.OnFightOver()
+  Medallion.Fight(false)
   Courtesy.ReadAuras()
 end
 
@@ -707,10 +824,37 @@ function Courtesy.Attach(m)
   m:RegisterEvent("GROUP_JOINED", Courtesy.OnGroupJoined)
   m:RegisterEvent("PLAYER_REGEN_DISABLED", Courtesy.OnFight)
   m:RegisterEvent("PLAYER_REGEN_ENABLED", Courtesy.OnFightOver)
+  local p = m.db.profile
+  Medallion.Attach({
+    shown = function()
+      return p.symbol ~= false
+    end,
+    place = function()
+      local at = p.symbolAt
+      if type(at) == "table" then
+        return at.x, at.y
+      end
+    end,
+    save = function(x, y)
+      p.symbolAt = { x = x, y = y }
+    end,
+    seconds = function()
+      return p.callSeconds
+    end,
+    ambient = Courtesy.Ambient,
+    shuffle = Courtesy.Shuffle,
+    switch = Courtesy.Switch,
+    language = Courtesy.Language,
+    languages = Courtesy.Languages,
+  })
+  local Screen = B.UI.Screen
+  Medallion.HideByKey(Screen and Screen.Hidden() and Screen.Hides("Courtesy") or false)
+  Medallion.Fight(InCombatLockdown())
 end
 
 function Courtesy.Detach()
   Courtesy.Hide()
+  Medallion.Detach()
   state, invite = { seen = {} }, nil
 end
 

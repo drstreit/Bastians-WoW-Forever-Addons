@@ -99,6 +99,10 @@ ns.L:Register("frFR", {
   ["one of"] = "une parmi",
   ["while in the log"] = "tant qu'elle est dans le journal",
   ["excludes"] = "exclut",
+  -- breadcrumbs (Everything Quests 2.16.0, 21.11.2026)
+  ["Turn in %s first"] = "Rendez d'abord %s",
+  ["breadcrumb"] = "quête d'introduction",
+  ["Breadcrumb"] = "Introduction",
   ["from"] = "de",
   ["Item"] = "Objet",
   ["Faction"] = "Faction",

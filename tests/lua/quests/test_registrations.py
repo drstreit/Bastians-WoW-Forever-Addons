@@ -277,7 +277,7 @@ def test_rewards_show_money_xp_reputation_items_and_spell_or_say_none(wow: WowRu
     wow.execute(
         """
         local Logic = Bastians:GetModule('Quests').Logic
-        local q = Logic.quest(62)
+        local q = Mock.Keep(Logic.quest(62))
         q.rewards = { money = 125, xp = 480, rep = { { 72, 150 }, { 54, -25 } },
           spell = 13563, spellName = "Summon Chicken Egg", src = "classic" }
         Mock.Keep(Logic.quest(176)).rewards = nil

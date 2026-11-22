@@ -840,7 +840,8 @@ def test_row_tags_mark_and_dim_rows(core: WowRuntime):
         and core.eval("Bastians:RowTag('npc:2')") is None
     )
     assert core.eval("Bastians:RowTag('item:1')") is None
-    assert core.eval("tree.pool[1].text:GetText()") == "One|cff888888  (odd)|r"
+    muted = core.eval("Bastians.UI.Style.H.muted")  # the theme's muted ink (Folio's since W4)
+    assert core.eval("tree.pool[1].text:GetText()") == f"One{muted}  (odd)|r"
     assert core.eval("tree.pool[2].text:GetText()") == "Two"
     assert core.errors == []
 
@@ -1090,6 +1091,7 @@ def test_a_window_may_have_a_taller_head_and_a_portrait_to_click(core: WowRuntim
     core.execute(
         """
         Mock.templates.PortraitFrameTemplate = true -- the client has the game's frame
+        Bastians:GetModule("Core").db.profile.gameFrames = false -- `flat`: the look's own edge
         clicks = 0
         tall = Bastians.UI.Window("BastiansTallHeadTest", { headHeight = 50, gameFrames = true,
           onPortrait = function() clicks = clicks + 1 end, portraitTip = "home" })

@@ -37,6 +37,8 @@ local KINDS = {
   "service",
   "innkeeper",
   "flight",
+  "ship", -- a boat's stop and a zeppelin's (map.md map.travel, 22.11.2026)
+  "zeppelin",
   "banker",
   "auctioneer",
   "repair",
@@ -165,6 +167,8 @@ local TINT = {
   treasure = "gold",
   fish = "water",
   flight = "water",
+  ship = "water",
+  zeppelin = "water",
   zone = "accent",
   route = "accent",
   spot = "accent",

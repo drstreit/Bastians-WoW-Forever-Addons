@@ -22,7 +22,7 @@
 ## Category-ruRU: Набор Bastian's
 ## Category-ptBR: Suite do Bastian
 ## Author: Bastian
-## Version: 2.6.0
+## Version: 2.7.0
 ## X-License: GPL-3.0
 ## Dependencies: Bastians_Core
 ## OptionalDeps: Bastians_Gestures, Bastians_Campfire, Bastians_MyLines
@@ -39,8 +39,9 @@ Locales\ptBR.lua
 News.lua
 Compat.lua
 Model.lua
-Lines.lua
 Voice.lua
+Lines_enUS.lua
+Lines_deDE.lua
 Mine.lua
 Facts.lua
 Medallion.lua

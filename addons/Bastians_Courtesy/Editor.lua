@@ -119,6 +119,7 @@ function Editor.FormLine()
     act = act ~= "" and act or nil,
     when = before.when,
     emote = before.emote,
+    lang = form.lang:GetValue(), -- the language it is offered in (ADR 0088)
   }
 end
 
@@ -127,6 +128,7 @@ function Editor.Clear()
   form.text:SetText("")
   form.act:SetText("")
   form.add:SetLabel(L["Add"])
+  form.lang:SetValue(Voice.language)
   setProblem(nil)
 end
 
@@ -141,6 +143,7 @@ function Editor.Load(index)
   form.mood:SetValue(line[2])
   form.text:SetText(type(line[3]) == "string" and line[3] or "")
   form.act:SetText(line.act or "")
+  form.lang:SetValue(Mine.Language(line))
   form.add:SetLabel(L["Save"])
   setProblem(Mine.Problem(line))
 end
@@ -173,7 +176,8 @@ function Editor.Try()
     end
   end
   facts.situation = line[1]
-  facts.company = facts.company or Voice.Company({ "Alda", "Brann" })
+  facts.lang = line.lang
+  facts.company = facts.company or Voice.Company({ "Alda", "Brann" }, line.lang)
   facts = Voice.Complete(facts)
   local said = (facts.myName and (facts.myName .. " ") or "") .. Voice.Words(line, facts, "emote")
   B:Say("%s", said)
@@ -364,8 +368,16 @@ local function build()
   end
   form.mood = W.Select(c, L["Mood"], moods)
   form.mood:SetPoint("TOPLEFT", 300, top)
-  form.mood:SetWidth(270)
+  form.mood:SetWidth(160)
   form.mood:SetValue("polite")
+  local languages = {}
+  for _, language in ipairs(Voice.LANGUAGES) do
+    languages[language] = Voice.Pack(language).name
+  end
+  form.lang = W.Select(c, L["Language"], languages)
+  form.lang:SetPoint("TOPLEFT", 470, top)
+  form.lang:SetWidth(100)
+  form.lang:SetValue(Voice.language)
   local function check()
     setProblem(Mine.Problem(Editor.FormLine()))
   end

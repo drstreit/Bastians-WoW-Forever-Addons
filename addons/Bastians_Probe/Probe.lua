@@ -2490,6 +2490,7 @@ local HELP = {
   "/bprobe bookreveal [uiMapID] - a zone as you explored it beside the zone with every overlay (R4.5)",
   "/bprobe perf - Core's performance snapshot (taken by itself 30 s after every login)",
   "/bprobe w2 - bookmodel, bookreveal, booklook and booklook small in a row (once by themselves)",
+  "/bprobe windows - every app's window opened in turn, photographed, what overflows named (W4)",
   "/bprobe chat - Chat version 3: the calls it needs, the item level, whisper flags (counts only)",
   "/bprobe combatlog - Forever only: may addons read the combat log, a minute of it (X11)",
   "/bprobe books - the Library books: the globals that name them, every book opened, their events (A3.2)",
@@ -3535,6 +3536,7 @@ end
 -- The probes of the one look (plan-suite-waves.md W2) in a block of their own: Lua 5.1 allows a
 -- chunk 200 local variables, and this file had them. W2 carries what the rest needs.
 local W2 = { waiting = false }
+local W4 = { waiting = false } -- the windows probe (W4), made below
 local events -- the probe's event frame, made below
 do
   -- ---------------------------------------------------------------------------------------------
@@ -4016,6 +4018,9 @@ do
         db.sequences[W2_KEY] = { at = now(), build = db.meta and db.meta.build }
         db.meta.updated = now()
         say("the one look's probes are done: /reload or log out saves the records")
+        if W4.due() then
+          C_Timer.After(1, W4.run) -- the windows next, once (W4)
+        end
         return
       end
       local ok, err = pcall(step, next)
@@ -4029,6 +4034,322 @@ do
 
   W2.perf, W2.model, W2.reveal, W2.run, W2.due = probePerf, probeBookModel, probeBookReveal, runW2, w2Due
   W2.PERF_DELAY = PERF_DELAY
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Windows (W4 of plan-suite-waves.md, ADR 0084: "a probe photographs every app's window and names
+-- what overflows; no app changed to make it fit"): every app with a window opened in turn as the
+-- hub opens it (Bastians:OpenApp), each window that comes up measured and photographed, then
+-- closed again; the windows open before are opened again at the end. Named per window: a label
+-- the kit cut (an action's `cutTip`), a text the client cut or that is wider than its room, a part
+-- standing outside the window. tools/look_windows.py prints the record. Runs once by itself
+-- after the first login with the one look (after W2's sequence); `/bprobe windows` by hand.
+-- ---------------------------------------------------------------------------------------------
+
+do
+  local W4_KEY = "w4-1"
+  local OPEN_WAIT = 1.2 -- seconds for a window to build and lay itself out
+  local SHOT_WAIT = 0.4 -- seconds for the screenshot before the window closes
+  local NAMED = 25 -- of each kind per window, at most
+
+  local function rectOf(f)
+    local ok, l, r, t, b = pcall(function()
+      return f:GetLeft(), f:GetRight(), f:GetTop(), f:GetBottom()
+    end)
+    if not (ok and l and r and t and b) then
+      return nil
+    end
+    return { l = l, r = r, t = t, b = b }
+  end
+
+  local function nameOf(f)
+    local name = f.GetName and f:GetName()
+    if name then
+      return name
+    end
+    local parent = f.GetParent and f:GetParent()
+    local kind = f.GetObjectType and f:GetObjectType() or "?"
+    return kind .. " in " .. tostring(parent and parent.GetName and parent:GetName() or "?")
+  end
+
+  local function textOf(fs)
+    local t = fs.GetText and fs:GetText()
+    if type(t) ~= "string" then
+      return nil
+    end
+    t = string.gsub(t, "|c%x%x%x%x%x%x%x%x", "")
+    t = string.gsub(t, "|r", "")
+    return string.sub(t, 1, 60)
+  end
+
+  -- A text the client cut, or one wider than its room on one line.
+  local function tooWide(fs)
+    local text = textOf(fs)
+    if not text or text == "" then
+      return nil
+    end
+    -- IsTruncated and CanWordWrap are retail's; not verified on Forever, so asked protected
+    local cut = tryMethod(fs, "IsTruncated")
+    local wrap = tryMethod(fs, "CanWordWrap")
+    local truncated = cut.ok and cut.ret[1] == true
+    local wraps = wrap.ok and wrap.ret[1] == true
+    local w, sw = fs:GetWidth(), fs:GetStringWidth()
+    if truncated or (not wraps and w and sw and w > 0 and sw > w + 1) then
+      return { text = text, room = w, needs = sw }
+    end
+    return nil
+  end
+
+  -- What overflows under `frame`: { cut = { label }, wide = { { text, room, needs } },
+  -- outside = { { what, l, r, t, b } } } (outside: units past the window's edge on each side).
+  -- A scroll frame clips its content, so nothing under one counts as outside.
+  local function overflows(frame)
+    local out = { cut = {}, wide = {}, outside = {} }
+    local box = rectOf(frame)
+    local function add(list, v)
+      if #list < NAMED then
+        list[#list + 1] = v
+      end
+    end
+    local function visit(f, clipped, depth)
+      if depth > 30 or not (f.IsShown and f:IsShown()) then
+        return
+      end
+      if type(f.cutTip) == "string" then
+        add(out.cut, f.cutTip)
+      end
+      if box and not clipped and f ~= frame then
+        local r = rectOf(f)
+        if r and (r.l < box.l - 1 or r.r > box.r + 1 or r.t > box.t + 1 or r.b < box.b - 1) then
+          add(out.outside, {
+            what = nameOf(f),
+            l = r.l - box.l,
+            r = r.r - box.r,
+            t = r.t - box.t,
+            b = r.b - box.b,
+          })
+        end
+      end
+      if f.GetRegions then
+        for _, region in ipairs({ f:GetRegions() }) do
+          if region.GetObjectType and region:GetObjectType() == "FontString" and region:IsShown() then
+            local wide = tooWide(region)
+            if wide then
+              add(out.wide, wide)
+            end
+          end
+        end
+      end
+      local clips = clipped or (f.GetObjectType and f:GetObjectType() == "ScrollFrame")
+      if f.GetChildren then
+        for _, child in ipairs({ f:GetChildren() }) do
+          visit(child, clips, depth + 1)
+        end
+      end
+    end
+    visit(frame, false, 0)
+    return out
+  end
+
+  local function shownWindows(suite)
+    local out = {}
+    for name, win in pairs(suite.UI.Windows or {}) do
+      if win.frame and win.frame:IsShown() then
+        out[name] = win
+      end
+    end
+    return out
+  end
+
+  local function measure(app, name, win)
+    local r = rectOf(win.frame)
+    local o = overflows(win.frame)
+    return {
+      app = app,
+      window = name,
+      width = r and (r.r - r.l) or nil,
+      height = r and (r.t - r.b) or nil,
+      gameFramed = win.gameFramed == true,
+      cut = o.cut,
+      wide = o.wide,
+      outside = o.outside,
+    }
+  end
+
+  local function w4Due()
+    return not (db.sequences and db.sequences[W4_KEY])
+  end
+
+  -- The city map's pins per sheet ("on the separate city map, some
+  -- trainers are missing - example is Daryl Riknussum"): what its query gives per layer, what the
+  -- cap leaves out, and every trainer the Trainers layer knows on the sheet that is not drawn
+  -- (asked whether the layer is on in that window or not). No window needs to be open.
+  local function cityPins(suite)
+    local mod = suite:GetModule("Map")
+    local City = mod and mod.City
+    local cities = suite.Map and suite.Map.cities
+    if not (City and City.Query and cities) then
+      return { why = "no city map (Bastians_Map or its art not loaded)" }
+    end
+    local out = {}
+    for _, city in ipairs(cities) do
+      local rec = { ui = city.ui, name = city.name, byLayer = {}, missing = {} }
+      local ok, pins = pcall(City.Query, city)
+      if not ok then
+        rec.why = tostring(pins)
+      else
+        rec.total = #pins
+        rec.cap = City.MAX_PINS
+        local drawn = {}
+        for i, pin in ipairs(pins) do
+          rec.byLayer[pin.layer or "?"] = (rec.byLayer[pin.layer or "?"] or 0) + 1
+          if i <= (City.MAX_PINS or #pins) and pin.ref then
+            drawn[pin.ref] = true
+          end
+        end
+        local view = {
+          continent = city.continent,
+          x1 = city.wx[1],
+          y1 = city.wy[1],
+          x2 = city.wx[2],
+          y2 = city.wy[2],
+          level = City.QUERY_LEVEL or 6,
+        }
+        local okT, trainerPins = pcall(suite.QueryLayer, suite, "map.trainers", view)
+        if not okT then
+          rec.trainersWhy = tostring(trainerPins)
+        end
+        for _, def in ipairs(suite:GetMapLayers()) do
+          if def.id == "map.trainers" then
+            rec.trainersOn = City.IsLayerOn(def)
+          end
+        end
+        local found, seen = 0, {}
+        for _, pin in ipairs(okT and type(trainerPins) == "table" and trainerPins or {}) do
+          if type(pin) == "table" and pin.ref and pin.kind ~= "path" and not seen[pin.ref] then
+            seen[pin.ref] = true
+            found = found + 1
+            if not drawn[pin.ref] and #rec.missing < NAMED then
+              rec.missing[#rec.missing + 1] = pin.label or pin.ref
+            end
+          end
+        end
+        rec.trainers = found
+      end
+      out[#out + 1] = rec
+    end
+    return out
+  end
+
+  local function runW4()
+    local suite = rawget(_G, "Bastians")
+    if not (suite and suite.UI and suite.UI.Windows and suite.IterateModules) then
+      say("windows: Bastian's Core is not loaded")
+      return
+    end
+    if running then
+      C_Timer.After(5, runW4) -- another probe first
+      return
+    end
+    if InCombatLockdown and InCombatLockdown() then
+      W4.waiting = true
+      events:RegisterEvent("PLAYER_REGEN_ENABLED") -- after the fight
+      return
+    end
+    running = true
+    local S = suite.UI.Style
+    local out = {
+      at = now(),
+      build = db.meta and db.meta.build,
+      theme = S and S.ThemeId and S.ThemeId() or nil,
+      gameFrames = S and S.Skin and S.Skin("gameFrames") or nil,
+      look = S and S.LookId and S.LookId() or nil,
+      windows = {},
+      skipped = {},
+    }
+    db.results.windows = out
+    -- the windows open now are closed for the run and opened again at its end
+    local before = shownWindows(suite)
+    for _, win in pairs(before) do
+      win.frame:Hide()
+    end
+    local apps = {}
+    for _, mod in suite:IterateModules() do
+      if mod.IsEnabled and mod:IsEnabled() and mod.def and type(mod.def.open) == "function" then
+        apps[#apps + 1] = mod.name
+      end
+    end
+    say("windows: %d apps open in turn for about %d s: hands off the mouse", #apps, #apps * 2)
+    local i = 0
+    local function step()
+      i = i + 1
+      local app = apps[i]
+      if not app then
+        for _, win in pairs(before) do
+          win.frame:Show()
+        end
+        local okC, cities = pcall(cityPins, suite)
+        out.cities = okC and cities or { why = tostring(cities) }
+        running = false
+        db.sequences = db.sequences or {}
+        db.sequences[W4_KEY] = { at = now(), build = db.meta and db.meta.build }
+        db.meta.updated = now()
+        local troubled = 0
+        for _, w in ipairs(out.windows) do
+          if #w.cut + #w.wide + #w.outside > 0 then
+            troubled = troubled + 1
+          end
+        end
+        say(
+          "windows: %d windows of %d apps photographed, %d name something that overflows;"
+            .. " /reload saves the record (tools/look_windows.py)",
+          #out.windows,
+          #apps,
+          troubled
+        )
+        return
+      end
+      local open = shownWindows(suite)
+      local opened = try(function()
+        return suite:OpenApp(app)
+      end)
+      if not (opened.ok and opened.ret and opened.ret[1]) then
+        out.skipped[#out.skipped + 1] = { app = app, why = opened.err or "no window" }
+        return step()
+      end
+      C_Timer.After(OPEN_WAIT, function()
+        local new = {}
+        for name, win in pairs(shownWindows(suite)) do
+          if not open[name] then
+            local ok, m = pcall(measure, app, name, win)
+            if ok then
+              out.windows[#out.windows + 1] = m
+              new[#new + 1] = { m = m, win = win }
+            else
+              out.skipped[#out.skipped + 1] = { app = app, window = name, why = tostring(m) }
+            end
+          end
+        end
+        if #new == 0 then
+          out.skipped[#out.skipped + 1] = { app = app, why = "no new window showed" }
+          return step()
+        end
+        local shot = try(rawget(_G, "Screenshot"))
+        for _, n in ipairs(new) do
+          n.m.screenshot = shot
+        end
+        C_Timer.After(SHOT_WAIT, function()
+          for _, n in ipairs(new) do
+            n.win.frame:Hide()
+          end
+          step()
+        end)
+      end)
+    end
+    step()
+  end
+
+  W4.run, W4.due, W4.overflows = runW4, w4Due, overflows
 end
 
 local function command(msg)
@@ -4118,6 +4439,9 @@ local function command(msg)
       W2.perf("by hand")
     end,
     w2 = W2.run,
+    windows = function()
+      W4.run()
+    end,
   }
   local fn = probes[cmd]
   if not fn then
@@ -4339,6 +4663,8 @@ events:SetScript("OnEvent", function(_, event, arg1)
         end
         if W2.due() then
           W2.run()
+        elseif W4.due() then
+          W4.run()
         end
       end)
     end
@@ -4348,6 +4674,10 @@ events:SetScript("OnEvent", function(_, event, arg1)
     if W2.waiting then
       W2.waiting = false
       W2.run()
+    end
+    if W4.waiting then
+      W4.waiting = false
+      W4.run()
     end
   else
     local handlers = {

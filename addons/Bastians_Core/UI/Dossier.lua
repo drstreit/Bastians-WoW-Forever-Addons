@@ -379,25 +379,17 @@ function Util.caps(text)
   return table.concat(out)
 end
 
--- A section title: in capitals, in its own case over an ornament (ADR 0034, ADR 0038).
+-- A section title: in capitals (ADR 0034). ~~In its own case over an ornament~~ (the WoW look's,
+-- until 20.11.2026, ADR 0084).
 function Util.titleText(text)
-  if S.Ornaments() then
-    return tostring(text or "")
-  end
   return Util.caps(text)
 end
 
--- The rule under a section title: the 1 px line, or the gold ornament (`ornaments`), no wider
--- than its texture.
-function Util.rule(line, orn, width)
-  if S.Ornaments() then
-    line:Hide()
-    orn:SetWidth(math.min(width, 256))
-    orn:Show()
-  else
-    orn:Hide()
-    line:Show()
-  end
+-- The rule under a section title: the 1 px line. ~~Or the gold ornament (`ornaments`)~~ (until
+-- 20.11.2026); `orn` and `width` stay for the callers until the dossier's own W9 session.
+function Util.rule(line, orn, _)
+  orn:Hide()
+  line:Show()
 end
 
 -- Whether a row or one of its descendants matches the query (a text or a compiled query, ADR

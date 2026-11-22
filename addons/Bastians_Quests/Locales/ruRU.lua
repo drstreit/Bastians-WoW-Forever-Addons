@@ -99,6 +99,10 @@ ns.L:Register("ruRU", {
   ["one of"] = "одно из",
   ["while in the log"] = "пока в журнале",
   ["excludes"] = "исключает",
+  -- breadcrumbs (Everything Quests 2.16.0, 21.11.2026)
+  ["Turn in %s first"] = "Сначала сдайте %s",
+  ["breadcrumb"] = "вводное задание",
+  ["Breadcrumb"] = "Вводное",
   ["from"] = "от",
   ["Item"] = "Предмет",
   ["Faction"] = "Фракция",

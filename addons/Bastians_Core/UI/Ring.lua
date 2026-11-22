@@ -1,6 +1,9 @@
 -- Ring (plan-launch-review.md R5.1, 01.11.2026): the suite's ring kit, a round menu of wedges
--- around a hub, drawn like the Orbiter's orbits (the disc and ring textures, kind tiles, labels).
--- Bastian's Gestures opens one at the cursor; the Orbiter moves onto it after the launch.
+-- around a hub. Drawn as the book's seal (ADR 0084 decision 2; the owner chose "A: Seal" on the
+-- board of 21.11.2026): dark discs on a soft shadow with a gold hairline and an inner rule, the
+-- lit one filled gold with the dark ink, labels in the book's small capitals, the hub a medallion
+-- with a gold edge. Bastian's Gestures opens one at the cursor, Bastian's Courtesy grows one from
+-- its symbol; the Orbiter moves onto it after the launch.
 local _, ns = ...
 local B = ns.B
 local S = ns.Style
@@ -58,12 +61,44 @@ local function disc(parent, color, alpha, layer)
   return t
 end
 
-local function rim(parent, color, alpha, layer, texture)
+local function rim(parent, color, alpha, layer, texture, inset)
   local t = parent:CreateTexture(nil, layer or "BORDER")
   t:SetTexture(texture or S.RINGS.M)
-  t:SetAllPoints()
+  if inset then
+    t:SetPoint("TOPLEFT", inset, -inset)
+    t:SetPoint("BOTTOMRIGHT", -inset, inset)
+  else
+    t:SetAllPoints()
+  end
   S.tint(t, color, alpha)
   return t
+end
+
+Ring.HAIRLINE = "Interface\\AddOns\\Bastians_Core\\Media\\RingXL" -- the seal's thin edges
+Ring.EDGE = 0.7 -- the gold hairline's strength on a wedge at rest
+Ring.SHADE = 16 -- how much wider the soft shadow is than its disc
+Ring.DROP = 3 -- how much lower it falls
+
+-- A soft round shadow under a disc of `size` (the Glow texture in the shadow's token).
+local function shade(parent, size, drop)
+  local t = parent:CreateTexture(nil, "BACKGROUND", nil, -8)
+  t:SetTexture(S.GLOW)
+  t:SetSize(size + Ring.SHADE, size + Ring.SHADE)
+  t:SetPoint("CENTER", 0, -(drop or Ring.DROP))
+  S.tint(t, S.C.folioShadow)
+  return t
+end
+Ring.Shade = shade
+
+-- The seal's disc (Courtesy's symbol and rim draw with it too): the table's dark on a soft shadow,
+-- a gold hairline and an inner rule. -> { disc, edge, rule, shade }.
+function Ring.Seal(frame, size)
+  local seal = {}
+  seal.shade = shade(frame, size)
+  seal.disc = disc(frame, S.C.bg, 0.97)
+  seal.edge = rim(frame, S.C.accent, Ring.EDGE, "ARTWORK", Ring.HAIRLINE)
+  seal.rule = rim(frame, S.C.line, 1, "ARTWORK", Ring.HAIRLINE, 3)
+  return seal
 end
 
 local RingMT = {}
@@ -72,16 +107,24 @@ RingMT.__index = RingMT
 local function newWedge(ring, i)
   local b = CreateFrame("Button", nil, ring.frame)
   b.index = i
-  b.disc = disc(b, S.C.panel, 0.92)
+  local size = ring.opts.bubble * 2
+  b.halo = rim(b, S.C.accent, 0, "BACKGROUND", S.RINGS.S, -4) -- the lit one's soft gold ring
+  b.shade = shade(b, size)
+  b.disc = disc(b, S.C.bg, 0.97)
   b.fill = disc(b, S.C.accent, 0, "BORDER")
-  b.ring = rim(b, S.C.line, 1, "ARTWORK")
+  b.ring = rim(b, S.C.accent, Ring.EDGE, "ARTWORK", Ring.HAIRLINE)
+  b.rule = rim(b, S.C.line, 1, "ARTWORK", Ring.HAIRLINE, 3)
   b.tile = b:CreateTexture(nil, "ARTWORK")
   b.tile:SetPoint("CENTER", 0, 7)
   b.glyph = b:CreateTexture(nil, "OVERLAY")
   b.glyph:SetPoint("CENTER", b.tile, "CENTER")
-  b.label = S.text(b, 10, S.C.text)
+  b.label = S.SetRole(S.text(b, 11, S.C.dim), "bookCaps")
   b.label:SetPoint("CENTER", 0, -10)
   b.label:SetJustifyH("CENTER")
+  -- a width of its own and one line: sized by its text alone, a word could round a hair too
+  -- narrow at some scales and places and vanish
+  b.label:SetWidth(size + 20)
+  b.label:SetWordWrap(false)
   b.sub = b:CreateTexture(nil, "OVERLAY")
   b.sub:SetSize(9, 9)
   b.sub:SetPoint("BOTTOMRIGHT", -3, 3)
@@ -135,6 +178,7 @@ local function paint(ring, b, item)
     S.tint(b.glyph, S.C.text)
     b.glyph:Show()
   end
+  b.tinted = not tile -- a bare glyph takes the ink; a kind tile keeps its colours
   b.label:SetText(item.label or "")
   b.sub:SetShown(item.sub and true or false)
   b:SetAlpha(item.disabled and 0.45 or 1)
@@ -332,9 +376,14 @@ function RingMT.Highlight(self, i)
   self.lit = i
   for n, b in ipairs(self.wedges) do
     local on = n == i and b.item ~= nil
-    S.tint(b.fill, S.C.accent, on and 0.9 or 0)
-    S.tint(b.ring, on and S.C.bright or S.C.line, 1)
-    S.ink(b.label, on and S.C.bg or S.C.text)
+    S.tint(b.fill, S.C.accent, on and 1 or 0)
+    S.tint(b.halo, S.C.accent, on and 0.25 or 0)
+    S.tint(b.ring, on and S.C.bright or S.C.accent, on and 0.8 or Ring.EDGE)
+    S.tint(b.rule, S.C.line, on and 0 or 1)
+    S.ink(b.label, on and S.C.folioGoldInk or S.C.dim)
+    if b.tinted then
+      S.tint(b.glyph, on and S.C.folioGoldInk or S.C.text)
+    end
   end
 end
 
@@ -415,8 +464,10 @@ function Ring.New(name, opts)
   local hub = CreateFrame("Button", nil, frame)
   hub:SetSize(opts.inner * 2, opts.inner * 2)
   hub:SetPoint("CENTER")
-  hub.disc = disc(hub, S.C.bg, 0.96)
-  hub.ring = rim(hub, S.C.line, 1, "ARTWORK")
+  hub.shade = shade(hub, opts.inner * 2, 4)
+  hub.disc = disc(hub, S.C.bg, 0.98)
+  hub.ring = rim(hub, S.C.accent, 1, "ARTWORK", S.RINGS.L) -- the medallion's gold edge
+  hub.rule = rim(hub, S.C.line, 1, "ARTWORK", Ring.HAIRLINE, 4)
   hub:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   hub:SetScript("OnClick", function(_, button)
     if opts.onHub then
@@ -424,7 +475,7 @@ function Ring.New(name, opts)
     end
   end)
   self.hub = hub
-  self.title = S.heading(hub, 12)
+  self.title = S.SetRole(S.text(hub, 13, S.C.text), "bookDisplay")
   self.title:SetPoint("CENTER", 0, 4)
   self.title:SetJustifyH("CENTER")
   frame:SetScript("OnMouseWheel", function(_, delta)

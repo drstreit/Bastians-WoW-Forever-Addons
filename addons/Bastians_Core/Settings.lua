@@ -720,28 +720,47 @@ end
 -- Core's module: profiles, tooltip lines, font, debug, load-on-demand switches
 -- ---------------------------------------------------------------------------------------------
 
--- Looks as presets (ADR 0038, "we deliver all 3, with the option to change
--- everything per option menu and save as new preset"; ADR 0046: the Azeroth preset went on
--- 01.11.2026, its profiles moved to WoW by migration 3). A preset is every look setting at once;
--- a player's own are kept account-wide (db.global.presets); any change after shows "custom". The
--- game's frames stay on in every preset.
-Settings_.LOOK_KEYS = {
-  "look", -- the renderer (ADR 0046): modern | wow | parchment | glass
-  "gameFrames",
-  "skinFrames",
+-- One look (ADR 0084, W4 of plan-suite-waves.md, 20.11.2026): the suite has one shape language,
+-- skinned by a theme; the game's frame is the one switch beside it. ~~Looks as presets (ADR 0038,
+-- ADR 0046): seven presets, a look each on a scheme, a player's own saved account-wide~~ (until
+-- 20.11.2026). A saved look is mapped once to a theme (migration 4, Settings_.MapLook).
+
+-- The settings a window may hold values of its own for (Window:SetPreset; Bastian's Chat's
+-- windows, plan-chat-v3.md V13): a theme and the faces. nil follows the suite's.
+Settings_.FRAME_KEYS = {
   "theme",
+  "gameFrames",
   "font",
   "headingFont",
-  "labelFont", -- a section's title, a tab's label (plan-chat-v3.md V17); nil: the text font
-  "numberFont", -- counts, times, prices (V17); nil: the text font
-  "fontScale",
+  "labelFont",
+  "numberFont",
   "windowColor",
   "windowAlpha",
-  "windowBorder", -- LibSharedMedia's border by its name (plan-chat-v3.md V25); nil none
+  "windowBorder",
   "windowBorderColor",
-  "windowTexture", -- LibSharedMedia's background by its name; nil the look's flat ground
-  "gameButtons",
-  "ornaments",
+  "windowTexture",
+}
+
+-- The old presets as ADR 0084 decision 6 maps them: the theme, the game's frame (nil: as it was
+-- set), the window's opacity at most (Glass kept its window see-through).
+Settings_.OLD_PRESETS = {
+  ["modern-dark"] = { theme = "folio" },
+  glass = { theme = "folio", alpha = 75 },
+  ["modern-light"] = { theme = "parchment" },
+  parchment = { theme = "parchment" },
+  ["modern-graphite"] = { theme = "graphite" },
+  night = { theme = "night" },
+  wow = { theme = "folio", frame = true },
+  azeroth = { theme = "folio", frame = true }, -- gone since 31.10.2026 (migration 3), for an old one
+}
+
+-- What a player's own preset (`db.global.presets`, ADR 0038) still gives: its theme, text font,
+-- text size, opacity and content switches; its look parts are dropped (ADR 0084 decision 6).
+Settings_.USER_KEYS = {
+  "theme",
+  "font",
+  "fontScale",
+  "windowAlpha",
   "sheetParchment",
   "rowPortraits",
   "placeCuts",
@@ -749,156 +768,73 @@ Settings_.LOOK_KEYS = {
   "modelMotion",
   "pageSounds",
 }
-local LOOK = {}
-for _, key in ipairs(Settings_.LOOK_KEYS) do
-  LOOK[key] = true
-end
-local function modern(theme)
-  return {
-    look = "modern",
-    gameFrames = false,
-    skinFrames = true,
-    theme = theme,
-    font = S.DEFAULT_FONT,
-    headingFont = nil,
-    labelFont = nil,
-    numberFont = nil,
-    fontScale = 100,
-    windowColor = nil,
-    windowAlpha = 100,
-    windowBorder = nil,
-    windowBorderColor = nil,
-    windowTexture = nil,
-    gameButtons = false,
-    ornaments = false,
-    sheetParchment = true,
-    rowPortraits = true,
-    placeCuts = true,
-    diorama = true,
-    modelMotion = true,
-    pageSounds = true,
-  }
-end
--- the built-ins, in the order of the choice; `font` and `headingFont` are the client's on a CJK
--- or Russian client (Friz Quadrata and Morpheus carry no Hangul or Han, Cyrillic is unverified)
--- The game's look on a scheme (, "a clearly skinned style according to
--- Blizzard examples"): the game's own windows and insets, its buttons, Friz Quadrata and Morpheus.
-local function game(theme)
-  local v = modern(theme)
-  v.look = "wow"
-  v.gameFrames = true
-  v.font = S.CLIENT_FONT and S.DEFAULT_FONT or S.BLIZZARD_FONT
-  v.headingFont = (not S.CLIENT_FONT) and S.HEADING_FONT or nil
-  v.gameButtons = true
-  v.ornaments = true
-  return v
-end
--- A look of its own on a scheme (plan-round4 H4): the Modern settings with the renderer named,
--- and a heading font where the look asks for one (Parchment: a serif).
-local function styled(theme, lookId, headingFont)
-  local v = modern(theme)
-  v.look = lookId
-  v.headingFont = (not S.CLIENT_FONT) and headingFont or nil
-  return v
-end
--- The seven (plan-round4 H5, 01.11.2026): the Modern renderer on four schemes, Glass, Parchment, WoW.
-Settings_.PRESETS = {
-  { id = "modern-dark", name = "Modern dark", values = modern("teal") },
-  { id = "modern-light", name = "Modern light", values = modern("parchment") },
-  { id = "modern-graphite", name = "Modern graphite", values = modern("graphite") },
-  { id = "night", name = "Night", values = modern("night") },
-  -- translucent plates under every text; dark glass on Dark teal (a light scheme gives light glass)
-  { id = "glass", name = "Glass", values = styled("teal", "glass") },
-  -- paper panels, brown ink, serif headings, square tiles with a sepia edge, no gold text
-  { id = "parchment", name = "Parchment", values = styled("parchment", "parchment", S.SERIF_FONT) },
-  -- the Character, Dungeon Finder and Guild windows: gold and white on the dark marble insets
-  { id = "wow", name = "WoW (the game's windows)", values = game("blizzard") },
-}
 
--- Writes every look setting of the built-in preset `id` into the profile table `p` (migrations).
-local function writePreset(p, id)
-  for _, preset in ipairs(Settings_.PRESETS) do
-    if preset.id == id then
-      for _, key in ipairs(Settings_.LOOK_KEYS) do
-        p[key] = preset.values[key]
+-- The keys that went with the looks; migration 4 clears them from every profile.
+Settings_.GONE_KEYS = { "preset", "look", "gameButtons", "ornaments", "skinFrames", "newPreset" }
+
+-- Maps one saved profile's look to the one look's settings, once; `saved` the account's own
+-- presets. -> true when the profile had a look to map.
+function Settings_.MapLook(p, saved)
+  local preset, lookId = rawget(p, "preset"), rawget(p, "look")
+  local user = type(preset) == "string" and string.match(preset, "^user:(.+)$")
+  local own = user and type(saved) == "table" and saved[user]
+  if type(own) == "table" then
+    for _, key in ipairs(Settings_.USER_KEYS) do
+      if own[key] ~= nil then
+        p[key] = own[key]
       end
     end
+    lookId = own.look
+    preset = "custom"
   end
-  p.preset = id
+  local map = Settings_.OLD_PRESETS[preset]
+  if map then
+    p.theme = map.theme -- a built-in preset named its scheme: the theme it maps to
+  end
+  -- a look chosen by hand: the game's frame for the WoW look, Glass's see-through; the theme the
+  -- player chose stays (decision 6: a colour scheme the player chose is kept)
+  local byLook = Settings_.OLD_PRESETS[lookId]
+  local frame = (map and map.frame) or (byLook and lookId == "wow" and true) or nil
+  local alpha = (map and map.alpha) or (byLook and byLook.alpha) or nil
+  if frame then
+    p.gameFrames = true
+  elseif rawget(p, "gameFrames") == nil then
+    p.gameFrames = false -- the frame as it was set: off was the default before the one look
+  end
+  if alpha then
+    p.windowAlpha = math.min(tonumber(rawget(p, "windowAlpha")) or 100, alpha)
+  end
+  for _, key in ipairs(Settings_.GONE_KEYS) do
+    p[key] = nil
+  end
+  return preset ~= nil or lookId ~= nil
 end
 
-local function presetValues(mod, id)
-  for _, preset in ipairs(Settings_.PRESETS) do
-    if preset.id == id then
-      return preset.values
+-- A window's values by an id (Window:SetPreset; Bastian's Chat's `look` and `toastLook`, V13): a
+-- theme's id, or an old preset's id mapped as migration 4 maps it; nil for an unknown one.
+function Settings_.PresetValues(id)
+  if type(id) ~= "string" then
+    return nil
+  end
+  local map = Settings_.OLD_PRESETS[id]
+  if map then
+    return { theme = map.theme, gameFrames = map.frame }
+  end
+  for _, theme in ipairs(S.Themes()) do
+    if theme.id == id then
+      return { theme = id }
     end
   end
-  local name = string.match(id or "", "^user:(.+)$")
-  local saved = name and mod.db.global.presets and mod.db.global.presets[name]
-  return saved
+  return nil
 end
 
--- Writes every look setting of the preset `id` (a built-in or "user:<name>") and applies them;
--- `fromSelect` when the select wrote `preset` already. An unknown id does nothing.
-function Settings_.ApplyPreset(mod, id, fromSelect)
-  local values = presetValues(mod, id)
-  if not values then
-    return false
-  end
-  local p = mod.db.profile
-  Settings_.applying = true
-  for _, key in ipairs(Settings_.LOOK_KEYS) do
-    p[key] = values[key]
-  end
-  p.preset = id
-  S.ApplyTheme(p.theme)
-  S.applyFont()
-  S.ApplySkin()
-  Settings_.applying = false
-  if not fromSelect then
-    B:Fire("BASTIANS_SETTING_CHANGED", mod.name, "preset", id)
-  end
-  if B.UI.Hub then
-    B.UI.Hub.Refresh() -- the choice and the rows show the new values
-  end
-  return true
-end
-
--- Keeps the current look under `name` for every character and profile, and selects it.
-function Settings_.SavePreset(mod, name)
-  name = string.match(tostring(name or ""), "^%s*(.-)%s*$")
-  if name == "" then
-    return false
-  end
-  local p = mod.db.profile
+-- The themes as an app's choice ({ [id] = name }): what a window of its own may wear.
+function Settings_.Presets()
   local values = {}
-  for _, key in ipairs(Settings_.LOOK_KEYS) do
-    values[key] = p[key]
+  for _, theme in ipairs(S.Themes()) do
+    values[theme.id] = L[theme.name]
   end
-  mod.db.global.presets = mod.db.global.presets or {}
-  mod.db.global.presets[name] = values
-  p.preset = "user:" .. name
-  B:Fire("BASTIANS_SETTING_CHANGED", mod.name, "preset", p.preset)
-  if B.UI.Hub then
-    B.UI.Hub.Refresh()
-  end
-  return true
-end
-
--- Removes the saved preset that is chosen; the settings stay as they are ("custom").
-function Settings_.DeletePreset(mod)
-  local p = mod.db.profile
-  local name = string.match(p.preset or "", "^user:(.+)$")
-  if not name or not (mod.db.global.presets and mod.db.global.presets[name]) then
-    return false
-  end
-  mod.db.global.presets[name] = nil
-  p.preset = "custom"
-  B:Fire("BASTIANS_SETTING_CHANGED", mod.name, "preset", p.preset)
-  if B.UI.Hub then
-    B.UI.Hub.Refresh()
-  end
-  return true
+  return values
 end
 
 -- A choice of LibSharedMedia's names of a kind (V25): "" is `none`, then every name it knows.
@@ -908,46 +844,6 @@ function Settings_.MediaChoices(kind, none)
     out[name] = name
   end
   return out
-end
-
--- A preset's values by its id (a built-in or "user:<name>"), nil for an unknown one: for a window
--- of a preset of its own (Window:SetPreset; Bastian's Chat's look, plan-chat-v3.md V13).
-function Settings_.PresetValues(id)
-  return type(id) == "string" and presetValues(ns.core, id) or nil
-end
-
--- The presets as an app's choice ({ [id] = name }): the built-ins and the saved ones, no Custom.
-function Settings_.Presets()
-  local values = Settings_.PresetChoices(ns.core)
-  values.custom = nil
-  return values
-end
-
--- The choice: the built-ins, the saved ones ("user:<name>"), and Custom.
-function Settings_.PresetChoices(mod)
-  local values = {}
-  for _, preset in ipairs(Settings_.PRESETS) do
-    values[preset.id] = L[preset.name]
-  end
-  for name in pairs(mod.db.global.presets or {}) do
-    values["user:" .. name] = name
-  end
-  values.custom = L["Custom"]
-  return values
-end
-
--- A look setting changed by hand: the preset shows as Custom (not while a preset is applied).
-function Settings_.NoteLookChange(mod, key)
-  if Settings_.applying or not LOOK[key] then
-    return
-  end
-  local p = mod.db.profile
-  if p.preset ~= "custom" then
-    p.preset = "custom"
-    if B.UI.Hub then
-      B.UI.Hub.Refresh()
-    end
-  end
 end
 
 local function profileValues()
@@ -985,14 +881,11 @@ ns.core = B:NewModule("Core", {
       fontScale = 100, -- the text size in percent
       tipDelay = 1, -- seconds
       font = S.DEFAULT_FONT,
-      theme = "teal", -- the colour scheme (ST3, ADR 0017)
+      theme = "folio", -- the theme (ADR 0017; ADR 0084: Folio the default, ~~teal~~ until 20.11.2026)
       windowAlpha = 100, -- the windows' opacity in percent (R27.2); windowColor nil: the theme's
-      -- the look (ADR 0034, ADR 0038): the preset, the game's window frames, the content switches
-      preset = "modern-dark",
-      gameButtons = false,
-      ornaments = false,
+      -- the one look (ADR 0084): the game's frame around every window, the content switches
+      gameFrames = true,
       sheetParchment = true,
-      skinFrames = true, -- the game's frames are the standard
       rowPortraits = true,
       placeCuts = true,
       diorama = true,
@@ -1010,7 +903,8 @@ ns.core = B:NewModule("Core", {
       omnibox = {},
       omniboxTree = {},
     },
-    global = { debug = false, perf = {}, newsMode = "always", presets = {}, welcomeAtLogin = true },
+    -- `presets` (a player's own, ADR 0038) stays in the saved variables for one release (ADR 0084)
+    global = { debug = false, perf = {}, newsMode = "always", welcomeAtLogin = true },
   },
   -- 2 (ADR 0038): the skin of ADR 0034 becomes a preset; every profile of the account
   migrations = {
@@ -1026,7 +920,7 @@ ns.core = B:NewModule("Core", {
           if skin == "azeroth" or skin == "blizzard" then
             -- the game's look of old becomes the game's look of now (31.10.2026): both the WoW
             -- preset since Azeroth went (ADR 0046), every look setting written
-            writePreset(p, "wow")
+            p.preset = "wow" -- every look setting of it: migration 4 maps the preset
           elseif rawget(p, "theme") == "parchment" then
             p.preset = "modern-light"
           elseif skin ~= nil or rawget(p, "theme") ~= nil then
@@ -1046,7 +940,7 @@ ns.core = B:NewModule("Core", {
       for _, p in pairs(profiles) do
         if type(p) == "table" then
           if rawget(p, "preset") == "azeroth" then
-            writePreset(p, "wow")
+            p.preset = "wow" -- every look setting of it: migration 4 maps the preset
             moved = moved + 1
           elseif rawget(p, "theme") == "azeroth" then
             p.theme = "parchment"
@@ -1061,6 +955,23 @@ ns.core = B:NewModule("Core", {
       end
       if moved > 0 then
         B:Log(nil, "info", "the Azeroth look is gone: %d profile(s) now wear the WoW look", moved)
+      end
+    end,
+    -- 4 (ADR 0084, W4, 20.11.2026): one look. Every profile's preset or look is mapped once to a
+    -- theme and the game's frame (decision 6); a player's own preset gives its theme, faces, size,
+    -- opacity and content switches; the keys of the looks go. A line in the log, never an error.
+    [4] = function(db)
+      local sv = rawget(db, "sv")
+      local profiles = sv and sv.profiles or { db.profile }
+      local saved = sv and sv.global and sv.global.presets
+      local mapped = 0
+      for _, p in pairs(profiles) do
+        if type(p) == "table" and Settings_.MapLook(p, saved) then
+          mapped = mapped + 1
+        end
+      end
+      if mapped > 0 then
+        B:Log(nil, "info", "one look for the suite: %d profile(s) mapped to a theme", mapped)
       end
     end,
   },
@@ -1093,66 +1004,10 @@ ns.core = B:NewModule("Core", {
       end,
     },
     -- every look setting of the suite in one section; every addon
-    -- follows it. Looks as presets: two buttons on top, the Preset
-    -- choice, save and delete, then every setting free.
+    -- follows it. One look (ADR 0084, 20.11.2026): the theme and the game's frame beside it, then
+    -- the faces, size and opacity. ~~The WoW and Modern buttons, the Preset choice, save and
+    -- delete, the game's window frames and buttons, the ornaments~~ went with the looks.
     { type = "header", label = L["Skin (every Bastian's addon)"] },
-    {
-      type = "execute",
-      icon = "keep",
-      label = L["Use the WoW look"],
-      desc = L["The game's own windows on every window: its frame, title bar, close button and insets, gold and white on dark."], -- luacheck: ignore 631 (a locale key stays one literal)
-      func = function(mod)
-        Settings_.ApplyPreset(mod, "wow")
-      end,
-    },
-    {
-      type = "execute",
-      icon = "layers",
-      label = L["Use the Modern look"],
-      desc = L["The flat look on the dark teal scheme; Modern light is the same on parchment."],
-      -- the other presets (Modern graphite, Night, Glass, Parchment) are in the Preset choice below
-      func = function(mod)
-        Settings_.ApplyPreset(mod, "modern-dark")
-      end,
-    },
-    {
-      type = "select",
-      key = "preset",
-      desc = L["Every look setting at once: the renderer, the colours, the fonts. Change anything after and save your own."], -- luacheck: ignore 631 (a locale key stays one literal)
-      label = L["Preset"],
-      values = function(mod)
-        return Settings_.PresetChoices(mod)
-      end,
-      set = function(id, mod)
-        if id ~= "custom" then
-          Settings_.ApplyPreset(mod, id, true)
-        end
-      end,
-    },
-    {
-      type = "edit",
-      key = "newPreset",
-      label = L["Save as new preset (press Enter)"],
-      set = function(name, mod)
-        Settings_.SavePreset(mod, name)
-      end,
-    },
-    {
-      type = "execute",
-      icon = "remove",
-      label = L["Delete this preset"],
-      desc = L["Removes the saved preset that is chosen; the settings stay as they are."],
-      func = function(mod)
-        Settings_.DeletePreset(mod)
-      end,
-    },
-    {
-      type = "toggle",
-      key = "gameFrames",
-      label = L["The game's own windows and insets"],
-      set = S.ApplySkin,
-    },
-    { type = "toggle", key = "skinFrames", label = L["The game's window frames"], set = S.ApplySkin },
     {
       type = "select",
       key = "theme",
@@ -1168,6 +1023,13 @@ ns.core = B:NewModule("Core", {
       set = function(id)
         S.ApplyTheme(id)
       end,
+    },
+    {
+      type = "toggle",
+      key = "gameFrames",
+      desc = L["The game's own frame around every window: its title strip, its round portrait and its close button."], -- luacheck: ignore 631 (a locale key stays one literal)
+      label = L["The game's frame around every window"],
+      set = S.ApplySkin,
     },
     {
       type = "select",
@@ -1311,20 +1173,6 @@ ns.core = B:NewModule("Core", {
       min = 20,
       max = 100,
       step = 5,
-    },
-    {
-      type = "toggle",
-      key = "gameButtons",
-      desc = L["The game's red button textures on every button of the suite."],
-      label = L["The game's buttons"],
-      set = S.ApplySkin,
-    },
-    {
-      type = "toggle",
-      key = "ornaments",
-      desc = L["The gold rule under section titles, as the game's quest frame draws it."],
-      label = L["Ornaments under section titles"],
-      set = S.ApplySkin,
     },
     {
       type = "toggle",
@@ -1520,9 +1368,6 @@ ns.core = B:NewModule("Core", {
         and (key == "windowColor" or key == "windowAlpha" or key == "windowBorderColor")
       then
         B.UI.ApplyWindowLook()
-      end
-      if modName == me.name then
-        Settings_.NoteLookChange(me, key) -- a look changed by hand: the preset reads Custom (ADR 0038)
       end
     end)
   end,

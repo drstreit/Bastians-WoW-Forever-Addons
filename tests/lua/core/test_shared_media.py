@@ -110,6 +110,6 @@ def test_the_general_page_offers_the_librarys_names(core: WowRuntime):
     assert values == {"": "None", "Thin": "Thin", "Thick": "Thick"}
     assert core.eval(f"{S}.MediaNames('background')")[1] == "Marble"
     assert {"windowBorder", "windowBorderColor", "windowTexture"} <= set(
-        core.eval("Bastians.UI.Settings.LOOK_KEYS").values()
+        core.eval("Bastians.UI.Settings.FRAME_KEYS").values()  # a window may have its own
     )
     assert core.errors == []

@@ -235,29 +235,16 @@ function Inbox.Panel(f, role)
   return f
 end
 
--- The panels in the window's look (plan §8, R14; , screen 9: "wow look
--- text background does not look very wow"): in the WoW look the stream on the game's chat ground
--- (black, half see-through, as the game's chat frame) inside a gold-edged inset, the rail and the
--- heads on the game's dark panel with a faint gilt edge; every other look its plate and its line.
-Inbox.WOW_GROUND = 0.5
+-- The panels in the window's look (plan §8, R14): each its plate and its line.
 function Inbox.PaintPanels(of)
   of = of or box -- the decks paint theirs by their own frame
   if not of then
     return
   end
-  local wow = S.LookOf(of) == "wow"
-  local gold = wow and S.Palette("blizzard").C.gold or nil
-  for f, role in pairs(panels) do
-    if wow and role == "stream" then
-      S.tint(f.ground, S.Tok(f, "bg"), Inbox.WOW_GROUND)
-      S.setEdges(f.edges, gold, 0.8)
-    elseif wow then
-      S.tint(f.ground, S.Tok(f, "panel"), 1)
-      S.setEdges(f.edges, gold, 0.45)
-    else
-      S.tint(f.ground, S.Tok(f, "panel"), 1)
-      S.setEdges(f.edges, S.Tok(f, "line"), 1)
-    end
+  -- ~~the WoW look's black stream in a gold-edged inset~~ (until 20.11.2026, ADR 0084: one look)
+  for f in pairs(panels) do
+    S.tint(f.ground, S.Tok(f, "panel"), 1)
+    S.setEdges(f.edges, S.Tok(f, "line"), 1)
   end
 end
 

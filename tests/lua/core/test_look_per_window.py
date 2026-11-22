@@ -1,8 +1,7 @@
-"""A look per window (ADR 0046's open point; plan-chat-v3.md §9, package V13): a frame takes a preset
-of its own (S.SetFramePreset), its scheme as the palette and its renderer as the look, whatever the
-suite's preset; its widgets, corners and window frame follow it, a part under it with a palette of
-its own keeps that one, and nil puts the suite's back. Nothing is walked before a frame took a
-look of its own. Since V17 (13.11.2026) its fonts too: a kit text has a role (text, heading,
+"""A theme per window (ADR 0046's open point; plan-chat-v3.md §9, package V13): a frame takes values
+of its own (S.SetFramePreset), its theme as the palette, whatever the suite's; its widgets and
+window frame follow it, a part under it with a palette of its own keeps that one, and nil puts the
+suite's back. ~~Its renderer as the look, its corners~~ (until 20.11.2026: one look, ADR 0084). Since V17 (13.11.2026) its fonts too: a kit text has a role (text, heading,
 label, number), each role the font its window's preset names, else the suite's."""
 
 from harness import WowRuntime
@@ -17,19 +16,20 @@ def boot(wow: WowRuntime) -> WowRuntime:
     return wow
 
 
-def test_the_presets_are_there_for_an_app(wow: WowRuntime):
+def test_the_themes_are_there_for_an_app(wow: WowRuntime):
+    """ADR 0084: a window of its own wears a theme; an old preset's id still names one."""
     boot(wow)
-    assert wow.eval(f"{SET}.PresetValues('wow').look") == "wow"
-    assert wow.eval(f"{SET}.PresetValues('glass').theme") == "teal"
+    assert wow.eval(f"{SET}.PresetValues('wow').theme") == "folio"
+    assert wow.eval(f"{SET}.PresetValues('glass').theme") == "folio"
+    assert wow.eval(f"{SET}.PresetValues('parchment').theme") == "parchment"
     assert wow.eval(f"{SET}.PresetValues('nonsense')") is None
     names = dict(wow.eval(f"{SET}.Presets()").items())
-    assert "wow" in names and "glass" in names and "custom" not in names
+    assert names["folio"] == "Folio" and names["parchment"] == "Paper"
+    assert "wow" not in names and "custom" not in names
 
 
-def test_a_frame_draws_in_a_preset_of_its_own(wow: WowRuntime):
+def test_a_frame_draws_in_a_theme_of_its_own(wow: WowRuntime):
     boot(wow)
-    suite = wow.eval(f"{S}.LookId()")
-    assert suite != "wow"
     wow.execute(
         f"""
         T = {{}}
@@ -37,18 +37,16 @@ def test_a_frame_draws_in_a_preset_of_its_own(wow: WowRuntime):
         T.child = CreateFrame("Frame", nil, T.f)
         T.b = {S}.action(T.child, {{ icon = "close", label = "Close" }})
         T.tex = {S}.fill(T.child, {S}.C.panel)
-        {S}.SetFramePreset(T.f, {SET}.PresetValues("wow"))
+        {S}.SetFramePreset(T.f, {SET}.PresetValues("parchment"))
         """
     )
-    assert wow.eval(f"{S}.LookOf(T.b)") == "wow"
-    assert wow.eval(f"{S}.PaletteOf(T.b).id") == "blizzard"
+    assert wow.eval(f"{S}.LookOf(T.b)") == "book"  # one look, whatever the frame's theme
+    assert wow.eval(f"{S}.PaletteOf(T.b).id") == "parchment"
     # what the kit drew under it took the palette's token
-    assert wow.eval(f"{S}.painted[T.tex][1] == {S}.Palette('blizzard').C.panel") is True
-    # a frame elsewhere keeps the suite's
-    assert wow.eval(f"{S}.LookOf(CreateFrame('Frame', nil, UIParent))") == suite
+    assert wow.eval(f"{S}.painted[T.tex][1] == {S}.Palette('parchment').C.panel") is True
+    assert wow.eval(f"{S}.painted[T.b.edges][1] == {S}.Palette('parchment').C.line") is True
     # nil: the suite's again, the tokens back to the theme's
     wow.execute(f"{S}.SetFramePreset(T.f, nil)")
-    assert wow.eval(f"{S}.LookOf(T.b)") == suite
     assert wow.eval(f"{S}.PaletteOf(T.b)") is None
     assert wow.eval(f"{S}.painted[T.tex][1] == {S}.C.panel") is True
     assert wow.errors == []
@@ -64,17 +62,19 @@ def test_a_part_with_a_palette_of_its_own_keeps_it(wow: WowRuntime):
         T.area.palette = {S}.Palette("blizzard")
         T.mark = T.area:CreateTexture()
         {S}.tint(T.mark, {S}.Palette("blizzard").C.tier0, 1)
-        {S}.SetFramePreset(T.f, {SET}.PresetValues("wow"))
+        {S}.SetFramePreset(T.f, {SET}.PresetValues("parchment"))
         {S}.SetFramePreset(T.f, nil)
         """
     )
-    # the window went from the WoW palette (blizzard) back to the theme; the area's own mark,
-    # drawn in that same palette, stays it
+    # the window went from Paper back to the theme; the area's own mark, drawn in a palette of
+    # its own, stays it
     assert wow.eval(f"{S}.painted[T.mark][1] == {S}.Palette('blizzard').C.tier0") is True
     assert wow.errors == []
 
 
-def test_corners_follow_the_frames_look(wow: WowRuntime):
+def test_corners_are_the_suites_in_every_frame(wow: WowRuntime):
+    """~~A frame of a look of its own took that look's corners (Glass rounder)~~ until 20.11.2026:
+    one look has one set of corners (ADR 0084)."""
     boot(wow)
     wow.execute(
         f"""
@@ -84,13 +84,13 @@ def test_corners_follow_the_frames_look(wow: WowRuntime):
         {S}.SetFramePreset(T.f, {SET}.PresetValues("glass"))
         """
     )
-    assert wow.eval(f"{S}.RadiusOf(T.f, 'radius')") == 10  # Glass rounds more
-    assert wow.eval(f"{S}.RadiusOf(T.f, 'radiusSmall')") == 8
-    other = "CreateFrame('Frame', nil, UIParent)"
-    assert wow.eval(f"{S}.RadiusOf({other}, 'radius')") == wow.eval(f"{S}.SHAPE.radius")
+    assert wow.eval(f"{S}.RadiusOf(T.f, 'radius')") == wow.eval(f"{S}.SHAPE.radius") == 6
+    assert wow.eval(f"{S}.RadiusOf(T.f, 'radiusSmall')") == 4
 
 
-def test_a_window_takes_the_presets_frame(wow: WowRuntime):
+def test_a_window_takes_its_own_frame_or_the_suites(wow: WowRuntime):
+    """A window's own values name the game's frame where they say (an old WoW preset's id: on);
+    else it follows the suite's switch (since 20.11.2026, ADR 0084: one switch beside the theme)."""
     boot(wow)
     wow.execute(
         """
@@ -98,12 +98,14 @@ def test_a_window_takes_the_presets_frame(wow: WowRuntime):
         T.win = Bastians.UI.Window("TestLookWindow", { title = "Test" })
         """
     )
-    assert wow.eval("T.win:Skin('gameFrames')") == wow.eval(f"{S}.Skin('gameFrames')")
-    wow.execute(f"T.win:SetPreset({SET}.PresetValues('wow'))")
-    assert wow.eval("T.win:Skin('gameFrames')") is True
-    assert wow.eval("T.win.frame.look") == "wow"
-    wow.execute(f"T.win:SetPreset({SET}.PresetValues('modern-dark'))")
+    assert wow.eval("T.win:Skin('gameFrames')") == wow.eval(f"{S}.Skin('gameFrames')") is True
+    wow.execute(f"T.win:SetPreset({SET}.PresetValues('parchment'))")
+    assert wow.eval("T.win:Skin('gameFrames')") is True  # the suite's
+    wow.execute("Bastians:GetModule('Core').db.profile.gameFrames = false")
     assert wow.eval("T.win:Skin('gameFrames')") is False
+    wow.execute(f"T.win:SetPreset({SET}.PresetValues('wow'))")
+    assert wow.eval("T.win:Skin('gameFrames')") is True  # its own says so
+    assert wow.eval("T.win.frame.look") is None
     wow.execute("T.win:SetPreset(nil)")
     assert wow.eval("T.win.frame.presetValues") is None
     assert wow.errors == []

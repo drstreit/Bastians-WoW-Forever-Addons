@@ -1,6 +1,7 @@
 """The skin: one section on the General page for
-every look setting; Modern or Azeroth (Morpheus headings in gold, ornaments); the game's window
-frames as a switch of their own; loot as a grid of icon cells, places as cuts of the map, the
+every look setting; ~~Modern or Azeroth (Morpheus headings in gold, ornaments); the game's window
+frames as a switch of their own~~ one look on a theme, the game's frame as the one switch (ADR
+0084, 20.11.2026); loot as a grid of icon cells, places as cuts of the map, the
 zone's painting behind a creature, creatures that greet, faces in NPC rows, page sounds. Each
 switch changes what it names; off gives back today's look."""
 
@@ -80,20 +81,17 @@ def test_the_greeting_follows_the_services(core: WowRuntime):
 
 
 def test_one_section_holds_every_look_setting(core: WowRuntime):
+    """ADR 0084 (W4, 20.11.2026): the theme and the game's frame beside it, then the faces, size
+    and opacity, then the content switches. ~~The WoW and Modern buttons, Preset, save and delete,
+    the game's window frames and buttons, the ornaments~~ went with the looks."""
     options = list(core.eval("Bastians:GetModule('Core').def.options").values())
     labels = [(o["type"], o.label, o.key) for o in options]
     start = next(i for i, x in enumerate(labels) if x[1] == "Skin (every Bastian's addon)")
     end = next(i for i in range(start + 1, len(labels)) if labels[i][0] == "header")
     keys = [x[2] for x in labels[start + 1 : end]]
     assert keys == [
-        None,  # Use the WoW look
-        None,  # Use the Modern look (the Azeroth row went with ADR 0046)
-        "preset",
-        "newPreset",  # Save as new preset
-        None,  # Delete this preset
-        "gameFrames",  # the game's own windows and insets
-        "skinFrames",
         "theme",
+        "gameFrames",  # the one switch beside the theme (ADR 0084 decision 4)
         "font",
         "headingFont",
         "labelFont",  # since V17 (13.11.2026): section titles and tabs
@@ -105,8 +103,6 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
         "windowBorderColor",
         "windowTexture",  # LibSharedMedia's background
         "windowAlpha",
-        "gameButtons",
-        "ornaments",
         "sheetParchment",
         "rowPortraits",
         "placeCuts",
@@ -116,7 +112,9 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
     ]
     assert "Windows" not in [x[1] for x in labels]  # folded into the section
     profile = core.eval(PROFILE)
-    assert profile.preset == "modern-dark" and profile.skinFrames is True  # the frames are standard
+    assert profile.theme == "folio" and profile.gameFrames is True  # the board's question 4
+    for gone in ("preset", "look", "gameButtons", "ornaments", "skinFrames"):
+        assert profile[gone] is None, gone
     for key in ("rowPortraits", "placeCuts", "diorama", "modelMotion", "pageSounds"):
         assert profile[key] is True, key
     assert core.errors == []
@@ -134,28 +132,33 @@ def test_the_heading_font_is_a_setting_of_its_own(core: WowRuntime):
     assert core.eval("{ W.title:GetTextColor() }")[1] == core.eval(f"{S}.C.headerText[1]")
     set_option(core, "headingFont", "nil")
     assert core.eval("(W.title:GetFont())") == font
-    assert core.eval(f"{PROFILE}.preset") == "modern-dark"  # set_option fires no message: no Custom
     assert core.errors == []
 
 
-def test_the_games_window_frames_are_a_switch_of_their_own(core: WowRuntime):
-    core.execute("W = Bastians.UI.Window('FrameTestFrame', { title = 'T' }); W:Show()")
-    # the frames are the standard: on from the first window
-    assert core.eval("W.border:IsShown()") is True
-    assert core.eval("(select(4, W.head:GetPoint(1)))") == 9  # moved in by the frame's width
-    assert core.eval("W.frame.edges:IsShown()") is False  # the round outline goes
-    assert core.eval("W.frame.bg:IsShown()") is True  # Modern keeps its flat ground inside
-    set_option(core, "skinFrames", "false")
-    assert core.eval("W.border:IsShown()") is False
-    assert core.eval("(select(4, W.head:GetPoint(1)))") == 1
-    assert core.eval("W.frame.edges:IsShown()") is True
-    assert core.eval(f"{S}.Ornaments()") is False  # the other settings did not change
-    set_option(core, "skinFrames", "true")
-    assert core.eval("W.border:IsShown()") is True
+def test_the_games_frame_is_the_one_switch(core: WowRuntime):
+    """ADR 0084 decision 4: on, the game's own frame around the window (on by default); off, the
+    look's own edge of 1. ~~The game's dialog border, a switch of its own (`skinFrames`)~~ (until
+    20.11.2026)."""
+    core.execute(
+        "Mock.templates.PortraitFrameTemplate = true; "  # the client has the game's frame
+        "W = Bastians.UI.Window('FrameTestFrame', { title = 'T' }); W:Show()"
+    )
+    assert core.eval("W.gameFramed") is True and core.eval("W.chrome:IsShown()") is True
+    assert core.eval("W.border") is None  # no dialog border any more
+    set_option(core, "gameFrames", "false")
+    assert core.eval("W.gameFramed") is False and core.eval("W.chrome:IsShown()") is False
+    assert core.eval("(select(4, W.head:GetPoint(1)))") == 1  # the look's own edge
+    assert (
+        core.eval("W.frame.edges:IsShown()") is True and core.eval("W.frame.bg:IsShown()") is True
+    )
+    set_option(core, "gameFrames", "true")
+    assert core.eval("W.gameFramed") is True
     assert core.errors == []
 
 
-def test_section_titles_keep_their_case_over_an_ornament(app: WowRuntime):
+def test_section_titles_are_capitals_over_a_line(app: WowRuntime):
+    """~~Or in their own case over the WoW look's gold ornament (`ornaments`)~~ until 20.11.2026
+    (ADR 0084): one look, a section's title in capitals over a 1 px line."""
     host(app)
     app.execute(TABLES)
     app.execute("dossier:SetSubject('npc:448')")
@@ -165,10 +168,6 @@ def test_section_titles_keep_their_case_over_an_ornament(app: WowRuntime):
     assert bf.title.IsShown(bf.title) is False and bf.line.IsShown(bf.line) is False
     assert head.title.GetText(head.title) == "Loot"
     assert head.line.IsShown(head.line) is True and head.orn.IsShown(head.orn) is False
-    set_option(app, "ornaments", "true")
-    app.execute("dossier:Refresh()")
-    assert block(app, "Loot") is not None  # a block title keeps its case over an ornament
-    assert head.orn.IsShown(head.orn) is True and head.line.IsShown(head.line) is False
     assert app.errors == []
 
 

@@ -2,6 +2,8 @@
 installed Spoken is newer or older than the suite was tested with; the suite's words never talk over
 Spoken's line or another addon's text to speech (Spoken Players); the Orbiter has a feed."""
 
+import itertools
+
 from harness import WowRuntime
 from test_voice import CORE, DATA, QUESTS, SPOKEN, VOICE, V, boot, run
 
@@ -110,4 +112,42 @@ def test_the_conversations_options_spread_over_an_arc(wow: WowRuntime):
     bearings = [round(o.bearing) for o in six.values()]
     assert bearings == [240, 288, 336, 24, 72, 120]  # 240 degrees, never wider
     assert wow.eval("BastiansVoiceOrbit.facing") is None
+    assert wow.errors == []
+
+
+def test_a_guards_many_answers_never_share_a_place(wow: WowRuntime):
+    """a guard's fifteen directions lay two on one place ("most of the
+    answers are doubled"). Past eleven the answers come in pages of nine behind "More"."""
+    boot(wow, CORE, DATA, VOICE)
+    T = "Bastians:GetModule('Voice').Talk"
+    wow.execute(
+        "Shown = {}; State = { quests = {}, options = {} }; "
+        "for i = 1, 15 do State.options[i] = { kind = 'say', label = 'Where ' .. i } end; "
+        "State.options[16] = { kind = 'say', label = 'Farewell' }; "
+    )
+
+    def outer() -> list:
+        return list(
+            wow.eval(f"(function() local _, o = {T}.OrbitItems(State) return o end)()").values()
+        )
+
+    first = outer()
+    labels = [o.label for o in first]
+    assert labels == [f"Where {i}" for i in range(1, 10)] + ["More", "Farewell"]
+    bearings = sorted(round(o.bearing) % 360 for o in first)
+    gaps = [(b - a) for a, b in itertools.pairwise(bearings)]
+    gaps.append(bearings[0] + 360 - bearings[-1])
+    assert min(gaps) >= wow.eval("Bastians:GetModule('Voice').Voice.MIN_GAP")
+    more = next(o for o in first if o.label == "More")
+    wow.execute(f"{T}.Page(State)[10].onClick()")
+    assert more.glyph == "more"
+    second = [o.label for o in outer()]
+    assert second == [f"Where {i}" for i in range(10, 16)] + ["More", "Farewell"]
+    wow.execute(f"{T}.Page(State)[7].onClick()")
+    assert next(o.label for o in outer()) == "Where 1"  # round again
+    # eleven fit without pages; no two words side by side above the hub
+    for n in range(1, 12):
+        b = [round(x) for x in wow.eval(f"{T}.Bearings({n})").values()]
+        near = [x for x in b if abs(x) < 20]
+        assert len(near) <= 1, (n, b)
     assert wow.errors == []

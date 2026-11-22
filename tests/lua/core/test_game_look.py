@@ -1,9 +1,9 @@
-"""The WoW look ("the full WoW look is not working - hardly readable through
-the transparency, not even close to WoW look ... I need a clearly skinned style according to
-Blizzard examples"): the client's own PortraitFrameTemplate behind every window and its
-InsetFrameTemplate behind the Browser's panes (marble on the dark scheme, our parchment on the
-light one), the window opacity reaching those grounds; a new profile starts as a copy of this one;
-a dropdown as wide as its longest choice."""
+"""The game's frame (ADR 0040; ADR 0084 decision 4, 20.11.2026: the optional border around the one
+look, on by default): the client's own PortraitFrameTemplate around every window, the window
+opacity reaching its ground; ~~the WoW look's InsetFrameTemplate behind the Browser's panes and the
+game's red buttons~~ (until 20.11.2026: the table is the ground in every theme); a new profile
+starts as a copy of this one; a dropdown as wide as its longest choice. The owner, retail
+31.10.2026: "I need a clearly skinned style according to Blizzard examples"."""
 
 from harness import WowRuntime
 
@@ -27,13 +27,18 @@ def omnibox(wow: WowRuntime) -> str:
     return "Bastians.UI.Windows.BastiansOmniboxFrame"
 
 
-def test_the_wow_preset_wears_the_games_own_window(wow: WowRuntime):
+def frames(wow: WowRuntime, on: bool) -> None:
+    wow.execute(f"{PROFILE}.gameFrames = {'true' if on else 'false'}; {S}.ApplySkin()")
+
+
+def theme(wow: WowRuntime, id_: str) -> None:
+    wow.execute(f"{PROFILE}.theme = '{id_}'; {S}.ApplyTheme('{id_}'); {S}.ApplySkin()")
+
+
+def test_every_window_wears_the_games_frame_by_default(wow: WowRuntime):
     boot(wow)
     win = omnibox(wow)
-    assert wow.eval(f"{win}.chrome") is None  # Modern: no game window made
-    assert wow.eval(f"{SET}.ApplyPreset({CORE}, 'wow')") is True
-    p = wow.eval(PROFILE)
-    assert p.gameFrames is True and p.theme == "blizzard" and p.gameButtons is True
+    assert wow.eval(f"{PROFILE}.gameFrames") is True  # the board's question 4, 17.11.2026
     chrome = f"{win}.chrome"
     assert wow.eval(f"{chrome}:IsShown()") is True
     assert wow.eval(f"{chrome}.TitleText:GetText()") == "Search"  # the title in the game's bar
@@ -51,17 +56,17 @@ def test_the_wow_preset_wears_the_games_own_window(wow: WowRuntime):
     # a title set later reaches the game's bar
     wow.execute(f"{win}:SetTitle('Elsewhere')")
     assert wow.eval(f"{chrome}.TitleText:GetText()") == "Elsewhere"
-    # back to Modern: our own frame again
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'modern-dark')")
+    # the switch off: the look's own edge and head again
+    frames(wow, False)
     assert wow.eval(f"{chrome}:IsShown()") is False and wow.eval(f"{win}.title:IsShown()") is True
     assert wow.eval(f"{win}.frame.bg:IsShown()") is True
+    assert tuple(wow.eval(f"{win}:Insets()"))[1:] == (1, 1)
     assert wow.errors == []
 
 
 def test_the_window_opacity_reaches_the_games_grounds(wow: WowRuntime):
     boot(wow)
     win = omnibox(wow)
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
     wow.execute(f"{PROFILE}.windowAlpha = 50; Bastians.UI.ApplyWindowLook()")
     alpha = wow.eval(f"{win}.chrome.Bg:GetAlpha()")
     assert abs(alpha - 0.5) < 0.01  # the slider moves the rock (it did nothing before)
@@ -69,32 +74,23 @@ def test_the_window_opacity_reaches_the_games_grounds(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_the_browsers_panes_sit_in_the_games_insets(wow: WowRuntime):
+def test_the_browsers_panes_lie_on_the_table_in_every_theme(wow: WowRuntime):
+    """ADR 0084 consequences: ADR 0040's insets behind the panes (the game's marble) go with the
+    WoW look; the table is the ground in every theme, in the game's frame too."""
     wow.execute('function GetRealmName() return "Classic Beta PvE" end')
     boot(wow, True, "Bastians_Core", "Bastians_Data", "Bastians_Browser")
     wow.execute("Bastians:GetModule('Browser').Browser.OpenWindow()")
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
     nav = "Bastians:GetModule('Browser').listPane"  # the list tile (the navigation until ADR 0056)
-    inset = f"{nav}.gameInset"
-    assert wow.eval(f"{inset}:IsShown()") is True
-    assert wow.eval(f"{inset}.Bg:GetTexture()") == "Interface\\FrameGeneral\\UI-Background-Marble"
-    assert wow.eval(f"{nav}.bg:IsShown()") is False  # its own flat fill gives way
-    # a light scheme under the game's frames: our parchment in the same insets, so brown ink reads
-    wow.execute(
-        f"{CORE}.db.profile.theme = 'parchment'; {S}.ApplyTheme('parchment'); {S}.ApplySkin()"
-    )
-    assert (
-        wow.eval(f"{inset}.Bg:GetTexture()") == "Interface\\AddOns\\Bastians_Core\\Media\\Parchment"
-    )
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'modern-dark')")
-    assert wow.eval(f"{inset}:IsShown()") is False and wow.eval(f"{nav}.bg:IsShown()") is True
+    for id_ in ("folio", "parchment"):
+        theme(wow, id_)
+        assert wow.eval(f"{nav}.gameInset") is None, id_  # never made
+        assert wow.eval(f"{nav}.bg:IsShown()") is True, id_  # its own flat fill
     assert wow.errors == []
 
 
 def test_without_the_templates_the_window_keeps_its_own_frame(wow: WowRuntime):
     boot(wow, False)
     win = omnibox(wow)
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
     assert wow.eval(f"{win}.chrome") is False  # asked once, the client has none
     assert wow.eval(f"{win}.title:IsShown()") is True
     assert wow.errors == []
@@ -102,13 +98,14 @@ def test_without_the_templates_the_window_keeps_its_own_frame(wow: WowRuntime):
 
 def test_a_new_profile_starts_as_a_copy_of_this_one(wow: WowRuntime):
     boot(wow)
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
+    theme(wow, "blizzard")
+    frames(wow, False)
     wow.execute("Bastians:SetProfile('Raid', true)")
     p = wow.eval(PROFILE)
     assert wow.eval("Bastians:GetProfile()") == "Raid"
-    assert p.preset == "wow" and p.theme == "blizzard"  # not the defaults (Modern)
+    assert p.theme == "blizzard" and p.gameFrames is False  # not the defaults
     wow.execute("Bastians:SetProfile('Fresh')")  # without the copy: the defaults, as before
-    assert wow.eval(f"{PROFILE}.preset") in (None, "modern-dark")
+    assert wow.eval(f"{PROFILE}.theme") == "folio" and wow.eval(f"{PROFILE}.gameFrames") is True
     assert wow.errors == []
 
 
@@ -128,9 +125,10 @@ def test_a_dropdown_is_as_wide_as_its_longest_choice(wow: WowRuntime):
 
 def test_the_settings_always_wear_the_wow_look(wow: WowRuntime):
     """ "option fonts are not readable ... leave the menu out of the
-    styling, it should always be the same - the WoW look"."""
+    styling, it should always be the same - the WoW look": its fixed palette and the game's frame
+    and inset, forced, until W5 puts Core's own windows on the one look's frame."""
     boot(wow)
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'modern-light')")  # parchment and brown ink elsewhere
+    theme(wow, "parchment")  # Paper and brown ink elsewhere
     wow.execute("Bastians.UI.Hub.Open()")
     hub = "Bastians.UI.Hub"
     gold = list(wow.eval(f"{S}.Palette('blizzard').C.text").values())
@@ -140,8 +138,8 @@ def test_the_settings_always_wear_the_wow_look(wow: WowRuntime):
     assert list(label.GetTextColor(label))[:3] == gold[:3]  # the menu in the gold scheme's text
     assert wow.eval(f"{hub}.win.chrome:IsShown()") is True  # the game's frame, whatever the look
     assert wow.eval(f"{hub}.nav.gameInset.Bg:GetTexture()").endswith("UI-Background-Marble")
-    # a theme change elsewhere leaves the settings as they are
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'modern-light')")
+    # a theme change elsewhere leaves the settings as they are (until W5 draws Core's windows)
+    theme(wow, "teal")
     assert list(label.GetTextColor(label))[:3] == gold[:3]
     assert wow.eval(f"{hub}.win.chrome:IsShown()") is True
     assert wow.errors == []
@@ -150,12 +148,11 @@ def test_the_settings_always_wear_the_wow_look(wow: WowRuntime):
 def test_text_on_a_light_ground_has_no_shadow(wow: WowRuntime):
     boot(wow)
     wow.execute(
-        f"""{SET}.ApplyPreset({CORE}, 'modern-dark')
-        local f = CreateFrame("Frame", nil, UIParent)
+        f"""local f = CreateFrame("Frame", nil, UIParent)
         FS = {S}.text(f, 12)"""
     )
     assert list(wow.eval("{ FS:GetShadowOffset() }").values()) == [1, -1]
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'modern-light')")  # brown ink on parchment
+    theme(wow, "parchment")  # brown ink on Paper
     assert list(wow.eval("{ FS:GetShadowOffset() }").values()) == [0, 0]
     assert wow.errors == []
 
@@ -175,39 +172,4 @@ def test_a_tree_survives_a_pruned_fold_table(wow: WowRuntime):
         T:ToggleFold(T.flat[1])"""
     )
     assert wow.eval("type(DBT.collapsed)") == "table"
-    assert wow.errors == []
-
-
-def test_a_wide_game_button_keeps_its_caps(wow: WowRuntime):
-    """the wide settings buttons looked strange, the game's button art
-    stretched whole. It is three slices now: 12/22 of the height per cap, the middle stretches."""
-    boot(wow)
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'wow')")
-    wow.execute(f"TestB = {S}.button(UIParent, 'Wide', 600, 22)")
-    art = "TestB.gameArt"
-    # the look sizes the button (ADR 0046: the WoW geometry, 24 px), the caps follow its height
-    h = wow.eval("TestB:GetHeight()")
-    assert h == 24
-    assert wow.eval(f"{art}.up[1]:GetWidth()") == round(h * 12 / 22)
-    assert wow.eval(f"{art}.up[3]:GetWidth()") == round(h * 12 / 22)
-    assert wow.eval(f"{art}.up[1]:GetTexture()") == "Interface\\Buttons\\UI-Panel-Button-Up"
-    coords = list(wow.eval(f"{{ {art}.up[2]:GetTexCoord() }}").values())
-    assert coords[:2] == [0.09375, 0.53125]
-    assert wow.eval(f"{art}.up[1]:IsShown()") is True
-    assert wow.eval(f"{art}.down[1]:IsShown()") is False
-    assert wow.eval("TestB:GetNormalTexture()") is None  # nothing stretched whole
-    # pressed: the down art; released: the up art again
-    wow.execute("TestB:GetScript('OnMouseDown')(TestB, 'LeftButton')")
-    assert wow.eval(f"{art}.down[2]:IsShown()") is True
-    assert wow.eval(f"{art}.up[2]:IsShown()") is False
-    wow.execute("TestB:GetScript('OnMouseUp')(TestB, 'LeftButton')")
-    assert wow.eval(f"{art}.up[2]:IsShown()") is True
-    assert wow.eval(f"{art}.down[2]:IsShown()") is False
-    # a narrow one: the caps never pass the middle
-    wow.execute("TestB:SetSize(16, 22); TestB:GetScript('OnSizeChanged')(TestB, 16, 22)")
-    assert wow.eval(f"{art}.up[1]:GetWidth()") == 8
-    # back to Modern: our own face, no game art
-    wow.execute(f"{SET}.ApplyPreset({CORE}, 'modern-dark')")
-    assert wow.eval(f"{art}.up[2]:IsShown()") is False
-    assert wow.eval("TestB.face:IsShown()") is True
     assert wow.errors == []

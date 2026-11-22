@@ -136,18 +136,35 @@ function Mine.IsNever(line)
   return key ~= nil and Mine.NeverSet()[key] == true
 end
 
--- The lines a moment draws from first: the player's, or ours when the switch is off or none is usable.
-function Mine.Pool()
-  local usable = check().usable
+-- The language of a line of the player's: its own, English for the lines from before.
+function Mine.Language(line)
+  return type(line) == "table" and line.lang or "enUS"
+end
+
+-- The player's usable lines of one language (nil: all).
+local function usableIn(language)
+  local out = {}
+  for _, line in ipairs(check().usable) do
+    if language == nil or Mine.Language(line) == language then
+      out[#out + 1] = line
+    end
+  end
+  return out
+end
+
+-- The lines a moment draws from first: the player's of the language, or ours when the switch is
+-- off or none is usable.
+function Mine.Pool(language)
+  local usable = usableIn(language)
   if switchedOn() and #usable > 0 then
     return usable
   end
-  return ns.CourtesyLines
+  return Voice.Pack(language).lines or ns.CourtesyLines
 end
 
 -- Whether a line is one of the player's.
 function Mine.Owns(line)
-  return check().own[line] == true
+  return check().own[Voice.Source(line)] == true
 end
 
 -- The line for a moment: one of the player's where one fits and was not said lately, else one of
@@ -156,12 +173,18 @@ end
 function Mine.Choose(facts, opts)
   opts = opts or {}
   local never = Mine.NeverSet()
-  local pool = Mine.Pool()
+  local language = facts.lang or Voice.language
+  local pack = Voice.Pack(language)
+  local usable = switchedOn() and usableIn(language) or {}
   local line
-  if pool ~= ns.CourtesyLines then
-    line = Voice.Choose(pool, facts, setmetatable({ fresh = true, never = never }, { __index = opts }))
+  if #usable > 0 then
+    line = Voice.Choose(usable, facts, setmetatable({ fresh = true, never = never }, { __index = opts }))
   end
-  return line or Voice.Choose(ns.CourtesyLines, facts, setmetatable({ never = never }, { __index = opts }))
+  if line then
+    return line
+  end
+  local ours = setmetatable({ never = never }, { __index = opts })
+  return Voice.Choose(pack.lines or {}, facts, ours)
 end
 
 -- Once: the lines the retired Bastians_MyLines (and the lines kept from Gestures) handed to Core go

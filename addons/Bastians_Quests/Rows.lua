@@ -259,6 +259,9 @@ function R.tags(qid, q, state, map)
   if q.excl then
     add(C.red, L["Decision"])
   end
+  if q.leads then
+    add(C.grey, L["Breadcrumb"])
+  end
   if q.classes and q.classes > 0 then
     add(C.grey, L["Class"])
   end

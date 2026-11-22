@@ -201,21 +201,21 @@ function Welcome.Cards()
   return out
 end
 
--- The swatches of the look row, pure: every built-in look preset with the colours of its scheme.
+-- The swatches of the look row, pure: every theme with its colours (ADR 0084: one look, skinned
+-- by a theme; ~~every built-in look preset~~ until 20.11.2026). `name` in the client's language.
 function Welcome.Swatches()
-  local Settings_ = settings()
-  local current = ns.core.db.profile.preset
+  local current = S.ThemeId()
   local out = {}
-  for _, preset in ipairs(Settings_.PRESETS) do
-    local colors = S.ThemeColors(preset.values.theme) or {}
+  for _, theme in ipairs(S.Themes()) do
+    local colors = S.ThemeColors(theme.id) or {}
     out[#out + 1] = {
-      id = preset.id,
-      name = preset.name,
+      id = theme.id,
+      name = L[theme.name],
       ground = colors.bg,
       panel = colors.panel,
       text = colors.text,
       accent = colors.accent,
-      chosen = current == preset.id,
+      chosen = current == theme.id,
     }
   end
   return out
@@ -434,8 +434,13 @@ function Welcome.Choose(playId)
   end
 end
 
-function Welcome.PickLook(presetId)
-  settings().ApplyPreset(ns.core, presetId)
+-- A swatch chosen: the theme for every window, as the General page's choice sets it.
+function Welcome.PickLook(themeId)
+  ns.core.db.profile.theme = themeId
+  S.ApplyTheme(themeId)
+  if B.UI.Hub then
+    B.UI.Hub.Refresh()
+  end
   Welcome.Render()
 end
 

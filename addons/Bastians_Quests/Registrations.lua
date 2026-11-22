@@ -758,8 +758,12 @@ local SHORT_STATUS = {
   inactive = { "Not offered now", "grey", 8 },
 }
 
--- Why the game does not offer the quest now, in a few words.
-local function inactiveWords(q)
+-- Why the game does not offer the quest now, in a few words; `crumbs` the breadcrumbs to it in the
+-- log (Logic.status' second value), whose hand-in opens it.
+local function inactiveWords(q, crumbs)
+  if crumbs and crumbs[1] then
+    return string.format(L["Turn in %s first"], R.questName(crumbs[1]))
+  end
   if q and q.holiday then
     return string.format(L["Only during %s"], L[q.holiday])
   end
@@ -767,7 +771,7 @@ local function inactiveWords(q)
 end
 
 local function shortStatus(id, s)
-  local st = Logic.status(id, s)
+  local st, missing = Logic.status(id, s)
   local e = st == "log" and State.log[id] or nil
   if e and e.isComplete then
     st = "complete"
@@ -779,7 +783,7 @@ local function shortStatus(id, s)
   if st == "level" then
     text = string.format(text, q and q.minLevel or 0)
   elseif st == "inactive" then
-    text = inactiveWords(q)
+    text = inactiveWords(q, missing)
   elseif st == "log" and e then
     local progress = R.progressText(e)
     if progress ~= "" then
@@ -899,7 +903,7 @@ local function statusText(id)
   elseif st == "available" then
     text = (q and Logic.isTrivial(q, s)) and L["Available, low level"] or L["Available"]
   elseif st == "inactive" then
-    text = inactiveWords(q)
+    text = inactiveWords(q, missing)
   elseif st == "level" then
     text = L["Needs level"] .. " " .. tostring(q and q.minLevel or "?")
   elseif st == "prereq" then
@@ -968,7 +972,8 @@ local function npcRows(refs)
 end
 
 -- The "after" link (C2): what must be done first; the plain prerequisites unlabelled, the other
--- kinds (one of, while in the log, excludes) with their word in front.
+-- kinds (one of, while in the log, excludes, the breadcrumbs that lead here) with their word in
+-- front.
 local function afterRows(id)
   local q = Logic.quest(id)
   if not q then
@@ -991,6 +996,7 @@ local function afterRows(id)
     add(L["while in the log"], { q.parent })
   end
   add(L["excludes"], q.excl)
+  add(L["breadcrumb"], q.crumbs)
   return #rows > 0 and rows or nil
 end
 
@@ -1010,6 +1016,9 @@ local function unlocksRows(id)
   end
   if q then
     add(q.chain)
+    for _, f in ipairs(q.leads or {}) do
+      add(f) -- a breadcrumb: the quests it sends you to
+    end
   end
   return #rows > 0 and rows or nil
 end

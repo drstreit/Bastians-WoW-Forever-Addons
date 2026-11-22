@@ -149,6 +149,9 @@ def test_a_chapters_page_filters_by_clicks(wow: WowRuntime):
     assert "Everywhere" in labels
     assert wow.eval(f"{FRONT}.view.hide.words:GetText()") == "Hide done"  # a switch, on
     assert wow.eval(f"{FRONT}.view.hide.on") is True
+    # Core's switch since W4 (ADR 0084: it moved from the book into the kit), lit while on
+    assert wow.eval(f"Bastians.UI.Style.widgets[{FRONT}.view.hide.bar]") == "toggle"
+    assert wow.eval(f"{FRONT}.view.hide.bar.spec.on") is True
     assert {"mount", "pet", "title"} <= set(labels)  # the chapter's own facet
     assert set(tiles(wow)) == {"mount:5784", "pet:10683", "title:144"}  # what is in Forever
     unconfirmed(wow, "collections")
@@ -503,8 +506,11 @@ def test_a_tile_drawn_again_lets_go_of_the_mouse(wow: WowRuntime):
     wow.execute("TILE:GetScript('OnEnter')(TILE)")
     wow.execute(f"{WIN}.Render()")  # the list hands the frame on, the mouse never left it
     assert wow.eval(rim) == 0
-    # paper in the WoW look too: never the theme's card gold
-    wow.execute("Bastians.UI.Settings.ApplyPreset(Bastians:GetModule('Core'), 'wow')")
+    # paper on the light theme too: never the theme's card colour (~~the WoW look~~, ADR 0084)
+    wow.execute(
+        "local c = Bastians:GetModule('Core'); c.db.profile.theme = 'parchment'; "
+        "Bastians.UI.Style.ApplyTheme('parchment')"
+    )
     wow.execute(f"{WIN}.Render()")
     first_tile(wow)
     for state in ("OnEnter", "OnLeave"):
@@ -525,7 +531,9 @@ def test_a_card_is_paper_in_the_books_faces_with_a_torn_picture(wow: WowRuntime)
     assert wow.eval("TILE.pic:GetWidth() == TILE:GetWidth()") is True
     assert wow.eval("TILE.pic:GetHeight()") == wow.eval("math.floor(TILE:GetWidth() * 0.5)")
     assert wow.eval("TILE.tear:IsShown()") is True
-    assert wow.eval("TILE.tear.tex:GetTexture()") == wow.eval(f"{FRONT}.DECKLE")
+    assert wow.eval("TILE.tear.tex:GetTexture()") == wow.eval(
+        "Bastians.UI.Style.DECKLE"
+    )  # the look's, drawn by Core's kit (W4)
     assert wow.eval(f"{S}.painted[TILE.tear.tex][1] == {S}.C.folioPaper") is True
     assert wow.eval("#TILE.shadow") == 8
     fonts = wow.eval(f"{S}.BOOK_FONTS")
@@ -756,19 +764,25 @@ def test_the_level_slider_takes_a_range_and_marks_your_level(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_the_dark_table_lies_under_the_book_in_the_wow_look_only(wow: WowRuntime):
-    """ "background color in wow schema should be same as artifact", D2 "WoW
-    look only" (book-look.md section 3): the band, its rule and the table in the board's darks,
-    the chips in the book's gold; every other look keeps its own ground."""
+def test_the_dark_table_lies_under_the_book_on_a_dark_theme(wow: WowRuntime):
+    """ "background color in wow schema should be same as artifact" (book-look.md
+    section 3): the band, its rule and the table in the board's darks, the chips in the book's
+    gold; ~~in the WoW look only (D2)~~ since 20.11.2026 on every dark theme (ADR 0084: one look,
+    Folio the default), and a light theme (Paper) keeps its own ground."""
     boot(wow)
     wow.slash("/bbook rares")
+    wow.execute(
+        "local c = Bastians:GetModule('Core'); c.db.profile.theme = 'parchment'; "
+        "Bastians.UI.Style.ApplyTheme('parchment')"
+    )
     size(wow)
     S = "Bastians.UI.Style"
     view = f"{FRONT}.view"
     assert wow.eval(f"{view}.filters.palette") is None
-    assert wow.eval(f"{S}.painted[{view}.table][2]") == 0  # no table: the look's own ground
+    assert wow.eval(f"{S}.painted[{view}.table][2]") == 0  # no table: the theme's own ground
     assert wow.eval(f"{S}.painted[{view}.band][1] == {S}.C.panel") is True
-    wow.execute("Bastians.UI.Settings.ApplyPreset(Bastians:GetModule('Core'), 'wow')")
+    wow.execute(f"Bastians:GetModule('Core').db.profile.theme = 'folio'; {S}.ApplyTheme('folio')")
+    wow.execute(f"{WIN}.Render()")
     size(wow)
     assert wow.eval(f"{view}.filters.palette == {S}.FolioPalette()") is True
     assert wow.eval(f"{S}.painted[{view}.table][1] == {S}.C.folioTable") is True
@@ -830,19 +844,18 @@ def test_the_bar_is_the_concept_boards(wow: WowRuntime):
     wow.execute(f"{bar}.record:Click()")
     assert wow.eval(f"{WIN}.Current().kind") == "record"
     assert wow.eval(f"{bar}.record.spec.on") is True
-    assert wow.eval(f"{bar}.ground:IsShown()") is False  # no dark bar outside the WoW look
-    assert wow.eval(f"{bar}.palette") is None
+    assert wow.eval(f"{bar}.ground:IsShown()") is False  # no dark bar outside the game's frame
+    assert wow.eval(f"{bar}.palette == {S}.FolioPalette()") is True  # the dark table: Folio
     assert wow.errors == []
 
 
-def test_the_bar_lies_on_the_dark_table_in_the_wow_look(wow: WowRuntime):
+def test_the_bar_lies_on_the_dark_table_in_the_games_frame(wow: WowRuntime):
     """D2 and D6: in the game's frame the crest is the round portrait and a
     button to the front table, the bar's ground the board's gradient with a rule under it, the
     shown tab and the Atlas in the book's gold."""
     boot(wow)
     wow.execute("Mock.templates.PortraitFrameTemplate = true")  # the client has the game's frame
-    wow.slash("/bbook rares")
-    wow.execute("Bastians.UI.Settings.ApplyPreset(Bastians:GetModule('Core'), 'wow')")
+    wow.slash("/bbook rares")  # Folio and the game's frame: the defaults since W4 (ADR 0084)
     size(wow)
     wow.execute(f"{WIN}.bar.Layout()")
     S = "Bastians.UI.Style"

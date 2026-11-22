@@ -278,4 +278,9 @@ ns.L:Register("koKR", {
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "시간을 읽을 수 없습니다. 5m, 1:30, 90s 또는 2h로 입력해 보세요.",
   -- the route's arrow at the minimap's rim (15.11.2026)
   ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "경로 안내 중 미니맵 가장자리의 화살표가 구간의 끝을 곧바로 가리킵니다",
+  -- a transport's stops on the map (map.md map.travel, 22.11.2026)
+  ["Boat to %s"] = "%s행 배",
+  ["Zeppelin to %s"] = "%s행 비행선",
+  ["Tram to %s"] = "%s행 지하철",
+  ["Portal to %s"] = "%s행 차원문",
 })

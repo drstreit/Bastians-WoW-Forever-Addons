@@ -1,0 +1,226 @@
+# Folio: the one look's default theme: Bastian's Book's
+# dark table (book-look.md section 3) as the suite's ground, its gold as the accent. Colours that
+# carry a meaning (quest status, difficulty, channels, money, the kind tiles) stay as in teal.
+# Colours #RRGGBB or #RRGGBBAA; compiled by `python -m bastians_build themes` (ST3, ADR 0017).
+id = "folio"
+name = "Folio"
+order = 0
+
+[colors]
+# surfaces
+bg = "#120e0bf0"        # window ground
+panel = "#1a1410fa"     # buttons, fields, menus
+header = "#2a2119"      # title bars, the dossier's band
+line = "#4a3b2c"      # 1 px edges
+hover = "#eadfca1f"     # a row under the mouse
+hoverBlock = "#d8a44124" # the whole block of a row under the mouse
+# the quest sheet (ADR 0053): parchment in every theme, a page of its own
+sheetInk = "#2e2014"
+sheetDim = "#57442f"
+sheetTitle = "#802b18"
+sheetGood = "#1d5220"
+sheetLine = "#3b2a1747"
+sheetTile = "#241b10"
+sheetTileText = "#f3e6c8"
+badgeInk = "#050505"       # the words on a light badge (a tile's level, ADR 0056)
+badgeInkLight = "#ffffff"  # the words on a dark badge
+sheetXp = "#9a35c8"
+# Bastian's Book: its cards are paper in
+# every theme, as the quest sheet; the words on them the paper's ink
+folioPaper = "#e6d6b3"
+folioPaperEdge = "#b99e6e"
+folioInk = "#36281b"
+folioInkSoft = "#6c5539"
+folioFit = "#d8a44166"        # a level chip that fits you: the gold at 40 %
+folioFitEdge = "#b8862c"
+folioGold = "#d8a441"         # a ribbon or a word in the book's gold
+folioSeal = "#a3332b"         # the new ribbon, the seal
+folioSealText = "#f3e5c4"     # the words on the seal
+folioShade = "#090705f0"      # the hero's words fade into this
+folioShadeText = "#eadfca"    # words on the shade
+folioShadow = "#00000073"     # the soft shadow under a card
+# the book's dark table (ADR 0081, docs/addons/book-look.md section 3; "background
+# color in wow schema should be same as artifact", D2 "WoW look only"): the same in every theme,
+# painted by the book where the look is the game's; the other looks keep their own ground
+folioTable = "#120e0b"        # the shelf's ground under the tiles
+folioBand = "#1a1410"         # the filter band
+folioBar = "#1a140f"          # the bar's foot
+folioBarTop = "#2a2119"       # the bar's top: the gradient's other end
+folioRule = "#4a3b2c"         # the rules under the bar and the band, a quiet chip's edge
+folioText = "#eadfca"         # words on the dark table
+folioMuted = "#a9987d"        # labels and counts on it
+folioGoldInk = "#1b140c"      # words on a chosen chip, on the Atlas button
+folioHover = "#2a2017"        # a quiet chip's plate under the mouse
+press = "#eadfca24"     # a pressed row
+faceHover = "#2a2017"   # a button's face under the mouse
+track = "#eadfca12"     # scroll and slider tracks
+rule = "#4a3b2c"      # a rule row
+divider = "#4a3b2c80"   # between two-line rows
+# text
+text = "#eadfca"
+dim = "#a9987d"         # secondary words, hints
+muted = "#a9987d"       # grey words after a name
+bright = "#f6eedd"      # the strongest text (objectives, zone names)
+mapText = "#1a1a1a"     # words on the map, every style: place and zone names, pin names
+mapTextDim = "#404040"  # the map's second words: a zone's level band, small places
+mapTextRim = "#f5f1e6d9"  # the light rim around the map's words (dark ground)
+# a zone's level band on the map (A3.4): the difficulty colours' dark twins, readable on
+# the light rim
+mapDiffRed = "#a01c1c"
+mapDiffOrange = "#9a4a0a"
+mapDiffYellow = "#6e5a00"
+mapDiffGreen = "#2a6a22"
+mapDiffGrey = "#5c5c5c"
+# accent and states
+accent = "#d8a441"
+wayWanderer = "#e6a04a"    # the welcome: the Wanderer's picture frame (warm; plan-launch-version 2.4)
+wayScholar = "#5aa8e6"     # the welcome: the Scholar's picture frame (cool)
+gold = "#ffd100"        # worth, money, available quests
+on = "#59e659"          # an icon that is switched on
+good = "#4de666"        # verified, ahead
+bad = "#e75656"         # refuted, behind, a loss
+warn = "#ff9933"
+neutral = "#b3b3b3"     # unverified
+rare = "#c64cff"        # rare creatures
+water = "#6fb6ff"       # fish, flight
+# the six note colours of Bastian's Notes (notes.md, J)
+note1 = "#f2c94c"
+note2 = "#6fcf97"
+note3 = "#56ccf2"
+note4 = "#bb6bd9"
+note5 = "#f2994a"
+note6 = "#eb5757"
+# outside our windows (Blizzard's dark chat and tooltips: keep these light in every theme)
+chat = "#66ccff"
+chatEmote = "#ffa66b"   # emote lines in the chat (/e, /wave), the roleplay colour (L5)
+tipText = "#ffffff"
+tipDim = "#cccccc"
+tipGold = "#ffd100"
+# quest difficulty (the game's own scale)
+diffRed = "#ff3838"
+diffOrange = "#ff8040"
+diffYellow = "#ffff00"
+diffGreen = "#40c040"
+diffGrey = "#888888"
+# money letters
+coinGold = "#ffd700"
+coinSilver = "#c7c7cf"
+coinCopper = "#eda55f"
+# the map
+sea = "#b8a380"          # under the art where no cell lies
+path = "#4dccffe6"       # the route's line
+waypoint = "#ffffff99"   # a quiet waypoint pin
+waypointLoud = "#ffe633" # the waypoint just set
+grid = "#ffffff40"       # the debug grid of the imagery
+# the Library's book (library.md 10.1): the same paper and ink in every theme, a book keeps its
+# paper. The paper colours multiply the drawn paper (white: as drawn); night darkens it.
+bookPaper = "#ffffff"
+bookInk = "#2a1c10"
+bookInkSoft = "#6b5538"
+bookRubric = "#8f2716"
+bookGold = "#e0bd72"
+bookSepia = "#d8b98a"
+bookCover = "#ffffff"
+bookPaperNight = "#4a4d5a"
+bookInkNight = "#efe3c8"
+bookInkSoftNight = "#b7a98d"
+bookRubricNight = "#f08f74"
+# the reading settings (library.md 10.2): the backgrounds, inks and highlights a reader picks, the
+# same in every theme; a test measures the contrast of every pair
+# the drawn paper's mean colour (Media/Paper.tga, a test keeps it true): the contrast is
+# measured against it
+bookPaperTone = "#e3d3b0"
+bookBgWhite = "#fbfaf6"
+bookBgCream = "#f3e9d2"
+bookBgGrey = "#d4d4d0"
+bookBgGreen = "#cde6cf"
+bookBgBlack = "#121212"
+bookInkBlack = "#141414"
+bookInkBlue = "#16306a"
+bookInkWhite = "#f2efe8"
+bookInkAmber = "#ffc871"
+bookBlue = "#1f4fa3"
+bookBlueNight = "#9cc2ff"
+
+# round 4 (ADR 0038): colour by meaning. Services (on tiles, chips, badges and counts, never on names),
+# the entity types, depth (the void behind the panes, a raised card, its light edge, the inner
+# highlight), and the title bar's words.
+svcVendor = "#f0ca70"
+svcQuest = "#ffd100"
+svcTrainer = "#6fb6ff"
+svcInn = "#c58cff"
+svcFlight = "#4fd3e0"
+svcRepair = "#b8a48a"
+svcFriendly = "#4de666"
+svcHostile = "#e75656"
+typeNpc = "#4de666"
+typeItem = "#6fb6ff"
+typeQuest = "#ffd100"
+typeObject = "#d9a066"
+typeNode = "#4fd3e0"
+typeZone = "#8fd07a"
+typeRecipe = "#ff9933"
+typeSpot = "#f0ca70"
+typeChain = "#c58cff"
+typeHere = "#0cd29d"
+void = "#0806048c"
+card = "#eadfca09"
+cardEdge = "#4a3b2c"
+inset = "#eadfca0f"
+headerText = "#eadfca"
+tier0 = "#ff5c8a"         # the chat's ladder (plan-chat-v3.md §2.2): needs you
+tier1 = "#86a8ff"         # your people
+tier2 = "#4de666"         # yours (loot, money, experience)
+tier3 = "#f2c14e"         # signals (Trade's offers, groups)
+tier4 = "#8a8a8a"         # ambient
+tier5 = "#6e6e6e"         # noise (junk)
+cardHot = "#d8a441"       # the edge of a fresh card (a request just arrived)
+roleTank = "#8ec1ff"      # the roles of a group post, as words
+roleHeal = "#6fe39a"
+roleDps = "#ff8a80"
+offerSell = "#9fe870"     # an offer's kind as a word: WTS
+offerBuy = "#ffc46b"      # WTB
+# the channels' colours (plan-chat-v3.md V25; the artifact's on a dark ground, twins on a light one)
+chanWhisper = "#ff80ff" # whispers (the artifact's --c-whisper)
+chanBnet = "#00faf6"    # Battle.net whispers
+chanParty = "#aaaaff"   # the party and instance chat
+chanRaid = "#ff7f00"    # the raid
+chanWarning = "#ff4800" # raid warnings
+chanGuild = "#40ff40"   # the guild
+chanOfficer = "#40c040" # the officers
+chanSay = "#ffffff"     # say
+chanYell = "#ff4040"    # yell
+chanEmote = "#ff8040"   # emotes
+chanChannel = "#ffc0c0" # Trade, General, LFG and other channels
+chanLoot = "#2fd466"    # loot and money
+chanXp = "#a99cff"      # experience
+chanRep = "#8fb3ff"     # reputation
+chanSystem = "#ffff00"  # system lines, achievements
+chanNpc = "#fffb9f"     # NPCs speaking
+
+# the kind tiles' eight groups (ADR 0046): value, hostile, place, nature, people, special, goods, other
+tileGold = "#a67c1e"
+tileRed = "#a4423b"
+tileTeal = "#1f8f87"
+tileGreen = "#3f8a45"
+tileBlue = "#3b6fb6"
+tilePurple = "#6b4aa8"
+tileBrown = "#7a5a2e"
+tileGrey = "#5c6670"
+
+[shape]
+radius = 6       # windows, blocks, menus
+radiusSmall = 4  # buttons, pills, fields
+
+# the widget set's sizes in px, the ground's alpha in % (ADR 0046, one look per theme)
+[geometry]
+action = 26
+actionRow = 22
+pill = 26
+chip = 22
+tab = 26
+row = 28
+tile = 18
+tileBig = 26
+gap = 6
+groundAlpha = 88

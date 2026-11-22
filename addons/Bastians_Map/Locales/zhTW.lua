@@ -278,4 +278,9 @@ ns.L:Register("zhTW", {
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "無法讀取這個時間。試試 5m、1:30、90s 或 2h。",
   -- the route's arrow at the minimap's rim (15.11.2026)
   ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "導航時，小地圖邊緣的箭頭直接指向目前路段的終點",
+  -- a transport's stops on the map (map.md map.travel, 22.11.2026)
+  ["Boat to %s"] = "前往%s的船",
+  ["Zeppelin to %s"] = "前往%s的飛艇",
+  ["Tram to %s"] = "前往%s的地鐵",
+  ["Portal to %s"] = "前往%s的傳送門",
 })

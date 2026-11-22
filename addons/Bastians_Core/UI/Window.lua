@@ -725,10 +725,6 @@ function Window:ApplyLook()
   end
   local alpha = own and tonumber(own.windowAlpha) or (core and tonumber(core.windowAlpha)) or 100
   local a = math.max(0.2, math.min(1, alpha / 100))
-  local cap = S.LookGroundAlpha and S.LookGroundAlpha(self.frame) or nil -- Glass: 75 % at most (ADR 0046)
-  if cap then
-    a = math.min(a, cap / 100)
-  end
   if self.frame.bg then
     S.tint(self.frame.bg, color, a)
   end
@@ -814,8 +810,7 @@ function Window:Insets()
   if self.gameFramed then
     return self:ChromeTop(), Window.CHROME_SIDE, Window.CHROME_SIDE
   end
-  local inset = self.framed and Window.FRAME_INSET or 1
-  return self.headH + inset, inset, inset
+  return self.headH + 1, 1, 1 -- the look's own edge
 end
 
 -- A medium setting as this window takes it (V25): its own preset's where it names one, else the
@@ -874,22 +869,20 @@ function Window:ApplyMedia(color, alpha)
       bc = S.Tok(self.frame, "line")
     end
     m:SetBackdropBorderColor(bc[1], bc[2], bc[3], bc[4] or 1)
-    if self.border then
-      self.border:Hide() -- the game's dialog border gives way to the chosen one
-    end
   end
   S.showPart(self.frame.bg, not tex) -- the background takes the flat ground's place
   if self.frame.edges then
-    S.showPart(self.frame.edges, not edge and not self.framed)
+    S.showPart(self.frame.edges, not edge)
   end
   m:Show()
   return true
 end
 
--- A skin setting as this window takes it: its own preset's (Window:SetPreset), else the suite's.
+-- A skin setting as this window takes it: its own values' (Window:SetPreset) where they name one,
+-- else the suite's (since 20.11.2026: a window of its own theme follows the suite's game frame).
 function Window:Skin(key)
   local own = self.frame.presetValues
-  if own then
+  if own and own[key] ~= nil then
     return own[key]
   end
   return S.Skin(key)
@@ -934,54 +927,18 @@ function Window:ApplyChrome()
   return on
 end
 
--- The game's window frame (the skin's `skinFrames`, ADR 0034): the dialog border over the window's
--- edge, the header, content and grip moved in by FRAME_INSET, the round outline hidden. Without
--- the client's backdrop the window keeps its flat look.
-Window.FRAME_INSET = 9
+-- Off the game's frame, the look's own edge (ADR 0084 decision 4: 1 unit, the theme's corners)
+-- and the grip in the corner. ~~The game's dialog border over the edge (`skinFrames`, ADR 0034)~~
+-- (until 20.11.2026: `gameFrames` is the one switch).
 function Window:ApplyFrame()
-  if self:ApplyChrome() then
-    if self.border then
-      self.border:Hide()
-    end
+  if self:ApplyChrome() or self.framed == false then
     return
   end
-  local on = self:Skin("skinFrames") == true
-  local border = self.border
-  if on and not border then
-    border = B.Compat.NewBackdrop(self.frame)
-    if border then
-      border:SetAllPoints(self.frame)
-      border:SetFrameLevel((self.frame:GetFrameLevel() or 1) + 40) -- over the content's edge
-      self.border = border
-    end
-  end
-  on = on and border ~= nil
-  if border then
-    -- the flat ground (the theme's colour and opacity) stays inside the border under every preset
-    -- (ADR 0038: the Azeroth scheme's ground is the quest frame's parchment)
-    if not border.dressed then
-      border.dressed = true
-      border:SetBackdrop({ edgeFile = S.FRAME_BORDER, edgeSize = 32 })
-    end
-    border:SetShown(on)
-  end
-  if self.framed == on then
-    return
-  end
-  self.framed = on
-  local inset = on and Window.FRAME_INSET or 1
-  self.head:ClearAllPoints()
-  self.head:SetPoint("TOPLEFT", inset, -inset)
-  self.head:SetPoint("TOPRIGHT", -inset, -inset)
-  self.content:SetPoint("BOTTOMRIGHT", -inset, inset)
+  self.framed = false
   self.grip:ClearAllPoints()
-  self.grip:SetPoint("BOTTOMRIGHT", -inset, inset)
+  self.grip:SetPoint("BOTTOMRIGHT", -1, 1)
   if self.frame.edges then
-    if on then
-      self.frame.edges:Hide()
-    else
-      self.frame.edges:Show()
-    end
+    self.frame.edges:Show()
   end
 end
 

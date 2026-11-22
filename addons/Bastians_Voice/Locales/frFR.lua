@@ -128,4 +128,6 @@ ns.L:Register("frFR", {
   ["Click to move the Orbiter freely."] = "Cliquez pour déplacer librement l'Orbiter.",
   ["Moves freely"] = "Déplacement libre",
   ["Drag the Orbiter where you want it. Click to lock it in place."] = "Faites glisser l'Orbiter où vous le voulez. Cliquez pour verrouiller sa position.",
+  -- a guard's many answers in pages (22.11.2026)
+  ["Page %d of %d: the other answers"] = "Page %d sur %d : les autres réponses",
 })

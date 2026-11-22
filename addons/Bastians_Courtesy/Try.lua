@@ -92,13 +92,19 @@ end
 -- What a /bcourtesy try asks for: { situation, mood, weather, time, land, level, fight, heavy, hurt,
 -- many, race, class, sex, myRace, mySex, count, ring, unknown = { words } }. Any order; lower or
 -- upper case.
+-- The words that name a language of the lines (ADR 0088): `/bcourtesy try de ring`.
+Try.LANGUAGE_WORDS = { en = "enUS", english = "enUS", de = "deDE", deutsch = "deDE", german = "deDE" }
+
 function Try.Parse(text, lines)
   local situations = Voice.Situations(lines)
+  situations.ambient = true -- no moment: the lines the symbol offers in between (ADR 0088)
   local w = { unknown = {} }
   for token in string.gmatch(string.lower(text or ""), "%S+") do
     local own = string.match(token, "^me:(.+)$")
     if token == "ring" then
       w.ring = true
+    elseif Try.LANGUAGE_WORDS[token] then
+      w.lang = Try.LANGUAGE_WORDS[token]
     elseif tonumber(token) then
       w.count = math.max(1, math.min(Try.MAX, math.floor(tonumber(token))))
     elseif own and RACES[own] then
@@ -135,6 +141,7 @@ end
 -- The speaker: the character as it is, unless the words said otherwise.
 local function speaker(w)
   local facts = Facts.Speaker()
+  facts.lang = w.lang or facts.lang
   facts.myName = facts.myName or Try.NAME
   if w.myRace then
     facts.myRaceKey, facts.myRace = RACES[w.myRace][1], RACES[w.myRace][2]
@@ -290,6 +297,7 @@ function Try.Ring(w, rand)
     facts,
     w.mood
   )
+  ns.Medallion.Grow() -- asked for by a command: the ring at once, where the symbol sits
   return true
 end
 

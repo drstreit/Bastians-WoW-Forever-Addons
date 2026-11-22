@@ -99,6 +99,10 @@ ns.L:Register("zhTW", {
   ["one of"] = "其中之一",
   ["while in the log"] = "在日誌中時",
   ["excludes"] = "排除",
+  -- breadcrumbs (Everything Quests 2.16.0, 21.11.2026)
+  ["Turn in %s first"] = "先交付%s",
+  ["breadcrumb"] = "引導任務",
+  ["Breadcrumb"] = "引導",
   ["from"] = "來自",
   ["Item"] = "物品",
   ["Faction"] = "陣營",

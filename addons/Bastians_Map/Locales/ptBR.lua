@@ -278,4 +278,9 @@ ns.L:Register("ptBR", {
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "Não consegui ler esse tempo. Tente 5m, 1:30, 90s ou 2h.",
   -- the route's arrow at the minimap's rim (15.11.2026)
   ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Durante uma rota, uma seta na borda do minimapa aponta direto para o fim do trecho",
+  -- a transport's stops on the map (map.md map.travel, 22.11.2026)
+  ["Boat to %s"] = "Barco para %s",
+  ["Zeppelin to %s"] = "Zepelim para %s",
+  ["Tram to %s"] = "Bonde para %s",
+  ["Portal to %s"] = "Portal para %s",
 })

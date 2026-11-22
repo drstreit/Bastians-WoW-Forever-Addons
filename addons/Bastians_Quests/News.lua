@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.7.0:1",
+    date = "2026-11-22",
+    version = "2.7.0",
+    text = "The quest window's buttons are readable on its parchment: dark words instead of white.",
+  },
+  {
     id = "2.5.0:1",
     date = "2026-11-15",
     version = "2.5.0",

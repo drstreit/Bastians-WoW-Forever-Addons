@@ -278,4 +278,9 @@ ns.L:Register("frFR", {
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "Je n'ai pas pu lire cette durée. Essayez 5m, 1:30, 90s ou 2h.",
   -- the route's arrow at the minimap's rim (15.11.2026)
   ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "Pendant un itinéraire, une flèche au bord de la mini-carte pointe droit vers la fin de l'étape",
+  -- a transport's stops on the map (map.md map.travel, 22.11.2026)
+  ["Boat to %s"] = "Bateau pour %s",
+  ["Zeppelin to %s"] = "Zeppelin pour %s",
+  ["Tram to %s"] = "Tram pour %s",
+  ["Portal to %s"] = "Portail vers %s",
 })

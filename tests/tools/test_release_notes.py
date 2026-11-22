@@ -87,3 +87,28 @@ def test_commits_since_a_release_on_a_track_with_their_notes(tmp_path: Path):
     assert rn.last_change(["nothing"], repo) is None
     with pytest.raises(rn.NotesError):
         rn.commits("no-such-commit", ["addons"], repo)
+
+
+def test_a_commit_taken_back_in_the_same_span_says_nothing(tmp_path: Path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    git(repo, "init", "-q")
+    git(repo, "config", "user.email", "t@example.org")
+    git(repo, "config", "user.name", "T")
+    f = repo / "addons" / "Bastians_Gestures" / "Symbol.lua"
+    f.parent.mkdir(parents=True)
+    f.write_text("a", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "Release: 1.0.0")
+    first = git(repo, "rev-parse", "HEAD").strip()
+    f.write_text("b", encoding="utf-8")
+    git(repo, "commit", "-q", "-am", "Gestures: a symbol\n\nRelease-note: feature: A symbol.")
+    kept = repo / "addons" / "Bastians_Gestures" / "Ring.lua"
+    kept.write_text("c", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "Gestures: a ring\n\nRelease-note: fix: The ring.")
+    symbol = git(repo, "rev-parse", "HEAD~1").strip()
+    git(repo, "revert", "--no-edit", symbol)
+    found = rn.commits(first, ["addons"], repo)
+    assert found[-1].reverts == symbol
+    assert [n.text for n in rn.player_notes(found)] == ["The ring."]

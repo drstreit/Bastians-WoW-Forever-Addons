@@ -4,7 +4,7 @@ EQ ships, per flavor, plain Lua tables under ``Data/`` whose packed encodings ar
 file's header; the decoders below follow those headers literally:
 
 * QuestAvailable: ``ns.CLASSIC_QUEST_AVAILABLE`` = { start, gates, names, pre, preAll, excl, chain,
-  parent, skill, minRep, maxRep }
+  parent, leads, skill, minRep, maxRep, maxLevel } (leads and maxLevel since EQ 2.16.0)
 * QuestTurnIn: ``ns.CLASSIC_QUEST_TURNIN`` [quest] = { [uiMapID] = { packed } }
 * QuestCoords: ``ns.CLASSIC_QUEST_COORDS`` [quest] = uiMapID*1e8 + x*1e4*1e4 + y*1e4
 * QuestSources: ``ns.CLASSIC_QUEST_SOURCES`` { npc = {id = name}, obj = {id = name} }
@@ -79,6 +79,10 @@ class Quest:
     exclusive: list[int] = field(default_factory=list)
     chain: int | None = None
     parent: int | None = None
+    # a breadcrumb: the quests it leads to. Any of them taken or done rules it out, and none is
+    # offered while it is in the log (EQ 2.16.0)
+    leads: list[int] = field(default_factory=list)
+    max_level: int | None = None  # the highest character level it is still offered at
     skill: tuple[int, int] | None = None  # skillLineID, required value
     min_rep: tuple[int, int] | None = None  # factionID, standing
     max_rep: tuple[int, int] | None = None
@@ -235,12 +239,19 @@ def assemble(
         quest(quest_id).turn_ins = places
     for quest_id, packed in (coords or {}).items():
         quest(quest_id).coord = decode_coord(packed)
-    for key, attr in (("pre", "pre_any"), ("preAll", "pre_all"), ("excl", "exclusive")):
+    for key, attr in (
+        ("pre", "pre_any"),
+        ("preAll", "pre_all"),
+        ("excl", "exclusive"),
+        ("leads", "leads"),
+    ):
         for quest_id, value in (available.get(key) or {}).items():
             setattr(quest(quest_id), attr, _ids(value))
     for key, attr in (("chain", "chain"), ("parent", "parent")):
         for quest_id, value in (available.get(key) or {}).items():
             setattr(quest(quest_id), attr, int(value))
+    for quest_id, value in (available.get("maxLevel") or {}).items():
+        quest(quest_id).max_level = int(value)
     for quest_id, packed in (available.get("skill") or {}).items():
         quest(quest_id).skill = decode_pair(packed, 10_000)
     for quest_id, packed in (available.get("minRep") or {}).items():

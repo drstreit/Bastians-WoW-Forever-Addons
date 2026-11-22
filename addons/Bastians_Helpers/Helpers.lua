@@ -248,8 +248,12 @@ end
 function Model.Recipients(characters, meKey, recent, max, surname)
   local me = characters and characters[meKey]
   local alts, seen = {}, {}
+  -- an unknown realm (nil, or "" from a session the client named none) is no other realm
+  local function sameRealm(a, b)
+    return a == nil or a == "" or b == nil or b == "" or a == b
+  end
   for key, c in pairs(characters or {}) do
-    if key ~= meKey and me and c.realm == me.realm and c.faction == me.faction and c.name then
+    if key ~= meKey and me and sameRealm(c.realm, me.realm) and c.faction == me.faction and c.name then
       alts[#alts + 1] = c.name
     end
   end
@@ -426,8 +430,32 @@ function Helpers.Paused()
   return B.Compat.ModifierDown(Helpers.Profile().pauseKey or "shift")
 end
 
+-- The realm as the client names it, nil while it names none (Forever 20.11.2026: GetRealmName()
+-- answered "" for a whole session, and every addon wrote "Hervor-").
+function Helpers.Realm()
+  local realm = GetRealmName()
+  return (type(realm) == "string" and realm ~= "") and realm or nil
+end
+
+-- This character's key. Without a realm it is the one recorded character of this name that has
+-- one, so a session without a realm reaches the record it always had; two such: no guess.
 function Helpers.Key()
-  return (UnitName("player") or "?") .. "-" .. (GetRealmName() or "?")
+  local name = UnitName("player") or "?"
+  local realm = Helpers.Realm()
+  if realm then
+    return name .. "-" .. realm
+  end
+  local found
+  local characters = Helpers.mod and Helpers.Global().characters or {}
+  for key, c in pairs(characters) do
+    if c.name == name and type(c.realm) == "string" and c.realm ~= "" then
+      if found then
+        return name .. "-"
+      end
+      found = key
+    end
+  end
+  return found or (name .. "-")
 end
 
 -- The unit vendor price of an item, nil while unknown (CLAUDE.md §4.2).

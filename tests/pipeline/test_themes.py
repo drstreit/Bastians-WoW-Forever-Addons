@@ -32,12 +32,13 @@ def test_the_committed_themes_lua_is_current():
     assert build_themes(check=True), "run: python -m bastians_build themes"
 
 
-def test_the_themes_teal_first_each_complete():
+def test_the_themes_folio_first_each_complete():
+    # ADR 0084 (W4, 20.11.2026): Folio is the default, so first; teal stays the reference
     themes = read_themes()
-    ids = ["teal", "parchment", "blizzard", "contrast", "night", "graphite"]
+    ids = ["folio", "teal", "parchment", "blizzard", "contrast", "night", "graphite"]
     assert [t.id for t in themes] == ids
-    assert themes[0].id == REFERENCE
-    tokens = set(themes[0].colors)
+    assert themes[1].id == REFERENCE
+    tokens = set(themes[1].colors)
     assert {"bg", "panel", "text", "accent", "gold", "good", "bad", "muted"} <= tokens
     # round 4 (ADR 0038): the services, the types, depth and the title bar's words
     assert {"svcVendor", "svcHostile", "typeNpc", "typeHere", "void", "card"} <= tokens
@@ -50,9 +51,24 @@ def test_the_themes_teal_first_each_complete():
 
 
 def test_the_reference_keeps_todays_look():
-    teal = read_themes()[0]
+    teal = read_themes()[1]
     assert teal.colors["accent"] == [0.047, 0.824, 0.616, 1.0]  # 12, 210, 157
     assert teal.colors["gold"] == [1.0, 0.82, 0.0, 1.0]
+
+
+def test_folio_is_the_books_dark_table_with_its_gold():
+    """ADR 0084 decision 5: the book's folio tokens (book-look.md section 3) are Folio's base."""
+    folio = read_themes()[0]
+    c = folio.colors
+    assert c["bg"][:3] == c["folioTable"][:3] and c["panel"][:3] == c["folioBand"][:3]
+    assert c["header"] == c["folioBarTop"] and c["line"] == c["folioRule"]
+    assert c["text"] == c["folioText"] and c["dim"] == c["muted"] == c["folioMuted"]
+    assert c["accent"] == c["folioGold"] and c["faceHover"] == c["folioHover"]
+    assert c["gold"] == [1.0, 0.82, 0.0, 1.0]  # a meaning (worth, quests), not the accent
+    paper = next(t for t in read_themes() if t.id == "parchment")
+    assert paper.name == "Paper"
+    sizes = {k: v for k, v in folio.geometry.items() if k != "groundAlpha"}  # an opacity differs
+    assert sizes == {k: v for k, v in paper.geometry.items() if k != "groundAlpha"}  # never a shape
 
 
 def test_colours_parse_and_refuse():

@@ -236,6 +236,37 @@ def test_send_to_and_the_last_recipient(wow: WowRuntime):
     assert wow.errors == []
 
 
+def test_send_to_survives_a_session_without_a_realm(wow: WowRuntime):
+    """Forever 20.11.2026: the client answered GetRealmName() with "" for a whole session, every
+    addon wrote "Hervor-", and the Send to column stood empty (the realm matched no alt's)."""
+    boot(wow)
+    me = wow.eval('UnitName("player")')
+    wow.execute(
+        f"""{H}.Global().characters['Bankalt-Mock Realm'] = {{ name = "Bankalt", realm = "Mock Realm",
+          faction = "Alliance" }}
+        {H}.Global().characters['{me}-'] = {{ name = "{me}", realm = "", faction = "Alliance" }}
+        GetRealmName = function() return "" end
+        {H}.RecordMe()"""
+    )
+    assert wow.eval(f"{H}.Key()") == f"{me}-Mock Realm"  # the recorded character, not a new one
+    assert wow.eval(f"{H}.Global().characters['{me}-Mock Realm'].realm") == "Mock Realm"
+    assert wow.eval(f"{H}.Global().characters['{me}-']") is None  # the stray record goes
+    wow.execute("Mock.OpenMailbox()")
+    assert wow.eval("BastiansHelpersSendTo:IsShown()") is True
+    assert list(wow.eval(f"{H}.Mail.Names()").values()) == ["Bankalt"]
+    assert wow.errors == []
+
+
+def test_an_unknown_realm_is_no_other_realm(core: WowRuntime):
+    core.start(HELPERS)
+    names = core.eval(
+        f"""{H}.Model.Recipients({{ me = {{ name = "Me", realm = "", faction = "A" }},
+          b = {{ name = "Bob", realm = "R", faction = "A" }}, x = {{ name = "Xan", realm = "Q", faction = "A" }},
+          o = {{ name = "Orc", realm = "R", faction = "H" }} }}, "me", {{}}, 10)"""
+    )
+    assert list(names.values()) == ["Bob", "Xan"]  # unknown is not a mismatch; the faction still is
+
+
 def test_quest_givers_are_left_alone_by_default(wow: WowRuntime):
     boot(wow)
     assert wow.eval(f"{P}.autoQuest") is False and wow.eval(f"{P}.skipGossip") is False

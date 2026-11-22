@@ -278,4 +278,9 @@ ns.L:Register("zhCN", {
   ["I could not read that time. Try 5m, 1:30, 90s or 2h."] = "无法识别这个时间。试试 5m、1:30、90s 或 2h。",
   -- the route's arrow at the minimap's rim (15.11.2026)
   ["While routing, an arrow at the minimap's edge points straight to where the step ends"] = "导航时，小地图边缘的箭头直接指向当前路段的终点",
+  -- a transport's stops on the map (map.md map.travel, 22.11.2026)
+  ["Boat to %s"] = "前往%s的船",
+  ["Zeppelin to %s"] = "前往%s的飞艇",
+  ["Tram to %s"] = "前往%s的地铁",
+  ["Portal to %s"] = "前往%s的传送门",
 })

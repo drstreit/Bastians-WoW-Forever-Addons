@@ -1,6 +1,6 @@
-# Parchment: a light theme to match the map art, ink on paper (ST3, ADR 0017).
+# Paper (until 20.11.2026 "Parchment"; ADR 0084 decision 5): the light theme to match the map art, ink on paper (ST3, ADR 0017).
 id = "parchment"
-name = "Parchment"
+name = "Paper"
 order = 2
 
 [colors]

@@ -128,4 +128,6 @@ ns.L:Register("koKR", {
   ["Click to move the Orbiter freely."] = "클릭하면 오비터를 자유롭게 옮길 수 있습니다.",
   ["Moves freely"] = "자유롭게 이동",
   ["Drag the Orbiter where you want it. Click to lock it in place."] = "오비터를 원하는 곳으로 끌어 놓으세요. 클릭하면 위치를 잠급니다.",
+  -- a guard's many answers in pages (22.11.2026)
+  ["Page %d of %d: the other answers"] = "%d/%d쪽: 다른 대답",
 })

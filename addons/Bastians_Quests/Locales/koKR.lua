@@ -99,6 +99,10 @@ ns.L:Register("koKR", {
   ["one of"] = "다음 중 하나:",
   ["while in the log"] = "퀘스트 목록에 있는 동안",
   ["excludes"] = "배타적 퀘스트:",
+  -- breadcrumbs (Everything Quests 2.16.0, 21.11.2026)
+  ["Turn in %s first"] = "먼저 %s 완료 보고",
+  ["breadcrumb"] = "안내 퀘스트",
+  ["Breadcrumb"] = "안내",
   ["from"] = "제공:",
   ["Item"] = "아이템",
   ["Faction"] = "진영",

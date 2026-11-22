@@ -235,7 +235,8 @@ def test_a_token_lights_its_rim_under_the_cursor(wow: WowRuntime):
     assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -2
     wow.execute("T:GetScript('OnEnter')(T)")
     lit = wow.eval("(function() local r, g, b = T.ring:GetVertexColor() return { r, g, b } end)()")
-    assert list(lit.values()) == [1, 1, 1]  # S.C.bright
+    bright = wow.eval("{ unpack(Bastians.UI.Style.C.bright, 1, 3) }")
+    assert list(lit.values()) == list(bright.values())  # S.C.bright (Folio's since W4)
     assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -4  # and wider
     wow.execute("T:GetScript('OnLeave')(T)")
     back = wow.eval("(function() local r, g, b = T.ring:GetVertexColor() return { r, g, b } end)()")
