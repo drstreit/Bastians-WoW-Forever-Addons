@@ -43,8 +43,9 @@ class CityError(Exception):
 
 def places(registry: Path = REGISTRY) -> dict[int, dict]:
     """The registry: UiMap id -> name, continent, wx, wy (UiMapAssignment's Region, world yards:
-    wx south to north, wy east to west), look, seed (a walked point, or None) and painted (what
-    tools/city_look.py needs to build the painted sheet, or None)."""
+    wx south to north, wy east to west), look, seed (a walked point, or None), painted (what
+    tools/city_look.py needs to build the painted sheet, or None) and ground (the world map draws
+    the sheet cut out to the city's plan, tools/city_ground.py)."""
     out: dict[int, dict] = {}
     for row in tomllib.loads(registry.read_text(encoding="utf-8")).get("place", []):
         if row.get("look") not in LOOKS:
@@ -59,6 +60,7 @@ def places(registry: Path = REGISTRY) -> dict[int, dict]:
             "look": row["look"],
             "seed": tuple(row["seed"]) if row.get("seed") else None,
             "painted": row.get("painted"),
+            "ground": bool(row.get("ground", False)),
         }
     return out
 
@@ -165,12 +167,16 @@ def manifest(sheets: list[dict]) -> str:
     ]
     for s in sorted(sheets, key=lambda item: item["ui"]):
         path = f"Interface\\\\AddOns\\\\Bastians_Map_Art\\\\Generated\\\\Cities\\\\{s['ui']}_"
+        ground = ""
+        if s.get("ground"):
+            listed = ", ".join(f'"{row}_{col}"' for row, col in s["ground"])
+            ground = f", ground = {{ {listed} }}"
         out.append(
             f'  {{ ui = {s["ui"]}, name = "{s["name"]}", continent = {s["continent"]}, '
             f"wx = {{ {lua_number(s['wx'][0])}, {lua_number(s['wx'][1])} }}, "
             f"wy = {{ {lua_number(s['wy'][0])}, {lua_number(s['wy'][1])} }}, "
             f"w = {s['w']}, h = {s['h']}, rows = {s['rows']}, cols = {s['cols']}, "
-            f'path = "{path}" }},'
+            f'path = "{path}"{ground} }},'
         )
     out.append("}")
     return "\n".join(out) + "\n"
@@ -181,10 +187,33 @@ MANIFEST_ROW = re.compile(
 )
 
 
-def entry_of(ui: int, place: dict, width: int, height: int) -> dict:
+def ground_file(addon: Path, ui: int, row: int, col: int) -> Path:
+    """A tile's mask for the world map (tools/city_ground.py writes it): white, the alpha is the
+    city's plan."""
+    return addon / "Generated" / "Cities" / f"{ui}_{row}_{col}_ground.tga"
+
+
+def ground_of(ui: int, place: dict, rows: int, cols: int, addon: Path | None) -> list:
+    """The tiles of a place the world map draws, (row, col): those with a mask, for a place the
+    registry marks `ground`. Empty for every other place, or without masks."""
+    if not (place.get("ground") and addon):
+        return []
+    return [
+        (row, col)
+        for row in range(rows)
+        for col in range(cols)
+        if ground_file(addon, ui, row, col).is_file()
+    ]
+
+
+def entry_of(ui: int, place: dict, width: int, height: int, addon: Path | None = None) -> dict:
     rows, cols = grid(width, height)
     fields = {key: place[key] for key in ("name", "continent", "wx", "wy")}
-    return {"ui": ui, **fields, "w": width, "h": height, "rows": rows, "cols": cols}
+    entry = {"ui": ui, **fields, "w": width, "h": height, "rows": rows, "cols": cols}
+    ground = ground_of(ui, place, rows, cols, addon)
+    if ground:
+        entry["ground"] = ground
+    return entry
 
 
 def build(ui: int, picture: Path, addon: Path, listed: dict[int, dict] | None = None) -> dict:
@@ -196,7 +225,7 @@ def build(ui: int, picture: Path, addon: Path, listed: dict[int, dict] | None = 
         sheet = image.convert("RGB")
     for row, col, tile in tiles(sheet):
         atomic_write(addon / "Generated" / "Cities" / f"{ui}_{row}_{col}.blp", blp_dxt1(tile))
-    return entry_of(ui, place, *sheet.size)
+    return entry_of(ui, place, *sheet.size, addon)
 
 
 def kept(ui: int, place: dict, addon: Path) -> dict | None:
@@ -214,8 +243,20 @@ def kept(ui: int, place: dict, addon: Path) -> dict | None:
             for row in range(rows)
             for col in range(cols)
         )
-        return entry_of(ui, place, width, height) if there else None
+        return entry_of(ui, place, width, height, addon) if there else None
     return None
+
+
+def relist(addon: Path, listed: dict[int, dict] | None = None) -> list[dict]:
+    """Writes the manifest again from the tiles there, building nothing (tools/city_ground.py,
+    after its masks). -> the entries."""
+    entries = []
+    for ui, place in sorted((listed or PLACES).items()):
+        entry = kept(ui, place, addon)
+        if entry:
+            entries.append(entry)
+    atomic_write(addon / "Generated" / "Cities.lua", manifest(entries).encode("utf-8"))
+    return entries
 
 
 def run(

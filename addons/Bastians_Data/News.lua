@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.8.0:1",
+    date = "2026-11-23",
+    version = "2.8.0",
+    text = "Quests no longer offers quests of content Forever has not released (Zul'Gurub and others), and shows only your faction's givers where both sides offer a quest.",
+  },
+  {
     id = "2.6.0:1",
     date = "2026-11-20",
     version = "2.6.0",

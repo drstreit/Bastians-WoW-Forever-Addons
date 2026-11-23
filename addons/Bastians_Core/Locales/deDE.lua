@@ -547,6 +547,8 @@ ns.L:Register("deDE", {
   ["Click: its page, to switch it on."] = "Klick: seine Seite, zum Einschalten.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The world map shows Ironforge and the Undercity as their city plan, cut out to the halls, with the land around them."] = "Die Weltkarte zeigt Eisenschmiede und Unterstadt als Stadtplan, auf die Hallen zugeschnitten, mit dem Land ringsum.",
+  ["Quests no longer offers quests of content Forever has not released (Zul'Gurub and others), and shows only your faction's givers where both sides offer a quest."] = "Quests bietet keine Quests mehr aus Inhalten an, die Forever noch nicht veröffentlicht hat (Zul'Gurub und andere), und zeigt nur die Questgeber deiner Fraktion, wo beide Seiten eine Quest anbieten.",
   ["The mailbox's Send to column shows your characters again after a session in which the game named no realm."] = "Die Spalte Senden an im Briefkasten zeigt deine Charaktere wieder, auch nach einer Sitzung, in der das Spiel keinen Realm nannte.",
   ["One look for the whole suite: every window wears Bastian's Book's buttons, chips, tabs and switches, on the new Folio theme, in the game's frame; your saved look is carried over once."] = "Ein Look für die ganze Suite: Jedes Fenster trägt die Buttons, Chips, Reiter und Schalter von Bastians Buch, im neuen Folio-Theme, im Rahmen des Spiels; dein gespeicherter Look wird einmal übernommen.",
   ["On the city map your marker no longer hides the pin you stand at."] = "Auf der Stadtkarte verdeckt dein Pfeil nicht mehr den Pin, an dem du stehst.",

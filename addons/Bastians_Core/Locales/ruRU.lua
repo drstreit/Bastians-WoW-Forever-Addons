@@ -545,6 +545,8 @@ ns.L:Register("ruRU", {
   ["%s is switched off. Its page has the switch to turn it on."] = "%s отключено. На его странице есть переключатель для включения.",
   ["Click: its page, to switch it on."] = "Щелчок: его страница, чтобы включить.",
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The world map shows Ironforge and the Undercity as their city plan, cut out to the halls, with the land around them."] = "Карта мира показывает Стальгорн и Подгород планом города, вырезанным по залам, с местностью вокруг.",
+  ["Quests no longer offers quests of content Forever has not released (Zul'Gurub and others), and shows only your faction's givers where both sides offer a quest."] = "Задания больше не предлагают задания из контента, который Forever ещё не выпустил (Зул'Гуруб и другие), и показывают только квестодателей вашей фракции, если задание выдают обе стороны.",
   ["The mailbox's Send to column shows your characters again after a session in which the game named no realm."] = "Столбец «Отправить» в почтовом ящике снова показывает ваших персонажей, даже после сеанса, в котором игра не назвала мир.",
   ["One look for the whole suite: every window wears Bastian's Book's buttons, chips, tabs and switches, on the new Folio theme, in the game's frame; your saved look is carried over once."] = "Единый вид для всего набора: каждое окно получает кнопки, метки, вкладки и переключатели Книги Бастиана, новую тему Фолио и рамку игры; сохранённый вид переносится один раз.",
   ["On the city map your marker no longer hides the pin you stand at."] = "На карте города ваш маркер больше не закрывает метку, у которой вы стоите.",

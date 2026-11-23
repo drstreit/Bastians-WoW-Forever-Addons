@@ -15,6 +15,9 @@
 # [place.painted]  what tools/city_look.py needs to build the painted sheet; its keys are listed in
 #            map.md "The `[place.painted]` table". A place may have the table while its look is
 #            still "painting": then a candidate can be built, and nothing ships
+# ground     true: the world map draws the sheet as the ground, cut out to the city's plan (a city
+#            inside the ground, whose terrain is what lies over it; map.md "Cities inside the
+#            ground"). tools/city_ground.py writes the masks from the walk mesh
 #
 # Regions measured 17.11.2026, Forever 1.60.1.70938 (f70938_UiMapAssignment.json, one assignment
 # per place, UiMin 0,0 and UiMax 1,1); Stormwind's as measured 08.11.2026 on 70862.
@@ -96,6 +99,7 @@ continent = 0
 wx = [-5096.8457, -4569.241]
 wy = [-1504.2164, -713.5914]
 look = "painting"
+ground = true
 seed = [-4821.78, -1155.44, 502.21]
 
 [[place]]
@@ -122,4 +126,5 @@ continent = 0
 wx = [1237.8412, 1877.9453]
 wy = [-86.1824, 873.1926]
 look = "painting"
+ground = true
 seed = [1568.62, 267.97, -43.1]

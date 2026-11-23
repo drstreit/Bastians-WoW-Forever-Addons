@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.8.0:1",
+    date = "2026-11-23",
+    version = "2.8.0",
+    text = "The world map shows Ironforge and the Undercity as their city plan, cut out to the halls, with the land around them.",
+  },
+  {
     id = "2.6.0:1",
     date = "2026-11-20",
     version = "2.6.0",
@@ -177,11 +183,5 @@ ns.NEWS = {
     date = "2026-10-29",
     version = "1.0.0-beta.13",
     text = "The map shows zone names with their levels and can show flight masters, docks, inns, banks, mailboxes, vendors, trainers and resource nodes.",
-  },
-  {
-    id = "1.0.0-beta.13:4",
-    date = "2026-10-29",
-    version = "1.0.0-beta.13",
-    text = "The map's layer bar slides, bookmarks get names, zones show their creature levels and resources, and a new route always shows on the map.",
   },
 }

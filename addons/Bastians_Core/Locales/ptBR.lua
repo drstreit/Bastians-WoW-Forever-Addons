@@ -545,6 +545,8 @@ ns.L:Register("ptBR", {
   ["%s is switched off. Its page has the switch to turn it on."] = "%s está desativado. A página dele tem o interruptor para ativá-lo.",
   ["Click: its page, to switch it on."] = "Clique: a página dele, para ativá-lo.",
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The world map shows Ironforge and the Undercity as their city plan, cut out to the halls, with the land around them."] = "O mapa-múndi mostra Altaforja e Cidade Baixa como planta da cidade, recortada nos salões, com o terreno ao redor.",
+  ["Quests no longer offers quests of content Forever has not released (Zul'Gurub and others), and shows only your faction's givers where both sides offer a quest."] = "Missões não oferece mais missões de conteúdo que o Forever ainda não lançou (Zul'Gurub e outros) e mostra só os doadores de missão da sua facção quando os dois lados oferecem uma missão.",
   ["The mailbox's Send to column shows your characters again after a session in which the game named no realm."] = "A coluna Enviar para da caixa de correio volta a mostrar seus personagens, mesmo depois de uma sessão em que o jogo não informou o reino.",
   ["One look for the whole suite: every window wears Bastian's Book's buttons, chips, tabs and switches, on the new Folio theme, in the game's frame; your saved look is carried over once."] = "Um visual para toda a suíte: cada janela usa os botões, chips, abas e interruptores de O livro de Bastian, no novo tema Fólio, na moldura do jogo; seu visual salvo é transferido uma vez.",
   ["On the city map your marker no longer hides the pin you stand at."] = "No mapa da cidade, seu marcador não esconde mais o alfinete onde você está.",

@@ -578,14 +578,21 @@ def merge_vendors_and_trainers(world: World, s: Sources) -> None:
 # ---------------------------------------------------------------------------------------------
 
 
-def _place_refs(places) -> tuple[list[str], list[list]]:
+def _place_refs(places, sides: dict[int, str] | None = None) -> tuple[list[str], list[list]]:
+    """The refs and the place rows of a quest's givers or takers. With `sides` (Everything
+    Quests' `giverSide`, 2.17.0) a giver's row that serves one faction only carries it as a fifth
+    field, "A" or "H": Bastians_Data leaves the other faction's rows out (Data.lua `record`)."""
     refs, points = [], []
     for p in places:
         if p.source_id and p.kind in ("npc", "object"):
             ref = f"{p.kind}:{p.source_id}"
             if ref not in refs:
                 refs.append(ref)
-        points.append([p.ui_map_id, round(p.x, 4), round(p.y, 4), "eq"])
+        row = [p.ui_map_id, round(p.x, 4), round(p.y, 4), "eq"]
+        side = (sides or {}).get(p.source_id) if p.kind == "npc" else None
+        if side:
+            row.append(side)
+        points.append(row)
     return refs, points
 
 
@@ -599,7 +606,7 @@ def merge_quests(world: World, s: Sources) -> None:
                 rec["minLevel"] = q.gates.required_level or None
                 rec["races"] = q.gates.required_races or None
                 rec["classes"] = q.gates.required_classes or None
-            starts, start_points = _place_refs(q.starts)
+            starts, start_points = _place_refs(q.starts, s.eq.giver_sides)
             ends, end_points = _place_refs(q.turn_ins)
             rec["starts"] = starts or None
             rec["startPlaces"] = start_points or None
@@ -617,6 +624,8 @@ def merge_quests(world: World, s: Sources) -> None:
             flags = sorted(q.categories)
             if q.gates and q.gates.repeatable and "repeatable" not in flags:
                 flags.append("repeatable")
+            if q.daily:  # EQ 2.17.0: offered again after the daily reset
+                flags = sorted({*flags, "repeatable", "daily"})
             rec["flags"] = flags or None
             rec["holiday"] = q.holiday
             zone = quest_start_zone(q.coord, start_points)
@@ -1189,6 +1198,63 @@ def merge_questie_gates(world: World, s: Sources) -> None:
             if rec is None or rec.get("seenBy") or (flag == "absent" and rec.get("holiday")):
                 continue
             rec["flags"] = sorted({*(rec.get("flags") or []), flag})
+
+
+# Everything Quests' `ended` (2.17.0) as the same flags: not in the game and content not
+# released on Forever are `absent`, an event that does not run (the Scourge Invasion too) `dormant`
+EQ_ENDED_FLAGS = {1: "absent", 2: "dormant", 3: "dormant", 4: "absent"}
+
+
+def merge_eq_gates(world: World, s: Sources) -> None:
+    """The quests Everything Quests says no character is offered today, as `absent` or `dormant`
+    (ADR 0051), on Questie's rules: a quest ForeverDB saw players take keeps no flag, and one of
+    a recurring event (`holiday`) none either: the event decides while it runs. Of 398 quests
+    (EQ 2.17.0, 22.11.2026) Questie had 154 already; the 244 of content not released on Forever
+    (Zul'Gurub, ...) were new."""
+    if not s.eq:
+        return
+    flagged = 0
+    for quest_id, q in s.eq.quests.items():
+        flag = EQ_ENDED_FLAGS.get(q.ended or 0)
+        rec = world.get("quest", quest_id)
+        if flag is None or rec is None or rec.get("seenBy") or rec.get("holiday"):
+            continue
+        flags = set(rec.get("flags") or [])
+        if flag not in flags:
+            rec["flags"] = sorted({*flags, flag})
+            flagged += 1
+    if flagged:
+        world.notes.append(f"Everything Quests: {flagged} quests not offered today got a flag")
+
+
+def side_by_giver(world: World, s: Sources) -> int:
+    """A quest open to every race whose givers all offer quests to one faction only (Everything
+    Quests' `giverSide`, 2.17.0) is that faction's: it takes the faction's races, so the other
+    faction never sees it offered. A giver of the list without a faction of its own takes it.
+    A quest with an object, an item or a giver of another faction among its starts stays open.
+    Returns how many quests it closed."""
+    sides = s.eq.giver_sides if s.eq else {}
+    if not sides:
+        return 0
+    for npc_id, side in sides.items():
+        rec = world.get("npc", npc_id)
+        if rec is not None:
+            _set_if_missing(rec, "faction", side)
+    closed = 0
+    for rec in world.records.get("quest", {}).values():
+        starts = rec.get("starts") or ()
+        if rec.get("races") or not starts:
+            continue
+        found = set()
+        for ref in starts:
+            kind, _, raw = str(ref).partition(":")
+            found.add(sides.get(int(raw)) if kind == "npc" and raw.isdigit() else None)
+        if len(found) == 1 and None not in found:
+            rec["races"] = ALLIANCE_RACES if found == {"A"} else HORDE_RACES
+            closed += 1
+    if closed:
+        world.notes.append(f"Everything Quests: {closed} quests open to all races are one side's")
+    return closed
 
 
 def _needs(world: World, quest_id: int, target: int) -> bool:
@@ -2239,6 +2305,7 @@ def build_world(s: Sources) -> World:
     merge_fdb_api(world, s)
     merge_fdb_previous_quests(world, s)
     merge_questie_gates(world, s)
+    merge_eq_gates(world, s)
     merge_client_quest_titles(world, s)
     merge_items(world, s)
     merge_client_recipes(world, s)
@@ -2248,6 +2315,7 @@ def build_world(s: Sources) -> World:
     merge_questie_vendors(world, s)
     merge_item_ways(world, s)
     merge_questie_quests(world, s)
+    side_by_giver(world, s)  # after every source named the givers and the races
     link_breadcrumbs(world)
     merge_quest_links(world, s)
     merge_objective_texts(world)

@@ -546,6 +546,8 @@ local strings = {
   ["Click: its page, to switch it on."] = "Clic: su página, para activarlo.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The world map shows Ironforge and the Undercity as their city plan, cut out to the halls, with the land around them."] = "El mapa del mundo muestra Forjaz y Entrañas con su plano de la ciudad, recortado a sus salas, con el terreno alrededor.",
+  ["Quests no longer offers quests of content Forever has not released (Zul'Gurub and others), and shows only your faction's givers where both sides offer a quest."] = "Misiones ya no ofrece misiones de contenido que Forever aún no ha publicado (Zul'Gurub y otros) y muestra solo a quienes dan misiones de tu facción cuando ambos bandos ofrecen una misión.",
   ["The mailbox's Send to column shows your characters again after a session in which the game named no realm."] = "La columna Enviar a del buzón vuelve a mostrar tus personajes, también tras una sesión en la que el juego no indicó ningún reino.",
   ["One look for the whole suite: every window wears Bastian's Book's buttons, chips, tabs and switches, on the new Folio theme, in the game's frame; your saved look is carried over once."] = "Un mismo estilo para toda la suite: cada ventana lleva los botones, fichas, pestañas e interruptores de El libro de Bastian, con el nuevo tema Folio, en el marco del juego; tu estilo guardado se conserva una vez.",
   ["On the city map your marker no longer hides the pin you stand at."] = "En el mapa de la ciudad, tu marcador ya no tapa el pin donde estás.",

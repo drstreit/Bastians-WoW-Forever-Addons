@@ -546,6 +546,8 @@ ns.L:Register("zhTW", {
   ["Click: its page, to switch it on."] = "點擊：打開其頁面以開啟。",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The world map shows Ironforge and the Undercity as their city plan, cut out to the halls, with the land around them."] = "世界地圖現在將鐵爐堡和幽暗城顯示為按大廳輪廓裁剪的城市平面圖，周圍的地形保持可見。",
+  ["Quests no longer offers quests of content Forever has not released (Zul'Gurub and others), and shows only your faction's givers where both sides offer a quest."] = "任務不再推薦 Forever 尚未開放的內容中的任務（祖爾格拉布等），並且在雙方陣營都提供某個任務時，只顯示你所屬陣營的任務發布者。",
   ["The mailbox's Send to column shows your characters again after a session in which the game named no realm."] = "郵箱的「寄給」欄再次列出你的角色，即使上一次登入時遊戲沒有給出伺服器名稱。",
   ["One look for the whole suite: every window wears Bastian's Book's buttons, chips, tabs and switches, on the new Folio theme, in the game's frame; your saved look is carried over once."] = "整個套件統一外觀：每個視窗都使用巴斯蒂安之書的按鈕、標籤、分頁和開關，採用新的書卷主題和遊戲本身的邊框；你儲存的外觀會轉移一次。",
   ["On the city map your marker no longer hides the pin you stand at."] = "在城市地圖上，你的標記不再擋住你所在位置的圖釘。",

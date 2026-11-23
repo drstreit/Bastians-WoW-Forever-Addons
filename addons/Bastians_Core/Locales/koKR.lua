@@ -546,6 +546,8 @@ ns.L:Register("koKR", {
   ["Click: its page, to switch it on."] = "클릭: 켜려면 해당 페이지로.",
 
   -- What's new (ADR 0021, LG5): the release notes, keyed by their English text
+  ["The world map shows Ironforge and the Undercity as their city plan, cut out to the halls, with the land around them."] = "세계 지도에 아이언포지와 언더시티가 홀 모양대로 잘라낸 도시 평면도로, 주변 지형과 함께 표시됩니다.",
+  ["Quests no longer offers quests of content Forever has not released (Zul'Gurub and others), and shows only your faction's givers where both sides offer a quest."] = "퀘스트가 Forever에 아직 출시되지 않은 콘텐츠(줄구룹 등)의 퀘스트를 더 이상 제안하지 않으며, 양 진영이 모두 주는 퀘스트는 내 진영의 퀘스트 제공자만 표시합니다.",
   ["The mailbox's Send to column shows your characters again after a session in which the game named no realm."] = "우편함의 보낼 대상 열에 게임이 서버 이름을 알려 주지 않은 세션 뒤에도 다시 내 캐릭터가 표시됩니다.",
   ["One look for the whole suite: every window wears Bastian's Book's buttons, chips, tabs and switches, on the new Folio theme, in the game's frame; your saved look is carried over once."] = "스위트 전체에 하나의 모습: 모든 창이 바스티안의 책의 버튼, 칩, 탭, 스위치를 새 폴리오 테마와 게임의 창틀로 보여 줍니다. 저장해 둔 모습은 한 번 옮겨집니다.",
   ["On the city map your marker no longer hides the pin you stand at."] = "도시 지도에서 내 표시가 내가 서 있는 핀을 더 이상 가리지 않습니다.",

@@ -4,7 +4,8 @@ EQ ships, per flavor, plain Lua tables under ``Data/`` whose packed encodings ar
 file's header; the decoders below follow those headers literally:
 
 * QuestAvailable: ``ns.CLASSIC_QUEST_AVAILABLE`` = { start, gates, names, pre, preAll, excl, chain,
-  parent, leads, skill, minRep, maxRep, maxLevel } (leads and maxLevel since EQ 2.16.0)
+  parent, leads, skill, minRep, maxRep, maxLevel, ended, daily, giverSide } (leads and maxLevel
+  since EQ 2.16.0; ended, daily and giverSide since 2.17.0)
 * QuestTurnIn: ``ns.CLASSIC_QUEST_TURNIN`` [quest] = { [uiMapID] = { packed } }
 * QuestCoords: ``ns.CLASSIC_QUEST_COORDS`` [quest] = uiMapID*1e8 + x*1e4*1e4 + y*1e4
 * QuestSources: ``ns.CLASSIC_QUEST_SOURCES`` { npc = {id = name}, obj = {id = name} }
@@ -29,6 +30,14 @@ OBJECTIVE_KINDS = {1: "slay", 2: "object", 3: "loot"}
 SOURCE_KINDS = {1: "npc", 2: "object", 3: "item"}
 CATEGORY_BITS = {1: "instance", 2: "repeatable", 4: "event", 8: "class", 16: "profession"}
 SPECIAL_FLAGS = {1: "repeatable", 2: "scripted", 4: "monthly"}
+# why no character is offered a quest today (QuestAvailable `ended`, EQ 2.17.0)
+ENDED = {
+    1: "not in the game",
+    2: "a world event that is not running",
+    3: "the Scourge Invasion",
+    4: "content not released here",
+}
+GIVER_SIDES = {1: "H", 2: "A"}  # `giverSide`: the one faction a creature offers quests to
 
 
 @dataclass(frozen=True)
@@ -91,6 +100,8 @@ class Quest:
     spawns: list[Place] = field(default_factory=list)
     holiday: str | None = None
     holiday_window: str | None = None
+    ended: int | None = None  # a key of ENDED: no character is offered it today (EQ 2.17.0)
+    daily: bool = False  # offered again after the daily reset (EQ 2.17.0)
 
 
 @dataclass
@@ -100,6 +111,8 @@ class EverythingQuests:
     quests: dict[int, Quest]
     npc_names: dict[int, str]
     object_names: dict[int, str]
+    # creature id -> "A" or "H": the one faction it offers quests to (EQ 2.17.0)
+    giver_sides: dict[int, str] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -258,6 +271,15 @@ def assemble(
         quest(quest_id).min_rep = decode_pair(packed, 1_000_000)
     for quest_id, packed in (available.get("maxRep") or {}).items():
         quest(quest_id).max_rep = decode_pair(packed, 1_000_000)
+    for quest_id, reason in (available.get("ended") or {}).items():
+        quest(quest_id).ended = int(reason)
+    for quest_id, value in (available.get("daily") or {}).items():
+        quest(quest_id).daily = bool(value)
+    giver_sides = {
+        int(npc_id): GIVER_SIDES[int(side)]
+        for npc_id, side in (available.get("giverSide") or {}).items()
+        if int(side) in GIVER_SIDES
+    }
     for quest_id, mask in (categories or {}).items():
         quest(quest_id).categories = decode_categories(mask)
     for quest_id, packed_list in (npcs or {}).items():
@@ -276,6 +298,7 @@ def assemble(
         quests=dict(sorted(quests.items())),
         npc_names={int(k): v for k, v in (sources.get("npc") or {}).items()},
         object_names={int(k): v for k, v in (sources.get("obj") or {}).items()},
+        giver_sides=dict(sorted(giver_sides.items())),
     )
 
 

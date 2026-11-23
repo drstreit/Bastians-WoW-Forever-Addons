@@ -217,6 +217,33 @@ local function decodeRow(raw, key)
   return row
 end
 
+-- The player's side as the place rows name it ("A", "H"), nil while the client does not say.
+local SIDE_OF = { Alliance = "A", Horde = "H" }
+local function playerSide()
+  local facts = B.Compat.GetPlayerFacts and B.Compat.GetPlayerFacts() or nil
+  return facts and SIDE_OF[facts.faction] or nil
+end
+
+-- A quest's giver who offers quests to one faction only carries it on its place row (fifth field,
+-- Everything Quests' `giverSide` 2.17.0): the other side's rows are left out ("The Islander": the
+-- warrior trainers of both sides). Unknown side, or no row left: all stay.
+local function ownSide(places)
+  local side = places and playerSide()
+  if not side then
+    return places
+  end
+  local kept, dropped = {}, false
+  for _, p in ipairs(places) do
+    if p[5] == nil or p[5] == side then
+      kept[#kept + 1] = p
+    else
+      dropped = true
+    end
+  end
+  return (dropped and #kept > 0) and kept or places
+end
+Data.OwnSide = ownSide
+
 local function record(typ, id)
   local key = typ .. ":" .. tostring(id)
   local rec = decoded[key]
@@ -236,6 +263,9 @@ local function record(typ, id)
   rec = { id = id, type = typ }
   for i, field in ipairs(pack.schema[typ]) do
     rec[field] = row[i]
+  end
+  if typ == "quest" and rec.startPlaces then
+    rec.startPlaces = ownSide(rec.startPlaces)
   end
   local loc = Data.locale
   if loc and (LOCALIZED[typ] or typ == "questText") then
