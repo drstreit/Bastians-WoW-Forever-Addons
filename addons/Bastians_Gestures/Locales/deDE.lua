@@ -83,6 +83,7 @@ ns.L:Register("deDE", {
   ["Click: the options. Right click: edit the rings."] = "Klick: die Optionen. Rechtsklick: die Ringe bearbeiten.",
   ["Courtesy: %s"] = "Höflichkeit: %s",
   ["Default rings"] = "Standardringe",
+  ["Click again: every ring back as shipped"] = "Nochmal klicken: alle Ringe wie ausgeliefert",
   ["Edit the ring"] = "Den Ring bearbeiten",
   ["Edit the rings"] = "Die Ringe bearbeiten",
   ["Emote"] = "Emote",

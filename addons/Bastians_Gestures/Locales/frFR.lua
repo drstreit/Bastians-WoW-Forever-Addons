@@ -83,6 +83,7 @@ ns.L:Register("frFR", {
   ["Click: the options. Right click: edit the rings."] = "Clic : les options. Clic droit : modifier les anneaux.",
   ["Courtesy: %s"] = "Courtoisie : %s",
   ["Default rings"] = "Anneaux par défaut",
+  ["Click again: every ring back as shipped"] = "Cliquez encore : tous les anneaux comme livrés",
   ["Edit the ring"] = "Modifier l'anneau",
   ["Edit the rings"] = "Modifier les anneaux",
   ["Emote"] = "Emote",

@@ -417,4 +417,6 @@ ns.L:Register("zhCN", {
   ["Follow"] = "跟随",
   ["Following"] = "跟随中",
   ["Route to the giver"] = "前往任务发布者",
+  ["Close My quests"] = "关闭我的任务",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "游戏自带的任务追踪会重新出现。小地图上的任务按钮或 /bq tracker 可再次打开我的任务。",
 })

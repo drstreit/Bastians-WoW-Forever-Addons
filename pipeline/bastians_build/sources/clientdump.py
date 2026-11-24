@@ -554,6 +554,43 @@ def _art_prefix(names: list[str | None]) -> str | None:
     return prefix
 
 
+OVERLAY_TILE = 256  # an overlay's files are tiles of this size (the client's own cut)
+
+
+def read_map_overlays(dumps: Path, prefix: str) -> dict[int, list[list[int]]]:
+    """Every explorable area's overlay of each map (R4.5 of plan-book-round4.md: the book draws
+    a zone whole), by UiMap id: `[offsetX, offsetY, width, height, FileDataID, ...]` in the map's
+    layer pixels, the files row by row as the client cuts them (256 px tiles), the overlays by
+    their id. From `<prefix>_UiMapXMapArt.json` (phase 0), `_WorldMapOverlay.json` and
+    `_WorldMapOverlayTile.json` (layer 0). Left out: an overlay with a player condition (a phase
+    the reader may not be in), one without a size, and one whose files are not all there (a
+    hole would show as a missing piece of the painting)."""
+    art_of: dict[int, int] = {}
+    for row in _rows(dumps / f"{prefix}_UiMapXMapArt.json", "UiMapXMapArt"):
+        if not int(row.get("PhaseID") or 0):
+            art_of.setdefault(int(row["UiMapID"]), int(row["UiMapArtID"]))
+    tiles: dict[int, dict[tuple[int, int], int]] = {}
+    for row in _rows(dumps / f"{prefix}_WorldMapOverlayTile.json", "WorldMapOverlayTile"):
+        if int(row.get("LayerIndex") or 0) == 0 and int(row.get("FileDataID") or 0):
+            cell = (int(row["RowIndex"]), int(row["ColIndex"]))
+            tiles.setdefault(int(row["WorldMapOverlayID"]), {})[cell] = int(row["FileDataID"])
+    by_art: dict[int, list[list[int]]] = {}
+    overlays = _rows(dumps / f"{prefix}_WorldMapOverlay.json", "WorldMapOverlay")
+    for row in sorted(overlays, key=lambda r: int(r["ID"])):
+        width, height = int(row.get("TextureWidth") or 0), int(row.get("TextureHeight") or 0)
+        if width <= 0 or height <= 0 or int(row.get("PlayerConditionID") or 0):
+            continue
+        cols, rows = -(-width // OVERLAY_TILE), -(-height // OVERLAY_TILE)
+        grid = tiles.get(int(row["ID"]), {})
+        files = [grid.get((r, c)) for r in range(rows) for c in range(cols)]
+        if not files or any(f is None for f in files):
+            continue
+        by_art.setdefault(int(row["UiMapArtID"]), []).append(
+            [int(row.get("OffsetX") or 0), int(row.get("OffsetY") or 0), width, height, *files]
+        )
+    return {ui: by_art[art] for ui, art in sorted(art_of.items()) if art in by_art}
+
+
 def read_floor_art(dumps: Path, prefix: str, listfile: Path | None) -> dict[int, list[FloorArt]]:
     """Every UiMap assigned to an instance, by the instance's Map.db2 id, in UiMap id order: its
     name (floors of one name are numbered), art prefix (with the listfile), grid and regions.

@@ -182,7 +182,7 @@ def test_a_floor_plate_draws_the_art_files_its_pins_open_the_boss_and_a_click_en
     wow.execute("BF.cells[2]:Click('LeftButton')")
     assert wow.eval("Bastians.UI.Scenery.FloorWindow():IsShown()") is True
     assert wow.eval("BastiansFloorFrame:GetName()") == "BastiansFloorFrame"
-    title = wow.eval("Bastians.UI.Scenery.FloorWindow().title:GetText()")
+    title = wow.eval("Bastians.UI.Scenery.FloorWindow().titleText")
     assert title == "The Deadmines: The Deadmines 2"
     wow.execute("Bastians.UI.Scenery.FloorWindow():Hide()")
     assert wow.errors == []
@@ -221,12 +221,12 @@ def test_a_hand_drawn_floor_credits_its_artist_under_the_plate_and_in_the_window
     # and the title names the dungeon once when the floor is named after it
     tabs = [strip(t.label.GetText(t.label)) for t in wow.eval(f"{win}.floor.tabs").values()]
     assert tabs[:2] == ["The Deadmines 1", "The Deadmines 2"]
-    assert wow.eval(f"{win}.title:GetText()") == "The Deadmines: The Deadmines 1"
+    assert wow.eval(f"{win}.titleText") == "The Deadmines: The Deadmines 1"
     wow.execute(
         f"local r = {win}.floor.rows[1]; r.text = r.floor.dungeon; "
         f"Bastians.UI.Scenery.OpenFloor({win}.floor.rows, 1, Host)"
     )
-    assert wow.eval(f"{win}.title:GetText()") == "The Deadmines"
+    assert wow.eval(f"{win}.titleText") == "The Deadmines"
     wow.execute(f"{win}.floor.rows[1].text = 'The Deadmines 1'")
     # the address stays what it is
     wow.execute(f"local b = {win}.link; b:SetText('x'); b:GetScript('OnTextChanged')(b, true)")

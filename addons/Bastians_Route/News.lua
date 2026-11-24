@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.9.0:1",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "The Route window wears the suite's one look: its kinds as chips, and Home, Replan and Clear in a foot where the hint no longer runs under them.",
+  },
+  {
     id = "2.5.0:1",
     date = "2026-11-15",
     version = "2.5.0",

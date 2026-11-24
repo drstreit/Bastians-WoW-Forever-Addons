@@ -358,8 +358,9 @@ end
 -- Draws the cut and returns the pin's place in px (x right, y down), or nil without art.
 -- `styled`: from the chosen map style where there is one (a place's cut; the painting behind a
 -- creature stays the painting).
-function Scenery.DrawCut(frame, pool, uiMapID, x, y, w, h, span, alpha, styled)
-  local art = uiMapID and B.Coords.MapArt(tonumber(uiMapID))
+function Scenery.DrawCut(frame, pool, uiMapID, x, y, w, h, span, alpha, styled, whole)
+  -- `whole` (Bastian's Book, R4.5): the zone with every area's overlay, not only the explored
+  local art = uiMapID and B.Coords.MapArt(tonumber(uiMapID), whole)
   local n = 0
   local px, py
   if art and x and y then
@@ -380,8 +381,8 @@ end
 -- The painting of the map box fx0, fy0 .. fx1, fy1 (map fractions) exactly into `w` x `h` px of
 -- `frame` (the Strategies plates, 29.10.2026: the dots must sit where the painting shows them, so
 -- the box is never moved onto the painting as a cut is). -> true when there was art.
-function Scenery.DrawBox(frame, pool, uiMapID, fx0, fy0, fx1, fy1, w, h, alpha)
-  local art = uiMapID and B.Coords.MapArt(tonumber(uiMapID))
+function Scenery.DrawBox(frame, pool, uiMapID, fx0, fy0, fx1, fy1, w, h, alpha, whole)
+  local art = uiMapID and B.Coords.MapArt(tonumber(uiMapID), whole)
   local n = 0
   if art and fx0 and fx1 > fx0 and fy1 > fy0 then
     local aw, ah = art.width, art.height

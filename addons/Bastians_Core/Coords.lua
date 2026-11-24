@@ -105,10 +105,36 @@ function Coords.OverlayTiles(infos)
   return out
 end
 
+-- Every overlay of a map as the World pack names them (`zone.overlays`, the client's
+-- WorldMapOverlay tables; R4.5 of plan-book-round4.md), in the shape Coords.OverlayTiles takes:
+-- the zone whole, not only what this character uncovered. nil without the pack or for a map it
+-- has no overlays of. The files load by their ids on a character that explored none (Forever
+-- 17.11.2026, build 1.60.1.70938, /bprobe bookreveal).
+function Coords.WholeOverlays(uiMapID)
+  local data = B.GetService and B:GetService("data")
+  local zone = data and data.Get and data:Get("zone", uiMapID) or nil
+  local list = zone and zone.overlays
+  if type(list) ~= "table" or not list[1] then
+    return nil
+  end
+  local infos = {}
+  for _, o in ipairs(list) do
+    local ids = {}
+    for i = 5, #o do
+      ids[#ids + 1] = o[i]
+    end
+    infos[#infos + 1] =
+      { offsetX = o[1], offsetY = o[2], textureWidth = o[3], textureHeight = o[4], fileDataIDs = ids }
+  end
+  return infos
+end
+
 -- The painting of a uiMap: { width, height, maxScale, tiles, explored } in layer pixels, each tile
 -- { file, px1, py1, px2, py2, tcRight, tcBottom } (edge tiles partly used), the explored areas cut
--- by Coords.OverlayTiles; nil when the map has no art or the client lacks the calls.
-function Coords.MapArt(uiMapID)
+-- by Coords.OverlayTiles; nil when the map has no art or the client lacks the calls. `whole`
+-- (the book, R4.5): every area's overlay from the pack where it has them, else what the
+-- character explored; `art.whole` says which.
+function Coords.MapArt(uiMapID, whole)
   local cmap = rawget(_G, "C_Map")
   if
     not (
@@ -146,15 +172,20 @@ function Coords.MapArt(uiMapID)
   if #tiles == 0 then
     return nil
   end
-  local api = rawget(_G, "C_MapExplorationInfo")
-  local infos = api and type(api.GetExploredMapTextures) == "function" and api.GetExploredMapTextures(uiMapID)
-    or nil
+  local infos = whole and Coords.WholeOverlays(uiMapID) or nil
+  local revealed = infos ~= nil
+  if not infos then
+    local api = rawget(_G, "C_MapExplorationInfo")
+    infos = api and type(api.GetExploredMapTextures) == "function" and api.GetExploredMapTextures(uiMapID)
+      or nil
+  end
   return {
     width = lw,
     height = lh,
     maxScale = info.maxScale,
     tiles = tiles,
     explored = Coords.OverlayTiles(infos),
+    whole = revealed or nil,
   }
 end
 

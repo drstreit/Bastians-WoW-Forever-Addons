@@ -27,7 +27,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-SECRETS = Path.home() / ".google" / ".google-secrets"
+SECRETS = Path.home() / ".secrets" / "google.env"
+# The old place, until the file has moved on every machine (24.11.2026)
+_OLD_SECRETS = Path.home() / ".google" / ".google-secrets"
+if _OLD_SECRETS.exists() and not SECRETS.exists():
+    SECRETS = _OLD_SECRETS
 NAME = "GOOGLE_AI_STUDIO_NANO_API_KEY_DRSTREIT"
 MODEL = "gemini-nano-banana-2.1"
 ASPECT, SIZE = "16:9", "1K"

@@ -451,9 +451,31 @@ function R.handInWords(q, map)
   return string.format(L["Hand in to %s"], name)
 end
 
+-- Who takes a done quest, as a line under a heading that already says "hand in": "Morgan
+-- Pestle", with the zone when it is not the one the player is on (`map`); nil when nobody is
+-- known.
+function R.handInWho(q, map)
+  local ref = q and q.ends and q.ends[1]
+  local name = ref and B:Entity(ref):Name() or nil
+  if not name then
+    return nil
+  end
+  local there = Logic.turnInMap(q)
+  if there and there ~= map then
+    return name .. ", " .. R.zoneName(there)
+  end
+  return name
+end
+
 -- The lines under a quest's name in My quests (ADR 0053): who takes a done quest, else the first
--- objective, and the others as a list for the lines below it.
-function R.nextStep(entry, q, map)
+-- objective, and the others as a list for the lines below it. `short`: the row stands under a
+-- heading that says "hand in" (the log view's sections), so a done quest's line is who takes it
+-- and where, in the quiet ink (the suite's board; quests.md "The one look").
+function R.nextStep(entry, q, map, short)
+  if entry.isComplete and short then
+    local who = R.handInWho(q, map)
+    return who and (C.grey .. who .. "|r") or (C.green .. L["Done."] .. "|r")
+  end
   if entry.isComplete then
     local words = R.handInWords(q, map)
     return C.green .. L["Done."] .. (words and (" " .. words) or "") .. "|r"

@@ -42,14 +42,17 @@ def test_every_window_wears_the_games_frame_by_default(wow: WowRuntime):
     chrome = f"{win}.chrome"
     assert wow.eval(f"{chrome}:IsShown()") is True
     assert wow.eval(f"{chrome}.TitleText:GetText()") == "Search"  # the title in the game's bar
-    assert wow.eval(f"{chrome}.portrait:GetTexture()") == "Interface\\AddOns\\Bastians_Core\\Icon"
+    # the search is a low head: no ring (ADR 0084 decision 4; W5, tests/lua/core/test_frame.py)
+    assert wow.eval(f"{chrome}.portrait:IsShown()") is False
     assert (
         wow.eval(f"{win}.title:IsShown()") is False and wow.eval(f"{win}.close:IsShown()") is False
     )
-    assert wow.eval(f"{win}.frame.bg:IsShown()") is False  # the rock is the ground now
-    assert tuple(wow.eval(f"{win}:Insets()")) == (56, 6, 6)
+    # the look's own table lies inside the game's border (~~the rock is the ground~~ until W5)
+    assert wow.eval(f"{win}.frame.bg:IsShown()") is False
+    assert wow.eval(f"{win}.ground:IsShown()") is True
+    assert tuple(wow.eval(f"{win}:Insets()")) == (52, 6, 6)
     point = wow.eval(f"{{ {win}.content:GetPoint(1) }}")
-    assert point[5] == -56  # the content under the band beside the portrait
+    assert point[5] == -52  # the content under the low head under the game's strip
     # the game's red button closes our window
     wow.execute(f"{chrome}.CloseButton:GetScript('OnClick')({chrome}.CloseButton)")
     assert wow.eval(f"{win}.frame:IsShown()") is False
@@ -68,8 +71,11 @@ def test_the_window_opacity_reaches_the_games_grounds(wow: WowRuntime):
     boot(wow)
     win = omnibox(wow)
     wow.execute(f"{PROFILE}.windowAlpha = 50; Bastians.UI.ApplyWindowLook()")
-    alpha = wow.eval(f"{win}.chrome.Bg:GetAlpha()")
-    assert abs(alpha - 0.5) < 0.01  # the slider moves the rock (it did nothing before)
+    # the slider moves the table inside the game's border (it did nothing before; ~~the rock~~
+    # until W5: the game's rock never shows)
+    alpha = wow.eval(f"{S}.painted[{win}.ground.table][2]")
+    assert abs(alpha - 0.5) < 0.01
+    assert wow.eval(f"{win}.chrome.Bg:GetAlpha()") == 0
     assert abs(wow.eval(f"{S}.insetAlpha") - 0.5) < 0.01
     assert wow.errors == []
 
@@ -123,25 +129,26 @@ def test_a_dropdown_is_as_wide_as_its_longest_choice(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_the_settings_always_wear_the_wow_look(wow: WowRuntime):
-    """ "option fonts are not readable ... leave the menu out of the
-    styling, it should always be the same - the WoW look": its fixed palette and the game's frame
-    and inset, forced, until W5 puts Core's own windows on the one look's frame."""
+def test_the_settings_wear_the_theme_and_the_frame_switch(wow: WowRuntime):
+    """W5 (ADR 0084, 23.11.2026): Core's own windows on the one look's frame. ~~Owner, retail
+    31.10.2026: "leave the menu out of the styling, it should always be the same - the WoW look":
+    a fixed gold palette and the game's frame and inset, forced~~: the looks it had to stay
+    readable against are gone; the hub takes the theme and the suite's frame switch."""
     boot(wow)
-    theme(wow, "parchment")  # Paper and brown ink elsewhere
+    theme(wow, "parchment")  # Paper and brown ink
     wow.execute("Bastians.UI.Hub.Open()")
     hub = "Bastians.UI.Hub"
-    gold = list(wow.eval(f"{S}.Palette('blizzard').C.text").values())
     brown = list(wow.eval(f"{S}.C.text").values())
-    assert gold != brown
     label = wow.eval(f"{hub}.navButtons[3].label")  # an app's entry, not the chosen one
-    assert list(label.GetTextColor(label))[:3] == gold[:3]  # the menu in the gold scheme's text
-    assert wow.eval(f"{hub}.win.chrome:IsShown()") is True  # the game's frame, whatever the look
-    assert wow.eval(f"{hub}.nav.gameInset.Bg:GetTexture()").endswith("UI-Background-Marble")
-    # a theme change elsewhere leaves the settings as they are (until W5 draws Core's windows)
+    assert list(label.GetTextColor(label))[:3] == brown[:3]  # the menu in the theme's ink
+    assert wow.eval(f"{hub}.win.chrome:IsShown()") is True  # the game's frame: the default
+    assert wow.eval(f"rawget({hub}.nav, 'gameInset')") is None  # no marble behind the rail
+    # a theme change reaches the settings, and the frame switch too
     theme(wow, "teal")
-    assert list(label.GetTextColor(label))[:3] == gold[:3]
-    assert wow.eval(f"{hub}.win.chrome:IsShown()") is True
+    pale = list(wow.eval(f"{S}.C.text").values())
+    assert pale != brown and list(label.GetTextColor(label))[:3] == pale[:3]
+    frames(wow, False)
+    assert wow.eval(f"{hub}.win.chrome:IsShown()") is False
     assert wow.errors == []
 
 

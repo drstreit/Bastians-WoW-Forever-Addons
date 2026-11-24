@@ -20,7 +20,7 @@ import re
 import tomllib
 from pathlib import Path
 
-from bastians_build.book import BookError, check_text, plain
+from bastians_build.book import BookError, art_slug, check_text, has_art, plain
 from bastians_build.model import World
 from bastians_build.sources.client_tables import ClientIds
 from bastians_build.sources.foreverdb_wonders import (
@@ -594,12 +594,14 @@ def add_wonders(
     hooks_path: Path,
     summons: dict[int, int] | None = None,
     client: ClientIds | None = None,
+    art: Path | None = None,
 ) -> int:
     """Adds every obtainable wonder to the world's ``wonder`` records; returns how many. The
     ones that are out are dropped with their reason (the build report lists them), and the
     report's notes carry the counts per state and the sources that stayed a sentence.
     `summons` as `collection_records` takes it (none: no models for mounts and pets); `client`:
-    the client's own ids (none: nothing is judged against the client)."""
+    the client's own ids (none: nothing is judged against the client); `art`: the folder of the
+    pictures (a wonder whose drawing is there gets `art = true`, as a page does: R4.9)."""
     hooks = read_hooks(hooks_path)
     zones = zone_index(world)
     sources = Sources(Ways(world, zones))
@@ -622,6 +624,13 @@ def add_wonders(
     unknown = sorted(set(read_scenes(hooks_path)) - set(records) - set(gone) - entrances)
     if unknown:
         raise BookError(f"wonders.toml: scenes for wonders that do not exist: {', '.join(unknown)}")
+    drawn = 0
+    for wid, rec in records.items():
+        if has_art(art, art_slug(wid)):
+            rec["art"] = True
+            drawn += 1
+    if art is not None:
+        world.notes.append(f"wonder pictures: {drawn} wonders have a drawing in {art.name}/")
     for wid in sorted(gone):
         world.drop("wonder", wid, gone[wid])
     for wid in sorted(records):

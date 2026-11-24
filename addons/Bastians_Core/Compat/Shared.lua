@@ -1323,6 +1323,36 @@ define("shared", "ShowCreature", function(model, npcID)
   return true
 end)
 
+-- A creature's portrait (ADR 0090; assumed 24.11.2026, `/bprobe portrait`): the display a model
+-- answers once its creature has loaded, and the game's own call that draws a display's face
+-- into a texture.
+define("shared", "CanCreaturePortrait", function()
+  return type(rawget(_G, "SetPortraitTextureFromCreatureDisplayID")) == "function"
+end)
+
+define("shared", "ModelDisplay", function(model)
+  if not (model and type(model.GetDisplayInfo) == "function") then
+    return nil
+  end
+  local id = model:GetDisplayInfo()
+  if type(id) == "number" and id > 0 then
+    note("ModelDisplay", "GetDisplayInfo")
+    return id
+  end
+  return nil -- 0: the creature has not loaded, or the client does not know it
+end)
+
+define("shared", "CreaturePortrait", function(texture, displayID)
+  local draw = rawget(_G, "SetPortraitTextureFromCreatureDisplayID")
+  displayID = tonumber(displayID)
+  if type(draw) ~= "function" or not (texture and displayID) then
+    return false
+  end
+  draw(texture, displayID)
+  note("CreaturePortrait", "SetPortraitTextureFromCreatureDisplayID")
+  return true
+end)
+
 -- The slots whose items have a model of their own (a chest piece or boots exist only as textures on a
 -- body: those keep their icon; "the item only as an item, not on the char").
 Compat.MODEL_SLOTS = {
@@ -1424,6 +1454,36 @@ define("shared", "NewGameWindow", function(parent)
     frame:Hide()
   end
   return nil
+end)
+
+-- The game window without (or again with) its round portrait (ADR 0084 decision 4: a low head
+-- has no ring): the template's own border layout without the portrait's corner, the portrait
+-- hidden, the title strip and the ground moved as Blizzard's ButtonFrameTemplate_HidePortrait
+-- does (SharedUIPanelTemplates.lua of Forever 1.60.1, read 23.11.2026). **Assumed** until seen:
+-- false where the frame lacks the calls or one fails, and the caller keeps the portrait.
+define("shared", "GameWindowPortrait", function(chrome, shown)
+  if
+    not (chrome and type(chrome.SetBorder) == "function" and type(chrome.SetPortraitShown) == "function")
+  then
+    return false
+  end
+  local ok = pcall(function()
+    chrome:SetBorder(shown and "PortraitFrameTemplate" or "ButtonFrameTemplateNoPortrait")
+    chrome:SetPortraitShown(shown and true or false)
+    local title = rawget(chrome, "TitleContainer") -- a part of the template, by its key
+    if title then
+      title:SetPoint("TOPLEFT", chrome, "TOPLEFT", shown and 58 or 0, -1)
+      title:SetPoint("TOPRIGHT", chrome, "TOPRIGHT", shown and -24 or 0, -1)
+    end
+    local ground = rawget(chrome, "Bg")
+    if ground then
+      ground:SetPoint("TOPLEFT", chrome, "TOPLEFT", shown and 2 or 7, -21)
+    end
+  end)
+  if ok then
+    note("GameWindowPortrait", shown and "shown" or "hidden")
+  end
+  return ok
 end)
 
 -- InsetFrameTemplate: the marble ground (`Bg`) in its bevelled edge, the game's inner panels.

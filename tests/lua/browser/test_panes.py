@@ -152,9 +152,8 @@ def test_a_narrow_window_shows_one_tile_at_a_time(wow: WowRuntime):
     assert wow.eval(f"{BR}.ListWidth()") == int((1000 - 16) * 0.36)  # 36 % until it is dragged
     wow.execute(f"{MOD}.win.frame:SetWidth(430); {MOD}.win.opts.onResize({MOD}.win, false)")
     assert wow.eval(f"{BR}.IsNarrow()") is True
-    # the list tile alone; the rail stays, its pictograms alone
-    assert wow.eval(f"{MOD}.rail:IsShown()") is True
-    assert wow.eval(f"{MOD}.rail.buttons[1].spec.only") is True
+    # the list tile alone; the seven sections stay (the head's tabs, W9)
+    assert len(rail_rows(wow)) == 7
     assert wow.eval(f"{MOD}.listPane:IsShown()") is True
     assert wow.eval(f"{MOD}.detailPane:IsShown()") is False
     assert wow.eval(f"{MOD}.splitter:IsShown()") is False
@@ -181,16 +180,11 @@ def test_a_narrow_window_shows_one_tile_at_a_time(wow: WowRuntime):
 
 
 def test_the_rail_and_the_tabs(wow: WowRuntime):
-    """ADR 0058: a rail of seven on top, always the same; the shown section's lists and views as
-    a row of tabs under it, which flows; the bars under them move down with its rows. The lit
-    entry is the section of the list tile, the lit tab what it shows."""
+    """ADR 0058: seven sections, always the same; the shown section's lists and views with them,
+    flowing; what stands under them moves down with their rows. The lit section is the list
+    tile's, the lit tab what it shows. Since W9 (ADR 0084) the sections are the head's tabs and
+    the lists chips in the band under it, after Back and Forward."""
     boot(wow)
-    flow = f"{BR}.Flow"
-    places = wow.eval(f"({flow}({{ 100, 100, 100 }}, 250, 4, 26))")
-    assert [(q.x, q.y) for q in places.values()] == [(0, 0), (104, 0), (0, 30)]
-    assert wow.eval(f"select(2, {flow}({{ 100, 100, 100 }}, 250, 4, 26))") == 56
-    assert wow.eval(f"select(2, {flow}({{}}, 250, 4, 26))") == 0
-    assert wow.eval(f"({flow}({{ 400 }}, 250, 4, 26))[1].x") == 0  # too wide: alone in its row
     wow.execute(f"{BR}.OpenWindow()")
     assert [r[0] for r in rail_rows(wow)] == [
         "here",
@@ -202,8 +196,11 @@ def test_the_rail_and_the_tabs(wow: WowRuntime):
         "more",
     ]
     assert [(r[0], r[2]) for r in rail_rows(wow) if r[2]] == [("here", True)]
-    assert wow.eval(f"{MOD}.rail.count") == 7 and wow.eval(f"{MOD}.rail.active") == "here"
+    assert wow.eval(f"{MOD}.head.tabs.spec.value") == "here"
     assert tab_rows(wow) == []  # Here has no tabs
+    # the band: Back and Forward alone, 10 above and 9 under a row of 22; the trail 4 under it
+    assert wow.eval(f"{MOD}.band:Height()") == 10 + 22 + 9
+    assert wow.eval(f"-select(5, {MOD}.crumbs:GetPoint(1))") == 41 + 4
     rows = nav_rows(wow)
     assert rows[0] == ("nav:here", "Here")
     quests = rows.index(("nav:list:quest", "Quests"))
@@ -213,32 +210,32 @@ def test_the_rail_and_the_tabs(wow: WowRuntime):
     nav_click(wow, "nav:list:npc")
     wow.run_frames(5)
     assert nav_active(wow) == "nav:list:npc" and wow.eval(f"{BR}.ListEntry().type") == "npc"
-    assert wow.eval(f"{MOD}.rail.active") == "world"
+    assert wow.eval(f"{MOD}.head.tabs.spec.value") == "world"
     assert [(t[1], t[2]) for t in tab_rows(wow)] == [
         ("Zones", False),
         ("People", True),
         ("Monsters", False),
         ("Objects", False),
     ]  # the fixture has no gathering nodes: no Gathering tab
-    assert wow.eval(f"{MOD}.rail.buttons[3].spec.primary") is True
-    assert wow.eval(f"{MOD}.rail.buttons[1].spec.primary") is None
-    assert wow.eval(f"{MOD}.rail.buttons[1].spec.only") is None  # the words show when wide
-    tabs_h = wow.eval(f"{MOD}.tabs.height")
-    action = wow.eval("Bastians.UI.Style.G.action")
-    # the search row sits under the rail and the tabs, the breadcrumb under the search row
-    assert wow.eval(f"select(5, {MOD}.toolbar:GetPoint(1))") == -(6 + action + 4 + tabs_h + 6)
+    assert wow.eval(f"{MOD}.head.words") is True  # the words show when wide
+    # the band under the head: a row of Back, Forward and the chips, then the list's filter
+    # chips on rows of their own, 8 under it; the breadcrumb 4 under the band
+    chips_h = wow.eval(f"{MOD}.band.blockH")
+    band_h = wow.eval(f"{MOD}.band:Height()")
+    assert wow.eval(f"{MOD}.filterHost:IsShown()") is True and chips_h > 0
+    assert band_h == 10 + 22 + 8 + chips_h + 9
+    assert wow.eval(f"select(5, {MOD}.band.frame:GetPoint(1))") == 0  # right under the head
+    assert wow.eval(f"-select(5, {MOD}.crumbs:GetPoint(1))") == band_h + 4
     wow.execute(f"{MOD}.win.frame:SetWidth(430); {MOD}.win.opts.onResize({MOD}.win, false)")
-    assert wow.eval(f"{MOD}.rail.buttons[1].spec.only") is True  # pictograms alone when narrow
-    assert wow.eval(f"{MOD}.rail.count") == 7  # the rail does not change shape
-    more = wow.eval(f"{MOD}.tabs.height")
-    assert more >= tabs_h
-    bar = 6 + action + 4 + more + 6
-    assert wow.eval(f"select(5, {MOD}.toolbar:GetPoint(1))") == -bar
-    # (a narrow window: the filter chips flow into more lines right of the arrows, PH2)
+    assert len(rail_rows(wow)) == 7  # the sections do not change
+    # (a narrow window: the filter chips flow into more lines, PH2)
+    more = wow.eval(f"{MOD}.band.blockH")
+    assert more > chips_h
     row = wow.eval(f"-select(5, {MOD}.crumbs:GetPoint(1))")
-    chips_h = wow.eval(f"{MOD}.filterHost:IsShown() and {MOD}.filterHost:GetHeight() or 0")
-    assert chips_h > 0
-    assert row == bar + max(26, chips_h - 4) + 4
+    # (and the lists with where take more rows of 22, each 8 under the one before)
+    rows = (wow.eval(f"{MOD}.band:Height()") - 10 - 9 - 8 - more + 8) / (22 + 8)
+    assert rows == int(rows) and rows >= 2
+    assert row == wow.eval(f"{MOD}.band:Height()") + 4
     # the breadcrumb: what the list tile shows, then the page
     crumbs = wow.eval(f"{BR}.Crumbs()")
     assert [(c.kind, c.text) for c in crumbs.values()] == [
@@ -259,13 +256,12 @@ def test_the_rail_and_the_tabs(wow: WowRuntime):
     assert ("nav:bookmarks", "Bookmarks") in nav_rows(wow)
     nav_click(wow, "nav:bookmarks")
     assert wow.eval(f"{BR}.Current().kind") == "bookmarks" and nav_active(wow) == "nav:bookmarks"
-    assert wow.eval(f"{MOD}.rail.active") == "more"
-    # a rail entry opens its section's first tab; a section with one list draws no tab row
+    assert wow.eval(f"{MOD}.head.tabs.spec.value") == "more"
+    # a section's tab opens its first list; a section with one list draws no chip
     rail_click(wow, "dungeons")
     wow.run_frames(5)
     assert wow.eval(f"{BR}.ListEntry().type") == "dungeon" and tab_rows(wow) == []
-    assert wow.eval(f"{MOD}.tabs:IsShown()") is False
-    assert wow.eval(f"select(5, {MOD}.toolbar:GetPoint(1))") == -(6 + action + 6)
+    assert wow.eval(f"{MOD}.tabs.count") == 0
     rail_click(wow, "quests")
     wow.run_frames(5)
     assert wow.eval(f"{BR}.ListEntry().type") == "quest" and tab_rows(wow)[0][2] is True
@@ -280,15 +276,19 @@ def test_more_holds_what_names_no_rail_entry(wow: WowRuntime):
     rows = rail_rows(wow)
     chars = next(r for r in rows if r[0] == "characters")
     assert chars[3] == "Characters needs Bastian's Alts"  # not installed here
-    assert wow.eval(f"{MOD}.rail.buttons[6].enabledFlat") is False
+    assert wow.eval(f"{MOD}.head.tabs:Part('characters').item.disabled") is True
+    assert (
+        wow.eval(f"{MOD}.head.tabs:Part('characters'):GetAlpha()") == 0.4
+    )  # dim, as a disabled action
     gold = next(r for r in rows if r[0] == "gold")
     assert gold[1] == "Items" and gold[3] is None  # without Bastian's Gold the entry reads Items
     rail_click(wow, "characters")  # a dim entry does nothing
     assert wow.eval(f"{BR}.Current().kind") == "here"
     rail_click(wow, "more")
     wow.run_frames(5)
-    assert wow.eval(f"{BR}.Current().kind") == "more" and wow.eval(f"{MOD}.rail.active") == "more"
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "More"
+    assert wow.eval(f"{BR}.Current().kind") == "more"
+    assert wow.eval(f"{MOD}.head.tabs.spec.value") == "more"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "More"
     texts = [strip(r.text) for r in wow.eval(f"{MOD}.tree.flat").values()]
     assert texts[0] == "Explore" and texts[-4:] == ["Settings", "Help", "What's new", "About"]
     more = wow.eval(f"{BR}.MoreRows()")
@@ -300,7 +300,7 @@ def test_more_holds_what_names_no_rail_entry(wow: WowRuntime):
         wow.eval(f"{BR}.Current().kind") == "view"
         and wow.eval(f"{BR}.Current().id") == "route.explore"
     )
-    assert wow.eval(f"{MOD}.rail.active") == "more"  # a view without a rail entry lights More
+    assert wow.eval(f"{MOD}.head.tabs.spec.value") == "more"  # a view without a section lights More
     # the suite's pages open the hub
     wow.execute(f"{BR}.ShowMore()")
     wow.execute(f"local rows = {BR}.MoreRows() rows[#rows - 3].onClick()")
@@ -793,28 +793,26 @@ def test_a_rows_own_click_that_opens_a_page_shows_the_page_tile_when_narrow(wow:
     assert wow.errors == []
 
 
-def test_the_rail_and_the_tabs_are_coloured_symbols_with_text(wow: WowRuntime):
-    """(R4): "the top row buttons need colours, this is not well to read
-    with green in green" - "remove them all with coloured symbols with text". Every rail entry and
-    tab: its pictogram on a square of its section's colour and its word, no plate and no edge; the
-    lit entry is underlined in its colour."""
+def test_the_sections_are_words_and_the_lists_are_chips(wow: WowRuntime):
+    """W9 (ADR 0084, the suite's board): the sections are the head's tabs, words in small capitals
+    with the lit one filled; the section's lists are chips in the band, the lit one filled.
+    ~~(R4): every rail entry and tab its pictogram on a square of its
+    section's colour, the lit one underlined in it~~ (until the board of ADR 0084)."""
     boot(wow)
     wow.execute(f"{BR}.OpenWindow()")
-    rail = [b for b in wow.eval(f"{MOD}.rail.buttons").values() if b.IsShown(b)]
-    assert len(rail) == 7
-    style = "Bastians.UI.Style.C"
-    for b in rail:
-        assert b.spec.hue and b.spec.boxed is None
-        assert b.hueSquare.IsShown(b.hueSquare) is True
-        square = list(b.hueSquare.GetVertexColor(b.hueSquare))[:3]
-        assert square == list(wow.eval(f"{style}.{b.spec.hue}").values())[:3]
-        assert all(list(x.GetVertexColor(x))[3] == 0 for x in b.face.pieces.values())  # no plate
-        assert b.hueLine.IsShown(b.hueLine) is (b.spec.primary is True)
-    hues = {b.spec.hue for b in rail}
-    assert len(hues) == 7  # one colour per section
+    tabs = f"{MOD}.head.tabs"
+    parts = list(wow.eval(f"{tabs}.parts").values())
+    assert len(parts) == 7 and wow.eval(f"{tabs}.spec.flat") is True  # no plate around the words
+    assert [p.label.GetText(p.label) for p in parts][:3] == [
+        "here",
+        "quests",
+        "world",
+    ]  # small caps
+    assert all(p.item.icon is None for p in parts)  # words, no pictogram, while they fit
+    assert [p.fill.IsShown(p.fill) for p in parts].count(True) == 1  # the lit one filled
     nav_click(wow, "nav:list:zone")
     wow.run_frames(5)
-    tabs = [b for b in wow.eval(f"{MOD}.tabs.buttons").values() if b.IsShown(b)]
-    assert tabs and all(t.spec.hue == "tileGreen" for t in tabs)  # World's colour
-    assert sum(1 for t in tabs if t.hueLine.IsShown(t.hueLine)) == 1  # the lit tab
+    chips = list(wow.eval(f"{MOD}.tabs.chips").values())
+    assert chips and all(c.small is True and c.GetHeight(c) == 22 for c in chips)
+    assert [c.spec.on for c in chips].count(True) == 1  # the lit list
     assert wow.errors == []

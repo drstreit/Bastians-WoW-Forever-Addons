@@ -83,6 +83,7 @@ ns.L:Register("ruRU", {
   ["Click: the options. Right click: edit the rings."] = "Щелчок: параметры. Правый щелчок: изменить кольца.",
   ["Courtesy: %s"] = "Вежливость: %s",
   ["Default rings"] = "Кольца по умолчанию",
+  ["Click again: every ring back as shipped"] = "Нажмите ещё раз: все кольца как были",
   ["Edit the ring"] = "Изменить кольцо",
   ["Edit the rings"] = "Изменить кольца",
   ["Emote"] = "Эмоция",

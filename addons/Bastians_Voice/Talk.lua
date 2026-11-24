@@ -46,6 +46,31 @@ local function questItem(title, status, questID, select)
 end
 
 -- `glyph` draws the answer as a symbol with the words in its tooltip.
+Talk.CHECK_SECONDS = 1 -- after an answer: the conversation should have moved on by then
+
+-- An answer that says what it did ("I have to click multiple
+-- times - no clear feedback when I click and why nothing happens"): a note at once, and a second
+-- one when the game has not moved the conversation on after CHECK_SECONDS.
+local function answered(label, run)
+  return function()
+    local before = Talk.state
+    local ok, why = run()
+    if ok == false then
+      Orbit.Note(why or string.format(L["%s: the game did not take it"], label))
+      return false
+    end
+    Orbit.Note(string.format(L["%s ..."], label))
+    C_Timer.After(Talk.CHECK_SECONDS, function()
+      if before ~= nil and Talk.state == before then
+        Orbit.Note(
+          L["The game did not answer. Click again, or open its window with the magnifier on the ring."]
+        )
+      end
+    end)
+    return true
+  end
+end
+
 local function sayItem(label, run, hint, glyph)
   return {
     kind = "say",
@@ -53,7 +78,7 @@ local function sayItem(label, run, hint, glyph)
     label = label,
     glyph = glyph,
     hint = hint or L["Click to say it"],
-    onClick = run,
+    onClick = answered(label, run),
   }
 end
 
@@ -65,7 +90,7 @@ local function actItem(label, run, hint, glyph)
     label = label,
     glyph = glyph,
     hint = hint or L["Click to answer"],
-    onClick = run,
+    onClick = answered(label, run),
   }
 end
 
@@ -342,8 +367,7 @@ function Talk.HandIn()
     return false
   end
   if #current.choices > 1 and not current.choice then
-    B:Say(L["Choose a reward first"])
-    return false
+    return false, L["Choose a reward first"] -- said under the hub, where the click was
   end
   local choice = current.choice or (current.choices[1] and current.choices[1].index) or nil
   return B.Compat.QuestTakeReward(choice)

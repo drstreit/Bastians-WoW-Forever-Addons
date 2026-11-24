@@ -12,6 +12,7 @@ ns.Helpers = Helpers
 
 Helpers.NOTICE_SECONDS = 6 -- the strip stays this long
 Helpers.DURABILITY_WARN = 0.2 -- the worst worn item below this fraction
+Helpers.DURABILITY_WORN = 0.7 -- below this the panel shows the value in the warning's colour
 Helpers.BAGS_WARN = 3 -- fewer free bag slots than this
 Helpers.RECENT_MAX = 8 -- recipients remembered per character
 Helpers.SEND_TO_MAX = 10 -- names in the mail's Send to column

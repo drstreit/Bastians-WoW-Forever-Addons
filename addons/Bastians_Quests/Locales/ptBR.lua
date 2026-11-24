@@ -418,4 +418,6 @@ ns.L:Register("ptBR", {
   ["Follow"] = "Seguir",
   ["Following"] = "Seguindo",
   ["Route to the giver"] = "Rota até quem dá a missão",
+  ["Close My quests"] = "Fechar Minhas missões",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "O rastreador de missões do jogo volta. O botão de Missões no minimapa ou /bq tracker abre Minhas missões de novo.",
 })

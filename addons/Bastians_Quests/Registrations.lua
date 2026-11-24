@@ -441,6 +441,23 @@ local function registerLayers(mod)
     minLevel = 1,
     query = turnInPins,
   })
+  -- A quest's own pin, where a host draws the quest itself (the Map's shown thing): the hand-in's
+  -- "?" for a quest of the log, grey while it is not done. Without it the quest type's "!" stood
+  -- for a done quest beside its page ("completed quests do not have
+  -- the completed questionmark anymore"). nil for a quest not in the log: the type's glyph.
+  B:RegisterFacet(mod, {
+    facet = "pin",
+    types = { "quest" },
+    priority = 100,
+    invalidateOn = { "BASTIANS_QUESTS_CHANGED" },
+    rule = function(ref)
+      local e = State.log[questID(ref) or -1]
+      if not e then
+        return nil
+      end
+      return { icon = B.UI.IconTexture("questActive"), color = not e.isComplete and COLOR.incomplete or nil }
+    end,
+  })
   B:RegisterMapLayer(mod, {
     id = "quests.objectives",
     icon = "mob", -- the layer bar shows its icon (R27.8)
@@ -2061,6 +2078,7 @@ local function hereLogRows(ref)
   local px, py = W.PlayerOn(map)
   local opts = W.LogFilters() -- the tracker's filters apply here too
   opts.questItem, opts.onOpen = W.QuestItemOf, ns.Sheet.Toggle
+  opts.sectioned = false -- one list without the view's headings: a done quest says "Hand in to"
   local roots = V.active(map, px, py, opts)
   local rows = {}
   for _, root in ipairs(roots) do

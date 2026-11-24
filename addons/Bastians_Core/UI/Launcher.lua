@@ -471,7 +471,7 @@ function Launcher.SetBadge(name, n)
     b.badge:SetFrameLevel((b:GetFrameLevel() or 8) + 2)
     b.badge:SetPoint("TOPRIGHT", 2, 2)
     b.badge.bg = S.fill(b.badge, S.C.accent)
-    b.badge.text = S.text(b.badge, 10, S.C.headerText)
+    b.badge.text = S.text(b.badge, 10, S.C.bg)
     b.badge.text:SetPoint("CENTER")
   end
   n = tonumber(n) or 0

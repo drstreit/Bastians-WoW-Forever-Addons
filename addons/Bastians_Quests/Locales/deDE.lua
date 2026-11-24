@@ -418,4 +418,6 @@ ns.L:Register("deDE", {
   ["Follow"] = "Folgen",
   ["Following"] = "Wird verfolgt",
   ["Route to the giver"] = "Route zum Questgeber",
+  ["Close My quests"] = "Meine Quests schließen",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "Die Questverfolgung des Spiels kommt zurück. Der Quests-Knopf an der Minikarte oder /bq tracker öffnet Meine Quests wieder.",
 })

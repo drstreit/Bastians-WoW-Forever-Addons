@@ -236,16 +236,16 @@ function W.ShowsLeads()
   return db().logTales ~= false and ns.Tracker ~= nil and ns.Tracker.Enabled() or false
 end
 
--- A toolbar toggle of the log view: accented while on, a click flips the profile flag.
-local function logToggle(host, key, label, width, tip)
+-- A toggle of the log view (core-contracts §7b): a chip on a band, filled while on; a click
+-- flips the profile flag.
+local function logToggle(host, key, label, tip)
   local p = db()
-  local on = p[key] == true
   return {
     id = key,
-    kind = "button",
+    kind = "toggle",
+    on = p[key] == true,
     align = "right",
-    width = width,
-    label = (on and R.accent() or R.COLOR.grey) .. label .. "|r",
+    label = label,
     tooltip = tip,
     onClick = function()
       p[key] = p[key] ~= true
@@ -260,15 +260,15 @@ local function renderLog(host, args)
   local name = map and R.zoneName(map) or L["Unknown zone"]
   local controls = {
     { id = "zone", kind = "label", text = name },
-    logToggle(host, "logHideDone", L["Hide done"], 66, L["Hide the complete quests (ready to hand in)."]),
-    logToggle(host, "logTrackedOnly", L["Tracked"], 56, L["Show only the quests on the objective tracker."]),
+    logToggle(host, "logHideDone", L["Hide done"], L["Hide the complete quests (ready to hand in)."]),
+    logToggle(host, "logTrackedOnly", L["Tracked"], L["Show only the quests on the objective tracker."]),
   }
   if B:GetService("route") then -- the quest round (R26.4): only while Route can plan it
     controls[#controls + 1] = {
       id = "round",
       kind = "button",
+      shape = "chip", -- beside the two toggles, as the board draws it
       align = "right",
-      width = 86,
       label = L["Quest round"],
       tooltip = L["A route through every open quest and every hand-in of the log, in the best order."],
       onClick = function()
@@ -536,7 +536,10 @@ local RENDER = {
 -- zone page and the quest page are the player's way in).
 -- ---------------------------------------------------------------------------------------------
 
-local win, tree, bar, search, summary
+local TREE_LEFT, TREE_RIGHT = 6, 20 -- the rows' room beside the fold marks and the scroll bar
+local SUM_TOP, SUM_H, SUM_FOOT = 8, 14, 6 -- the line that says what is shown (the board: 13)
+
+local win, tree, bar, search, summary, tabs
 local dossier -- the page renderer (Bastians.UI.Dossier, C2), in the tree's place while a page shows
 local shown -- { id, args } of the view, or { page = ref } of the page, in the fallback window
 local fallbackJob
@@ -551,7 +554,7 @@ local function fallbackHost(entry)
     summary:SetText(text or "")
   end
   function host.SetChips(_, chips, active, onChip, title)
-    tree:SetChips(chips or {}, active, onChip, nil, title)
+    W.SetStatusChips(chips, active, onChip, title)
   end
   function host.SetControls(_, controls)
     bar:SetControls(controls)
@@ -594,8 +597,31 @@ local function leaveFallback()
   end
 end
 
+-- A view's chips in the window's band, one chip per choice with its count and All first (the
+-- board's status row); a click on the chosen one or on All clears the choice.
+function W.SetStatusChips(chips, active, onChip, title)
+  local dims = {}
+  if chips and #chips > 1 then
+    dims[1] = {
+      id = "chips1",
+      title = title, -- the row's label in the band
+      chips = true,
+      choices = chips,
+      active = active ~= nil and { [active] = true } or nil,
+      onSelect = function(key)
+        if onChip then
+          onChip(key ~= active and key or nil)
+        end
+      end,
+    }
+  end
+  bar.blockLabel = dims[1] and dims[1].title or nil
+  tree:SetFilters(dims)
+end
+
 local function build()
   win = B.UI.Window("BastiansQuestsFrame", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     module = "Quests", -- the options button opens this page (R27.1)
     title = L["Quests"],
     width = 560,
@@ -609,6 +635,7 @@ local function build()
       leaveFallback()
     end,
     onResize = function()
+      W.LayoutOwn()
       if tree then
         tree:Refresh()
       end
@@ -618,13 +645,31 @@ local function build()
     end,
   })
   local content = win.content
-  bar = Widgets.ControlBar(content)
-  bar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -6)
-  bar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
-
-  search = S.search(content, L["Search quests ..."])
-  search:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -32)
-  search:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -32)
+  -- the views as the head's tabs (ADR 0084 decision 3): on a head too narrow for them a row of
+  -- their own under it
+  local items = {}
+  for _, t in ipairs(VIEWS) do
+    items[#items + 1] = { id = viewID(t[1]), label = L[t[2]] }
+  end
+  tabs = win:Bar({
+    tabs = {
+      items = items,
+      onChange = function(id)
+        B:ShowView(id, {})
+      end,
+    },
+    onLayout = function()
+      W.LayoutOwn()
+    end,
+  })
+  -- the band under the head: the search, the view's controls, its status chips (the board)
+  bar = Widgets.ControlBand(content, { search = L["Search quests ..."] })
+  bar.onHeight = function()
+    if tree then
+      tree:Refresh()
+    end
+  end
+  search = bar.search
   search:SetScript("OnTextChanged", function(self)
     local text = self:GetText() or ""
     if text == "" then
@@ -641,14 +686,24 @@ local function build()
     end
   end)
 
-  summary = S.text(content, 11, S.C.dim)
-  summary:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -58)
-  summary:SetPoint("TOPRIGHT", content, "TOPRIGHT", -8, -58)
-  summary:SetHeight(14)
+  summary = S.text(content, 13, S.C.dim)
+  summary:SetPoint("TOPLEFT", bar.frame, "BOTTOMLEFT", 15, -SUM_TOP)
+  summary:SetPoint("TOPRIGHT", bar.frame, "BOTTOMRIGHT", -15, -SUM_TOP)
+  summary:SetHeight(SUM_H)
+  summary:SetJustifyH("LEFT")
+  summary:SetWordWrap(false)
 
+  -- the view's chips stand in the band, on a row of their own under the controls
+  local chipHost = CreateFrame("Frame", nil, bar.frame)
+  chipHost:SetHeight(1)
   tree = B.UI.Tree(content, {
     db = db().tree,
     ctx = { source = "quests" },
+    capsSections = true, -- the sections as quiet headings (the board)
+    filterHost = chipHost,
+    onFilterHeight = function(_, chipsH)
+      bar:SetBlockHeight(chipsH)
+    end,
     onClick = function(row, button)
       if row.onClick and button ~= "RightButton" then
         row.onClick(row, button)
@@ -663,12 +718,13 @@ local function build()
       end
     end,
   })
-  tree.chips:ClearAllPoints()
-  tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -76)
-  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, -76)
+  bar.onBlockWidth = function(w)
+    tree:SetFilterWidth(w)
+  end
+  bar:SetBlock(chipHost)
   tree.scroll:ClearAllPoints()
-  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
-  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 6)
+  tree.scroll:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", TREE_LEFT - 15, -SUM_FOOT)
+  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -TREE_RIGHT, 6)
 
   -- the page renderer (C2): the same dossier the Browser draws, in the tree's place on a page
   dossier = B.UI.Dossier(content, {
@@ -684,21 +740,35 @@ local function build()
     end,
   })
   dossier.frame:ClearAllPoints()
-  dossier.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -76)
-  dossier.frame:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 6)
+  dossier.frame:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", TREE_LEFT - 15, -SUM_FOOT)
+  dossier.frame:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -TREE_RIGHT, 6)
   dossier:Hide()
   W.win, W.tree, W.bar, W.search, W.summary, W.dossier = win, tree, bar, search, summary, dossier
+  W.tabs = tabs
+  W.LayoutOwn()
+end
+
+-- The band's place and width: under the head, or under the tabs' own row on a narrow window.
+function W.LayoutOwn()
+  if not (win and bar and tabs) then
+    return
+  end
+  local content = win.content
+  local top = tabs:Room()
+  bar.frame:ClearAllPoints()
+  bar.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -top)
+  bar.frame:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -top)
+  bar:Layout(content:GetWidth())
 end
 
 -- The tree (views) and the dossier (pages) share the space under the search box; one shows.
 local function showTree(on)
   if on then
     dossier:Hide()
-    tree.chips:Show()
     tree.scroll:Show()
     tree.bar:Show()
   else
-    tree.chips:Hide()
+    tree:SetFilters({}) -- a page has no status chips
     tree.scroll:Hide()
     tree.bar:Hide()
     dossier:Show()
@@ -714,6 +784,7 @@ function W.Render()
     leaveFallback()
     local e = B:Entity(shown.page)
     win:SetTitle(e:Name() or shown.page)
+    tabs.tabs:SetValue(nil) -- a page is no view: no tab is the shown one
     bar:SetControls({})
     showTree(false)
     local sections = dossier:Sections(shown.page) -- built in the page's palette
@@ -726,15 +797,15 @@ function W.Render()
     return
   end
   showTree(true)
-  local def = B:GetView(shown.id)
-  win:SetTitle(def and tostring(def.title) or L["Quests"])
+  win:SetTitle(L["Quests"]) -- the shown view is the head's filled tab
+  tabs.tabs:SetValue(shown.id)
   local host = fallbackHost(shown)
   if W.shownView ~= shown.id then
     leaveFallback()
     W.shownView = shown.id
     B:ViewEvent(shown.id, "show", host)
   end
-  tree:SetChips({}, nil, nil)
+  W.SetStatusChips(nil)
   B:RenderView(shown.id, host)
 end
 

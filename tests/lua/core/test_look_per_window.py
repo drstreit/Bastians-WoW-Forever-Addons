@@ -172,7 +172,9 @@ def test_a_window_draws_its_texts_in_its_presets_fonts(wow: WowRuntime):
     boot(wow)
     fonts_frame(wow)
     suite = wow.eval(f"{S}.font()")
-    assert font_of(wow, "T.sec.title")[0] == suite  # no label font: the text font, as before
+    # the suite's labels wear the book's small capitals (ADR 0084 decision 7, W5)
+    caps = wow.eval(f"{S}.BOOK_FONTS.bookCaps")
+    assert font_of(wow, "T.sec.title")[0] == caps
     wow.execute(f"{S}.SetFramePreset(T.f, {own_values(wow)})")
     scale = wow.eval(f"{S}.scale()")
     assert font_of(wow, "T.text")[0] == OWN["font"]
@@ -192,7 +194,7 @@ def test_a_window_draws_its_texts_in_its_presets_fonts(wow: WowRuntime):
     # nil: the suite's fonts again, the label at its own size
     wow.execute(f"{S}.SetFramePreset(T.f, nil)")
     assert font_of(wow, "T.num")[0] == suite
-    assert font_of(wow, "T.sec.title") == (suite, round(11 * scale))
+    assert font_of(wow, "T.sec.title") == (caps, round(11 * scale))
     assert wow.errors == []
 
 
@@ -208,7 +210,10 @@ def test_label_and_number_fall_back_to_the_windows_text_font(wow: WowRuntime):
     assert wow.errors == []
 
 
-def test_the_suites_label_and_number_fonts_reach_every_window(wow: WowRuntime):
+def test_the_suites_faces_reach_every_window_whatever_a_profile_still_holds(wow: WowRuntime):
+    """ADR 0084 decision 7 (W5, 23.11.2026): labels in the book's small capitals, headings in its
+    display face, numbers and the body in the reader's text font. ~~The suite's label and number
+    fonts were settings~~ (V17): a profile that still holds them changes nothing."""
     boot(wow)
     fonts_frame(wow)
     wow.execute(
@@ -216,13 +221,16 @@ def test_the_suites_label_and_number_fonts_reach_every_window(wow: WowRuntime):
         local p = Bastians:GetModule("Core").db.profile
         p.labelFont = [[{OWN["labelFont"]}]]
         p.numberFont = [[{OWN["numberFont"]}]]
+        p.headingFont = [[{OWN["headingFont"]}]]
         {S}.applyFont()
         """
     )
-    assert font_of(wow, "T.sec.title")[0] == OWN["labelFont"]
-    assert font_of(wow, "T.tab.label")[0] == OWN["labelFont"]
-    assert font_of(wow, "T.num")[0] == OWN["numberFont"]
-    assert font_of(wow, "T.text")[0] == wow.eval(f"{S}.font()")
+    suite = wow.eval(f"{S}.font()")
+    assert font_of(wow, "T.sec.title")[0] == wow.eval(f"{S}.BOOK_FONTS.bookCaps")
+    assert font_of(wow, "T.tab.label")[0] == wow.eval(f"{S}.BOOK_FONTS.bookCaps")
+    assert font_of(wow, "T.head")[0] == wow.eval(f"{S}.BOOK_FONTS.bookDisplay")
+    assert font_of(wow, "T.num")[0] == suite
+    assert font_of(wow, "T.text")[0] == suite
     assert wow.errors == []
 
 

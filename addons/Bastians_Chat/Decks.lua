@@ -18,6 +18,8 @@ Decks.MIN_W, Decks.MIN_H = 440, 280
 Decks.FIRST_H = 340 -- the first time the decks show, the window has at least this height
 Decks.RAIL_W = 0 -- no rail: the request bar and the plates have the window's width
 Decks.STRIP_H = 20
+Decks.HEAD_STRIP_H = 22 -- Know's strip in the window's head: chips of 22 (the suite's board; the
+-- )
 Decks.SPLIT_H = 4 -- the splitter over Talk's strip
 -- a low window: the strip and the splitter give their room to the lines (the rule, plan §2)
 Decks.TIGHT_H, Decks.STRIP_TIGHT, Decks.SPLIT_TIGHT = 320, 15, 2
@@ -299,7 +301,7 @@ end
 local function placeChip(b, x, w, natural)
   b:ClearAllPoints()
   b:SetPoint("LEFT", b:GetParent(), "LEFT", x, 0)
-  b:SetSize(w, b.deck == "talk" and Decks.StripHeight() or Decks.STRIP_H)
+  b:SetSize(w, b.deck == "talk" and Decks.StripHeight() or Decks.HEAD_STRIP_H)
   if w < natural then
     local room = w - 2 * Decks.CHIP_PAD
     if b.count:IsShown() then
@@ -1079,21 +1081,32 @@ local function layStripAt(pane, parent, x, y, w)
   strip:Show()
 end
 
--- A strip in a window's head, in place of the title.
-local function layStripInHead(pane, host, rightOf)
+-- A strip in a window's head. The main window keeps its name before it (`named`: the suite's
+-- board draws "Chat", then Know's chips; "ok"); in the game's frame its
+-- title strip carries the name, so the chips start at the head's padding (Core's HeadStart). A
+-- deck's own window: the strip in place of the title, as before.
+local function layStripInHead(pane, host, rightOf, named)
   local head, strip = host.head, pane.strip
   if strip:GetParent() ~= head then
     strip:SetParent(head)
   end
+  local start = 4
+  if named then
+    if not host.gameFramed then
+      host.title:Show()
+    end
+    start = host:HeadStart()
+  else
+    host.title:Hide()
+  end
   strip:SetFrameLevel((head:GetFrameLevel() or 1) + 2)
   strip:ClearAllPoints()
-  strip:SetPoint("LEFT", head, "LEFT", 4, 0)
+  strip:SetPoint("LEFT", head, "LEFT", start, 0)
   strip:SetPoint("RIGHT", rightOf, "LEFT", -4, 0)
-  strip:SetHeight(Decks.STRIP_H)
-  local w = (host.frame:GetWidth() or Decks.MIN_W) - Decks.HEAD_ROOM
+  strip:SetHeight(Decks.HEAD_STRIP_H)
+  local w = (host.frame:GetWidth() or Decks.MIN_W) - Decks.HEAD_ROOM - math.max(0, start - 4)
   strip:SetWidth(math.max(1, w))
   strip:Show()
-  host.title:Hide()
 end
 
 -- A deck in the window it left to.
@@ -1153,7 +1166,7 @@ function Decks.Layout()
   local knowIn, talkIn = not s.out.know, not s.out.talk
   -- Know's strip: in the head while Know is in this window
   if knowIn then
-    layStripInHead(know, win.win, box.findButton)
+    layStripInHead(know, win.win, box.findButton, true)
     know.fold:Show()
   else
     win.win.title:Show()
@@ -2547,7 +2560,6 @@ function Decks.DeckWindow(deck)
     minWidth = 300,
     minHeight = 120,
     lockable = true,
-    headIcons = true,
     db = s.windows[deck],
     escape = false,
     strata = "LOW",

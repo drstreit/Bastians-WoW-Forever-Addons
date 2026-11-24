@@ -136,17 +136,17 @@ def test_the_card_actions_run_and_follow_the_state(wow: WowRuntime):
     wow.run_frames(3)
     assert "Bookmarked" in card(wow)["buttons"]
     assert wow.eval(f"{BR}.IsBookmarked('quest:176')") is True
-    # a view (the log) fills the list pane with its control bar; the page stays in the detail
-    # pane beside it (ADR 0018)
+    # a view (the log) fills the list pane, its controls stand in the band (W9; ~~a bar of
+    # their own in the list tile~~); the page stays in the detail pane beside it (ADR 0018)
     wow.slash("/bq log")
     assert wow.eval(f"{BR}.Current().kind") == "view"
     # (the mock's log names quest 176 "The Fargodeep Mine"; the sheet reads as the log does)
     assert wow.eval(f"{DS}:IsShown()") is True and card(wow)["name"] == "The Fargodeep Mine"
-    assert wow.eval(f"{MOD}.controlBar:IsShown()") is True
-    assert wow.eval(f"{MOD}.header:GetHeight()") == 22
+    assert wow.eval(f"{MOD}.band.byId.logHideDone:IsShown()") is True
+    assert wow.eval(f"{MOD}.header:GetHeight()") == 1  # no row of the view's in the list tile
     wow.execute(f"{BR}.Back()")
     assert wow.eval(f"{DS}:IsShown()") is True
-    assert wow.eval(f"{MOD}.controlBar:IsShown()") is False
+    assert wow.eval(f"{MOD}.band.byId.logHideDone") is None
     # before any list the list pane shows Here (the zone's dossier), not the tree
     assert wow.eval(f"{MOD}.tree.scroll:IsShown()") is False
     assert wow.eval(f"{MOD}.hereDossier:IsShown()") is True

@@ -457,7 +457,7 @@ end
 local function clearDisplay(title)
   local d = getDisplay()
   d.title:SetText(title .. "   (/bprobe hide)")
-  for _, key in ipairs({ "tech", "models", "reveal" }) do
+  for _, key in ipairs({ "tech", "models", "reveal", "portraits" }) do
     local part = rawget(d, key) -- rawget: a stub frame answers every name
     if part then
       part:Hide()
@@ -2484,13 +2484,15 @@ local HELP = {
   "/bprobe all  - P1, P2, P3, P5, P6, P10 (automatic probes)",
   "/bprobe resize - the drags of a window's corner recorded by themselves (the resize jump); resize clear",
   "/bprobe booktech - a turned word, a gradient, a line: do they draw on this client (the book's look)",
+  "/bprobe portrait - a creature's display from its model and the game's portrait of it (ADR 0090)",
   "/bprobe booklook - Bastian's Book measured at three widths against book-look.md, with screenshots",
   "/bprobe booklook small - the same at the scale of a 1,920 x 1,080 screen (768 units high)",
   "/bprobe bookmodel - an object's model in a model frame, a model as a dark shape (R4.9, the album)",
   "/bprobe bookreveal [uiMapID] - a zone as you explored it beside the zone with every overlay (R4.5)",
   "/bprobe perf - Core's performance snapshot (taken by itself 30 s after every login)",
   "/bprobe w2 - bookmodel, bookreveal, booklook and booklook small in a row (once by themselves)",
-  "/bprobe windows - every app's window opened in turn, photographed, what overflows named (W4)",
+  "/bprobe windows - every app's window opened in turn, photographed, its head measured, what"
+    .. " overflows named, at three widths and the small screen's scale (W4, W5)",
   "/bprobe chat - Chat version 3: the calls it needs, the item level, whisper flags (counts only)",
   "/bprobe combatlog - Forever only: may addons read the combat log, a minute of it (X11)",
   "/bprobe books - the Library books: the globals that name them, every book opened, their events (A3.2)",
@@ -3314,6 +3316,154 @@ local function probeBookTech()
 end
 
 -- ---------------------------------------------------------------------------------------------
+-- Portrait (ADR 0090, the book's Portrait.lua): a creature's round portrait needs its display, which
+-- the client learns from the game. Six rares, one of them new in Forever: each on a model that is
+-- seen and on one nobody sees (1 by 1, alpha 0, as the kit's). Recorded per creature: the display
+-- right after SetCreature, whether and when OnModelLoaded came, the display then; whether
+-- SetPortraitTextureFromCreatureDisplayID took it and what the texture answers. The picture is
+-- the proof: the model above, the portrait call's result under it. Once by itself after a login.
+-- ---------------------------------------------------------------------------------------------
+
+local PORTRAIT_WAIT = 5 -- seconds for the models to load before the record is closed
+local PORTRAIT_NPCS = {
+  { 521, "Lupos" },
+  { 100, "Gruff Swiftbite" },
+  { 276180, "Elder Finseer (new in Forever)" },
+  { 5808, "Warlord Kolkanis" },
+  { 3270, "Elder Mystic Razorsnout" },
+  { 10356, "Bayne" },
+}
+
+local function probePortrait(_, onDone)
+  local started = GetTime()
+  local draw = rawget(_G, "SetPortraitTextureFromCreatureDisplayID")
+  local out = { at = now(), call = type(draw), tests = {} }
+  db.results.portrait = out
+  local d = clearDisplay("Portraits: a creature's display from its model, and the game's portrait of it")
+  local holder = rawget(d, "portraits")
+  if not holder then
+    holder = CreateFrame("Frame", nil, d)
+    holder:SetAllPoints(d)
+    d.portraits = holder
+    holder.cells = {}
+  end
+  holder:Show()
+  local function displayOf(model)
+    local ok, id = pcall(function()
+      return model:GetDisplayInfo()
+    end)
+    if ok then
+      return id
+    end
+    return "error: " .. tostring(id)
+  end
+  local portrayOf = {} -- per creature: draws its portrait once its display is there
+  for i, pair in ipairs(PORTRAIT_NPCS) do
+    local npc, name = pair[1], pair[2]
+    local rec = { name = name, seen = {}, unseen = {} }
+    out.tests[tostring(npc)] = rec
+    local c = holder.cells[i]
+    if not c then
+      c = {}
+      holder.cells[i] = c
+      local left = 10 + (i - 1) * 110
+      c.bg = holder:CreateTexture(nil, "BACKGROUND")
+      c.bg:SetColorTexture(0.9, 0.84, 0.7, 1) -- the book's paper
+      c.bg:SetSize(100, 100)
+      c.bg:SetPoint("TOPLEFT", left, -30)
+      c.tex = holder:CreateTexture(nil, "ARTWORK")
+      c.tex:SetSize(64, 64)
+      c.tex:SetPoint("TOP", c.bg, "BOTTOM", 0, -10)
+      c.small = holder:CreateTexture(nil, "ARTWORK") -- at the Atlas's size
+      c.small:SetSize(33, 33)
+      c.small:SetPoint("TOP", c.tex, "BOTTOM", 0, -8)
+      c.label = holder:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+      c.label:SetPoint("TOP", c.small, "BOTTOM", 0, -6)
+      c.label:SetWidth(104)
+      for _, kind in ipairs({ "seen", "unseen" }) do
+        local okMake, model = pcall(CreateFrame, "PlayerModel", nil, holder)
+        if okMake and model then
+          -- placed and sized before its creature is set (the FacePool lesson)
+          if kind == "seen" then
+            model:SetSize(100, 100)
+            model:SetPoint("TOPLEFT", left, -30)
+          else
+            model:SetSize(1, 1)
+            model:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, 0)
+            model:SetAlpha(0)
+          end
+          model:Show()
+          c[kind] = model
+        end
+      end
+    end
+    c.tex:SetTexture(nil)
+    c.small:SetTexture(nil)
+    c.label:SetText(name)
+    local function portray(id)
+      if rec.portrait or type(id) ~= "number" or id <= 0 then
+        return
+      end
+      local r = try(draw, c.tex, id)
+      try(draw, c.small, id)
+      local okTex, path = pcall(c.tex.GetTexture, c.tex)
+      rec.portrait = { display = id, ok = r.ok, err = r.err, texture = okTex and tostring(path) or nil }
+    end
+    portrayOf[i] = portray
+    for _, kind in ipairs({ "seen", "unseen" }) do
+      local model, r = c[kind], rec[kind]
+      r.made = model ~= nil
+      if model then
+        tryMethod(model, "SetScript", "OnModelLoaded", function(m)
+          if r.loadedAfter then
+            return
+          end
+          r.loadedAfter = GetTime() - started
+          r.atLoaded = displayOf(m)
+          portray(r.atLoaded)
+        end)
+        r.clear = tryMethod(model, "ClearModel").ok
+        r.set = tryMethod(model, "SetCreature", npc)
+        r.atOnce = displayOf(model)
+        portray(r.atOnce)
+      end
+    end
+  end
+  C_Timer.After(PORTRAIT_WAIT, function()
+    local loaded, unseen, drawn = 0, 0, 0
+    for i, pair in ipairs(PORTRAIT_NPCS) do
+      local rec, c = out.tests[tostring(pair[1])], holder.cells[i]
+      for _, kind in ipairs({ "seen", "unseen" }) do
+        if c[kind] then
+          rec[kind].atEnd = displayOf(c[kind]) -- when OnModelLoaded never came
+          portrayOf[i](rec[kind].atEnd)
+        end
+      end
+      loaded = loaded + ((rec.seen.loadedAfter or (tonumber(rec.seen.atEnd) or 0) > 0) and 1 or 0)
+      unseen = unseen + ((rec.unseen.loadedAfter or (tonumber(rec.unseen.atEnd) or 0) > 0) and 1 or 0)
+      drawn = drawn + ((rec.portrait and rec.portrait.ok) and 1 or 0)
+    end
+    out.summary =
+      { creatures = #PORTRAIT_NPCS, seenLoaded = loaded, unseenLoaded = unseen, portraits = drawn }
+    say(
+      "portrait: of %d creatures %d loaded seen, %d unseen; the portrait call took %d",
+      #PORTRAIT_NPCS,
+      loaded,
+      unseen,
+      drawn
+    )
+    C_Timer.After(0.5, function()
+      out.screenshot = try(rawget(_G, "Screenshot"))
+      db.meta.updated = now()
+      say("portrait: screenshot taken; /reload or log out saves the record")
+      if onDone then
+        C_Timer.After(1.5, onDone)
+      end
+    end)
+  end)
+end
+
+-- ---------------------------------------------------------------------------------------------
 -- Booklook: Bastian's Book measured as the client lays it out (plan-book-round3.md M5; the owner
 -- saw every result before its author did: the mock lays no frame out from its anchors). Opens a
 -- chapter's page, sets the window to three widths and records, for each, where the head, the bar,
@@ -3426,7 +3576,9 @@ local function probeBookLook(arg, onDone)
       mark = rect(bar.mark),
       record = rect(bar.record),
       atlas = rect(bar.atlas),
-      gear = rect(bar.gear),
+      -- the pictogram itself: Core's button is its 20 with 5 of room on each side, and the
+      -- first run held the button's 30 against the 20 (23.11.2026)
+      gear = rect(bar.gear and rawget(bar.gear, "icon") or bar.gear),
       logo = rect(bar.logo),
       portrait = rect(win.portraitButton),
     }
@@ -3460,6 +3612,42 @@ local function probeBookLook(arg, onDone)
     run.slider = rect(view.slider)
     run.hide = rect(view.hide)
     run.done = rect(view.done)
+    -- the front table's cabinet at this width (W6, book-look.md 10.2): the cells as the game
+    -- laid them, each tile's place in the cabinet's row and what it drew; then the shelf again
+    local okCab, cab = pcall(function()
+      Window.Show({ kind = "front" })
+      local found
+      for _, row in ipairs(Front.list:Rows()) do
+        if row.layout and row.tiles then
+          found = row
+        end
+      end
+      if not found then
+        return { error = "no cabinet on the front table" }
+      end
+      local at = rect(found)
+      local c = {
+        row = at,
+        cols = found.layout.cols,
+        c = found.layout.c,
+        h = found.layout.h,
+        height = found.layout.height,
+        tiles = {},
+      }
+      for i, t in ipairs(found.tiles) do
+        if one(t, "IsShown") then
+          local r = rect(t)
+          r.slot, r.kind, r.drew = i - 1, t.kind, t.drew
+          if r.left and at.left then
+            r.x, r.y = r.left - at.left, r.top - at.top
+          end
+          c.tiles[#c.tiles + 1] = r
+        end
+      end
+      return c
+    end)
+    run.cabinet = okCab and cab or { error = tostring(cab) }
+    pcall(Window.Show, { kind = "shelf", id = "rares" })
     run.rows = {}
     local okRows, rows = pcall(function()
       return Front.list:Rows()
@@ -4047,10 +4235,18 @@ end
 -- ---------------------------------------------------------------------------------------------
 
 do
-  local W4_KEY = "w4-1"
+  -- "w9-2": the fixes of W9's run (24.11.2026, evening) run it once more by itself; "w9-1"
+  -- was W9's first (Quests on the board's spacing, 24.11.2026), "w5-1"
+  -- was the frame's run (23.11.2026), "w4-1" the kit's
+  local W4_KEY = "w9-2"
   local OPEN_WAIT = 1.2 -- seconds for a window to build and lay itself out
   local SHOT_WAIT = 0.4 -- seconds for the screenshot before the window closes
+  local SIZE_WAIT = 0.35 -- seconds for a window to lay itself out at another width
   local NAMED = 25 -- of each kind per window, at most
+  -- W5's acceptance: every window at three widths and on the small screen's scale (a 1,920 x
+  -- 1,080 screen holds 768 units of height; book-look.md 10.7)
+  local WIDTHS = { 1100, 1532, 2100 }
+  local SMALL_HEIGHT, SMALL_WIDTH = 768, 1100
 
   local function rectOf(f)
     local ok, l, r, t, b = pcall(function()
@@ -4062,14 +4258,28 @@ do
     return { l = l, r = r, t = t, b = b }
   end
 
+  -- A frame by its name, else where it stands: it and up to three frames above it, each by its
+  -- name or its kind and the kit's spec (a chip's kind) until a named one (24.11.2026: two texts
+  -- of the Browser could not be found from their words alone, "Button in ?" on the Map).
   local function nameOf(f)
-    local name = f.GetName and f:GetName()
-    if name then
-      return name
+    local parts = {}
+    local cur = f
+    for _ = 1, 4 do
+      if not cur then
+        break
+      end
+      local name = cur.GetName and cur:GetName()
+      if name then
+        parts[#parts + 1] = name
+        break
+      end
+      local kind = cur.GetObjectType and cur:GetObjectType() or "?"
+      local spec = type(cur.spec) == "table" and cur.spec or nil
+      local said = spec and (spec.kind or spec.shape) or nil
+      parts[#parts + 1] = said and (kind .. ":" .. tostring(said)) or kind
+      cur = cur.GetParent and cur:GetParent() or nil
     end
-    local parent = f.GetParent and f:GetParent()
-    local kind = f.GetObjectType and f:GetObjectType() or "?"
-    return kind .. " in " .. tostring(parent and parent.GetName and parent:GetName() or "?")
+    return table.concat(parts, " < ")
   end
 
   local function textOf(fs)
@@ -4100,10 +4310,12 @@ do
     return nil
   end
 
-  -- What overflows under `frame`: { cut = { label }, wide = { { text, room, needs } },
+  -- What overflows under `frame`: { cut = { label }, wide = { { text, room, needs, where } },
   -- outside = { { what, l, r, t, b } } } (outside: units past the window's edge on each side).
-  -- A scroll frame clips its content, so nothing under one counts as outside.
-  local function overflows(frame)
+  -- A scroll frame clips its content, so nothing under one counts as outside; nor does a part of
+  -- `own` (the game's frame around a window: its close button stands 3 over the top and its ring
+  -- over the corner by the template, which the first run named on every window, 23.11.2026).
+  local function overflows(frame, own)
     local out = { cut = {}, wide = {}, outside = {} }
     local box = rectOf(frame)
     local function add(list, v)
@@ -4133,14 +4345,18 @@ do
       if f.GetRegions then
         for _, region in ipairs({ f:GetRegions() }) do
           if region.GetObjectType and region:GetObjectType() == "FontString" and region:IsShown() then
-            local wide = tooWide(region)
+            -- a cut on purpose: the frame's tip says the whole words (the hub's rail cuts each
+            -- app's description to one line, 16 names on every hub window, 24.11.2026)
+            local whole = type(f.tip) == "string" and f.tip == region:GetText()
+            local wide = not whole and tooWide(region)
             if wide then
+              wide.where = nameOf(f)
               add(out.wide, wide)
             end
           end
         end
       end
-      local clips = clipped or (f.GetObjectType and f:GetObjectType() == "ScrollFrame")
+      local clips = clipped or f == own or (f.GetObjectType and f:GetObjectType() == "ScrollFrame")
       if f.GetChildren then
         for _, child in ipairs({ f:GetChildren() }) do
           visit(child, clips, depth + 1)
@@ -4161,19 +4377,115 @@ do
     return out
   end
 
+  -- The head as the game drew it (W5, ADR 0084 decisions 2 to 4): its kind, where it lies in the
+  -- window and how high it is, where the content starts, the name's face and size, the mark.
+  local function headOf(win)
+    local f, h, c = rectOf(win.frame), win.head and rectOf(win.head), win.content and rectOf(win.content)
+    local out = {
+      kind = win.headKind,
+      bare = type(win.IsBare) == "function" and win:IsBare() or nil,
+      shown = win.head and win.head:IsShown() or false,
+      portraitGone = win.portraitGone,
+      barRow = win.headBar and win.headBar.row == true or nil,
+    }
+    if f and h then
+      out.left, out.top, out.height = h.l - f.l, f.t - h.t, h.t - h.b
+    end
+    if f and c then
+      out.contentTop, out.contentLeft = f.t - c.t, c.l - f.l
+    end
+    if win.title then
+      local ok, font, size = pcall(win.title.GetFont, win.title)
+      if ok then
+        out.nameFont, out.nameSize = font, size
+      end
+      out.nameShown = win.title:IsShown()
+    end
+    if win.mark then
+      out.mark, out.markShown = win.mark:GetWidth(), win.mark:IsShown()
+    end
+    return out
+  end
+
   local function measure(app, name, win)
     local r = rectOf(win.frame)
-    local o = overflows(win.frame)
+    local o = overflows(win.frame, win.chrome or nil)
     return {
       app = app,
       window = name,
       width = r and (r.r - r.l) or nil,
       height = r and (r.t - r.b) or nil,
       gameFramed = win.gameFramed == true,
+      head = headOf(win),
       cut = o.cut,
       wide = o.wide,
       outside = o.outside,
     }
+  end
+
+  -- The other layouts of one window (W5): the three widths its bounds and the screen allow, then
+  -- the small screen's scale at 1,100. Each is { width, small, head, cut, wide, outside } with
+  -- the counts of what overflows and the first names; `done()` when the window stands as before.
+  local function variants(win, record, done)
+    local frame = win.frame
+    local w0, h0 = frame:GetWidth(), frame:GetHeight()
+    local scale0 = frame:GetScale() or 1
+    local minW = win.opts and win.opts.minWidth or 300
+    local maxW = win.opts and win.opts.maxWidth or 1200
+    local screenW = UIParent:GetWidth() or 1920
+    local todo = {}
+    for _, w in ipairs(WIDTHS) do
+      if w >= minW and w <= maxW and w <= screenW - 40 and math.abs(w - w0) > 1 then
+        todo[#todo + 1] = { width = w }
+      end
+    end
+    local factor = (UIParent:GetHeight() or SMALL_HEIGHT) / SMALL_HEIGHT
+    if factor > 1.01 and SMALL_WIDTH >= minW then
+      todo[#todo + 1] = { width = math.min(SMALL_WIDTH, maxW), small = factor }
+    end
+    record.variants = {}
+    local i = 0
+    local function restore()
+      frame:SetScale(scale0)
+      frame:SetSize(w0, h0)
+      if win.opts and win.opts.onResize then
+        pcall(win.opts.onResize, win, false)
+      end
+      done()
+    end
+    local function nextVariant()
+      i = i + 1
+      local v = todo[i]
+      if not v or not frame:IsShown() then
+        return restore()
+      end
+      frame:SetScale(scale0 * (v.small or 1))
+      frame:SetWidth(v.width)
+      if v.small then
+        frame:SetHeight(math.min(h0, SMALL_HEIGHT - 80))
+      end
+      if win.opts and win.opts.onResize then
+        pcall(win.opts.onResize, win, false)
+      end
+      C_Timer.After(SIZE_WAIT, function()
+        local ok, o = pcall(overflows, frame, win.chrome or nil)
+        local okH, head = pcall(headOf, win)
+        local r = rectOf(frame)
+        record.variants[#record.variants + 1] = {
+          width = v.width,
+          small = v.small,
+          got = r and (r.r - r.l) or nil,
+          head = okH and head or nil,
+          cut = ok and #o.cut or nil,
+          wide = ok and #o.wide or nil,
+          outside = ok and #o.outside or nil,
+          first = ok and (o.cut[1] or (o.wide[1] and o.wide[1].text) or (o.outside[1] and o.outside[1].what))
+            or nil,
+        }
+        nextVariant()
+      end)
+    end
+    nextVariant()
   end
 
   local function w4Due()
@@ -4279,7 +4591,7 @@ do
         apps[#apps + 1] = mod.name
       end
     end
-    say("windows: %d apps open in turn for about %d s: hands off the mouse", #apps, #apps * 2)
+    say("windows: %d apps open in turn for about %d s: hands off the mouse", #apps, #apps * 4)
     local i = 0
     local function step()
       i = i + 1
@@ -4339,10 +4651,23 @@ do
           n.m.screenshot = shot
         end
         C_Timer.After(SHOT_WAIT, function()
-          for _, n in ipairs(new) do
-            n.win.frame:Hide()
+          -- each new window at the other widths and the small scale, one after the other
+          local k = 0
+          local function nextWindow()
+            k = k + 1
+            local n = new[k]
+            if not n then
+              for _, m in ipairs(new) do
+                m.win.frame:Hide()
+              end
+              return step()
+            end
+            local okV = pcall(variants, n.win, n.m, nextWindow)
+            if not okV then
+              nextWindow()
+            end
           end
-          step()
+          nextWindow()
         end)
       end)
     end
@@ -4426,6 +4751,7 @@ local function command(msg)
       probeResize(arg)
     end,
     booktech = probeBookTech,
+    portrait = probePortrait,
     booklook = function()
       probeBookLook(arg)
     end,
@@ -4667,6 +4993,30 @@ events:SetScript("OnEvent", function(_, event, arg1)
           W4.run()
         end
       end)
+      -- the portrait's probe (ADR 0090): once by itself, when nothing else runs, out of combat;
+      -- its panel closes again after the picture
+      local tries = 0 -- in a fight or behind another probe it looks again, four times; then next login
+      local function portraitOnce()
+        if db.results.portrait then
+          return
+        end
+        if running or (InCombatLockdown and InCombatLockdown()) then
+          tries = tries + 1
+          if tries <= 4 then
+            C_Timer.After(30, portraitOnce)
+          end
+          return
+        end
+        local ok, err = pcall(probePortrait, nil, function()
+          if display then
+            display:Hide()
+          end
+        end)
+        if not ok then
+          say("portrait failed: %s", tostring(err))
+        end
+      end
+      C_Timer.After(W2.PERF_DELAY + 45, portraitOnce)
     end
   elseif event == "PLAYER_REGEN_ENABLED" then
     events:UnregisterEvent("PLAYER_REGEN_ENABLED")

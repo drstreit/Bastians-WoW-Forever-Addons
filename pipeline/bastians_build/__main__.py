@@ -595,7 +595,8 @@ def main(argv: list[str] | None = None) -> int:
         book_dir = args.book or (None if args.fixture or not CONTENT_DIR.is_dir() else CONTENT_DIR)
         if book_dir and export:
             # the Strategies book (strategies-design.md section 6), the claims from the export
-            add_book(world, export, book_dir, transforms, args.art or export.folder / "art")
+            art = args.art or export.folder / "art"
+            add_book(world, export, book_dir, transforms, art)
             fdb = args.wonders or (args.addons / "ForeverDB" / "Data" if args.addons else None)
             if fdb and fdb.is_dir() and world.records.get("chapter"):
                 # Bastian's Book (ADR 0080): ForeverDB's secrets, collections and rares
@@ -608,7 +609,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 summons = client_tables.read_summons(args.dumps, dump) if dump else {}
                 ids = client_tables.read_ids(args.dumps, dump) if dump else None
-                n = add_wonders(world, read_wonders(fdb), book_dir / "wonders.toml", summons, ids)
+                scenes = book_dir / "wonders.toml"
+                n = add_wonders(world, read_wonders(fdb), scenes, summons, ids, art)
                 print(f"wonders: {n}")
         if export:
             # the daily run's selection: the export's strategies scored (design section 7)

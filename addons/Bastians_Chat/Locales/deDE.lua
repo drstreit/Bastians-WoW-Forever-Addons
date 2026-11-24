@@ -397,11 +397,10 @@ ns.L:Register("deDE", {
   ["Window text"] = "Text der Fenster",
   ["Heads and tabs"] = "Köpfe und Reiter",
   ["Numbers and times"] = "Zahlen und Uhrzeiten",
-  ["By the look (%s in Modern and Glass)"] = "Nach dem Aussehen (%s in Modern und Glas)",
   ["By the look"] = "Nach dem Aussehen",
-  ["By the look: in Modern and Glass the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono; WoW and Parchment their own fonts."] = "Nach dem Aussehen: in Modern und Glas nehmen Köpfe und Reiter Barlow Condensed SemiBold, Zahlen und Zeiten IBM Plex Mono; WoW und Pergament ihre eigenen Schriften.",
+  ["By the look: the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono."] = "Nach dem Aussehen: Köpfe und Reiter nehmen Barlow Condensed SemiBold, Zahlen und Zeiten IBM Plex Mono.",
   ["The look's own"] = "Die des Aussehens",
-  ["Modern and Glass take IBM Plex Sans, Barlow Condensed and IBM Plex Mono, WoW and Parchment their own fonts; the chat's lines keep the Font under Text."] = "Modern und Glas nehmen IBM Plex Sans, Barlow Condensed und IBM Plex Mono, WoW und Pergament ihre eigenen Schriften; die Zeilen des Chats behalten die Schrift unter Text.",
+  ["By the look, the chat's windows take IBM Plex Sans, Barlow Condensed and IBM Plex Mono; the chat's lines keep the Font under Text."] = "Nach dem Aussehen nehmen die Fenster des Chats IBM Plex Sans, Barlow Condensed und IBM Plex Mono; die Zeilen des Chats behalten die Schrift unter Text.",
   -- an offer: how many of the item the bags hold (plan-chat-v3.md V18)
   ["you have %d"] = "du hast %d",
   -- the watch list (plan-chat-v3.md V19)

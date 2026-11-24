@@ -260,9 +260,9 @@ def test_the_button_box_takes_the_buttons_and_names_the_hovered_one(wow: WowRunt
     assert wow.eval(f"B1:GetFrameLevel() > {win}.content:GetFrameLevel()") is True
     # hovering shows the name in the title bar, leaving gives the box's title back
     wow.execute("B1:GetScript('OnEnter')(B1)")
-    assert wow.eval(f"{win}.title:GetText()") == "Bug Sack"
+    assert wow.eval(f"{win}.titleText") == "Bug Sack"
     wow.execute("B1:GetScript('OnLeave')(B1)")
-    assert wow.eval(f"{win}.title:GetText()") == "Minimap buttons"
+    assert wow.eval(f"{win}.titleText") == "Minimap buttons"
     # off: the buttons go back where they were
     setting(wow, "miniButtonBox", "false")
     assert wow.eval("B1:GetParent() == Minimap") is True

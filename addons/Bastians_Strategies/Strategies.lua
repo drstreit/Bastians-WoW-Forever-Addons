@@ -308,7 +308,8 @@ local mod = B:NewModule("Strategies", {
   data = { "book", "world", "items" }, -- the pages; the loot tables and items for the live boxes
   defaults = {
     profile = { window = {} },
-    char = { bookmarks = {} }, -- bookmarks by page id
+    -- bookmarks by page id; a shelf's view by chapter ("tiles" | "list", R4.10)
+    char = { bookmarks = {}, views = {} },
     -- the reader's notes by page id, for every character; Bastian's Book (ADR 0080): what each
     -- character of the account did (`record`) and the envelopes opened (`opened`)
     global = { notes = {}, record = {}, opened = {} },
@@ -446,7 +447,7 @@ local mod = B:NewModule("Strategies", {
         local facts = {}
         if p.art then
           -- the 2:1 picture in a 3:2 slot: an eighth off each side
-          facts.picture = { path = ns.Window.ART .. tostring(id), coords = { left = 0.125, right = 0.875 } }
+          facts.picture = { path = ns.Picture.ArtOf(id), coords = { left = 0.125, right = 0.875 } }
         end
         facts.line = ns.Book.Lead(p, 70)
         return next(facts) ~= nil and facts or nil
@@ -524,8 +525,14 @@ local mod = B:NewModule("Strategies", {
       level = UnitLevel("player"),
     })
     local module = self
+    -- the first look with the shelf's wonders finds what the character had before this login:
+    -- the book does not know where or at which level, so that find keeps neither (R4.11)
+    local caughtUp = false
     local function scan()
-      ns.Record.Scan(module, ns.Front.Entries(), Window.Schedule)
+      local entries = ns.Front.Entries()
+      local where = caughtUp and ns.Record.Here() or nil
+      caughtUp = caughtUp or #entries > 0
+      ns.Record.Scan(module, entries, Window.Schedule, where)
     end
     for _, event in ipairs({
       "QUEST_TURNED_IN",
@@ -548,6 +555,19 @@ local mod = B:NewModule("Strategies", {
       Window.Schedule()
     end)
     self:On("BASTIANS_PRICES_UPDATED", Window.Schedule)
+    -- a layer the Atlas hosts changed (a note, the route's line): the Atlas asks it again
+    self:On("BASTIANS_LAYER_CHANGED", function(...)
+      local shown = Window.Current()
+      if not (shown and shown.kind == "atlas") then
+        return
+      end
+      for i = 1, select("#", ...) do
+        if ns.AtlasMap.Hosts((select(i, ...))) then
+          Window.Schedule()
+          return
+        end
+      end
+    end)
     self:On("BASTIANS_THEME_CHANGED", Window.Schedule)
     ns.Feed.Register(self) -- the broker displays' feed (ADR 0043)
   end,
@@ -563,7 +583,14 @@ mod.Plate = ns.Plate
 mod.Shelf = ns.Shelf
 mod.Record = ns.Record
 mod.Front = ns.Front
+mod.Cabinet = ns.Cabinet -- the front table (W6)
+mod.Sources = ns.Sources -- how to get a wonder (W7)
+mod.List = ns.List -- a shelf as a list (W8, R4.10)
 mod.Wonder = ns.Wonder
+mod.Diary = ns.Diary -- Your diary (W8, R4.11)
+mod.Atlas = ns.Atlas -- the Atlas with filters, its pure part (W8, R4.12)
+mod.AtlasMap = ns.AtlasMap -- and its window part
+mod.Portrait = ns.Portrait -- a creature's round portrait (ADR 0090)
 mod.Picture = ns.Picture
 
 SLASH_BASTIANSSTRATEGIES1 = "/bbook"
@@ -594,8 +621,8 @@ SlashCmdList.BASTIANSSTRATEGIES = function(msg)
     Window.Show({ kind = "atlas" }) -- the story map (ADR 0057), the Atlas (ADR 0080)
   elseif cmd == "front" or cmd == "table" then
     Window.Show({ kind = "front" })
-  elseif cmd == "record" then
-    Window.Show({ kind = "record" })
+  elseif cmd == "diary" or cmd == "record" then
+    Window.Show({ kind = "record" }) -- Your diary (R4.11; "Your record" until 24.11.2026)
   elseif SHELVES[cmd] then
     Window.Show({ kind = "shelf", id = SHELVES[cmd] })
   elseif string.match(cmd, "^simulate") then

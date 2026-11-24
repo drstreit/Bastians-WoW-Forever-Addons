@@ -54,7 +54,7 @@ def flat(wow: WowRuntime) -> list[str]:
 
 
 def title(wow: WowRuntime) -> str:
-    return strip(wow.eval(f"{MOD}.win.title:GetText()"))
+    return strip(wow.eval(f"{MOD}.Browser.Title()"))
 
 
 def actions(wow: WowRuntime) -> list[str]:

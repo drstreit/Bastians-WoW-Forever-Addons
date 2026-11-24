@@ -105,15 +105,15 @@ end
 View.ApplyFont = applyFont -- the Messenger's bubbles too
 
 -- The faces of the chat's windows (plan-chat-v3.md V17): an option per role and the value of the
--- look it sets. `auto` is the artifact's faces when the look draws in the Modern or the Glass
--- renderer, the look's own in WoW and Parchment; "" the look's own; else the font chosen.
+-- look it sets. `auto` ("By the look") is the artifact's faces (~~in the Modern and the Glass
+-- renderer only, the look's own in WoW and Parchment~~ until the one look, 20.11.2026); "" the
+-- look's own; else the font chosen.
 View.FACES = { uiFont = "font", labelFont = "labelFont", numberFont = "numberFont" }
 View.ARTIFACT_FACES = {
   font = S.SANS_FONT, -- IBM Plex Sans
   labelFont = View.FONT_DIR .. "BarlowCondensedSemiBold.ttf",
   numberFont = S.MONO_FONT, -- IBM Plex Mono
 }
-View.ARTIFACT_LOOKS = { modern = true, glass = true }
 
 -- The choice for one of the faces: by the look, the look's own, every font.
 function View.FaceChoices(option)
@@ -1637,7 +1637,6 @@ newWindow = function(wid)
     minWidth = 220,
     minHeight = 120,
     lockable = true, -- the pin in the header
-    headIcons = true, -- Lock, Options, Close as pictograms (V27: "all the same color")
     db = main and p.window or (function()
       p.places[wid] = p.places[wid] or {}
       return p.places[wid]
@@ -1926,9 +1925,7 @@ function View.LookValues(key)
   for option, valueKey in pairs(View.FACES) do
     local choice = p[option]
     if choice == nil or choice == "auto" then
-      if View.ARTIFACT_LOOKS[out.look or "modern"] then
-        out[valueKey] = View.ARTIFACT_FACES[valueKey]
-      end
+      out[valueKey] = View.ARTIFACT_FACES[valueKey] -- one look: the artifact's faces
     elseif choice ~= "" then
       out[valueKey] = choice
     end

@@ -35,6 +35,11 @@ folioSealText = "#f3e5c4"     # the words on the seal
 folioShade = "#090705f0"      # the hero's words fade into this
 folioShadeText = "#eadfca"    # words on the shade
 folioShadow = "#3b2a1738"     # the soft shadow under a card
+folioLight = "#ffffff24"      # a tile's lit top edge: white at 14 %
+folioDark = "#0000004d"       # a tile's foot in shade: black at 30 %
+folioMat = "#8a5a36"          # the mat under a camp item
+folioMatFoot = "#6b4326"      # the mat's foot: the gradient's other end
+folioAlbum = "#d9c69c"        # the mat in an album's frame (the diary, R4.11)
 # the book's dark table (ADR 0081, docs/addons/book-look.md section 3; "background
 # color in wow schema should be same as artifact", D2 "WoW look only"): the same in every theme,
 # painted by the book where the look is the game's; the other looks keep their own ground

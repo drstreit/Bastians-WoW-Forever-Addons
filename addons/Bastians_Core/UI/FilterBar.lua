@@ -6,9 +6,11 @@ local B = ns.B
 local S = ns.Style
 local L = ns.L
 
-local PILL_H, PILL_GAP, LINE_GAP = 20, 6, 4 -- PILL_H: the chips' height; a pill's is S.G.pill
-local CHIP_GAP, CHIP_ICON = 4, 11
-local PAD = 8
+-- PILL_H: the chips' height (book-look.md section 5: 22, round at both ends, 9 beside the
+-- words, 5 between two); a pill's is S.G.pill
+local PILL_H, PILL_GAP, LINE_GAP = 22, 6, 4
+local CHIP_GAP, CHIP_ICON = 5, 11
+local PAD = 9
 local ITEM_H, MENU_MIN, MENU_MAX = 20, 140, 320
 
 local Bar = {}
@@ -217,13 +219,13 @@ local function makeChip(bar)
   c.count:SetPoint("LEFT", c.label, "RIGHT", 4, 0)
   c:SetScript("OnEnter", function(self)
     if not self.on then
-      S.tint(self.face, S.C.faceHover)
+      S.tint(self.face, S.Tok(self, "faceHover"), 1)
     end
     S.TipEnter(self)
   end)
   c:SetScript("OnLeave", function(self)
     if not self.on then
-      S.tint(self.face, S.C.panel)
+      S.tint(self.face, S.Tok(self, "panel"), 0)
     end
     S.TipLeave(self)
   end)
@@ -241,7 +243,10 @@ local function makeChip(bar)
 end
 
 -- Lays the chips of `dim` out from (x, y); returns x, y and the height of the line it ends on.
+-- A chip is quiet (no plate, the line's edge, the text's ink); the chosen one is filled in its
+-- colour with the ground's ink (ADR 0084 decision 2: the chosen one filled).
 local function layoutChips(bar, dim, x, y, width)
+  local x0, lineGap = bar.x0, bar.lineGap
   for _, c in ipairs(menuChoices(dim)) do
     bar.chipCount = bar.chipCount + 1
     local chip = bar.chips[bar.chipCount] or makeChip(bar)
@@ -249,13 +254,13 @@ local function layoutChips(bar, dim, x, y, width)
     chip.dim, chip.key = dim, c.key
     local on = chipOn(dim, c.key)
     chip.on = on
-    local col = (c.token and S.C[c.token]) or S.C.accent
+    local col = (c.token and S.Tok(chip, c.token)) or S.Tok(chip, "accent")
     chip.label:SetText(tostring(c.label))
     chip.count:SetText(c.count and tostring(c.count) or "")
-    local ink = on and col or S.C.dim
-    chip.label:SetTextColor(ink[1], ink[2], ink[3])
-    S.tint(chip.face, on and col or S.C.panel, on and 0.18 or nil)
-    S.setEdges(chip.edges, on and col or S.C.line, on and 0.7 or nil)
+    S.ink(chip.label, S.Tok(chip, on and "bg" or "text"))
+    S.ink(chip.count, S.Tok(chip, on and "bg" or "muted"))
+    S.tint(chip.face, on and col or S.Tok(chip, "panel"), on and 1 or 0)
+    S.setEdges(chip.edges, on and col or S.Tok(chip, "line"), 1)
     local w = PAD
     if c.icon then
       B.UI.PaintIcon(chip.icon, c.icon)
@@ -268,13 +273,13 @@ local function layoutChips(bar, dim, x, y, width)
     chip.label:SetPoint("LEFT", w, 0)
     w = w + textWidth(chip.label) + (c.count and (4 + textWidth(chip.count)) or 0) + PAD
     if x > 0 and x + w > width then
-      x, y = 0, y + PILL_H + LINE_GAP
+      x, y = 0, y + PILL_H + lineGap
     end
     chip:SetSize(w, PILL_H)
     chip.face:Layout()
     chip.edges:Layout()
     chip:ClearAllPoints()
-    chip:SetPoint("TOPLEFT", bar.frame, "TOPLEFT", x, -y)
+    chip:SetPoint("TOPLEFT", bar.frame, "TOPLEFT", x0 + x, -y)
     chip:Show()
     x = x + w + CHIP_GAP
   end
@@ -286,11 +291,29 @@ end
 -- nil, default = the key the "x" restores (nil: All), all = { label, count } or false (no All
 -- choice: a sort), onSelect = fn(key), tip = words }. A dimension with nothing to choose (fewer
 -- than two entries in its dropdown) is left out. The pills flow left to right and wrap to a new
--- line when the width is used up.
-function B.UI.FilterBar(parent)
+-- line when the width is used up. `opts.band` (ADR 0084 decision 2, W5): the bar is a band of its
+-- own, on the panel's ground with a rule under it, in the band's padding and row gap
+-- (B.UI.BandClass); without it the pills stand bare in the owner's frame.
+function B.UI.FilterBar(parent, opts)
   local bar = setmetatable({ pills = {}, chips = {}, chipCount = 0, dims = {}, height = 1 }, Bar)
   bar.frame = CreateFrame("Frame", nil, parent)
   bar.frame:SetHeight(1)
+  local Band = B.UI.BandClass
+  bar.band = opts and opts.band == true
+  bar.x0 = bar.band and Band.SIDE or 0
+  bar.y0 = bar.band and Band.TOP or 0
+  bar.foot = bar.band and Band.FOOT or LINE_GAP
+  bar.lineGap = bar.band and Band.ROW_GAP or LINE_GAP
+  if bar.band then
+    bar.ground = S.fill(bar.frame, S.C.panel, "BACKGROUND")
+    bar.rule = S.fill(bar.frame, S.C.line, "BORDER")
+    bar.rule:ClearAllPoints()
+    bar.rule:SetPoint("BOTTOMLEFT", bar.frame, "BOTTOMLEFT", 0, 0)
+    bar.rule:SetPoint("BOTTOMRIGHT", bar.frame, "BOTTOMRIGHT", 0, 0)
+    bar.rule:SetHeight(1)
+    bar.ground:Hide()
+    bar.rule:Hide()
+  end
   -- the pills wrap at the bar's width: laid out again when it changes (the first layout often
   -- runs before the frame has one, and a resized window gives it another; owner, retail
   -- 31.10.2026: "the filter buttons should use the full width ... should readjust when scaling")
@@ -323,11 +346,16 @@ function Bar:Layout()
   if not width or width <= 0 then
     width = 400
   end
+  local x0, lineGap = self.x0, self.lineGap
+  local full = width
+  width = math.max(1, width - 2 * x0) -- the room between the band's side padding
   local pillH = S.G.pill or PILL_H
-  local x, y, lineH = 0, 0, 0 -- lineH: the height of the line being filled, 0 while it is empty
+  local x, y, lineH = 0, self.y0, 0 -- lineH: the height of the line being filled, 0 while empty
+  local bottom = self.y0 -- the foot of the last line that holds something
   local function newLine()
     if lineH > 0 then
-      y = y + lineH + LINE_GAP
+      bottom = y + lineH
+      y = bottom + lineGap
     end
     x, lineH = 0, 0
   end
@@ -359,7 +387,7 @@ function Bar:Layout()
         newLine()
       end
       p:ClearAllPoints()
-      p:SetPoint("TOPLEFT", self.frame, "TOPLEFT", x, -y)
+      p:SetPoint("TOPLEFT", self.frame, "TOPLEFT", x0 + x, -y)
       p:Show()
       lineH = math.max(lineH, pillH)
       x = x + w + PILL_GAP
@@ -372,8 +400,20 @@ function Bar:Layout()
     self.chips[i]:Hide()
   end
   local total = y + lineH
-  self.height = total > 0 and (total + LINE_GAP) or 1
-  self.laidOutAt = width
+  local any = total > self.y0
+  if lineH > 0 then
+    bottom = total
+  end
+  -- a band ends its padding under the last line; a bare bar keeps the air it always had
+  self.height = any and ((self.band and bottom or total) + self.foot) or 1
+  self.bottom = any and bottom or 0 -- the foot of the last line, without the air under it
+  if self.ground then
+    self.ground:SetShown(any)
+    self.rule:SetShown(any)
+    S.tint(self.ground, S.Tok(self.frame, "panel"))
+    S.tint(self.rule, S.Tok(self.frame, "line"))
+  end
+  self.laidOutAt = full
   self.frame:SetHeight(self.height)
   if self.onHeight then
     self.onHeight(self.height) -- the owner moves its rows under the bar (Tree:SetFilters)

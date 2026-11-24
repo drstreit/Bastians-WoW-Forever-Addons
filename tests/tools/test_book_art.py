@@ -114,3 +114,53 @@ def test_the_world_picture_ships_whole_and_large(tmp_path):
     width, height = struct.unpack_from("<II", data, 12)
     assert (width, height) == book_art.WHOLE["world"] == (2048, 1024)
     assert "world" in book_art.FRONT_IDS
+
+
+def test_numpy_writes_the_same_blocks_as_the_loop():
+    """The fast blocks (23.11.2026: a 2K texture took half a minute in the loop) are the loop's
+    bytes: a noisy picture whose size is no multiple of four, and a flat one."""
+    pytest.importorskip("numpy")
+    import random
+
+    rnd = random.Random(7)
+    noisy = Image.new("RGB", (37, 22))
+    noisy.putdata(
+        [(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256)) for _ in range(37 * 22)]
+    )
+    soft = Image.new("RGB", (64, 32))
+    soft.putdata([(x * 3 % 256, (x + y) % 256, y * 7 % 256) for y in range(32) for x in range(64)])
+    for image in (noisy, soft, Image.new("RGB", (8, 8), (10, 20, 30)), Image.new("RGB", (1, 1))):
+        assert book_art.dxt1(image) == book_art.dxt1(image, fast=False)
+
+
+def test_a_picture_drawn_at_2k_ships_at_2048_and_none_is_enlarged(tmp_path):
+    """Round 4's drawings are 2,752 x 1,536 and ship at 2,048 x 1,024 (book-look.md 10.6); the
+    first pictures (1,376 x 768) stay 1,024 x 512."""
+    from bastians_build.overview import texture_size
+
+    assert book_art.game_size(2532) == (2048, 1024) and book_art.game_size(1266) == (1024, 512)
+    large = tmp_path / "large.blp"
+    large.write_bytes(book_art.game_texture(picture(tmp_path / "large.jpg", (2752, 1536))))
+    assert texture_size(large) == (2048, 1024)
+    assert 1_390_000 < large.stat().st_size < 1_410_000  # the size a pack's budget counts with
+
+
+def test_a_wonders_drawing_is_installed_by_its_dashed_name(tmp_path):
+    """`[scenes]` of wonders.toml names what round 4 drew; a wonder's file writes the colon of
+    its id as a dash; a picture named after nothing the book has stays out, and so does a
+    chapter's entrance, which no part of the book draws yet."""
+    content = tmp_path / "content"
+    (content / "gold").mkdir(parents=True)
+    (content / "gold" / "wolf-flanks.md").write_text("x", encoding="utf-8")
+    (content / "wonders.toml").write_text(
+        '[scenes]\n"camp:279938" = "A rack."\n"chapter:gold" = "A table."\n', encoding="utf-8"
+    )
+    assert book_art.art_ids(content) == {"wolf-flanks", "camp-279938"}
+    art = tmp_path / "art"
+    art.mkdir()
+    for name in ("camp-279938", "chapter-gold", "wolf-flanks", "camp-1"):
+        picture(art / f"{name}.jpg", (64, 36))
+    done = book_art.install(art, tmp_path / "packs", ids=book_art.art_ids(content))
+    assert done == ["camp-279938", "wolf-flanks"]
+    folder = tmp_path / "packs" / book_art.ADDON / book_art.ART_DIR
+    assert sorted(p.name for p in folder.iterdir()) == ["camp-279938.blp", "wolf-flanks.blp"]

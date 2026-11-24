@@ -107,6 +107,7 @@ function Util.chapters(blocks, catalogue)
       tab = entry.tab, -- a tab of a tabbed sheet (ADR 0058)
       always = entry.always, -- there with nothing to show, saying `empty`
       empty = entry.empty,
+      label = entry.label, -- its name while it has no section to take one from
       blocks = {},
       count = 0,
     }
@@ -130,7 +131,9 @@ function Util.chapters(blocks, catalogue)
   local function listedChapters(tail)
     for _, chapter in ipairs(listed) do
       if (#chapter.blocks > 0 or chapter.always) and (chapter.tail or false) == tail then
-        chapter.title = chapter.title or (chapter.blocks[1] and chapter.blocks[1].title)
+        -- an `always` chapter without a section had no name: its tab read "nil" (a character's
+        -- bank and mail not read yet, Forever 23.11.2026)
+        chapter.title = chapter.title or (chapter.blocks[1] and chapter.blocks[1].title) or chapter.label
         out[#out + 1] = chapter
       end
     end
@@ -1181,6 +1184,7 @@ local function newShowcase()
   local n = #showcases + 1
   local win
   win = B.UI.Window(n == 1 and "BastiansShowcase" or ("BastiansShowcase" .. n), {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     title = "",
     width = 560,
     height = 600,

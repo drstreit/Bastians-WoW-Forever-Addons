@@ -83,6 +83,7 @@ ns.L:Register("zhCN", {
   ["Click: the options. Right click: edit the rings."] = "点击：选项。右键：编辑环。",
   ["Courtesy: %s"] = "礼貌：%s",
   ["Default rings"] = "默认环",
+  ["Click again: every ring back as shipped"] = "再次点击：所有环恢复为默认",
   ["Edit the ring"] = "编辑此环",
   ["Edit the rings"] = "编辑这些环",
   ["Emote"] = "表情",

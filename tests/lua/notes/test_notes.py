@@ -170,7 +170,9 @@ def test_the_lists_window_draws_every_note_row(wow: WowRuntime):
         end)()"""
     )
     texts = list(shown.values())
-    assert texts[0].startswith("My notes") and "(3)" in texts[0]
+    # since W9 a list's name is a quiet heading: small capitals, its count in the accent
+    dim, accent = wow.eval("Bastians.UI.Style.H.dim"), wow.eval("Bastians.UI.Style.H.accent")
+    assert texts[0] == f"{dim}my notes|r  {accent}3|r"
     assert all(any(name in t for t in texts[1:]) for name in ("Anvil", "Bank", "Cook"))
     # the title starts right of the symbol, not under it
     left = wow.eval(f"(select(4, {tree}.pool[2].text:GetPoint(1)))")

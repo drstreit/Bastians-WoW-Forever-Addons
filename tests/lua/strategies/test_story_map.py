@@ -134,14 +134,14 @@ def test_the_atlas_shows_the_stories_and_a_token_opens_its_story(wow: WowRuntime
     shown = tokens(wow)
     assert "hogger-camp" in [t.id for t in shown]
     assert wow.eval(f"{WIN}.bar.atlas.spec.on") is True
-    # no two tokens on the land cover each other
-    land = [(t.x, t.y) for t in shown if not t.onBoard]
+    # no two tokens on the land cover each other (since R4.12 each with its own size)
+    land = [t for t in shown if not t.onBoard]
     for i, a in enumerate(land):
         for b in land[i + 1 :]:
-            assert math.dist(a, b) >= 40 + 14 - 1e-6
+            assert math.dist((a.x, a.y), (b.x, b.y)) >= a.size / 2 + b.size / 2
     wow.execute(
-        f"for _, b in ipairs({WIN}.atlas.tokens) do "
-        "if b.story and b.story.id == 'hogger-camp' then b:Click() end end"
+        f"for _, b in ipairs({WIN}.atlas.marks) do "
+        "if b:IsShown() and b.entry and b.entry.id == 'hogger-camp' then b:Click() return end end"
     )
     assert wow.eval(f"{WIN}.Current().id") == "hogger-camp"
     assert wow.eval(f"{WIN}.atlas:IsShown()") is False
@@ -176,21 +176,27 @@ def test_the_front_table_is_the_front_door_and_the_atlas_a_button(wow: WowRuntim
 
 def test_the_map_scales_as_one_piece_and_the_bar_does_not(wow: WowRuntime):
     """ "only the map scales, not the button row"; "scaling is bumpy":
-    the picture is laid out at its base size and scaled into the atlas on every size event."""
+    while the grip is held the picture is scaled into the atlas on every size event. Since R4.12
+    the picture is laid out at the room's size, so a settled Atlas stands at scale 1 and its tokens
+    keep their size (test_atlas_map.py)."""
     boot(wow)
     wow.slash("/bbook map")
     size(wow)  # 928 x 560: the width limits
+    band = wow.eval(f"{WIN}.atlas.bandH")
     assert wow.eval(f"{WIN}.win.content:GetScale()") == 1
-    assert wow.eval(f"{WIN}.atlas.picture:GetWidth()") == 900
-    assert wow.eval(f"{WIN}.atlas.picture:GetHeight()") == 450
-    assert math.isclose(wow.eval(f"{WIN}.atlas.picture:GetScale()"), 928 / 900)
+    assert wow.eval(f"{WIN}.atlas.picture:GetWidth()") == 928
+    assert wow.eval(f"{WIN}.atlas.picture:GetHeight()") == 464
+    assert wow.eval(f"{WIN}.atlas.picture:GetScale()") == 1
     wow.execute(
         f"{WIN}.atlas:SetSize(1800, 500); {WIN}.atlas:GetScript('OnSizeChanged')({WIN}.atlas)"
     )
-    assert math.isclose(wow.eval(f"{WIN}.atlas.picture:GetScale()"), 500 / 450)  # the height limits
-    assert wow.eval(f"{WIN}.atlas.picture:GetWidth()") == 900  # the layout did not run again
-    assert wow.eval(f"{WIN}.atlas.mill:GetParent() == {WIN}.atlas") is True  # a button, unscaled
-    assert wow.eval(f"{WIN}.bar:GetParent() == {WIN}.win.frame") is True
+    # the height under the band limits
+    assert math.isclose(wow.eval(f"{WIN}.atlas.picture:GetScale()"), (500 - band) * 2 / 928)
+    assert wow.eval(f"{WIN}.atlas.picture:GetWidth()") == 928  # the layout did not run again
+    assert (
+        wow.eval(f"{WIN}.atlas.mill:GetParent() == {WIN}.atlas.room") is True
+    )  # a button, unscaled
+    assert wow.eval(f"{WIN}.bar.atlas:GetParent() == {WIN}.win.head") is True
     assert wow.errors == []
 
 
@@ -202,18 +208,22 @@ def test_the_window_takes_the_maps_proportions(wow: WowRuntime):
     wow.execute(f"{WIN}.atlas:SetSize(928, 560)")  # the atlas' room in a 940 x 640 window
     wow.execute(f"{WIN}.bar.atlas:Click()")
     w, h = wow.eval(f"{WIN}.win.frame:GetSize()")
-    assert (w, h) == (940, 928 / 2 + 80)  # the window adds 80 around the map's height
+    band = wow.eval(f"{WIN}.atlas.bandH")  # since R4.12 the Atlas has its band over the map
+    assert (w, h) == (940, 928 / 2 + 80 + band)  # the window adds 80 and the band
     assert wow.eval(f"{WIN}.win.db.size[2]") == h  # saved as after a drag
     # after a drag: the height follows the width again
     wow.execute(f"{WIN}.win.frame:SetSize(1200, 700); {WIN}.atlas:SetSize(1188, 620)")
     wow.execute(f"{WIN}.win.opts.onResize(nil, false)")
     w, h = wow.eval(f"{WIN}.win.frame:GetSize()")
-    assert (w, h) == (1200, 1188 / 2 + 80)
-    # too narrow for the smallest height: the width follows instead
+    assert (w, h) == (1200, 1188 / 2 + 80 + wow.eval(f"{WIN}.atlas.bandH"))
+    # a narrow window: the band wraps to more rows, and the height holds them over the map
+    # (~~too narrow for the smallest height: the width follows instead~~ until R4.12: with its
+    # band the Atlas is never lower than the window's smallest height at these widths)
     wow.execute(f"{WIN}.win.frame:SetSize(660, 600); {WIN}.atlas:SetSize(648, 520)")
     wow.execute(f"{WIN}.win.opts.onResize(nil, false)")
     w, h = wow.eval(f"{WIN}.win.frame:GetSize()")
-    assert h == 420 and w == (420 - 80) * 2 + 12
+    band = wow.eval(f"{WIN}.atlas.bandH")
+    assert band > 41 and (w, h) == (660, 648 / 2 + 80 + band)
     # the pages keep their size: nothing fits a page's window to the map
     wow.execute(f"{WIN}.bar.front:Click()")
     wow.execute(f"{WIN}.win.frame:SetSize(1000, 900); {WIN}.win.opts.onResize(nil, false)")
@@ -227,21 +237,21 @@ def test_a_token_lights_its_rim_under_the_cursor(wow: WowRuntime):
     wow.slash("/bbook map")
     size(wow)
     wow.execute(
-        f"for _, b in ipairs({WIN}.atlas.tokens) do "
-        "if b.story and b.story.id == 'hogger-camp' then T = b end end"
+        f"for _, b in ipairs({WIN}.atlas.marks) do "
+        "if b:IsShown() and b.entry and b.entry.id == 'hogger-camp' then T = b end end"
     )
     rest = wow.eval("(function() local r, g, b = T.ring:GetVertexColor() return { r, g, b } end)()")
     assert list(rest.values()) != [1, 1, 1]
-    assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -2
+    assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -3  # a gold page's ring (book-look 10.10)
     wow.execute("T:GetScript('OnEnter')(T)")
     lit = wow.eval("(function() local r, g, b = T.ring:GetVertexColor() return { r, g, b } end)()")
     bright = wow.eval("{ unpack(Bastians.UI.Style.C.bright, 1, 3) }")
     assert list(lit.values()) == list(bright.values())  # S.C.bright (Folio's since W4)
-    assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -4  # and wider
+    assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -5  # and 2 wider
     wow.execute("T:GetScript('OnLeave')(T)")
     back = wow.eval("(function() local r, g, b = T.ring:GetVertexColor() return { r, g, b } end)()")
     assert list(back.values()) == list(rest.values())
-    assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -2
+    assert wow.eval("(select(4, T.ring:GetPoint(1)))") == -3
     assert wow.errors == []
 
 
@@ -257,7 +267,7 @@ def test_without_the_picture_the_map_says_so_and_keeps_its_tokens(wow: WowRuntim
 
 
 def test_every_key_of_the_map_is_translated():
-    keys = ("The market", "Making and gathering", "Click: open the story", "Map")
+    keys = ("The market", "Making and gathering", "Click: open the page.", "Map")
     for path in (ROOT / "addons" / "Bastians_Strategies" / "Locales").glob("*.lua"):
         text = path.read_text(encoding="utf-8")
         for key in keys:

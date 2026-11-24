@@ -239,7 +239,8 @@ end
 
 -- One quest of the log as two lines (ADR 0053): its name, then the one thing to know (R.nextStep).
 -- What else there is lives on the sheet. opts: { questItem(entry) -> { itemID, icon, link } or nil,
--- onOpen(questID) (a left click) }.
+-- onOpen(questID) (a left click), sectioned (the row stands under the view's headings: a done
+-- quest's line is who takes it) }.
 function V.activeRow(e, state, map, px, py, opts)
   opts = opts or {}
   local q = Logic.quest(e.questID)
@@ -258,7 +259,7 @@ function V.activeRow(e, state, map, px, py, opts)
     .. (level and ("[" .. level .. "] ") or "")
     .. (e.title or R.questName(e.questID))
     .. "|r"
-  local step, more = R.nextStep(e, q, map)
+  local step, more = R.nextStep(e, q, map, opts.sectioned)
   row.title, row.meta, row.metaMore = title, step, more
   row.text = title .. "  " .. step .. (more and more[1] and ("  " .. table.concat(more, "  ")) or "")
   row.icon = B.UI.IconTexture(e.isComplete and "done" or "questActive")
@@ -281,6 +282,9 @@ end
 -- default); the tracker's filters. The hidden count goes to the summary.
 function V.active(map, px, py, opts)
   opts = opts or {}
+  if opts.sectioned == nil then
+    opts.sectioned = true -- the view's own headings; a host that drops them says `false`
+  end
   local state = State.ForLogic()
   local isTracked = opts.isTracked or State.IsTracked
   local here, goals, doneElsewhere, doneUnknown = {}, {}, {}, {}

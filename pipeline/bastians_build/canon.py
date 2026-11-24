@@ -148,6 +148,9 @@ class Sources:
     # the client's dungeon maps by instance (the retail client's UiMap tables, DG2c): the
     # floors' art
     floor_art: dict[int, list[FloorArt]] = field(default_factory=dict)
+    # every explorable area's overlay per map (clientdump.read_map_overlays): the book draws a
+    # zone whole (R4.5), `zone.overlays`
+    map_overlays: dict[int, list[list[int]]] = field(default_factory=dict)
     cm_quests: list[cmangos.QuestRow] = field(default_factory=list)
     cm_creatures: list[dict] = field(default_factory=list)  # creature_template rows
     cm_objects: list[dict] = field(default_factory=list)  # gameobject_template rows
@@ -237,6 +240,9 @@ def merge_zones(world: World, s: Sources) -> None:
         rec["parent"] = parent
         rec["continent"] = continent
         rec["mapType"] = s.map_types.get(ui_map_id)  # None when the source has no type
+        overlays = s.map_overlays.get(ui_map_id)
+        if overlays:  # absent where the client has none (unknown is not an empty list)
+            rec["overlays"] = [list(o) for o in overlays]
 
 
 def merge_areas(world: World, s: Sources) -> None:

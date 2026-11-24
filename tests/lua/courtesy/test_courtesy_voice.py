@@ -550,7 +550,7 @@ def test_the_window_adds_saves_removes_and_tries_a_line(wow: WowRuntime):
     wow.execute(f"{f}.text:SetText('Hello %k, good %h!')")
     assert wow.eval(f"{ed}.Commit()") is True
     assert [line[3] for line in wow.eval(f"{MINE}.List()").values()] == ["Hello %k, good %h!"]
-    assert wow.eval(f"{ed}.tabs.mine.label:GetText()") == "Mine (1)"
+    assert wow.eval(f"{ed}.bar.tabs:Part('mine').item.word") == "Mine (1)"  # the head's tab
     # a line nobody can use is not added, and the form says why
     wow.execute(f"{f}.text:SetText('')")
     assert wow.eval(f"({ed}.Commit())") is False  # the first answer; the second says why
@@ -913,3 +913,61 @@ def test_a_greeting_names_the_company_only_when_it_is_known(wow: WowRuntime):
     assert any("Alda and Brann" in w for w in with_names)
     assert not any("%k" in w for w in without)  # nobody known: no line asks for them
     assert problem(wow, "{ 'camp.greet', 'cheerful', 'Hi %k!' }") is None  # my own lines may use it
+
+
+def test_my_lines_in_the_one_look(wow: WowRuntime):
+    """W9 (ADR 0084): the three views are tabs of the window's head, the shown one filled, and
+    what a view is stands in the window's foot. ~~Three buttons in the content with a line of
+    size 11 under them.~~"""
+    boot(wow)
+    ed = f"{MOD}.Editor"
+    wow.execute(f"{ed}.Open()")
+    win, tabs = f"{ed}.win", f"{ed}.bar.tabs"
+    assert wow.eval(f"{win}.headKind") == "tall" and wow.eval(f"{win}.headBar == {ed}.bar") is True
+    assert [p.item.word for p in wow.eval(f"{tabs}.parts").values()] == [
+        "Mine (0)",
+        "Offered lately",
+        "Never (0)",
+    ]
+    assert wow.eval(f"{tabs}.spec.value") == "mine"
+    # the foot: Core's, 34 high, the view's words in it
+    foot = f"{win}.note"
+    assert wow.eval(f"{foot}:GetHeight()") == 34 and wow.eval(f"{foot}.rule:IsShown()") is True
+    assert wow.eval(f"{foot}:GetText()").startswith("Click a line to change it")
+    # the list starts 8 under the head
+    assert tuple(wow.eval(f"{win}.list:GetPoint(1)"))[3:] == (6, -8)
+    # the form's selects: each as wide as its label and its button, none over another (the
+    # review sketch of W9 showed Mood's button over its label: 160 units for a button of 160)
+    f = f"{ed}.form"
+    for name in ("situation", "mood", "lang"):
+        sel = f"{f}.{name}"
+        assert wow.eval(f"{sel}:GetWidth() >= {sel}.button:GetWidth() + 10") is True, name
+    sx, sy = tuple(wow.eval(f"{f}.situation:GetPoint(1)"))[3:]
+    mx, my = tuple(wow.eval(f"{f}.mood:GetPoint(1)"))[3:]
+    lx, ly = tuple(wow.eval(f"{f}.lang:GetPoint(1)"))[3:]
+    assert sx == mx == 10 and my == sy - 28 and ly == my  # the situation on a row of its own
+    assert lx == mx + wow.eval(f"{f}.mood:GetWidth()") + 18
+    assert lx + wow.eval(f"{f}.lang:GetWidth()") <= 600 - 10
+    # a tab is its view
+    wow.execute(f"{tabs}:Part('never'):Click()")
+    assert wow.eval(f"{ed}.View()") == "never" and wow.eval(f"{tabs}.spec.value") == "never"
+    assert wow.eval(f"{foot}:GetText()").startswith("These lines are never offered")
+    # a head too narrow for the tabs: they take a row, and the list moves under it
+    wow.execute(
+        f"local w = {win}; w.frame:SetWidth(360); w.head:SetWidth(358); w.content:SetWidth(358);"
+        " w.headBar:Layout()"
+    )
+    assert wow.eval(f"{ed}.bar.row") is True and wow.eval(f"{ed}.bar:Room()") == 38
+    assert wow.eval(f"select(5, {win}.list:GetParent():GetPoint(1))") == -38
+    assert not errors(wow)
+
+
+def test_courtesy_works_with_core_alone(wow: WowRuntime):
+    """W9's gate (ADR 0083): the app loads and works with Core alone: no Gestures, no Data."""
+    wow.start("Bastians_Core", "Bastians_Courtesy")
+    wow.run_frames(5)
+    assert wow.eval(f"{MOD}:IsEnabled()") is True
+    assert wow.eval("Bastians:GetModule('Gestures')") is None
+    wow.execute(f"{MOD}.Editor.Open()")
+    assert wow.eval(f"{MOD}.Editor.win:IsShown()") is True
+    assert not errors(wow)

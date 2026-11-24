@@ -10,7 +10,7 @@ type 88568 = WoW Forever) for every term, sorted by total downloads, and prints 
 id, downloads, created, updated, name and summary. `--describe` prints a project's description as
 text (its HTML stripped) for reading what it really does. `--json` keeps the rows. The key is the
 Core API key tools/curseforge.py reads (CF_CORE_API_KEY, else the CURSEFORGE-API-FOR-STUDIOS line
-of ~/.curseforge/.secrets); it is never printed and never stored in the repository.
+of ~/.secrets/curseforge.env); it is never printed and never stored in the repository.
 """
 
 from __future__ import annotations

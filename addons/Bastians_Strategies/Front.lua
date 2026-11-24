@@ -1,4 +1,5 @@
--- Bastian's Book: the front table, the category pages and Your record (book.md "The pages"):
+-- Bastian's Book: the front table and the category pages (book.md "The pages"; Your record
+-- was a list here until 24.11.2026, it is the diary's spread now, Diary.lua):
 -- large picture tiles in Core's virtual list (only the rows in sight have frames) under the
 -- chapter's filter, every chip a click.
 local _, ns = ...
@@ -18,8 +19,6 @@ Front.TILE_MIN = 320 -- a tile's least width: the columns follow the window
 Front.COLS_MAX = 4
 Front.GAP = 11 -- between two tiles (book-look.md section 6; ~~18~~ until 17.11.2026)
 Front.PIC = 0.5 -- a tile's picture, the card's whole width: the drawings' own 2:1
-Front.HERO_RATIO = 2.6 -- the hero: its width over its height, the drawing cut to it (Picture.Cover)
-Front.HERO_MIN, Front.HERO_MAX = 220, 480
 Front.BODY = 130 -- a tile's words and chips under its picture
 Front.ZONES_SHOWN = 10 -- a continent's zone chips before "more"
 -- the filter band in the concept board's numbers (docs/addons/book-look.md section 5)
@@ -120,6 +119,11 @@ local function sourceName(v)
   return wordsOf().source[v] or tostring(v)
 end
 
+-- The words for a way to get something ("a drop"), by the filter's value (the list's rows).
+function Front.SourceWords()
+  return wordsOf().source
+end
+
 local function valueLabel(key, v)
   if key == "chapter" then
     return Front.ChapterName(v)
@@ -130,6 +134,8 @@ local function valueLabel(key, v)
   end
   return wordsOf().value[v] or tostring(v)
 end
+
+Front.ValueLabel = valueLabel -- a kind's or a chapter's word, for the Atlas's band and cards
 
 local function facetLabel(key)
   return wordsOf().facet[key] or key
@@ -245,6 +251,10 @@ function Front.Ctx()
   local continent, wx, wy, map = B.Coords.Player()
   return {
     isDone = Record.IsDone,
+    doneAt = function(id) -- the time of this character's mark (the list's sort by "have")
+      local mine = Record.Entry(id)
+      return mine and mine.at or nil
+    end,
     zoneOf = zoneOf,
     itemName = itemName,
     level = UnitLevel and UnitLevel("player") or nil,
@@ -263,6 +273,28 @@ end
 
 function Front.ResetFilters()
   filters = {}
+end
+
+-- A shelf's view (book.md "The views", E4): tiles or a list, the reader's choice kept per chapter
+-- and character (`char.views`); Collections opens as a list.
+local function views()
+  local char = ns.mod and ns.mod.db and ns.mod.db.char or nil
+  if not char then
+    return nil
+  end
+  char.views = char.views or {} -- a character saved before round 4's list has none
+  return char.views
+end
+
+function Front.View(chapter)
+  return Shelf.ViewOf(views(), chapter or "all")
+end
+
+function Front.SetView(chapter, v)
+  local saved = views()
+  if saved and Shelf.VIEWS[v] then
+    saved[chapter or "all"] = v
+  end
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -330,6 +362,7 @@ local function openEntry(e)
     show({ kind = "wonder", id = e.id })
   end
 end
+Front.OpenEntry, Front.Show = openEntry, show
 
 -- A chip of a tile filters its chapter's page (book.md "The category page").
 local function chipClick(e, chip)
@@ -361,34 +394,25 @@ Front.SHADOW_DROP = 4 -- px it falls lower than the card
 Front.DECKLE_H = 12 -- the torn edge at a picture's foot
 Front.CHIP_H = 18 -- a chip on a card
 
--- The shadow under the card's paper (book-look.md section 6).
-local function shadow(t)
-  S.shadow(t, Front.SHADOW_SPREAD, Front.SHADOW_DROP)
-end
-
--- A card's paper; under the mouse its edge in the book's gold. Drawn plain again on every fill:
--- the list hands a card on under a resting mouse.
-local function plate(t, hot)
+-- A card's paper, at rest. Drawn plain again on every fill: the list hands a card on under a
+-- resting mouse. ~~Under the mouse its edge in the book's gold~~ (until 23.11.2026): a tile is an
+-- object now (R4.6, Core's S.object): it rises, its shadow grows, its edge is lit 2 wide.
+local function plate(t)
   S.tint(t.face, S.C.folioPaper)
-  S.setEdges(t.edges, S.C.folioGold, hot and 1 or 0)
+  t:SetObjectState("rest")
 end
 Front.Plate = plate
 
+Front.RADIUS = 5 -- a tile's corners (book-look.md section 6)
+
 local function paperFrame(parent)
   local t = CreateFrame("Button", nil, parent)
-  shadow(t)
-  t.face = S.roundFill(t, S.C.folioPaper, "radiusSmall")
-  t.edges = S.roundEdges(t, S.C.folioGold, "radiusSmall")
+  t.face = S.roundFill(t, S.C.folioPaper, Front.RADIUS)
+  S.object(t, { radius = Front.RADIUS })
   t:SetScript("OnClick", function(self)
     if self.entry then
       openEntry(self.entry)
     end
-  end)
-  t:SetScript("OnEnter", function(self)
-    plate(self, true)
-  end)
-  t:SetScript("OnLeave", function(self)
-    plate(self, false)
   end)
   return t
 end
@@ -476,7 +500,7 @@ Front.SmallCaps = lower
 local function fillTile(t, e, w, h, ctx, extra)
   t.entry = e
   t:SetSize(w, h)
-  plate(t, false)
+  plate(t)
   local picH = floor(w * Front.PIC)
   Picture.Draw(t.pic, e, w, picH)
   t.tear:ClearAllPoints()
@@ -499,7 +523,11 @@ local function fillTile(t, e, w, h, ctx, extra)
     t.alt:ClearAllPoints()
     t.alt:SetPoint("BOTTOMLEFT", t, "TOPLEFT", 10, -picH + Front.DECKLE_H + 4)
   end
-  local sealed = (e.kind == "chain" or e.kind == "unsolved") and not Record.IsOpened(e.id)
+  -- a done wonder wears the stamp and its date at the picture's top right (R4.11); it takes the
+  -- seal's corner: what is done needs no seal
+  local mine = not e.page and Record.Entry(e.id) or nil
+  Picture.Stamp(t, t, mine)
+  local sealed = (e.kind == "chain" or e.kind == "unsolved") and not Record.IsOpened(e.id) and not mine
   t.seal:SetShown(sealed)
   if sealed then
     S.tint(t.seal, S.C.folioGold)
@@ -576,6 +604,7 @@ local function tileSize(width)
 end
 
 local KINDS = {}
+Front.KINDS = KINDS -- the front table's kinds join it (Cabinet.lua)
 
 KINDS.head = {
   make = function(parent)
@@ -683,70 +712,6 @@ KINDS.result = {
   end,
 }
 
--- The hero's height: the window's width over HERO_RATIO, within its bounds; the drawing is cut to
--- it, never stretched (Picture.Cover).
-function Front.HeroHeight(width)
-  return max(Front.HERO_MIN, min(Front.HERO_MAX, floor(width / Front.HERO_RATIO)))
-end
-
--- The hero: the picture the whole width, its words on a fade into the dark at its foot (the
--- concept board's front table), ~~in a dark box~~.
-KINDS.hero = {
-  make = function(parent)
-    local f = paperFrame(parent)
-    f.pic = Picture.New(f)
-    f.pic:SetPoint("TOPLEFT", f, "TOPLEFT", 0, 0)
-    f.shade = S.fade(f, 7, "folioShade")
-    f.shade:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 0, 0)
-    f.shade:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", 0, 0)
-    f.cap = CreateFrame("Frame", nil, f)
-    f.cap:SetFrameLevel(f:GetFrameLevel() + 8)
-    f.hook = bookText(f.cap, 13, S.C.folioShadeText, "bookItalic", true)
-    f.hook:SetJustifyV("BOTTOM")
-    f.hook:SetPoint("BOTTOMLEFT", f.cap, "BOTTOMLEFT", 0, 0)
-    f.title = bookText(f.cap, 18, S.C.folioShadeText, "bookDisplay")
-    f.title:SetPoint("BOTTOMLEFT", f.hook, "TOPLEFT", 0, 6)
-    f.kind = bookText(f.cap, 11, S.C.folioGold, "bookCaps")
-    f.kind:SetPoint("BOTTOMLEFT", f.title, "TOPLEFT", 0, 5)
-    f.ribbon = CreateFrame("Frame", nil, f)
-    f.ribbon:SetFrameLevel(f:GetFrameLevel() + 9)
-    f.ribbon.fill = S.fill(f.ribbon, S.C.folioSeal, "BACKGROUND")
-    f.ribbon.text = bookText(f.ribbon, 11, S.C.folioSealText, "bookCaps")
-    f.ribbon.text:SetPoint("CENTER")
-    return f
-  end,
-  fill = function(f, item, width)
-    local h = Front.HeroHeight(width)
-    if not f.vlKind then
-      return h
-    end
-    local e, ctx = item.entry, item.ctx
-    f.entry = e
-    plate(f, false)
-    Picture.Draw(f.pic, e, width, h)
-    f.shade:SetHeight(min(h, max(140, floor(h * 0.62))))
-    local capW = min(width - 48, max(300, floor(width * 0.55)))
-    f.cap:ClearAllPoints()
-    f.cap:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 24, 20)
-    f.cap:SetSize(capW, 120)
-    f.kind:SetWidth(capW)
-    f.kind:SetText(lower(Front.KindLabel(e)))
-    f.title:SetWidth(capW)
-    f.title:SetText(e.title)
-    f.hook:SetSize(capW, 34)
-    f.hook:SetText(e.hook or e.tale or "")
-    local new = Shelf.IsNew(e, ctx.today)
-    f.ribbon:SetShown(new)
-    if new then
-      f.ribbon.text:SetText(lower(string.format(L["new, %s"], e.added or "")))
-      f.ribbon:SetSize(f.ribbon.text:GetStringWidth() + 16, 19)
-      f.ribbon:ClearAllPoints()
-      f.ribbon:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -14)
-    end
-    return h
-  end,
-}
-
 KINDS.tiles = {
   make = function(parent)
     local f = CreateFrame("Frame", nil, parent)
@@ -764,8 +729,7 @@ KINDS.tiles = {
         t = newTile(f)
         f.tiles[i] = t
       end
-      t:ClearAllPoints()
-      t:SetPoint("TOPLEFT", f, "TOPLEFT", (i - 1) * (w + Front.GAP), 0)
+      t:Rest("TOPLEFT", f, "TOPLEFT", (i - 1) * (w + Front.GAP), 0)
       fillTile(t, e, w, h, item.ctx, item.extra and item.extra(e) or nil)
     end
     for i = #item.entries + 1, #f.tiles do
@@ -822,82 +786,29 @@ end
 -- The filter flows in groups: a group is
 -- its label and its chips; it starts a row with its label in the left column, or follows the
 -- group before on the same row after a thin line when it fits there. A row is as high as a chip,
--- the level's as high as its slider; everything in it sits on its middle.
-local function label(state, text, x)
-  state.n = state.n + 1
-  local fs = view.labels[state.n]
-  if not fs then
-    fs = Front.BookText(view.filters, 11, S.C.dim, "bookCaps")
-    view.labels[state.n] = fs
-  end
-  S.ink(fs, S.Tok(view.filters, "dim"))
-  fs:ClearAllPoints()
-  fs:SetPoint("LEFT", view.filters, "TOPLEFT", x, -(state.y + state.rowH / 2))
-  fs:SetText(Front.SmallCaps(text)) -- small capitals: the face sets them
-  fs:Show()
-  local w = fs:GetStringWidth()
-  return (w and w > 0) and w or (#text * 6)
-end
-
+-- the level's as high as its slider; everything in it sits on its middle. Core's band lays it
+-- out (B.UI.Band, W5 of plan-suite-waves.md; the book drew it itself until 23.11.2026).
 local function newRow(state, h)
-  if state.started then
-    state.y = state.y + state.rowH + Front.ROW_GAP
-  end
-  state.rowH = h or chipHeight()
-  state.x = Front.BAND_SIDE + Front.LABEL_W
-  state.started = true
+  state:NewRow(h)
 end
 
--- A thin line between two groups on one row.
 local function separator(state)
-  state.s = state.s + 1
-  local line = view.seps[state.s]
-  if not line then
-    line = S.fill(view.filters, S.C.line, "ARTWORK")
-    view.seps[state.s] = line
-  end
-  S.tint(line, S.Tok(view.filters, "line"))
-  local x = state.x - CHIP_GAP + Front.SEP_PAD
-  line:ClearAllPoints()
-  line:SetSize(1, Front.SEP_H)
-  line:SetPoint("LEFT", view.filters, "TOPLEFT", x, -(state.y + state.rowH / 2))
-  line:Show()
-  state.x = x + 1 + Front.SEP_PAD
+  state:Separator()
 end
 
--- Whether `need` px still fit on the row after a separator.
 local function fits(state, need)
-  return state.started and state.x + 2 * Front.SEP_PAD + need <= state.right
+  return state:Fits(need)
 end
 
--- Opens a group; `need` the room its first chips take, so a group never begins at a row's end.
--- `own`: on a row of its own, `h` high.
 local function group(state, text, own, need, h)
-  if own or not fits(state, #text * 6 + 8 + (need or 80)) then
-    newRow(state, h)
-    local w = label(state, text, Front.BAND_SIDE)
-    state.x = max(state.x, Front.BAND_SIDE + w + 8) -- a long label pushes its chips
-    return
-  end
-  separator(state)
-  state.x = state.x + label(state, text, state.x) + 8
+  state:Group(text, own, need, h)
 end
 
--- How far under a row's top a part of height `h` sits to stand on the row's middle, in whole
--- units. Rounded, not cut: the game answers a chip's 22 as 22.00002, and cutting put every chip
--- one unit too high (the band's padding 9 for 10, measured in Forever 17.11.2026; R4.14).
-function Front.Centre(rowH, h)
-  return floor((rowH - h) / 2 + 0.5)
-end
+-- How far under a row's top a part of height `h` sits to stand on the row's middle (Core's).
+Front.Centre = B.UI.BandClass.Centre
 
--- Puts `frame` (w x h) on the row, on a new one when it does not fit.
 local function place(state, frame, w, h)
-  if state.x + w > state.right and state.x > Front.BAND_SIDE + Front.LABEL_W then
-    newRow(state)
-  end
-  frame:ClearAllPoints()
-  frame:SetPoint("TOPLEFT", view.filters, "TOPLEFT", state.x, -(state.y + Front.Centre(state.rowH, h)))
-  state.x = state.x + w + CHIP_GAP
+  state:Place(frame, w, h)
 end
 
 local function filterPill(state, spec)
@@ -1076,6 +987,8 @@ local function newSwitch(parent)
   return b
 end
 
+Front.NewSwitch = newSwitch -- the Atlas's band has the same switch (R4.12)
+
 -- Quiet words with a line under them: a link.
 local function newLink(parent)
   local b = CreateFrame("Button", nil, parent)
@@ -1104,6 +1017,8 @@ local function newLink(parent)
   return b
 end
 
+Front.NewLink = newLink
+
 local function toggleFacet(f, key, value)
   local chosen = f.facets[key] or {}
   chosen[value] = not chosen[value] or nil
@@ -1119,15 +1034,8 @@ end
 -- leaves out.
 local function layFilters(chapter, all, ctx, width, hidden)
   local f = Front.Filter(chapter)
-  local state = {
-    x = Front.BAND_SIDE + Front.LABEL_W,
-    y = Front.BAND_TOP,
-    rowH = chipHeight(),
-    right = width - Front.BAND_SIDE,
-    n = 0,
-    p = 0,
-    s = 0,
-  }
+  local state = view.flow:Begin(width)
+  state.p = 0
   -- where: the continents; after a line the chosen continent's zones while they fit on the row
   -- (else on a row of their own: every continent's zones at once were too many chips); after a
   -- line the zone you stand in
@@ -1322,18 +1230,30 @@ local function layFilters(chapter, all, ctx, width, hidden)
       })
     end
   end
-  -- hide done: a switch at the row's right end; the count of the hidden ones leads to Your record
+  -- hide done: a switch at the row's right end; the count of the hidden ones leads to Your diary
   local hide = view.hide
   if not hide then
     hide = newSwitch(view.filters)
     view.hide = hide
   end
-  hide.tip = L["What you did, or the game shows done, leaves the shelf. Your record keeps it."]
+  hide.tip = L["What you did, or the game shows done, leaves the shelf. Your diary keeps it."]
   hide:SetScript("OnClick", function()
     f.showDone = not f.showDone
     rerender()
   end)
   local total = hide:Set(not f.showDone, L["Hide done"])
+  -- the view's switch (R4.10): two pictograms left of Hide done, the chosen one in gold
+  local switch = view.viewSwitch
+  if not switch then
+    switch = ns.List.NewSwitch(view.filters)
+    view.viewSwitch = switch
+  end
+  switch:Set(Front.View(chapter), function(v)
+    Front.SetView(chapter, v)
+    rerender()
+  end)
+  local lead = switch:GetWidth() + Front.SEP_PAD
+  total = total + lead
   local done = view.done
   if (hidden or 0) > 0 then
     if not done then
@@ -1343,7 +1263,7 @@ local function layFilters(chapter, all, ctx, width, hidden)
     done:SetScript("OnClick", function()
       show({ kind = "record" })
     end)
-    total = total + 8 + done:Set(string.format(L["%d done, in Your record"], hidden))
+    total = total + 8 + done:Set(string.format(L["%d done, in Your diary"], hidden))
     done:Show()
   elseif done then
     done:Hide()
@@ -1352,17 +1272,18 @@ local function layFilters(chapter, all, ctx, width, hidden)
     newRow(state)
   end
   local mid = -(state.y + state.rowH / 2)
+  switch:ClearAllPoints()
+  switch:SetPoint("LEFT", view.filters, "TOPLEFT", state.right - total, mid)
+  switch:Show()
   hide:ClearAllPoints()
-  hide:SetPoint("LEFT", view.filters, "TOPLEFT", state.right - total, mid)
+  hide:SetPoint("LEFT", view.filters, "TOPLEFT", state.right - total + lead, mid)
   hide:Show()
   if done and done:IsShown() then
     done:ClearAllPoints()
     done:SetPoint("RIGHT", view.filters, "TOPLEFT", state.right, mid)
   end
-  hideFrom(view.labels, state.n)
   hideFrom(view.pills, state.p)
-  hideFrom(view.seps, state.s)
-  return state.y + state.rowH + Front.BAND_FOOT
+  return state:End()
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -1380,55 +1301,32 @@ local function rows(out, found, width, ctx, extra)
   end
 end
 
-local function frontItems(all, ctx, width)
+-- The front table (book.md "The front table", E3): the cabinet of seven tiles, Bastian's note,
+-- one entrance per chapter. ~~The hero, New on the table and a strip of tiles per chapter~~
+-- (until 23.11.2026, W6).
+local function frontItems(all, ctx)
   local front = Shelf.Front(all, ctx)
   local out = {}
-  if not front.hero then
+  if not front.main and not front.six[1] then
     out[1] = { kind = "note", text = L["The book has no pages yet: the data pack is not loaded."] }
     return out
   end
-  out[#out + 1] = { kind = "hero", entry = front.hero, ctx = ctx }
+  out[#out + 1] = { kind = "cabinet", front = front, ctx = ctx }
   out[#out + 1] = {
-    kind = "head",
-    title = L["New on the table"],
-    note = L["what came in last, and what the day turned up"],
-    acts = {
-      {
-        icon = "rare",
-        label = L["Surprise me"],
-        tip = L["A wonder you have not done yet, at random."],
-        onClick = function()
-          local e = Shelf.Surprise(all, ctx, GetTime and GetTime() * 1000 or 0)
-          if e then
-            openEntry(e)
-          end
-        end,
-      },
+    kind = "bnote",
+    text = ns.Cabinet.Note(ctx),
+    act = {
+      label = L["Surprise me"],
+      tip = L["A wonder you have not done yet, at random."],
+      onClick = function()
+        local e = Shelf.Surprise(all, ctx, GetTime and GetTime() * 1000 or 0)
+        if e then
+          openEntry(e)
+        end
+      end,
     },
   }
-  rows(out, front.new, width, ctx)
-  for _, strip in ipairs(front.strips) do
-    local chapter = strip.chapter
-    out[#out + 1] = {
-      kind = "head",
-      title = Front.ChapterName(chapter),
-      note = string.format(L["%d to find"], strip.total),
-      acts = {
-        {
-          label = L["all of them"],
-          onClick = function()
-            show({ kind = "shelf", id = chapter })
-          end,
-        },
-      },
-    }
-    local cols = columns(width)
-    local some = {}
-    for i = 1, min(cols, #strip.entries) do
-      some[i] = strip.entries[i]
-    end
-    rows(out, some, width, ctx)
-  end
+  out[#out + 1] = { kind = "entrances", front = front, ctx = ctx }
   return out
 end
 
@@ -1502,81 +1400,22 @@ local function shelfItems(chapter, f, found, ctx, width)
     out[#out + 1] =
       { kind = "note", text = L["Nothing here with this filter. Clear a chip, or all of them."] }
   end
-  rows(out, found, width, ctx)
-  return out
-end
-
-local NOTHING_DONE = "Nothing done yet on this character. Mark a wonder done, or the book finds it"
-  .. " in your quest history, bags and titles."
-
-local function recordItems(ctx, width)
-  local out = {}
-  local marks = ns.mod and ns.mod.db and ns.mod.db.char.bookmarks or {}
-  local kept = {}
-  for _, id in ipairs(marks) do
-    local e = Front.Find(id)
-    if e then
-      kept[#kept + 1] = e
-    end
-  end
-  out[#out + 1] =
-    { kind = "head", title = L["Kept for later"], note = string.format(L["%d bookmarks"], #kept) }
-  if #kept == 0 then
-    out[#out + 1] = { kind = "note", text = L["Bookmark a page to keep it here."] }
-  end
-  rows(out, kept, width, ctx)
-  local lists = Record.Lists()
-  local byChapter = {}
-  for _, d in ipairs(lists.mine) do
-    local e = Front.Find(d.id)
-    if e then
-      byChapter[e.chapter] = byChapter[e.chapter] or {}
-      table.insert(byChapter[e.chapter], e)
-    end
-  end
-  local any = false
-  for _, chapter in ipairs(Shelf.CHAPTERS) do
-    local done = byChapter[chapter]
-    if done then
-      any = true
-      out[#out + 1] = {
-        kind = "head",
-        title = string.format(L["Done: %s"], Front.ChapterName(chapter)),
-        note = string.format(L["%d by %s"], #done, (Record.Mine() or {}).name or UnitName("player") or ""),
-      }
-      rows(out, done, width, ctx, function(e)
-        local d = Record.Entry(e.id) or {}
-        return {
-          label = (d.how == "found" and L["found, not done yet?"]) or L["Not done yet"],
-          onClick = function()
-            Record.Unmark(e.id)
-            rerender()
-          end,
-        }
-      end)
-    end
-  end
-  if not any then
-    out[#out + 1] = { kind = "head", title = L["Done"] }
+  if Front.View(chapter) == "list" and #found > 0 then
+    -- the list (R4.10): the columns' heads sort, but a shelf in one fixed order (Gold)
+    local fixed = Shelf.FIXED_SORT[chapter]
     out[#out + 1] = {
-      kind = "note",
-      text = L[NOTHING_DONE],
+      kind = "listhead",
+      sort = not fixed and f.sort or nil,
+      onSort = not fixed and function(sort)
+        f.sort = sort
+        rerender()
+      end or nil,
     }
-  end
-  local alts = {}
-  for _, a in ipairs(lists.alts) do
-    local e = Front.Find(a.id)
-    if e then
-      alts[#alts + 1] = e
+    for _, e in ipairs(found) do
+      out[#out + 1] = { kind = "row", entry = e, ctx = ctx }
     end
-  end
-  if alts[1] then
-    out[#out + 1] = {
-      kind = "head",
-      title = L["Your other characters"],
-      note = string.format(L["%d done by them, not by you"], #alts),
-    }
-    rows(out, alts, width, ctx)
+  else
+    rows(out, found, width, ctx)
   end
   return out
 end
@@ -1603,6 +1442,8 @@ local function remember(items)
       for _, e in ipairs(item.entries) do
         add(e)
       end
+    elseif item.kind == "row" then
+      add(item.entry) -- the list's rows: the wonder's page turns to its neighbours as on tiles
     end
   end
 end
@@ -1648,7 +1489,11 @@ function Front.Build(host, top)
   view.rule:SetPoint("BOTTOMLEFT", view.filters, "BOTTOMLEFT", 0, 0)
   view.rule:SetPoint("BOTTOMRIGHT", view.filters, "BOTTOMRIGHT", 0, 0)
   view.rule:SetHeight(1)
-  view.labels, view.pills, view.seps = {}, {}, {}
+  view.pills = {}
+  -- Core's band lays the groups out; its ground and rule are the book's own two textures above
+  -- (the dark table on a dark theme)
+  view.flow = B.UI.Band(view, { frame = view.filters, ground = false })
+  view.labels, view.seps = view.flow.labels, view.flow.seps
   view.body = CreateFrame("Frame", nil, view)
   view.body:SetPoint("TOPLEFT", view.filters, "BOTTOMLEFT", 0, 0)
   view.body:SetPoint("BOTTOMRIGHT", view, "BOTTOMRIGHT", 0, 0)
@@ -1679,7 +1524,7 @@ function Front.Build(host, top)
   return view
 end
 
--- Renders `entry` ({ kind = "front" | "shelf" | "record", id }) -> the page's title.
+-- Renders `entry` ({ kind = "front" | "shelf", id }) -> the page's title.
 function Front.Render(entry)
   current = entry
   local all = Front.Entries()
@@ -1706,17 +1551,15 @@ function Front.Render(entry)
     if view.hide then
       view.hide:Hide()
     end
+    if view.viewSwitch then
+      view.viewSwitch:Hide()
+    end
     if view.done then
       view.done:Hide()
     end
     view.filters:SetHeight(1)
-    if entry.kind == "record" then
-      items = recordItems(ctx, listW)
-      title = L["Your record"]
-    else
-      items = frontItems(all, ctx, listW)
-      title = L["The front table"]
-    end
+    items = frontItems(all, ctx)
+    title = L["The front table"]
   end
   remember(items)
   list:SetItems(items)

@@ -1,17 +1,21 @@
 """The book's pictures (content/strategies/art/README.md): AHSync makes them with the image model
 and hands them over in its export (`art/<page id>.jpg`); this turns each one into what ships:
 
-- the game's texture: cut to 2:1 from the middle, 1024 x 512 (~~512 x 256~~ until 16.11.2026: the
-  front table's hero is a window wide), BLP2 with DXT1 and mipmaps (about 350 KB), in
-  `<packs>/Bastians_Data_Strategies/Generated/Art/<page id>.blp`;
+- the game's texture: cut to 2:1 from the middle, BLP2 with DXT1 and mipmaps, in
+  `<packs>/Bastians_Data_Strategies/Generated/Art/<id>.blp`. 2,048 x 1,024 (about 1.4 MB) for a
+  picture drawn at 2K, 1,024 x 512 (about 350 KB) for a smaller one (book-look.md 10.6; ~~always
+  1024 x 512~~ until 23.11.2026, ~~512 x 256~~ until 16.11.2026);
 - the website's picture: the same cut, 1024 x 512 JPEG (tools/diary_site.py).
 
 Usage: python tools/book_art.py <art folder> [--packs build/data/packs]
 
-Only pictures named after a page of content/strategies are taken, and the book's own pages'
-pictures from content/strategies/art/front.
-Deterministic: the same picture gives the same bytes. Needs Pillow (the dev dependencies); the
-pipeline itself decodes no images.
+Only pictures named after a page of content/strategies or after a drawing of round 4 are taken
+(a wonder's id in `[scenes]` of wonders.toml, its colon written as a dash: `camp-279938.jpg`;
+the chapters' entrances wait for a part that shows them), and the book's own pages' pictures from
+content/strategies/art/front.
+Deterministic: the same picture gives the same bytes, with or without numpy (it only makes the
+blocks faster: a 2K texture in about a second, not half a minute). Needs Pillow (the dev
+dependencies); the pipeline itself decodes no images.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import argparse
 import io
 import struct
 import sys
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +42,10 @@ WHOLE = {"world": (2048, 1024)}
 ART_DIR = Path("Generated") / "Art"
 SOURCES = (".jpg", ".png")
 GAME_SIZE = (1024, 512)  # ~~(512, 256)~~ until 16.11.2026 (ADR 0024, point 4)
+# a picture drawn at 2K (round 4, D5): its cut is at least this wide, and ships this large
+LARGE_SIZE = (2048, 1024)
+BLOCKS = 1 << 15  # numpy's blocks per pass (about 25 MB of distances)
+UNPLACED = "chapter:"  # drawn in round 4, shown nowhere yet (scene_ids)
 WEB_SIZE = (1024, 512)
 JPEG_QUALITY = 84
 TRIM = 0.04  # taken off each edge before the 2:1 cut
@@ -45,6 +54,29 @@ BLP_PALETTE = b"\0" * 1024  # unused by DXT, part of the BLP2 header
 
 def page_ids(content: Path = CONTENT) -> set[str]:
     return {p.stem for p in content.glob("*/*.md") if p.parent.name != "art"}
+
+
+def art_name(wid: str) -> str:
+    """A drawing's file name for a wonder's or a chapter's id: the colon as a dash (the pipeline
+    marks `art` by the same name, bastians_build.book.art_slug; the book asks for it so)."""
+    return wid.replace(":", "-")
+
+
+def scene_ids(content: Path = CONTENT) -> set[str]:
+    """The drawings of round 4 by their file names: `[scenes]` of wonders.toml. Without the five
+    chapters' entrances (`chapter:<name>`): the front table's entrances are paper cards (W6, the
+    book's board) and no part of the book draws their pictures yet, so they do not ship."""
+    path = content / "wonders.toml"
+    if not path.is_file():
+        return set()
+    with path.open("rb") as fh:
+        scenes = tomllib.load(fh).get("scenes", {})
+    return {art_name(wid) for wid in scenes if not wid.startswith(UNPLACED)}
+
+
+def art_ids(content: Path = CONTENT) -> set[str]:
+    """Every picture name the book ships: its pages' and round 4's drawings'."""
+    return page_ids(content) | scene_ids(content)
 
 
 def pictures(art: Path, ids: set[str]) -> dict[str, Path]:
@@ -131,8 +163,59 @@ def dxt1_block(pixels: list[tuple[int, int, int]]) -> bytes:
     return struct.pack("<HHI", c0, c1, bits)
 
 
-def dxt1(image) -> bytes:
-    """An RGB image as DXT1 blocks (edges repeated where the size is not a multiple of four)."""
+def _dxt1_numpy(image) -> bytes | None:
+    """`dxt1` with numpy, block for block the same bytes (tested); None without numpy."""
+    try:
+        import numpy as np
+    except ImportError:
+        return None
+    a = np.asarray(image, dtype=np.int32)
+    h, w = a.shape[:2]
+    bh, bw = -(-h // 4), -(-w // 4)
+    a = np.pad(a, ((0, bh * 4 - h), (0, bw * 4 - w), (0, 0)), mode="edge")
+    blocks = a.reshape(bh, 4, bw, 4, 3).transpose(0, 2, 1, 3, 4).reshape(bh * bw, 16, 3)
+
+    def pack(c):
+        return (
+            ((c[:, 0] * 31 + 127) // 255) << 11
+            | ((c[:, 1] * 63 + 127) // 255) << 5
+            | ((c[:, 2] * 31 + 127) // 255)
+        )
+
+    def rgb(c):
+        return np.stack(
+            [((c >> 11) & 31) * 255 // 31, ((c >> 5) & 63) * 255 // 63, (c & 31) * 255 // 31],
+            axis=1,
+        )
+
+    shifts = (2 * np.arange(16)).astype(np.uint64)
+    out = np.empty(bh * bw, dtype=[("c0", "<u2"), ("c1", "<u2"), ("bits", "<u4")])
+    for at in range(0, bh * bw, BLOCKS):
+        part = blocks[at : at + BLOCKS]
+        lo, hi = part.min(axis=1), part.max(axis=1)
+        inset = (hi - lo) // 16
+        c0, c1 = pack(hi - inset), pack(lo + inset)
+        c0, c1 = np.maximum(c0, c1), np.minimum(c0, c1)
+        first, second = rgb(c0), rgb(c1)
+        palette = np.stack(
+            [first, second, (2 * first + second) // 3, (first + 2 * second) // 3], axis=1
+        )
+        far = ((part[:, :, None, :] - palette[:, None, :, :]) ** 2).sum(axis=3)
+        nearest = far.argmin(axis=2).astype(np.uint64)  # the first of equals, as the loop's `<`
+        bits = (nearest << shifts).sum(axis=1)
+        out["c0"][at : at + BLOCKS] = c0
+        out["c1"][at : at + BLOCKS] = c1
+        out["bits"][at : at + BLOCKS] = np.where(c0 == c1, 0, bits)
+    return out.tobytes()
+
+
+def dxt1(image, fast: bool = True) -> bytes:
+    """An RGB image as DXT1 blocks (edges repeated where the size is not a multiple of four).
+    `fast`: with numpy where it is installed; the bytes are the same either way."""
+    if fast:
+        done = _dxt1_numpy(image)
+        if done is not None:
+            return done
     w, h = image.size
     px = image.load()
     out = bytearray()
@@ -169,14 +252,21 @@ def blp_dxt1(image) -> bytes:
     return head + b"".join(levels)
 
 
+def game_size(width: int) -> tuple[int, int]:
+    """The texture's size for a cut `width` px wide: 2,048 x 1,024 for a picture drawn at 2K (its
+    cut is about 2,500 wide), 1,024 x 512 for the first pictures (about 1,270): none is enlarged."""
+    return LARGE_SIZE if width >= LARGE_SIZE[0] else GAME_SIZE
+
+
 def game_texture(path: Path) -> bytes:
-    """The game's texture: 1024 x 512 BLP2 (WHOLE: its own size, uncut), DXT1 with mipmaps."""
+    """The game's texture: BLP2 at `game_size` (WHOLE: its own size, uncut), DXT1 with mipmaps."""
     from PIL import Image
 
     if path.stem in WHOLE:
         image = Image.open(path).convert("RGB")
         return blp_dxt1(image.resize(WHOLE[path.stem], Image.Resampling.LANCZOS))
-    return blp_dxt1(cut(path).resize(GAME_SIZE, Image.Resampling.LANCZOS))
+    image = cut(path)
+    return blp_dxt1(image.resize(game_size(image.size[0]), Image.Resampling.LANCZOS))
 
 
 # ---- installing ---------------------------------------------------------------------------------
@@ -188,7 +278,7 @@ def install(
     """Writes the game's textures of the pictures in `art` (the pages') and in `front` (the book's
     own pages, FRONT_IDS) into `packs`, and removes those of pictures that are gone. -> the ids
     with a texture."""
-    ids = page_ids() if ids is None else ids
+    ids = art_ids() if ids is None else ids
     found = pictures(art, ids) if art is not None else {}
     if front is not None:
         found.update(pictures(front, set(FRONT_IDS)))

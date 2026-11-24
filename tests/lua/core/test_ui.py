@@ -68,7 +68,7 @@ def test_window_persists_place_and_closes_on_escape(core: WowRuntime):
         core.eval("win:IsShown()") is True
         and core.eval("win.frame:GetFrameStrata()") == "FULLSCREEN_DIALOG"
     )
-    assert core.eval("win.title:GetText()") == "Test"
+    assert core.eval("win.title:GetText()") == "test"  # a low head: small capitals (W5)
     core.execute("win.head:GetScript('OnDragStop')(win.head)")
     assert core.eval("winDB.size[1]") == 300 and core.eval("winDB.pos ~= nil") is True
     core.execute("Mock.PressEscape()")
@@ -998,6 +998,40 @@ def test_a_long_worth_never_wraps_over_the_rows(app: WowRuntime):
     assert not f2.value.IsShown(f2.value) and f2.worth.IsShown(f2.worth)
     assert "unlocks 2" in f2.worth.GetText(f2.worth)
     assert f2.GetHeight(f2) == 34 + 24 + 2  # two worth lines at this width
+    # a provider may name a short line for the value column (W9: a quest's coin, XP and best
+    # reward); the lines under a two-line row keep the whole worth
+    app.execute(
+        """
+        local m = Bastians:GetModule("TestApp")
+        Bastians:RegisterWorth(m, { types = { "quest" }, priority = 90, worth = function(ref)
+          return { text = "1s 25c - 480 XP - +150 Stormwind - +75 Ironforge - reward 50s 00c",
+            short = "1s 25c - 480 XP - reward 50s 00c" }
+        end })
+        one:Refresh(); two:Refresh()
+        """
+    )
+    app.run_frames(2)
+    assert f1.value.GetText(f1.value) == "1s 25c - 480 XP - reward 50s 00c"
+    assert "+75 Ironforge" in f2.worth.GetText(f2.worth)
+    # ... while the whole fits its two lines: a narrower row would need a third, and the client
+    # cut it (the windows probe, 24.11.2026, the Browser at 1,100), so it shows the short line
+    app.execute(
+        """
+        host3 = CreateFrame("Frame", nil, UIParent); host3:SetSize(200, 200)
+        three = Bastians.UI.Tree(host3, { twoLine = true })
+        three.scroll:SetSize(200, 200)
+        three:SetRows({ { text = "Quest 3", title = "Quest 3", meta = "Chain 1/3", ref = "quest:3" } })
+        """
+    )
+    app.run_frames(2)
+    f3 = app.eval("three.pool[1]")
+    assert f3.worth.GetText(f3.worth) == "1s 25c - 480 XP - reward 50s 00c"
+    assert f3.GetHeight(f3) == 34 + 24 + 2
+    # the lines are counted at the words, as the client wraps: 49 characters a line at 300, so
+    # three words of 12 a line; seven are 91 characters (two lines by count) but three lines
+    under = "Bastians.UI.TreeUtil.worthUnder"
+    assert app.eval(f"({under}(string.rep('abcdefghijkl ', 7), 'short', 300))") == "short"
+    assert app.eval(f"({under}(string.rep('abcdefghijkl ', 6), 'short', 300))") != "short"
     assert app.errors == []
 
 
@@ -1084,26 +1118,27 @@ def test_a_saved_size_beyond_the_screen_is_fitted_and_the_place_kept_on_it(core:
     assert core.errors == []
 
 
-def test_a_window_may_have_a_taller_head_and_a_portrait_to_click(core: WowRuntime):
-    """`opts.headHeight` (Bastian's Book's bar: , "the header feels
-    squeezed. make it higher"): the head and the content's top follow it, in the game's frame too;
-    `opts.onPortrait` makes the frame's round portrait a button. Other windows keep 30 and 56."""
+def test_a_tall_head_and_a_portrait_to_click(core: WowRuntime):
+    """`head = "tall"` (ADR 0084 decision 3, W5; `opts.headHeight` until 23.11.2026: Bastian's
+    Book's bar, , "the header feels squeezed. make it higher"): the head
+    and the content's top follow it, in the game's frame too; `opts.onHome` makes the frame's
+    round portrait a button. Other windows keep the low head: 30, and 52 in the game's frame."""
     core.execute(
         """
         Mock.templates.PortraitFrameTemplate = true -- the client has the game's frame
         Bastians:GetModule("Core").db.profile.gameFrames = false -- `flat`: the look's own edge
         clicks = 0
-        tall = Bastians.UI.Window("BastiansTallHeadTest", { headHeight = 50, gameFrames = true,
-          onPortrait = function() clicks = clicks + 1 end, portraitTip = "home" })
+        tall = Bastians.UI.Window("BastiansTallHeadTest", { head = "tall", gameFrames = true,
+          onHome = function() clicks = clicks + 1 end, homeTip = "home" })
         plain = Bastians.UI.Window("BastiansPlainHeadTest", { gameFrames = true })
-        flat = Bastians.UI.Window("BastiansFlatHeadTest", { headHeight = 50 })
+        flat = Bastians.UI.Window("BastiansFlatHeadTest", { head = "tall" })
         """
     )
     assert core.eval("flat.head:GetHeight()") == 50
     assert core.eval("(flat:Insets()) - select(2, flat:Insets())") == 50  # the head over the inset
     assert core.eval("tall.gameFramed") is True and core.eval("tall.head:GetHeight()") == 50
-    assert core.eval("(tall:Insets())") == 72 and core.eval("(plain:Insets())") == 56
-    assert core.eval("plain.head:GetHeight()") == 32 and core.eval("plain.portraitButton") is None
+    assert core.eval("(tall:Insets())") == 72 and core.eval("(plain:Insets())") == 52
+    assert core.eval("plain.head:GetHeight()") == 30 and core.eval("plain.portraitButton") is None
     core.execute("tall.portraitButton:Click()")
     assert core.eval("clicks") == 1 and core.eval("tall.portraitButton.tip") == "home"
     assert core.errors == []

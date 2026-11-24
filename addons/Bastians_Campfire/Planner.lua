@@ -82,32 +82,43 @@ local function others(feature)
   return nil
 end
 
+-- A feature's row (W9: three short lines for one long one; the windows probe of 23.11.2026 read
+-- "First Aid 300, tier 3, Blueprint: Plague Doctor's Laboratory" at 325 units in a line of 282):
+-- its name with what it gives at the right; under it the skill and the tier; then where it
+-- comes from; then, when there is something to say, what this account has of it.
 local function featureRow(entry)
   local feature = entry.feature
-  local meta = {
-    string.format("%s %d", Planner.SkillName(feature.skill), feature.rank),
-    string.format(L["tier %d"], feature.tier),
-    source(feature),
-  }
+  local needs = string.format("%s %d", Planner.SkillName(feature.skill), feature.rank)
+    .. ", "
+    .. string.format(L["tier %d"], feature.tier)
+  local from = source(feature)
+  local have = {}
   if entry.canPlace == true then
-    meta[#meta + 1] = L["you can place it"]
+    have[#have + 1] = L["you can place it"]
   end
   if entry.carried > 0 then
-    meta[#meta + 1] = string.format(L["%d in your bags"], entry.carried)
+    have[#have + 1] = string.format(L["%d in your bags"], entry.carried)
   end
   local alts = others(feature)
   if alts then
-    meta[#meta + 1] = string.format(L["known by %s"], alts)
+    have[#have + 1] = string.format(L["known by %s"], alts)
+  end
+  local more = { from }
+  local meta = { needs, from }
+  if #have > 0 then
+    more[#more + 1] = table.concat(have, ", ")
+    meta[#meta + 1] = more[#more]
   end
   local value = Planner.ValueText(entry.benefit, entry.amounts)
   if not entry.benefit then
     value = L[feature.service or "Service"]
   end
   local name = L[feature.name]
-  local metaText = table.concat(meta, ", ")
+  local metaText = table.concat(meta, ", ") -- what the search reads, and a host of one line
   return {
     title = name,
-    meta = metaText,
+    meta = needs,
+    metaMore = more,
     text = name .. "  " .. S.H.muted .. metaText .. "|r",
     icon = B.Compat.ItemIcon(feature.item) or B.UI.IconTexture("campfire"),
     value = value,
@@ -245,13 +256,17 @@ local function render(host)
       text = ctx.level and string.format(L["Values at level %d"], ctx.level) or L["Level unknown"],
     },
   })
-  host:SetRows(rows)
-  host:SetSummary(
-    string.format(
+  -- where the numbers come from: a paragraph under the rows, which wraps (W9: as the view's
+  -- summary it needed 517 units of the line's 264 and was cut)
+  rows[#rows + 1] = {
+    kind = "para",
+    text = S.H.muted .. string.format(
       L["Numbers from Campfire Tooltips (GPLv3), client build %s; not yet measured by us."],
       Camp.SOURCE_BUILD
-    )
-  )
+    ) .. "|r",
+  }
+  host:SetRows(rows)
+  host:SetSummary("")
 end
 
 function Planner.Open()

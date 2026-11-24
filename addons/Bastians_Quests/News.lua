@@ -5,6 +5,18 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.9.0:1",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "The Quests minimap button opens My quests again, and a closed My quests frame comes back with one click or one /bq tracker.",
+  },
+  {
+    id = "2.9.0:2",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "A quest's row names its largest reputation gain again beside the coin, the XP and the best reward.",
+  },
+  {
     id = "2.7.0:1",
     date = "2026-11-22",
     version = "2.7.0",

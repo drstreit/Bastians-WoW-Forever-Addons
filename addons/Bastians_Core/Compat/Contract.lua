@@ -51,6 +51,9 @@ Compat.CONTRACT = {
   GetSendMailItems = "-> { [itemID] = count } attached to the mail being written",
   NewGameWindow = "parent -> the game's PortraitFrameTemplate frame (Bg, CloseButton, SetTitle,"
     .. " SetPortraitToAsset) or nil where the client lacks it",
+  GameWindowPortrait = "chrome, shown -> bool ; the game window without (or with) its round"
+    .. " portrait: the border's layout, the title strip and the ground moved; false where the"
+    .. " frame lacks the calls",
   NewInset = "parent -> the game's InsetFrameTemplate frame (Bg) or nil",
   GetMoney = "-> copper the character carries",
   GetPlayerXP = "-> xp, xpMax, level of the character (nil, nil, level when the client has no XP bar)",
@@ -155,6 +158,11 @@ Compat.CONTRACT = {
     .. " that is open (C_TradeSkillUI.GetAllRecipeIDs, GetRecipeInfo.learned); nil without one",
   NewModel = "parent -> a PlayerModel frame (DressUpModel where the client has no PlayerModel) or nil",
   ShowCreature = "model, npcID -> bool ; the creature's 3D model, false when the client cannot",
+  CanCreaturePortrait = "-> bool ; whether the client draws a creature's portrait into a texture",
+  ModelDisplay = "model -> displayID or nil ; the display of the creature a model shows, nil"
+    .. " until it has loaded (GetDisplayInfo)",
+  CreaturePortrait = "texture, displayID -> bool ; the display's round portrait drawn into the"
+    .. " texture (SetPortraitTextureFromCreatureDisplayID)",
   ShowItem = "model, itemID -> bool ; the item's own 3D model (weapons, shields, held things, helms,"
     .. " shoulders), false when it has none or the client cannot",
   ZoomModel = "model, scale -> nil ; the camera's distance (1 the default, smaller is closer)",

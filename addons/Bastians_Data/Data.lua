@@ -569,6 +569,14 @@ function service:PackLoaded(name)
   return Data.loaded[name] == true
 end
 
+-- The folder a pack ships its pictures in (the book's drawings), as a texture path that ends
+-- with a separator; nil for a pack the suite does not know. The pack's own addon holds it, so
+-- an app never writes a path into another addon's folder (ADR 0082; W6, 23.11.2026).
+function service:PackArt(name)
+  local addon = PACK_ADDON[name]
+  return addon and ("Interface\\AddOns\\" .. addon .. "\\Generated\\Art\\") or nil
+end
+
 function service:LoadPack(name)
   return Data.LoadPack(name)
 end

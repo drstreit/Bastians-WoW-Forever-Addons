@@ -45,7 +45,7 @@ def test_bq_opens_the_zone_page_in_the_browser(wow: WowRuntime):
     assert wow.eval(f"{BR}.Current().kind") == "page"
     assert wow.eval(f"{BR}.Current().ref") == "zone:1429"
     # the window names the list pane (Here), the zone's page is the detail (ADR 0018)
-    assert strip(wow.eval(f"{MOD}.win.title:GetText()")) == "Here: Elwynn Forest"
+    assert strip(wow.eval(f"{MOD}.Browser.Title()")) == "Here: Elwynn Forest"
     assert wow.eval(f"{DS}:IsShown()") is True
     assert band(wow, DS)["name"] == "Elwynn Forest"
     # the sheet's lead (ADR 0054): a zone says its quest levels and where it lies
@@ -80,17 +80,17 @@ def test_pages_and_views_share_one_history(wow: WowRuntime):
     assert click_ref(wow, DS, "quest:62") is True
     assert wow.eval(f"{BR}.Current().ref") == "quest:62"
     assert wow.eval(f"{DS}:IsShown()") is True
-    assert wow.eval(f"{MOD}.controlBar:IsShown()") is False
+    assert wow.eval(f"{MOD}.band.byId.logHideDone") is None  # no view, none of its controls
     # the chain is the strip of the quest's sheet (ADR 0055)
     assert hosted_sheet(wow, DS)["links"][0] == "Step 1 of 3 - The Fargodeep Mine"
     # a view in the same history: Back from it returns to the page
     wow.slash("/bq log")
     assert wow.eval(f"{BR}.Current().kind") == "view"
     assert wow.eval(f"{BR}.Current().id") == "quests.log"
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Quests: My quests"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "Quests: My quests"
     # the view fills the list pane; the quest's page stays in the detail pane (ADR 0018)
     assert wow.eval(f"{DS}:IsShown()") is True and band(wow, DS)["name"] == "The Fargodeep Mine II"
-    assert wow.eval(f"{MOD}.controlBar:IsShown()") is True
+    assert wow.eval(f"{MOD}.band.byId.logHideDone:IsShown()") is True  # the view's, in the band
     assert flat(wow)[0] == "HAND IN, THIS ZONE  1"
     wow.execute(f"{BR}.Back()")
     assert wow.eval(f"{BR}.Current().ref") == "quest:62"
@@ -105,7 +105,7 @@ def test_the_item_bar_follows_the_log_view_in_the_browser(wow: WowRuntime):
     wow.execute("Mock.questLog[2].item = { id = 2589, icon = 132889 }; Mock.bags[2589] = 1")
     wow.slash("/bq log")
     wow.execute(SIZE)
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Quests: My quests"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "Quests: My quests"
     assert wow.eval("BastiansQuestsItemBar:IsShown()") is True
     assert wow.eval("BastiansQuestsItem1:GetAttribute('item')") == "item:2589"
     # a page: the view is left, but the Here column's "My quests here" keeps the bar (C4)
@@ -148,7 +148,7 @@ def test_without_the_browser_the_quests_window_hosts_views_and_pages(wow: WowRun
     wow.slash("/bq all")  # the view a list covers opens that list
     assert wow.eval("BastiansBrowserFrame:IsShown()") is True
     wow.run_frames(5)
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Quests"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "Quests"
     assert wow.errors == []
 
 
@@ -157,6 +157,6 @@ def test_a_view_of_an_addon_that_is_off_says_so(wow: WowRuntime):
     wow.slash("/bq log")
     wow.execute("Bastians:GetModule('Quests'):Disable()")
     wow.execute(f"{BR}.Render()")
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Not available"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "Not available"
     assert flat(wow)[0].startswith("This view is not available")
     assert wow.errors == []

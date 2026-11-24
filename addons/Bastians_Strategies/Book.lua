@@ -73,6 +73,23 @@ function Book.WorldSpot(continent, wx, wy)
     (w.oy + (row - w.ty) * Book.WORLD.ppt) / Book.WORLD.height
 end
 
+-- The continents on the picture, and a continent's part of the world on it in world yards ->
+-- wx1, wy1, wx2, wy2 (the smaller first): what a hosted map layer is asked for (R4.12).
+function Book.WorldContinents()
+  return { 0, 1 }
+end
+
+function Book.WorldBox(continent)
+  local w = Book.WORLD[continent]
+  if not w then
+    return nil
+  end
+  return ORIGIN - w.ty2 * TILE_YARDS,
+    ORIGIN - w.tx2 * TILE_YARDS,
+    ORIGIN - w.ty * TILE_YARDS,
+    ORIGIN - w.tx * TILE_YARDS
+end
+
 -- The stories for the map: `pages` by id, `toWorld(map, x, y)` -> continent, wx, wy. -> `spots`, the
 -- stories with a place ({ id, page, fx, fy, exact }: exact where the page names its spot, else the
 -- middle of its first zone) and `boards` = { market = { ... }, trades = { ... } } of the rest. The

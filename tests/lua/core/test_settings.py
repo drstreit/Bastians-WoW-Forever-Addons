@@ -162,7 +162,12 @@ def test_font_setting_applies_to_kit_text(app: WowRuntime):
     )
     assert app.eval("Bastians.UI.Style.font()") == "Fonts\\FRIZQT__.TTF"
     app.execute("Bastians.UI.Hub.Open('Core')")
-    assert app.eval("(Bastians.UI.Hub.win.title:GetFont())") == "Fonts\\FRIZQT__.TTF"
+    # a row of the hub's rail is body text; the window's name keeps the heading face (ADR 0084
+    # decision 7, W5: the body stays the reader's choice)
+    assert app.eval("(Bastians.UI.Hub.navButtons[1].label:GetFont())") == "Fonts\\FRIZQT__.TTF"
+    assert app.eval("(Bastians.UI.Hub.win.title:GetFont())") == app.eval(
+        "Bastians.UI.Style.BOOK_FONTS.bookDisplay"
+    )
 
 
 def test_every_client_font_and_a_text_size(app: WowRuntime):

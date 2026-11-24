@@ -93,6 +93,27 @@ function Editor.Defaults()
   changed()
 end
 
+Editor.ARM_SECONDS = 4
+
+-- Default rings asks first: a click arms the button, a second click within
+-- ARM_SECONDS resets; the button falls back by itself.
+function Editor.AskDefaults()
+  if Editor.armedAt and GetTime() - Editor.armedAt < Editor.ARM_SECONDS then
+    Editor.armedAt = nil
+    Editor.Defaults()
+    return
+  end
+  local at = GetTime()
+  Editor.armedAt = at
+  Editor.Render()
+  C_Timer.After(Editor.ARM_SECONDS, function()
+    if Editor.armedAt == at then
+      Editor.armedAt = nil
+      Editor.Render()
+    end
+  end)
+end
+
 -- The words of a slot for its row.
 local function slotWords(slot)
   if not slot then
@@ -672,9 +693,17 @@ local function drawRings(y, width)
     y = drawRing(ring, y, 0)
     y = y - 6
   end
-  local defaults = button({ icon = "replay", label = L["Default rings"], boxed = true }, 12, y - 4)
+  -- it asks first: the first click arms it for a few seconds and says so,
+  -- the second resets every ring
+  local armed = Editor.armedAt and GetTime() - Editor.armedAt < Editor.ARM_SECONDS
+  local defaults = button({
+    icon = "replay",
+    label = armed and L["Click again: every ring back as shipped"] or L["Default rings"],
+    boxed = true,
+    on = armed or nil, -- armed: the accent says so
+  }, 12, y - 4)
   defaults.tip = L["Back to the three rings as shipped; your lines are lost."]
-  defaults:SetScript("OnClick", Editor.Defaults)
+  defaults:SetScript("OnClick", Editor.AskDefaults)
   return y - ROW - 8
 end
 
@@ -720,6 +749,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansGesturesEditor", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     title = L["Bastian's Gestures"],
     module = "Gestures",
     width = 860,

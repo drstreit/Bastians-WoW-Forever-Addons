@@ -46,7 +46,8 @@ def test_slim_is_gone_and_a_slim_profile_opens_wide(wow: WowRuntime):
     assert wow.eval(f"{p}.slim == nil and {p}.slimWidth == nil and {p}.wideSize == nil") is True
     assert wow.eval(f"{p}.hideTracker") is None
     assert (
-        wow.eval(f"{MOD}.rail:IsShown()") is True and wow.eval(f"{MOD}.toolbar:IsShown()") is True
+        wow.eval(f"{MOD}.head.tabs:IsShown()") is True
+        and wow.eval(f"{MOD}.band.frame:IsShown()") is True
     )
     assert wow.eval(f"{MOD}.listPane:IsShown()") is True
     assert wow.eval(f"{MOD}.detailPane:IsShown()") is True
@@ -67,14 +68,15 @@ def test_slim_is_gone_and_a_slim_profile_opens_wide(wow: WowRuntime):
 
 def test_dock_sits_in_the_title_bar_and_the_gesture_is_wired(wow: WowRuntime):
     """Dock lives in the title bar; a right-button drag over the window
-    goes back and forward; the bar is 26 px with 30 px arrows."""
+    goes back and forward; ~~the bar is 26 px with 30 px arrows~~ since W9 Back and Forward are
+    tools of the band, 22 high, a pictogram and the word."""
     boot(wow)
     wow.slash("/bb")
     assert wow.eval(f"{MOD}.toolbar.dock:GetParent() == {MOD}.win.head") is True
     assert wow.eval(f"{MOD}.toolbar.dock:IsShown()") is True
     g = wow.eval(f"{MOD}.win.opts.gestures")
     assert g.back is not None and g.forward is not None
-    assert wow.eval(f"{MOD}.toolbar:GetHeight()") == 26
+    assert wow.eval(f"{MOD}.toolbar.back:GetHeight()") == 22
     assert (
         wow.eval(f"{MOD}.toolbar.back:GetWidth()") >= 30
     )  # self-sized since ADR 0046 (pictogram and word)

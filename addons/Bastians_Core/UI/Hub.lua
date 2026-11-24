@@ -11,16 +11,14 @@ B.UI.Hub = Hub
 
 local NAV_W = 200 -- the rail: the app's icon, its name and its sentence (ADR 0058, PH7)
 local ROW_H, ROW_TALL = 24, 40 -- a plain row; a row with a sentence under its name
-local win, nav, canvas, scroll, bar
+local NAV_MARGIN = 8 -- a row's words end here, left of the rail's scroll bar
+local NAV_PAD = 6 -- over the first row and under the last
+local win, rail, nav, navScroll, navBar, canvas, scroll, bar
 local navButtons = {}
 
--- The settings always in the WoW look ("option fonts are not readable
--- ... leave the menu out of the styling, it should always be the same - the WoW look"): the
--- game's frame and insets whatever the look, and the gold scheme's colours as a fixed palette.
-Hub.PALETTE = "blizzard"
-local function palette()
-  return S.Palette(Hub.PALETTE)
-end
+-- The hub wears the suite's one look, the tall head and the theme (ADR 0084, W5; ~~always the
+-- WoW look: the game's frame and insets and the gold scheme as a fixed palette~~ from
+-- 31.10.2026 to 23.11.2026, when the looks it had to stay readable against were gone).
 
 -- The menu's entries: the Suite page, General, the apps by name (each with its icon and its own
 -- pages indented under it: Map > Minimap, General > Hidden by the key; plan-launch-review O3,
@@ -124,13 +122,9 @@ local function selectEntry(entry)
         or (entry.help and b.entry.help)
         or (entry.suite and b.entry.suite)
       )
-    local c = on and S.C.accent or S.C.text
-    b.label:SetTextColor(c[1], c[2], c[3])
-    if on then
-      b.line:Show()
-    else
-      b.line:Hide()
-    end
+    S.ink(b.label, on and S.C.accent or S.C.text)
+    b.line:SetShown(on and true or false)
+    b.on:SetShown(on and true or false)
   end
   if entry.mod then
     Settings_.Render(canvas, entry.mod, entry.page)
@@ -148,34 +142,49 @@ local function selectEntry(entry)
 end
 
 local function select(entry)
-  S.WithPalette(palette(), selectEntry, entry)
+  selectEntry(entry)
 end
 
 local function build()
   win = B.UI.Window("BastiansHubFrame", {
     title = L["Bastian's"] .. " " .. B.VERSION,
+    head = "tall",
     width = 620,
     height = 520,
     db = ns.core.db.profile.hub,
-    gameFrames = true,
-    palette = palette(),
     onResize = function()
       Hub.Refresh()
     end,
   })
-  nav = CreateFrame("Frame", nil, win.content)
-  nav:SetPoint("TOPLEFT", 0, 0)
-  nav:SetPoint("BOTTOMLEFT", 0, 0)
-  nav:SetWidth(NAV_W)
-  nav.bg = S.fill(nav, S.C.header)
-  S.inset(nav, true) -- the game's marble inset, whatever the look
+  -- the rail on the band's ground, a rule between it and the page (the suite's board)
+  rail = CreateFrame("Frame", nil, win.content)
+  rail:SetPoint("TOPLEFT", 0, 0)
+  rail:SetPoint("BOTTOMLEFT", 0, 0)
+  rail:SetWidth(NAV_W)
+  rail.bg = S.fill(rail, S.C.panel)
+  rail.rule = S.fill(rail, S.C.line, "BORDER")
+  rail.rule:ClearAllPoints()
+  rail.rule:SetPoint("TOPRIGHT", rail, "TOPRIGHT", 0, 0)
+  rail.rule:SetPoint("BOTTOMRIGHT", rail, "BOTTOMRIGHT", 0, 0)
+  rail.rule:SetWidth(1)
+  -- the rows scroll where the window is lower than the list: 22 rows are 790 units, and in a
+  -- window 728 high the last four stood under its foot (the windows probe, Forever 23.11.2026)
+  navScroll = CreateFrame("ScrollFrame", nil, rail)
+  navScroll:SetPoint("TOPLEFT", 0, 0)
+  navScroll:SetPoint("BOTTOMRIGHT", -1, 0)
+  nav = CreateFrame("Frame", nil, navScroll)
+  nav:SetSize(NAV_W - 1, 1)
+  navScroll:SetScrollChild(nav)
+  navBar = S.scrollbar(navScroll, rail)
+  navBar:ClearAllPoints() -- inside the rail's right edge, over the rows' margin
+  navBar:SetPoint("TOPRIGHT", rail, "TOPRIGHT", -2, -2)
+  navBar:SetPoint("BOTTOMRIGHT", rail, "BOTTOMRIGHT", -2, 2)
   local page = CreateFrame("Frame", nil, win.content)
-  page:SetPoint("TOPLEFT", nav, "TOPRIGHT", 4, 0)
+  page:SetPoint("TOPLEFT", rail, "TOPRIGHT", 4, 0)
   page:SetPoint("BOTTOMRIGHT", 0, 0)
-  S.inset(page, true)
   Hub.page = page
   scroll = CreateFrame("ScrollFrame", nil, win.content)
-  scroll:SetPoint("TOPLEFT", nav, "TOPRIGHT", 4, -2)
+  scroll:SetPoint("TOPLEFT", rail, "TOPRIGHT", 4, -2)
   scroll:SetPoint("BOTTOMRIGHT", -14, 2)
   canvas = CreateFrame("Frame", nil, scroll)
   canvas:SetSize(440, 1)
@@ -186,6 +195,7 @@ local function build()
     bar.SetTotal(height)
   end
   Hub.win, Hub.nav, Hub.canvas, Hub.navButtons = win, nav, canvas, navButtons
+  Hub.rail, Hub.navScroll, Hub.navBar = rail, navScroll, navBar
 end
 
 -- A row of the rail (ADR 0058, PH7): the icon, the name, and under it the app's one sentence
@@ -205,11 +215,14 @@ local function navButton(i, entry, y)
     b.icon:SetPoint("LEFT", 8, 0)
     b.label = S.text(b, 12)
     b.label:SetPoint("LEFT", 10, 0)
-    b.label:SetPoint("RIGHT", -4, 0)
+    b.label:SetPoint("RIGHT", -NAV_MARGIN, 0)
     b.label:SetWordWrap(false)
     b.sub = S.text(b, 10, S.C.dim)
     b.sub:SetWordWrap(false)
     b.sub:Hide()
+    b.on = S.fill(b, S.C.accent, "BORDER") -- the chosen row's faint plate (the board: 10 %)
+    b.on:SetAlpha(0.1)
+    b.on:Hide()
     b.line = S.fill(b, S.C.accent, "OVERLAY")
     b.line:ClearAllPoints()
     b.line:SetPoint("TOPLEFT", 0, 0)
@@ -246,14 +259,14 @@ local function navButton(i, entry, y)
   b.sub:ClearAllPoints()
   if tall then
     b.label:SetPoint("TOPLEFT", left, -6)
-    b.label:SetPoint("RIGHT", -4, 0)
+    b.label:SetPoint("RIGHT", -NAV_MARGIN, 0)
     b.sub:SetPoint("TOPLEFT", left, -21)
-    b.sub:SetPoint("RIGHT", -4, 0)
+    b.sub:SetPoint("RIGHT", -NAV_MARGIN, 0)
     b.sub:SetText(entry.tip)
     b.sub:Show()
   else
     b.label:SetPoint("LEFT", left, 0)
-    b.label:SetPoint("RIGHT", -4, 0)
+    b.label:SetPoint("RIGHT", -NAV_MARGIN, 0)
     b.sub:Hide()
   end
   local off = entry.mod and entry.mod.state ~= "enabled" and not entry.mod.def.noSwitch
@@ -262,36 +275,54 @@ local function navButton(i, entry, y)
   b:ClearAllPoints()
   b:SetPoint("TOPLEFT", 0, -y)
   b:SetPoint("RIGHT", 0, 0)
+  b.top = y -- where the row starts in the list (Hub.ShowChosenRow)
   b:Show()
   return height
 end
 
-local refresh
 function Hub.Refresh()
   if not win then
     return
   end
-  S.WithPalette(palette(), refresh)
-end
-
-refresh = function()
   canvas:SetWidth(math.max(100, (scroll:GetWidth() or 440)))
   local list = entries()
-  local y = 6
+  local y = NAV_PAD
   for i, entry in ipairs(list) do
     y = y + navButton(i, entry, y)
   end
   for i = #list + 1, #navButtons do
     navButtons[i]:Hide()
   end
+  nav:SetHeight(y + NAV_PAD)
+  navBar.SetTotal(y + NAV_PAD)
+  navBar:SetAlpha(navBar.thumb:IsShown() and 1 or 0) -- no track beside a list that fits
   local current = Hub.current or list[1]
   selectEntry(current)
+  Hub.ShowChosenRow()
+end
+
+-- The chosen row inside the rail's view (the hub opened on an app far down the list).
+function Hub.ShowChosenRow()
+  local view = navScroll:GetHeight() or 0
+  local off = navScroll:GetVerticalScroll() or 0
+  for _, b in ipairs(navButtons) do
+    if b:IsShown() and b.line:IsShown() then
+      local top = b.top or 0
+      local bottom = top + (b:GetHeight() or 0)
+      if top - NAV_PAD < off then
+        navBar.ScrollTo(top - NAV_PAD)
+      elseif view > 0 and bottom + NAV_PAD > off + view then
+        navBar.ScrollTo(bottom + NAV_PAD - view)
+      end
+      return
+    end
+  end
 end
 
 -- Hub.Open([moduleName[, pageID]]): the module's page, or one of its own pages.
 function Hub.Open(moduleName, pageID)
   if not win then
-    S.WithPalette(palette(), build)
+    build()
   end
   if moduleName == "about" then
     Hub.current = { about = true, title = L["About"] }

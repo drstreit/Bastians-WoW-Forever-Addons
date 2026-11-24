@@ -32,27 +32,33 @@ def test_the_window_shows_the_characters_on_top_and_the_chosen_ones_view(wow: Wo
     assert pills(wow) == [("Mockchar", True), ("Bankalt", False), ("Orcalt", False)]
     assert wow.eval(f"{W}.pills[1].spec.count") == 12  # the level after the name
     assert wow.eval(f"{W}.Character()") == ME
-    # the overview of this character by default, the tab lit
-    tabs = {t.view: t.spec.on is True for t in wow.eval(f"{W}.tabs").values()}
-    assert tabs == {
-        "overview": True,
-        "equipment": False,
-        "bags": False,
-        "bank": False,
-        "mail": False,
-        "requests": False,
-    }
+    # the overview of this character by default: the head's filled tab (W9, ADR 0084)
+    tabs = [p.item.id for p in wow.eval(f"{W}.bar.tabs.parts").values()]
+    assert tabs == ["overview", "equipment", "bags", "bank", "mail", "requests"]
+    assert wow.eval(f"{W}.bar.tabs.spec.value") == "overview"
+    # the characters are chips in the band under the head, the search at its end
+    assert wow.eval(f"{W}.pills[1]:GetParent() == {W}.band.frame") is True
+    assert wow.eval(f"{W}.pills[1].small") is True and wow.eval(f"{W}.pills[1]:GetHeight()") == 22
+    assert wow.eval(f"{W}.search:GetParent() == {W}.band.frame") is True
+    assert wow.eval(f"{W}.band.frame:GetHeight()") == 10 + 22 + 9
     texts = [strip(r.text) for r in flat(wow)]
     assert texts[0] == "Level" and "Money" in texts
     # another character's bags: a click on its pill, then the tab
     wow.execute(f"{W}.pills[2]:Click()")
-    wow.execute(f"{W}.Open(nil, 'bags')")
+    wow.execute(f"{W}.bar.tabs:Part('bags'):Click()")  # a tab is its view
+    assert wow.eval(f"{W}.bar.tabs.spec.value") == "bags"
     assert wow.eval(f"{W}.Character()") == "Bankalt-Mock Realm"
     assert pills(wow)[1] == ("Bankalt", True)
     got = [(strip(r.text), r.value) for r in flat(wow)]
     assert got == [("Blood Saber", 1), ("Linen Cloth", 40)]  # stacks summed, by name
     assert strip(wow.eval(f"{W}.summary:GetText()")).startswith("Bags")
     assert "2 rows" in strip(wow.eval(f"{W}.summary:GetText()"))
+    assert tuple(wow.eval(f"{W}.summary:GetFont()"))[1] == 13  # the line of what is shown
+    # the hint in a foot, the rows end on it
+    assert wow.eval(f"{W}.hint:GetHeight()") == 34
+    assert (
+        wow.eval(f"{W}.hint:GetText()") == "Click a line: its page. Right click: its entity menu."
+    )
     # a place not read yet says so instead of showing nothing
     wow.execute(f"{W}.Open(nil, 'mail')")
     assert [strip(r.text) for r in flat(wow)] == [
@@ -84,8 +90,8 @@ def test_the_search_lists_what_every_character_holds(wow: WowRuntime):
     assert words.startswith("Linen Cloth  ")
     assert "Orcalt: bags 99" in words and "Bankalt: bags 40, bank 15" in words
     assert strip(wow.eval(f"{W}.summary:GetText()")) == "1 items on 3 characters"
-    # the tabs step back while a search shows
-    assert all(t.spec.on is not True for t in wow.eval(f"{W}.tabs").values())
+    # the tabs step back while a search shows: none is the filled one
+    assert wow.eval(f"{W}.bar.tabs.spec.value") is None
     wow.execute(f"{W}.search:SetText('zzz')")
     wow.execute(f"local b = {W}.search; b:GetScript('OnTextChanged')(b, true)")
     wow.advance(0.1)
@@ -96,6 +102,7 @@ def test_the_search_lists_what_every_character_holds(wow: WowRuntime):
     wow.advance(0.1)
     wow.run_frames(2)
     assert strip(flat(wow)[0].text) == "Level"
+    assert wow.eval(f"{W}.bar.tabs.spec.value") == "overview"
     assert wow.errors == []
 
 
@@ -111,10 +118,11 @@ def test_a_second_realm_gets_its_name_before_its_characters(wow: WowRuntime):
     groups = [(g.realm, list(g.chars.values())) for g in wow.eval(f"{W}.Groups()").values()]
     assert groups[0][0] == "Mock Realm" and groups[0][1][0] == ME
     assert groups[1] == ("Other Realm", ["Farling-Other Realm"])
+    # the realms' names as the band's labels, in small capitals
     labels = [
-        strip(fs.GetText(fs)) for fs in wow.eval(f"{W}.realmLabels").values() if fs.IsShown(fs)
+        strip(fs.GetText(fs)) for fs in wow.eval(f"{W}.band.labels").values() if fs.IsShown(fs)
     ]
-    assert labels == ["Mock Realm", "Other Realm"]
+    assert labels == ["mock realm", "other realm"]
     # the pills flow into a second line when the window is narrow
     wow.execute("BastiansAltsFrame:SetWidth(240)")
     wow.execute(f"{W}.Render()")
@@ -164,4 +172,23 @@ def test_balts_opens_the_character_in_the_browsers_characters(wow: WowRuntime):
     assert wow.eval(f"{br}.PageRef()") == f"character:{ME}"
     entry = wow.eval(f"{br}.ListEntry()")
     assert (entry.kind, entry.type) == ("list", "character")
+    assert wow.errors == []
+
+
+def test_characters_works_with_core_alone(wow: WowRuntime):
+    """W9's gate (ADR 0083): the app loads and works with Core alone: no Data, no Browser."""
+    wow.execute(
+        "Mock.money = 1234; Mock.bagSlots[0] = { slots = 16, { itemID = 2589, count = 20 } }"
+    )
+    wow.start(CORE, ALTS)  # the shared boot loads Data's packs: not here
+    wow.run_frames(10)
+    with_alts(wow)
+    wow.slash("/balts")
+    wow.run_frames(3)
+    assert wow.eval("BastiansAltsFrame:IsShown()") is True
+    assert pills(wow)[0] == ("Mockchar", True)
+    for view in ("overview", "equipment", "bags", "bank", "mail", "requests"):
+        wow.execute(f"{W}.bar.tabs:Part('{view}'):Click()")
+        assert wow.eval(f"{W}.bar.tabs.spec.value") == view
+        assert len(flat(wow)) >= 1
     assert wow.errors == []

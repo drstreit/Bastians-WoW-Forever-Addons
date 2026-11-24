@@ -51,7 +51,10 @@ local GLYPH = {
   object = "object",
   say = "other",
 }
-local STATUS_GLYPH = { available = "quest", log = "questActive", ready = "done" }
+-- "!" to take, "?" to hand in, a grey "?" while it runs (the game's own marks; the owner, Forever
+-- 24.11.2026: the "?" stood for running quests, "normally the sign of a quest ready to bring in")
+local STATUS_GLYPH = { available = "quest", log = "questActive", ready = "questActive" }
+local GREY_STATUS = { log = true }
 local MAX_FACES = 7
 
 local frame, hub, progress
@@ -628,13 +631,27 @@ local function newBubble()
   b.mark:SetPoint("BOTTOMLEFT", b, "BOTTOMLEFT", -2, -2)
   b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
   b:SetScript("OnClick", onBubbleClick)
+  -- under the pointer it lights up, pressed its symbol gives (
+  -- "hovering should change the symbol, click also")
   b:SetScript("OnEnter", function(self)
     Orbit.Hover(true)
+    self.over = true
+    Orbit.Lit(self)
     tip(self)
   end)
-  b:SetScript("OnLeave", function()
+  b:SetScript("OnLeave", function(self)
     Orbit.Hover(false)
+    self.over, self.pressed = false, false
+    Orbit.Lit(self)
     hideTip()
+  end)
+  b:SetScript("OnMouseDown", function(self)
+    self.pressed = true
+    Orbit.Lit(self)
+  end)
+  b:SetScript("OnMouseUp", function(self)
+    self.pressed = false
+    Orbit.Lit(self)
   end)
   return b
 end
@@ -649,6 +666,7 @@ local function itemKey(item)
 end
 
 local function paint(b, item, playing)
+  b.playing = playing
   local kind = item.kind == "quest" and "quest" or item.kind
   local color = token(TOKEN[kind] or "text")
   local hasLine = item.line ~= nil
@@ -680,6 +698,26 @@ local function paint(b, item, playing)
     b.mark:Show()
   else
     b.mark:Hide()
+  end
+end
+
+Orbit.HOVER_GROW, Orbit.PRESS_SHRINK = 1.15, 0.85 -- the symbol under the pointer, and pressed
+
+-- A bubble under the pointer: a bright ring, the fill in the accent, the symbol a little larger
+-- (smaller while pressed); off the pointer as its paint left it.
+function Orbit.Lit(b)
+  local base = b.glyphSize
+  if b.over and b.item then
+    S.tint(b.ring, S.C.bright, 1)
+    if not b.active then
+      S.tint(b.fill, S.C.accent, b.pressed and 0.55 or 0.35)
+    end
+  elseif b.item then
+    paint(b, b.item, b.playing)
+  end
+  if base then
+    local k = b.pressed and Orbit.PRESS_SHRINK or (b.over and Orbit.HOVER_GROW or 1)
+    b.glyph:SetSize(base * k, base * k)
   end
 end
 
@@ -752,6 +790,7 @@ local function bubble(item, x, y, r, playing)
   b.mark:SetSize(math.max(8, size * 0.38), math.max(8, size * 0.38))
   paint(b, item, playing)
   b.glyph:Hide()
+  b.glyphSize = nil
   b.label:Hide()
   b.badge:Hide()
   local wantsFace = (item.kind == "npc" or item.kind == "object") and item.creature and faceCount < MAX_FACES
@@ -767,14 +806,15 @@ local function bubble(item, x, y, r, playing)
   elseif item.kind == "npc" or item.kind == "object" then
     local icon = item.ref and B:Entity(item.ref):Icon() or nil
     b.glyph:SetTexture(icon or B.UI.IconTexture(item.index and "item" or "service"))
-    b.glyph:SetSize(size * 0.7, size * 0.7)
+    S.untint(b.glyph) -- a pooled bubble kept the tint of what it showed before (black symbols)
+    b.glyphSize = size * 0.7
     b.glyph:Show()
   elseif (item.kind == "act" or item.kind == "say") and item.glyph then
     -- an answer as a symbol;
     -- its words are the tooltip's
     b.glyph:SetTexture(B.UI.GLYPH_PATHS[item.glyph])
     S.tint(b.glyph, item.kind == "act" and S.C.bg or S.C.text)
-    b.glyph:SetSize(size * 0.6, size * 0.6)
+    b.glyphSize = size * 0.6
     b.glyph:Show()
   elseif item.kind == "act" or item.kind == "say" or item.kind == "plus" then
     b.label:SetText(item.label or item.title) -- its ink is paint's (the active one reads in bg)
@@ -782,9 +822,11 @@ local function bubble(item, x, y, r, playing)
     b.label:Show()
   elseif g then
     b.glyph:SetTexture(B.UI.IconTexture(g))
-    b.glyph:SetSize(size * 0.75, size * 0.75)
+    S.untint(b.glyph) -- the tile's own colours, never a tint left from an answer
+    b.glyphSize = size * 0.75
     b.glyph:Show()
   end
+  b.glyph:SetDesaturated(item.kind == "quest" and GREY_STATUS[item.status] or false)
   if item.more and item.more > 0 then
     b.badge:SetText("+" .. item.more)
     b.badge:Show()
@@ -792,6 +834,7 @@ local function bubble(item, x, y, r, playing)
     b.badge:SetText(tostring(#item.quests))
     b.badge:Show()
   end
+  Orbit.Lit(b) -- the size, and the hover kept through a render under the pointer
   if not b:IsShown() then
     b:Show()
   end
@@ -941,9 +984,19 @@ local function build()
   end, L["Play or pause"])
   hub.play:SetPoint("CENTER")
   local d, dy = 21, 13
-  hub.restart = iconButton("replay", 16, Voice.Restart, L["Jump to start"])
+  -- every click answers: with nothing playing, the note says so
+  local function playing(run)
+    return function()
+      if not Voice.Now() then
+        Orbit.Note(L["Nothing is playing"])
+        return
+      end
+      run()
+    end
+  end
+  hub.restart = iconButton("replay", 16, playing(Voice.Restart), L["Jump to start"])
   hub.restart:SetPoint("CENTER", hub, "CENTER", -d, dy)
-  hub.stop = iconButton("stop", 16, Voice.StopAll, L["Stop"])
+  hub.stop = iconButton("stop", 16, playing(Voice.StopAll), L["Stop"])
   hub.stop:SetPoint("CENTER", hub, "CENTER", d, dy)
   hub.heard = iconButton("done", 16, function()
     local now = Voice.Now()
@@ -951,6 +1004,8 @@ local function build()
       Voice.MarkHeard(now.key)
       Voice.StopAll()
       Orbit.Note(string.format(L["Marked heard: %s"], now.title or "?"))
+    else
+      Orbit.Note(L["Nothing is playing"])
     end
   end, L["Mark heard"])
   hub.heard:SetPoint("CENTER", hub, "CENTER", -d, -dy)
@@ -1089,6 +1144,10 @@ end
 
 -- Grows or shrinks around the centre.
 function Orbit.SetWide(on)
+  if on and state.wide and state.target == 1 and not state.moving then
+    state.settle = nil
+    return -- already wide: a hover changes nothing (it drew the ring again on every bubble)
+  end
   state.wide = on and true or false
   state.target = on and 1 or COMPACT
   state.settle = nil

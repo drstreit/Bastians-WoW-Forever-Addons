@@ -646,14 +646,13 @@ end
 -- The page's picture (content/strategies/art), the page's width at 2:1. A picture that came with a
 -- new Data edition is a new file: the client takes it without an error but shows it only after
 -- a full restart (GetTexture stays nil, Forever 22.10.2026), so until then the page has none.
-local ART = "Interface\\AddOns\\Bastians_Data_Strategies\\Generated\\Art\\"
 local function addPicture(page, id)
   local tex = page.pics[page.npics + 1]
   if not tex then
     tex = page.content:CreateTexture(nil, "ARTWORK")
     page.pics[page.npics + 1] = tex
   end
-  tex:SetTexture(ART .. id)
+  tex:SetTexture(ns.Picture.ArtOf(id))
   if not tex:GetTexture() then
     tex:Hide()
     return nil
@@ -667,7 +666,6 @@ local function addPicture(page, id)
   page.y = page.y + h + GAP
   return tex
 end
-Window.ART = ART
 
 -- The page's address on bastians.dev to copy (the game opens no browser): a back-shelf page and a
 -- tombstone have one too, the web keeps every id.
@@ -1061,78 +1059,12 @@ local function renderBookmarks()
 end
 
 -- ---------------------------------------------------------------------------------------------
--- The story map (ADR 0057): the stories on one picture of the world, the general ones on two boards
--- in the ocean. A view of the book: the Map tab, the book's front door.
---
--- The picture is laid out once at its base size (ATLAS_W x ATLAS_H, the world's 2:1) and scaled as
--- one piece into the room the window gives it ("only the map scales,
--- not the button row", "scaling is bumpy"): a size change costs one SetScale, so the map follows
--- every size event of the grip, and the tokens grow with the land.
+-- The Atlas (ADR 0057, the story map; since R4.12 "The Atlas with filters", book.md): every
+-- chapter on one picture of the world and on a zone's painting. A view of the book: the Atlas
+-- button. Atlas.lua decides what stands where, AtlasMap.lua draws it.
 -- ---------------------------------------------------------------------------------------------
 
-local ATLAS_W = 900 -- the picture's base width; its height follows the world's proportions
-local ATLAS_H = ATLAS_W * Book.WORLD.height / Book.WORLD.width
-local TOKEN, BOARD_TOKEN = 40, 34 -- a story's picture on the land and on a board
-local TOKEN_GAP = 14 -- under a token: its level
-local RING, RING_HOVER = 2, 4 -- the rim around a token's picture, and lit under the cursor
-local BOARD_W, BOARD_HEAD, BOARD_PAD = 0.15, 22, 10 -- a board's share of the picture's width
-local SCREEN_MARGIN = 20 -- a window fitted to the map stays this far from the screen's bottom
-local ROUND_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask" -- as Bastian's minimap's
 local atlas
-
-local function tokenTip(self)
-  local p = self.story.page
-  local band = p.levelMin and string.format(L["level %d-%d"], p.levelMin, p.levelMax) or ""
-  local how = L["Click: open the story"]
-  if p.plate and p.plate.place then
-    how = how .. "\n" .. L["Right click: show on the map"]
-  end
-  return p.name or self.story.id, band .. (band ~= "" and "\n" or "") .. how
-end
-
--- The rim: the token's own colour, lit bright and wider under the cursor.
-local function drawRing(b, lit)
-  S.tint(b.ring, lit and S.C.bright or b.ringColor)
-  local r = lit and RING_HOVER or RING
-  b.ring:ClearAllPoints()
-  b.ring:SetPoint("TOPLEFT", b, "TOPLEFT", -r, r)
-  b.ring:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", r, -r)
-end
-
-local function newToken()
-  local b = CreateFrame("Button", nil, atlas.picture)
-  b.ring = b:CreateTexture(nil, "BORDER")
-  b.ring:SetTexture(S.DISC)
-  b.pic = b:CreateTexture(nil, "ARTWORK")
-  if b.CreateMaskTexture then
-    b.mask = b:CreateMaskTexture()
-    b.mask:SetTexture(ROUND_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    b.mask:SetAllPoints(b.pic)
-    b.pic:AddMaskTexture(b.mask)
-  end
-  b.plate = S.fill(b, S.C.header, "OVERLAY")
-  b.band = S.text(b, 10, S.C.headerText)
-  b.band:SetDrawLayer("OVERLAY", 2)
-  b.tip = tokenTip
-  b:SetScript("OnEnter", function(self)
-    drawRing(self, true)
-    S.TipEnter(self)
-  end)
-  b:SetScript("OnLeave", function(self)
-    drawRing(self, false)
-    S.TipLeave(self)
-  end)
-  b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  b:SetScript("OnClick", function(self, button)
-    -- a right click shows the story's place on the world map ("all
-    -- maps need to be able to open in world map")
-    if button == "RightButton" and Window.ShowStoryOnMap(self.story) then
-      return
-    end
-    Window.Show({ kind = "page", id = self.story.id })
-  end)
-  return b
-end
 
 -- A story's place on the world map: its page's plate. -> true when shown.
 function Window.ShowStoryOnMap(story)
@@ -1144,181 +1076,21 @@ function Window.ShowStoryOnMap(story)
   return false
 end
 
--- One story's token: its picture cut round (the picture's middle square), its level under it.
-local function drawToken(i, story, x, y, size, ring)
-  local b = atlas.tokens[i]
-  if not b then
-    b = newToken()
-    atlas.tokens[i] = b
-  end
-  b.story = story
-  b:SetSize(size, size)
-  b:ClearAllPoints()
-  b:SetPoint("CENTER", atlas.picture, "TOPLEFT", x, -y)
-  b:SetFrameLevel((atlas.picture:GetFrameLevel() or 0) + (story.onBoard and 6 or 4))
-  b.ringColor = ring
-  drawRing(b, b:IsMouseOver())
-  b.pic:SetAllPoints(b)
-  b.pic:SetTexture(story.page.art and (ART .. story.id) or nil)
-  if b.pic:GetTexture() then
-    b.pic:SetTexCoord(0.25, 0.75, 0, 1)
-  else -- no picture, or a new file before a full restart
-    b.pic:SetTexCoord(0, 1, 0, 1)
-    b.pic:SetTexture(B.UI.IconTexture("ledger"))
-  end
-  local p = story.page
-  local lo, hi = p.levelMin, p.levelMax
-  b.band:SetText(lo and (lo == hi and tostring(lo) or (lo .. "-" .. tostring(hi))) or "")
-  b.band:ClearAllPoints()
-  b.band:SetPoint("TOP", b, "BOTTOM", 0, 3)
-  b.plate:ClearAllPoints()
-  b.plate:SetPoint("TOPLEFT", b.band, "TOPLEFT", -4, 1)
-  b.plate:SetPoint("BOTTOMRIGHT", b.band, "BOTTOMRIGHT", 4, -1)
-  b.plate:SetShown(lo ~= nil)
-  b:Show()
-  return b
-end
-
--- A board in the ocean: its title and its stories in two columns.
-local function drawBoard(key, title, stories, onLeft, pw, n)
-  local board = atlas.boards[key]
-  if not board then
-    board = CreateFrame("Frame", nil, atlas.picture)
-    board.ground = S.fill(board, S.C.card, "BACKGROUND")
-    board.edges = S.roundEdges(board, S.C.line, "radiusSmall")
-    board.title = S.text(board, 11, S.C.bright)
-    board.title:SetPoint("TOPLEFT", board, "TOPLEFT", 6, -5)
-    board.title:SetPoint("TOPRIGHT", board, "TOPRIGHT", -6, -5)
-    atlas.boards[key] = board
-  end
-  local w = pw * BOARD_W
-  local pitch = BOARD_TOKEN + TOKEN_GAP + 8
-  local rows = math.ceil(#stories / 2)
-  local x0 = onLeft and BOARD_PAD or (pw - w - BOARD_PAD)
-  board:SetFrameLevel((atlas.picture:GetFrameLevel() or 0) + 2)
-  board:ClearAllPoints()
-  board:SetPoint("TOPLEFT", atlas.picture, "TOPLEFT", x0, -BOARD_PAD)
-  board:SetSize(w, BOARD_HEAD + rows * pitch + 4)
-  board.title:SetText(title)
-  board:SetShown(#stories > 0)
-  for i, story in ipairs(stories) do
-    story.onBoard = true
-    local col, row = (i - 1) % 2, math.floor((i - 1) / 2)
-    n = n + 1
-    local x = x0 + w * (col == 0 and 0.27 or 0.73)
-    local y = BOARD_PAD + BOARD_HEAD + row * pitch + BOARD_TOKEN / 2 + 2
-    drawToken(n, story, x, y, BOARD_TOKEN, S.C.line)
-  end
-  return n
-end
-
-local function dotAt(i, x, y, ring)
-  local dot = atlas.dots[i]
-  if not dot then
-    dot = atlas.picture:CreateTexture(nil, "OVERLAY")
-    dot:SetTexture(S.DISC)
-    dot:SetSize(7, 7)
-    atlas.dots[i] = dot
-  end
-  S.tint(dot, ring)
-  dot:ClearAllPoints()
-  dot:SetPoint("CENTER", atlas.picture, "TOPLEFT", x, -y)
-  dot:Show()
-end
-
--- The picture into the room the atlas has: one scale, the picture centred. Runs on every size
--- change of the window, so it does nothing else.
-local function fitAtlas()
-  local w, h = atlas:GetWidth() or 0, atlas:GetHeight() or 0
-  if w < 1 or h < 1 then
-    return
-  end
-  local k = math.min(w / ATLAS_W, h / ATLAS_H)
-  if math.abs((atlas.picture:GetScale() or 1) - k) > 0.0005 then
-    atlas.picture:SetScale(k)
-  end
-end
-
--- The window takes the map's proportions (the window's size "bound to the
--- map"; before, the map and the window grew apart): after the grip is let go and on the way onto
--- the map, the height follows the width so that the picture fills the window, within the screen
--- and the window's smallest height. The place is saved as after a drag.
+-- The window takes the map's proportions.
 local function fitWindowToMap()
-  if not (win and atlas:IsShown()) or win.full or win.dock then
-    return
-  end
-  local frame = win.frame
-  local fw, fh = frame:GetWidth() or 0, frame:GetHeight() or 0
-  local aw, ah = atlas:GetWidth() or 0, atlas:GetHeight() or 0
-  if fw < 1 or fh < 1 or aw < 1 or ah < 1 then
-    return
-  end
-  local edgeW, edgeH = fw - aw, fh - ah -- what the window adds around the map
-  local minH = win.opts.minHeight or 0
-  local maxH = (UIParent:GetHeight() or 0) - SCREEN_MARGIN
-  local h = aw * ATLAS_H / ATLAS_W + edgeH
-  local w = fw
-  if h < minH then
-    h = minH
-    w = (h - edgeH) * ATLAS_W / ATLAS_H + edgeW
-  elseif maxH > minH and h > maxH then
-    h = maxH
-    w = (h - edgeH) * ATLAS_W / ATLAS_H + edgeW
-  end
-  if math.abs(w - fw) > 0.5 or math.abs(h - fh) > 0.5 then
-    frame:SetSize(w, h)
-    win:SavePlace()
-  end
+  ns.AtlasMap.FitWindow(win)
 end
 
 local function renderAtlas()
-  local pw, ph = ATLAS_W, ATLAS_H
-  fitAtlas()
-  atlas.world:SetTexture(ART .. "world")
-  local drawn = atlas.world:GetTexture() ~= nil
-  atlas.world:SetShown(drawn)
-  atlas.note:SetShown(not drawn) -- a new file: the client sees it after a full restart
-  local spots, boards = Book.Atlas(Window.Pages(), B.Coords.ToWorld, FRONT)
-  -- the land's tokens part where they would cover each other, between the boards
-  local points = {}
-  for i, s in ipairs(spots) do
-    points[i] = { x = s.fx * pw, y = s.fy * ph }
-  end
-  local pad = pw * BOARD_W + BOARD_PAD + TOKEN / 2
-  Book.Spread(points, TOKEN + TOKEN_GAP, pad, TOKEN / 2, pw - pad, ph - TOKEN / 2 - TOKEN_GAP)
-  local n = 0
-  for i, s in ipairs(spots) do
-    n = n + 1
-    local ring = s.exact and S.C.gold or S.C.dim
-    dotAt(i, s.fx * pw, s.fy * ph, ring)
-    drawToken(n, s, points[i].x, points[i].y, TOKEN, ring)
-  end
-  for i = #spots + 1, #atlas.dots do
-    atlas.dots[i]:Hide()
-  end
-  n = drawBoard("market", L["The market"], boards.market, true, pw, n)
-  n = drawBoard("trades", L["Making and gathering"], boards.trades, false, pw, n)
-  atlas.mill.chapter = nil -- the mill from the map: the first chapter with rumours
-  for _, entry in ipairs(Window.Order()) do
-    if entry.kind == "mill" and not atlas.mill.chapter then
-      atlas.mill.chapter = entry.id
-    end
-  end
-  atlas.mill:SetShown(atlas.mill.chapter ~= nil)
-  for i = n + 1, #atlas.tokens do
-    atlas.tokens[i]:Hide()
-    atlas.tokens[i].story = nil
-  end
-  return L["Map"]
+  return ns.AtlasMap.Render()
 end
 
--- What a test and the hub read: the tokens shown, { id, x, y, size }.
+-- What a test and the hub read: the wonders' tokens shown, { id, x, y, size, form, onBoard }.
 function Window.AtlasTokens()
   local out = {}
-  for _, b in ipairs(atlas and atlas.tokens or {}) do
-    if b:IsShown() and b.story then
-      local _, _, _, x, y = b:GetPoint(1)
-      out[#out + 1] = { id = b.story.id, x = x, y = -y, size = b:GetWidth(), onBoard = b.story.onBoard }
+  for _, m in ipairs(ns.AtlasMap.Marks()) do
+    if m.id then
+      out[#out + 1] = m
     end
   end
   return out
@@ -1337,7 +1109,10 @@ local function updateBar()
   local on = isPage and Book.IsBookmarked(db().char.bookmarks, current.id)
   bar.mark.spec.label = on and L["Bookmarked"] or L["Bookmark"]
   bar.mark:SetOn(on)
-  bar.mark:SetShown(isPage)
+  if bar.mark:IsShown() ~= isPage then
+    bar.mark:SetShown(isPage)
+    bar:Layout() -- the tools close up
+  end
   bar.atlas:SetOn(current.kind == "atlas")
   bar.record:SetOn(current.kind == "record")
   local tab = current.kind == "front" and "front"
@@ -1371,15 +1146,22 @@ function Window.Render()
   end
   local kind = current.kind
   local isMap = kind == "atlas" -- the map takes the place of the two pages
-  -- the front table, a chapter's shelf and Your record take the place of the pages (ADR 0080)
-  local isShelf = kind == "front" or kind == "shelf" or kind == "record"
+  -- the front table and a chapter's shelf take the place of the pages (ADR 0080); ~~Your record
+  -- too~~: Your diary is a spread of two paper pages since 24.11.2026 (R4.11)
+  local isShelf = kind == "front" or kind == "shelf"
+  local isDiary = kind == "record"
   left:SetShown(not isMap and not isShelf)
   right:SetShown(not isMap and not isShelf)
-  folio:SetShown(not isMap and not isShelf)
+  folio:SetShown(not isMap and not isShelf and not isDiary) -- the diary is one spread: no turning
   atlas:SetShown(isMap)
   ns.Front.view:SetShown(isShelf)
   if kind ~= "wonder" then
-    ns.Wonder.Hide(left)
+    ns.Wonder.Hide(left) -- the wonder's paper and its parts go: the theme's page again
+    ns.Wonder.Hide(right)
+  end
+  if not isDiary then
+    ns.Diary.Hide(left) -- the diary's slots and frames go, its models stop drawing
+    ns.Diary.Hide(right)
   end
   layoutPages() -- the spread's scale is the view's: one for the map, the window's for the pages
   begin(left)
@@ -1391,6 +1173,8 @@ function Window.Render()
     title = ns.Front.Render(current)
   elseif kind == "wonder" then
     title = ns.Wonder.Render(Window.Kit, left, right, current.id)
+  elseif isDiary then
+    title = ns.Diary.Render(Window.Kit, left, right)
   elseif current.kind == "title" then
     title = renderTitle()
   elseif current.kind == "contents" then
@@ -1555,114 +1339,18 @@ end
 -- The bar in the concept board's numbers (docs/addons/book-look.md section 4; owner, Forever
 -- 17.11.2026: "The header feels squeezed. make it higher", "the 3 buttons top right are isolated
 -- from the rest and break the style"): a head of 50, its tabs and tools 28 high.
-local BAR_H = 28
-Window.HEAD_H = 50
-Window.LOGO = 34 -- the crest before the book's name
-Window.SEARCH_MIN = 150 -- the search box's least width on the bar
-Window.SEARCH_MAX = 230
+local BAR_H = 28 -- a tab or a tool of the bar (Core's tall head, Window.HEADS.tall.tool)
 
 -- The room the bar takes at the content's top: none when it sits in the window's head (the
--- filter's band lies directly under it).
+-- filter's band lies directly under it), a row for the tabs on a window too narrow for them.
 function Window.BarRoom()
-  return (bar and bar.oneBar) and 0 or (BAR_H + 10)
-end
-
--- A tool of the bar (book-look.md section 4): words in a thin outline, 28 high; `filled` the
--- Atlas, the book's primary plate with its pictogram. It answers SetOn and carries `spec` and
--- `label` as Core's action does, drawn in the bar's own palette (the dark table in the WoW look).
--- spec = { label, icon, filled, caps, on }
-local TOOL_PAD, TOOL_ICON = 10, 16
-
-local function barTool(parent, spec)
-  local b = CreateFrame("Button", nil, parent)
-  b.spec = spec
-  b.face = S.roundFill(b, S.C.accent, 4)
-  b.edges = S.roundEdges(b, S.C.line, 4)
-  b.icon = b:CreateTexture(nil, "ARTWORK")
-  b.icon:SetSize(TOOL_ICON, TOOL_ICON)
-  b.label = S.SetRole(S.text(b, 13, S.C.text), spec.caps and "bookCaps" or "bookSans")
-  b.label:SetWordWrap(false)
-  function b.Draw(self)
-    local sp = self.spec
-    local pad = sp.filled and TOOL_PAD + 2 or TOOL_PAD
-    local lit = sp.on or self.over
-    local ink
-    if sp.filled then
-      S.tint(self.face, S.Tok(self, "accent"), 1)
-      S.setEdges(self.edges, S.Tok(self, lit and "text" or "accent"), 1)
-      ink = S.Tok(self, "bg")
-    else
-      S.tint(self.face, S.Tok(self, "accent"), 0)
-      S.setEdges(self.edges, S.Tok(self, lit and "accent" or "line"), lit and 1 or nil)
-      ink = S.Tok(self, sp.on and "accent" or "text")
-    end
-    local icon = sp.icon and B.UI.Pictogram(sp.icon) or nil
-    local x = pad
-    self.icon:SetShown(icon ~= nil)
-    if icon then
-      self.icon:SetTexture(icon)
-      S.tint(self.icon, ink, 1)
-      self.icon:ClearAllPoints()
-      self.icon:SetPoint("LEFT", self, "LEFT", x, 0)
-      x = x + TOOL_ICON + 6
-    end
-    local text = sp.label or ""
-    if sp.caps then
-      text = ns.Front.SmallCaps(text)
-    end
-    self.label:SetText(text)
-    S.ink(self.label, ink)
-    self.label:ClearAllPoints()
-    self.label:SetPoint("LEFT", self, "LEFT", x, 0)
-    local w = self.label:GetStringWidth()
-    self:SetSize(x + ((w and w > 0) and w or (#text * 7)) + pad, BAR_H)
-  end
-  function b.SetOn(self, on)
-    self.spec.on = on and true or nil
-    self:Draw()
-  end
-  b:SetScript("OnEnter", function(self)
-    self.over = true
-    self:Draw()
-    S.TipEnter(self)
-  end)
-  b:SetScript("OnLeave", function(self)
-    self.over = nil
-    self:Draw()
-    S.TipLeave(self)
-  end)
-  b:Draw()
-  return b
-end
-
--- A quiet pictogram of the bar (the options): dim, brighter under the mouse.
-local function barGlyph(parent, icon, size)
-  local b = CreateFrame("Button", nil, parent)
-  b:SetSize(size, size)
-  b.icon = b:CreateTexture(nil, "ARTWORK")
-  b.icon:SetAllPoints(b)
-  b.icon:SetTexture(B.UI.Pictogram(icon))
-  function b.Draw(self)
-    S.tint(self.icon, S.Tok(self, self.over and "text" or "dim"), 1)
-  end
-  b:SetScript("OnEnter", function(self)
-    self.over = true
-    self:Draw()
-    S.TipEnter(self)
-  end)
-  b:SetScript("OnLeave", function(self)
-    self.over = nil
-    self:Draw()
-    S.TipLeave(self)
-  end)
-  b:Draw()
-  return b
+  return bar and bar:Room() or 0
 end
 
 function layoutPages()
   local content = win.content
-  if bar and bar.Layout then
-    bar.Layout() -- the tabs keep their words while the window has room for them
+  if bar then
+    bar:Layout() -- the tabs keep their words while the window has room for them
   end
   -- the pages are not scaled ("the font scaling of the book is too
   -- large, should follow a global setting"): a larger window gives the pages more room and the
@@ -1690,20 +1378,21 @@ end
 
 function Window.Build()
   win = B.UI.Window("BastiansStrategiesFrame", {
-    module = "Strategies", -- the options button opens this page (R27.1)
+    module = "Strategies", -- the options pictogram opens this page (R27.1)
     title = L["Bastian's Book"],
     width = 940,
     height = 640,
     minWidth = 660,
     minHeight = 420,
-    -- the bar: a head of 50 with pictograms for the window's own buttons; the crest is the book's
-    -- logo, in the game's frame its round portrait, and leads to the front table (owner, Forever
-    -- 17.11.2026: "Add the book bastian logo top left and make that clickable to the front page")
-    headHeight = Window.HEAD_H,
-    headIcons = true,
+    -- Core's tall head (ADR 0084; the book's own bar until 23.11.2026, W5): the crest is the
+    -- book's home mark, in the game's frame its round portrait, and leads to the front table
+    -- ("Add the book bastian logo top left and make that clickable
+    -- to the front page")
+    head = "tall",
+    mark = S.CREST,
     portrait = S.CREST_PORTRAIT,
-    portraitTip = L["The front table"],
-    onPortrait = function()
+    homeTip = L["The front table"],
+    onHome = function()
       Window.Show({ kind = "front" })
     end,
     -- as large as the reader drags it
@@ -1736,21 +1425,15 @@ function Window.Build()
   measure = S.text(content, 12)
   measure:SetWordWrap(true)
   measure:Hide()
-  -- the bar on the window, not in the content: it never scales with the spread
-  bar = CreateFrame("Frame", nil, win.frame)
-  bar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -6)
-  bar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
-  bar:SetHeight(BAR_H)
-  bar:SetFrameLevel((content:GetFrameLevel() or 0) + 2)
   -- the tabs: words in the book's small capitals, the shown one filled, no plate around them
-  --,
-  -- ~~a pictogram on each~~; the front table, then the chapters (ADR 0080). A window too narrow
-  -- for the words even on a row of their own keeps the pictograms, the names in the tips.
+  --; the
+  -- front table, then the chapters (ADR 0080). A window too narrow for the words even on a row
+  -- of their own shows the pictograms, the names in the tips (Core's bar).
   local items = {
     {
       id = "front",
-      glyph = "ledger",
-      word = L["Front table"],
+      icon = "ledger",
+      label = L["Front table"],
       tip = L["The newest wonders, and a strip of every chapter."],
     },
   }
@@ -1764,171 +1447,71 @@ function Window.Build()
   }) do
     -- a chapter's sentence is its tab's tip (book.md "The chapters")
     items[#items + 1] =
-      { id = c[1], glyph = c[2], word = ns.Front.ChapterName(c[1]), tip = ns.Front.ChapterLine(c[1]) }
+      { id = c[1], icon = c[2], label = ns.Front.ChapterName(c[1]), tip = ns.Front.ChapterLine(c[1]) }
   end
-  for _, item in ipairs(items) do
-    item.label = ns.Front.SmallCaps(item.word)
-  end
-  bar.tabs = S.segmented(bar, {
-    items = items,
-    flat = true,
-    height = BAR_H, -- book-look.md section 4: 28 high, 10 beside the words, 4 between two
-    pad = 10,
-    gap = 4,
-    corners = "top", -- the shown tab stands on the bar
-    onChange = function(_, id)
-      if id == "front" then
-        Window.Show({ kind = "front" })
-      else
-        Window.Show({ kind = "shelf", id = id })
-      end
-    end,
-  })
-  for _, b in ipairs(bar.tabs.parts) do
-    S.SetRole(b.label, "bookCaps")
-    S.setSize(b.label, 13)
-  end
-  S.Draw(bar.tabs)
-  bar.front = bar.tabs:Part("front")
-  -- the tools at the bar's right end, in the bar's own style (the three
-  -- buttons "break the style"): the options a quiet pictogram, the Atlas the book's primary plate,
-  -- Your record and the bookmark words in an outline
-  bar.gear = barGlyph(bar, "settings", 20)
-  bar.gear.tip = win.options and win.options.tip -- Core's own words
-  bar.gear:SetPoint("RIGHT", bar, "RIGHT", 0, 0)
-  bar.gear:SetScript("OnClick", function()
-    if B.UI.Hub then
-      B.UI.Hub.Open("Strategies")
-    end
-  end)
-  if win.options then
-    win.options:Hide() -- the bar has its own
-  end
-  bar.atlas = barTool(bar, { icon = "zone", label = L["Atlas"], filled = true, caps = true })
-  bar.atlas.tip = L["The stories on the world map."]
-  bar.atlas:SetPoint("RIGHT", bar.gear, "LEFT", -10, 0)
-  bar.atlas:SetScript("OnClick", function()
-    Window.Show({ kind = "atlas" })
-  end)
-  bar.record = barTool(bar, { label = L["Your record"] })
-  bar.record.tip = L["What you kept for later, what you did, and what your other characters did."]
-  bar.record:SetPoint("RIGHT", bar.atlas, "LEFT", -8, 0)
-  bar.record:SetScript("OnClick", function()
-    Window.Show({ kind = "record" })
-  end)
-  bar.mark = barTool(bar, { label = L["Bookmark"] })
-  bar.mark.tip = L["Keeps this page in Your record, also when it moves to the back shelf."]
-  bar.mark:SetPoint("RIGHT", bar.record, "LEFT", -8, 0)
-  bar.mark:SetScript("OnClick", function()
-    Window.ToggleBookmark()
-  end)
-  -- the logo and the name (looks without the game's frame; in it the portrait and the frame's
-  -- title bar carry them): the crest in the name's ink, a click to the front table
-  S.SetRole(win.title, "bookDisplay")
-  S.setSize(win.title, 18)
-  bar.logo = CreateFrame("Button", nil, win.head)
-  bar.logo:SetSize(Window.LOGO, Window.LOGO)
-  bar.logo:SetPoint("LEFT", win.head, "LEFT", 10, 0)
-  bar.logo.icon = bar.logo:CreateTexture(nil, "ARTWORK")
-  bar.logo.icon:SetAllPoints(bar.logo)
-  bar.logo.icon:SetTexture(S.CREST)
-  S.tint(bar.logo.icon, S.C.headerText)
-  bar.logo.tip = L["The front table"]
-  bar.logo:SetScript("OnEnter", S.TipEnter)
-  bar.logo:SetScript("OnLeave", S.TipLeave)
-  bar.logo:SetScript("OnClick", function()
-    Window.Show({ kind = "front" })
-  end)
-  -- the bar's ground in the WoW look (book-look.md section 3; D2): the board's gradient from the
-  -- game frame's title bar down to the band, a rule under it; under the head's own children
-  bar.ground = CreateFrame("Frame", nil, win.frame)
-  bar.ground:SetFrameLevel(win.head:GetFrameLevel() or 1)
-  bar.ground.fill = S.fill(bar.ground, S.C.folioBar, "BACKGROUND")
-  bar.ground.rule = S.fill(bar.ground, S.C.folioRule, "BORDER")
-  bar.ground.rule:ClearAllPoints()
-  bar.ground.rule:SetPoint("BOTTOMLEFT", bar.ground, "BOTTOMLEFT", 0, 0)
-  bar.ground.rule:SetPoint("BOTTOMRIGHT", bar.ground, "BOTTOMRIGHT", 0, 0)
-  bar.ground.rule:SetHeight(1)
-  -- The palette the bar draws in and its ground: the dark table on a dark theme (ADR 0084).
+  -- The palette the head draws in: the dark table on a dark theme (ADR 0084), the theme's own
+  -- on a light one.
   local function barGround()
-    local dark = S.DarkTable(win.frame)
-    bar.palette = dark and S.FolioPalette() or nil
-    local shown = dark and win.gameFramed == true
-    bar.ground:SetShown(shown)
-    if shown then
-      bar.ground:ClearAllPoints()
-      bar.ground:SetPoint("TOPLEFT", win.frame, "TOPLEFT", win.CHROME_SIDE, -win.CHROME_TITLE)
-      bar.ground:SetPoint("BOTTOMRIGHT", win.head, "BOTTOMRIGHT", 0, 0)
-      S.gradient(bar.ground.fill, S.C.folioBar, S.C.folioBarTop)
-    end
-    for _, tool in ipairs({ bar.gear, bar.atlas, bar.record, bar.mark }) do
-      tool:Draw()
-    end
+    win:SetHeadPalette(S.DarkTable(win.frame) and S.FolioPalette() or nil)
   end
   -- One bar where the window has room (the concept board's single
   -- bar): the tabs, the search, the bookmark, Your record and the Atlas in the window's head,
-  -- after the book's name, before its options; ~~a title bar and a row of tabs under it~~. A
-  -- narrower window gives them a row of their own under the head.
-  local function tabWords(words)
-    for _, b in ipairs(bar.tabs.parts) do
-      local item = b.item
-      item.label = words and ns.Front.SmallCaps(item.word) or nil
-      item.icon = (not words) and item.glyph or nil
-      b.tip = item.tip or ((not words) and item.word or nil)
-    end
-    S.Draw(bar.tabs)
-  end
-  -- The window's own buttons right of the bar: its close (the game's frame has its own).
-  local function headRight()
-    if win.close and win.close:IsShown() then
-      return win.close, win.close:GetWidth() + 14
-    end
-    return nil, 8
-  end
-  function bar.Layout()
-    barGround()
-    tabWords(true)
-    local head = win.head
-    local framed = win.gameFramed -- the game's frame: its own title and portrait, none in our head
-    bar.logo:SetShown(not framed)
-    local nameX = 10 + Window.LOGO + 8
-    local titleW = framed and 4 or (nameX + (win.title:GetStringWidth() or 0) + 18)
-    local edge, rightW = headRight()
-    local tools = bar.mark:GetWidth()
-      + bar.record:GetWidth()
-      + bar.atlas:GetWidth()
-      + bar.gear:GetWidth()
-      + 36
-    local need = titleW + bar.tabs:GetWidth() + Window.SEARCH_MIN + tools + rightW
-    local headW = head:GetWidth() or 0
-    bar.oneBar = headW > 0 and need <= headW
-    bar:ClearAllPoints()
-    win.title:ClearAllPoints()
-    win.title:SetPoint("LEFT", head, "LEFT", nameX, 0)
-    if bar.oneBar then
-      bar:SetPoint("LEFT", head, "LEFT", titleW, 0)
-      bar:SetPoint("RIGHT", edge or head, edge and "LEFT" or "RIGHT", -8, 0)
-      bar:SetFrameLevel((head:GetFrameLevel() or 0) + 5)
-    else
-      win.title:SetPoint("RIGHT", edge or head, edge and "LEFT" or "RIGHT", -8, 0)
-      bar:SetPoint("TOPLEFT", win.content, "TOPLEFT", 6, -6)
-      bar:SetPoint("TOPRIGHT", win.content, "TOPRIGHT", -6, -6)
-      bar:SetFrameLevel((win.content:GetFrameLevel() or 0) + 2)
-      local room = (win.content:GetWidth() or 0) - 12 - tools - Window.SEARCH_MIN
-      if (win.content:GetWidth() or 0) > 0 and bar.tabs:GetWidth() > room then
-        tabWords(false)
-      end
-    end
-    bar.tabs:ClearAllPoints()
-    bar.tabs:SetPoint("LEFT", bar, "LEFT", 0, 0)
-    bar.tabsRight = bar.tabs:GetWidth()
-  end
-  bar.Layout()
-  -- the full-text search: between the tabs and the bookmark button, as wide as the window allows
-  bar.search = S.search(bar, L["Search the book"])
-  bar.search:SetHeight(BAR_H) -- a tool of the bar: its height
-  bar.search:SetPoint("LEFT", bar.tabs, "RIGHT", 15, 0)
-  bar.search:SetPoint("RIGHT", bar.mark, "LEFT", -15, 0)
+  -- after the book's name, before its options. A narrower window gives the tabs a row of their
+  -- own under the head. Core lays it out (Window:Bar).
+  bar = win:Bar({
+    tabs = {
+      items = items,
+      onChange = function(id)
+        if id == "front" then
+          Window.Show({ kind = "front" })
+        else
+          Window.Show({ kind = "shelf", id = id })
+        end
+      end,
+    },
+    search = { hint = L["Search the book"] },
+    -- the tools at the bar's right end (the three buttons "break the
+    -- style"): the bookmark and Your diary words in an outline, the Atlas the book's primary plate
+    tools = {
+      {
+        id = "mark",
+        label = L["Bookmark"],
+        tip = L["Keeps this page in Your diary, also when it moves to the back shelf."],
+        onClick = function()
+          Window.ToggleBookmark()
+        end,
+      },
+      {
+        -- ~~Your record~~ until 24.11.2026 (the book's board, question 3); the id and the page's
+        -- kind stay "record": a character's last place and a macro keep working
+        id = "record",
+        label = L["Your diary"],
+        tip = L["Your journal by the day, what you kept for later, your progress and your album."],
+        onClick = function()
+          Window.Show({ kind = "record" })
+        end,
+      },
+      {
+        id = "atlas",
+        icon = "zone",
+        label = L["Atlas"],
+        primary = true,
+        tip = L["The stories on the world map."],
+        onClick = function()
+          Window.Show({ kind = "atlas" })
+        end,
+      },
+    },
+    onLayout = function(b)
+      b.oneBar = not b.row
+      barGround()
+    end,
+  })
+  bar.front = bar.tabs:Part("front")
+  bar.mark, bar.record, bar.atlas = bar.tools.mark, bar.tools.record, bar.tools.atlas
+  bar.gear, bar.logo = win.options, win.mark
+  bar:Layout()
+  -- the full-text search: between the tabs and the tools (Core's bar places it)
   bar.search:SetScript("OnTextChanged", function(self, userInput)
     local text = self:GetText() or ""
     if text == "" then
@@ -1950,31 +1533,9 @@ function Window.Build()
   end)
   left = newPage(content)
   right = newPage(content)
-  atlas = CreateFrame("Frame", nil, content)
+  atlas = ns.AtlasMap.Build(content)
   atlas:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -36)
   atlas:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, 6)
-  atlas.ground = S.fill(atlas, S.C.panel, "BACKGROUND")
-  -- the picture at its base size, scaled as one piece into the atlas (fitAtlas)
-  atlas.picture = CreateFrame("Frame", nil, atlas)
-  atlas.picture:SetSize(ATLAS_W, ATLAS_H)
-  atlas.picture:SetPoint("CENTER", atlas, "CENTER", 0, 0)
-  atlas.world = atlas.picture:CreateTexture(nil, "BORDER")
-  atlas.world:SetAllPoints(atlas.picture)
-  atlas.note = S.text(atlas.picture, 12, S.C.dim)
-  atlas.note:SetPoint("BOTTOM", atlas.picture, "BOTTOM", 0, 8)
-  atlas.note:SetText(L["The map appears after a full restart of the game."])
-  atlas.tokens, atlas.boards, atlas.dots = {}, {}, {}
-  -- the mill's button is a button, not part of the land: on the atlas, unscaled, at the
-  -- picture's corner
-  atlas.mill = S.action(atlas, { icon = "note", label = L["The rumour mill"], boxed = true })
-  atlas.mill:SetPoint("BOTTOMLEFT", atlas.picture, "BOTTOMLEFT", BOARD_PAD, BOARD_PAD)
-  atlas.mill:SetFrameLevel((atlas.picture:GetFrameLevel() or 0) + 10)
-  atlas:SetScript("OnSizeChanged", fitAtlas) -- every size event of the grip, nothing coalesced
-  atlas.mill.tip = L["This is what they're saying on the road. Make of it what you will."]
-  atlas.mill:SetScript("OnClick", function(self)
-    Window.Show({ kind = "mill", id = self.chapter })
-  end)
-  atlas:Hide()
   Window.atlas = atlas
   folio = CreateFrame("Frame", nil, content)
   folio:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 6, 6)

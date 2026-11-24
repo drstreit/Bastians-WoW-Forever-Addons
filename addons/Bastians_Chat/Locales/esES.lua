@@ -396,11 +396,10 @@ local strings = {
   ["Window text"] = "Texto de las ventanas",
   ["Heads and tabs"] = "Cabeceras y pestañas",
   ["Numbers and times"] = "Números y horas",
-  ["By the look (%s in Modern and Glass)"] = "Según el aspecto (%s en Moderno y Cristal)",
   ["By the look"] = "Según el aspecto",
-  ["By the look: in Modern and Glass the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono; WoW and Parchment their own fonts."] = "Según el aspecto: en Moderno y Cristal, los títulos y pestañas usan Barlow Condensed SemiBold, los números y horas IBM Plex Mono; WoW y Pergamino sus propias fuentes.",
+  ["By the look: the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono."] = "Según el aspecto: los títulos y pestañas usan Barlow Condensed SemiBold, los números y horas IBM Plex Mono.",
   ["The look's own"] = "La del aspecto",
-  ["Modern and Glass take IBM Plex Sans, Barlow Condensed and IBM Plex Mono, WoW and Parchment their own fonts; the chat's lines keep the Font under Text."] = "Moderno y Cristal usan IBM Plex Sans, Barlow Condensed e IBM Plex Mono; WoW y Pergamino, sus propias fuentes; las líneas del chat conservan la Fuente de Texto.",
+  ["By the look, the chat's windows take IBM Plex Sans, Barlow Condensed and IBM Plex Mono; the chat's lines keep the Font under Text."] = "Según el aspecto, las ventanas del chat usan IBM Plex Sans, Barlow Condensed e IBM Plex Mono; las líneas del chat conservan la Fuente de Texto.",
   -- an offer: how many of the item the bags hold (plan-chat-v3.md V18)
   ["you have %d"] = "tienes %d",
   -- the watch list (plan-chat-v3.md V19)

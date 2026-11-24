@@ -2,11 +2,12 @@
 -- fixed on screen (under the minimap until moved), replacing the game's objective tracker while it
 -- shows; the Companion keeps the same view and its slim mode. A third host of the log view beside
 -- the Browser and the fallback window: the view renders into it, two-line rows, the two toggles
--- on its bar, the secure quest-item bar beside it; the rows re-render through Window.Schedule.
+-- on its band, the secure quest-item bar beside it; the rows re-render through Window.Schedule.
+-- In the one look (ADR 0084, W9; quests.md "The one look"): the low head with Lock as its tool,
+-- the view's controls in a band, the sections as quiet headings, the summary in a foot.
 local _, ns = ...
 local B = Bastians
 local L = ns.L
-local S = B.UI.Style
 local Widgets = B.UI.Widgets
 
 local Tracker = {}
@@ -15,9 +16,11 @@ ns.Tracker = Tracker
 local VIEW = "quests.log"
 local CLAIM = "quests-tracker" -- the game tracker claim (core-contracts §13)
 local RENDER_DELAY = 0.05
-local DEFAULT_W, DEFAULT_H = 300, 420
+local DEFAULT_W, DEFAULT_H = 344, 420 -- the board's width: the band on one row
 
-local mod, win, bar, tree, summary
+local TREE_LEFT, TREE_RIGHT = 6, 20 -- the rows' room beside the fold marks and the scroll bar
+
+local mod, win, bar, tree, summary, lock
 local rows -- the rows shown now, for the item bar
 
 local function db()
@@ -68,9 +71,10 @@ local function applyLock()
     win.head:RegisterForDrag("LeftButton")
     win.grip:Show()
   end
-  if win.lock then
-    win.lock.spec.label = locked and L["Locked"] or L["Lock"]
-    win.lock:SetOn(locked) -- the look draws the state (ADR 0046)
+  if lock then
+    lock.spec.label = locked and L["Locked"] or L["Lock"]
+    lock:SetOn(locked) -- the look draws the state (ADR 0046)
+    win.headBar:Layout() -- the word's width changed
   end
 end
 
@@ -105,6 +109,9 @@ local function build()
       Tracker.UpdateClaim()
     end,
     onResize = function()
+      if bar then
+        bar:Layout(win.content:GetWidth()) -- the chips wrap at the frame's width
+      end
       if tree then
         tree:Refresh()
       end
@@ -122,23 +129,36 @@ local function build()
       win.frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -20, -220)
     end
   end
-  win.lock = S.action(win.head, { icon = "lock", label = L["Lock"], row = true })
-  -- left of the window's options button (R27.1) when it has one, else of the close button
-  win.lock:SetPoint("RIGHT", win.options or win.close, "LEFT", -4, 0)
-  win.title:SetPoint("RIGHT", win.lock, "LEFT", -4, 0)
-  win.lock:SetScript("OnClick", Tracker.ToggleLock)
-  win.lock.tip = function()
+  -- the close button switches the frame off as the setting does, so the Quests button and
+  -- /bq tracker bring it back in one go
+  win.close:SetScript("OnClick", function()
+    Tracker.Toggle()
+  end)
+  win.close.tip = function()
+    return L["Close My quests"],
+      L["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."]
+  end
+  -- the lock: a tool of the low head, before the window's own pictograms (the suite's board).
+  -- Never `win.lock`: that name is the window's own lock pictogram (Window:HeadEnd counts it)
+  lock = win:Bar({
+    tools = { { id = "lock", label = L["Lock"], onClick = Tracker.ToggleLock } },
+  }).tools.lock
+  lock.tip = function()
     local text = "Locked: the frame cannot be moved or resized. Click to switch;"
       .. ' the same as "Lock the frame in place" in the settings.'
     return L["Lock the frame in place"], L[text]
   end
   local content = win.content
-  bar = Widgets.ControlBar(content)
-  bar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -4)
-  bar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -4)
+  -- the view's controls in a band under the head: the zone, then Hide done, Tracked and the
+  -- quest round at the row's end
+  bar = Widgets.ControlBand(content)
+  bar.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+  bar.frame:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, 0)
+  summary = Widgets.Foot(content) -- the view's summary, two lines on a narrow frame
   tree = B.UI.Tree(content, {
     db = p.tracker, -- the folds of the groups, apart from the fallback window's
     ctx = { source = "tracker" },
+    capsSections = true, -- the sections as quiet headings (the board)
     twoLine = true, -- the owner's two-line quest rows (R2)
     iconsAlways = true,
     rowActions = { "voice.play", "quests.chain" }, -- on the row; the rest on the sheet (ADR 0053)
@@ -159,16 +179,13 @@ local function build()
     end,
   })
   tree.chips:ClearAllPoints()
-  tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -28)
-  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, -28)
+  tree.chips:SetPoint("TOPLEFT", bar.frame, "BOTTOMLEFT", TREE_LEFT, 0)
+  tree.chips:SetPoint("TOPRIGHT", bar.frame, "BOTTOMRIGHT", -TREE_RIGHT, 0)
   tree.scroll:ClearAllPoints()
-  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
-  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 18)
-  summary = S.text(content, 11, S.C.dim)
-  summary:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 8, 4)
-  summary:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -8, 4)
+  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, 0)
+  tree.scroll:SetPoint("BOTTOMRIGHT", summary, "TOPRIGHT", -TREE_RIGHT, 0)
   applyLock()
-  Tracker.win, Tracker.tree, Tracker.bar, Tracker.summary = win, tree, bar, summary
+  Tracker.win, Tracker.tree, Tracker.bar, Tracker.summary, Tracker.lock = win, tree, bar, summary, lock
 end
 
 -- The game's tracker goes while the frame shows and the setting says so.
@@ -216,11 +233,15 @@ function Tracker.Apply()
   end
 end
 
+-- Shows the frame when it is not on screen, takes it away when it is, and keeps that as the
+-- setting. By what is seen, not by the setting alone ("I closed our
+-- quest log. I cannot reopen it": a frame closed by its button was still "on", so the first
+-- /bq tracker switched the setting off and nothing showed).
 function Tracker.Toggle()
   if not mod then
     return false
   end
-  db().trackerFrame = not Tracker.Enabled()
+  db().trackerFrame = not (Tracker.Enabled() and Tracker.IsShown())
   Tracker.Apply()
   mod:Fire("BASTIANS_SETTING_CHANGED", mod.name, "trackerFrame", db().trackerFrame) -- the lead card
   return db().trackerFrame

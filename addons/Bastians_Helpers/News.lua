@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.9.0:1",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "The Helpers panel shows worn gear and nearly full bags in a warning colour, on the suite's one look.",
+  },
+  {
     id = "2.7.0:1",
     date = "2026-11-22",
     version = "2.7.0",

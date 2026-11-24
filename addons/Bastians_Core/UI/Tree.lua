@@ -10,6 +10,9 @@ local L = ns.L
 local ROW_H, INDENT, VALUE_W, OVERSCAN = 18, 14, 70, 2
 local FOLD_W = 18 -- the fold marker's width
 local DOUBLE_H = 34 -- a two-line row (opts.twoLine, rows with `meta`): name, then the meta line
+-- a section's heading in small capitals (opts.capsSections, the suite's board): 9 above the
+-- words of 11, 4 under them
+local CAPS_H, CAPS_TOP, CAPS_FOOT, CAPS_SIZE = 24, 9, 4, 11
 local META_LINE_H = 14 -- each further line of `row.metaMore` under the meta line
 local FLAT_INDENT = 8 -- children inside a dossier block (flat mode): a step, no marker
 local WORTH_W = 170 -- the value column may grow to this for a worth line (C3)
@@ -292,20 +295,54 @@ function B.UI.Card(ref, ctx, sections)
 end
 
 -- The worth line of a row (C3): the entity's worth where the row has no value of its own, or nil.
--- `worthOn` false (the host's setting) shows none.
+-- `worthOn` false (the host's setting) shows none. The second answer is the line for the value
+-- column: the provider's `short` when it names one (W9: a quest's coin, XP and best reward; its
+-- reputations filled the column and were cut), else the same words.
 function Util.worthText(row, worthOn)
   if worthOn == false or row.value ~= nil or not row.ref or row.worth == false then
     return nil
   end
   local worth = B:Entity(row.ref):Worth()
-  return worth and worth.text or nil
+  if not (worth and worth.text) then
+    return nil
+  end
+  return worth.text, worth.short or worth.text
+end
+
+-- How many lines a worth text needs under a two-line row of `width` px, wrapped at its words as
+-- the client wraps it (a count of characters alone said two where the game took three: the
+-- windows probe, 24.11.2026, the Browser at 1,100), not capped.
+local function worthWrapped(text, width)
+  local plain = string.gsub(string.gsub(text or "", "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
+  local chars = math.max(20, math.floor((width - 30) / 5.5))
+  local lines, used = 1, 0
+  for word in string.gmatch(plain, "%S+") do
+    local n = #word
+    if used == 0 then
+      used = n
+    elseif used + 1 + n <= chars then
+      used = used + 1 + n
+    else
+      lines, used = lines + 1, n
+    end
+  end
+  return lines
 end
 
 -- How many lines (1 or 2) a worth text takes under a two-line row of `width` px.
 function Util.worthLines(text, width)
-  local plain = string.gsub(string.gsub(text or "", "|c%x%x%x%x%x%x%x%x", ""), "|r", "")
-  local chars = math.max(20, math.floor((width - 30) / 5.5))
-  return math.min(WORTH_LINES, math.max(1, math.ceil(#plain / chars)))
+  return math.min(WORTH_LINES, worthWrapped(text, width))
+end
+
+-- The worth under a two-line row: the whole line while it fits its two lines, else the
+-- provider's short one (a quest's coin, XP and best reward; the whole stands on its page). W9:
+-- "WANTED: Jai'vhanel" needed a third line at 1,100 and the client cut it (the windows probe,
+-- 24.11.2026). -> text, lines
+function Util.worthUnder(worth, short, width)
+  if worthWrapped(worth, width) > WORTH_LINES and short and short ~= worth then
+    worth = short
+  end
+  return worth, Util.worthLines(worth, width)
 end
 
 -- Whether a row of a tree of tiles is drawn as a tile: it stands for one thing (a ref) and is
@@ -358,9 +395,12 @@ function Util.metaMore(frame, lines, left, right, y)
   end
 end
 
-function Util.rowHeight(row, width, twoLine, worthOn, tiles)
+function Util.rowHeight(row, width, twoLine, worthOn, tiles, caps)
   if row.height then
     return row.height
+  end
+  if caps and row.kind == "section" and row.title then
+    return CAPS_H
   end
   if tiles and Util.isTile(row) then
     return TILE_H
@@ -369,9 +409,10 @@ function Util.rowHeight(row, width, twoLine, worthOn, tiles)
     return RULE_H
   end
   if twoLine and row.meta then
-    local worth = Util.worthText(row, worthOn)
+    local worth, short = Util.worthText(row, worthOn)
     if worth then
-      return DOUBLE_H + Util.worthLines(worth, width) * WORTH_LINE_H + 2
+      local _, lines = Util.worthUnder(worth, short, width)
+      return DOUBLE_H + lines * WORTH_LINE_H + 2
     end
     return DOUBLE_H + (row.metaMore and #row.metaMore * META_LINE_H or 0)
   end
@@ -411,7 +452,9 @@ end
 --         under it `meta` or the entity's summary, the value or the worth at the right),
 --         pages = true (ADR 0058: the rows in pages of what fits the view, no scroll bar; the
 --         wheel, tree:TurnPage and tree:SetPage turn them, tree:Page says where you are; a new
---         first row goes back to the first page) }
+--         first row goes back to the first page),
+--         capsSections = true (ADR 0084, W9: a section row with `title` is a heading in small
+--         capitals 11 in the dim ink, its `count` and `suffix` in the accent, 24 high, no plate) }
 -- Rows may carry `rightPad` (px kept free on the right, for an owner's own widget placed in onRender).
 function B.UI.Tree(parent, opts)
   opts = opts or {}
@@ -592,7 +635,8 @@ function Tree:Refresh()
       width - (row.depth or 0) * indent,
       self.opts.twoLine,
       self:WorthOn(),
-      self.opts.tiles
+      self.opts.tiles,
+      self.opts.capsSections
     )
     self.heights[i] = h
     total = total + h
@@ -1195,10 +1239,17 @@ function Tree:RenderNow()
       end
       frame.tile = tile or false
       frame.iconsOver = nil -- this render lays the second line out again
-      local textSize = tile and 14 or 12 -- a pooled row may have been the other kind
+      -- a section's heading as the board draws it (opts.capsSections): small capitals in the dim
+      -- ink, its count in the accent, no plate
+      local caps = self.opts.capsSections == true and row.kind == "section" and row.title ~= nil
+      local textSize = tile and 14 or (caps and CAPS_SIZE or 12) -- a pooled row may have been the other kind
       if frame.textSize ~= textSize then
         frame.textSize = textSize
         S.setSize(frame.text, textSize)
+      end
+      if (frame.capsRole or false) ~= caps then
+        frame.capsRole = caps
+        S.SetRole(frame.text, caps and "bookCaps" or "text")
       end
       -- a tile always has its two lines: the name stays in its place beside the badges
       local two = (self.opts.twoLine == true and row.meta ~= nil) or tile == true
@@ -1208,6 +1259,12 @@ function Tree:RenderNow()
       -- any text that is not a string is shown as one: a table as text stopped the whole tree at
       -- that row in game (a quest's flags list, 22.10.2026)
       local text = row.text
+      if caps then
+        text = S.H.dim .. S.SmallCaps(tostring(row.title)) .. "|r"
+        if row.count ~= nil then
+          text = text .. "  " .. S.H.accent .. tostring(row.count) .. tostring(row.suffix or "") .. "|r"
+        end
+      end
       if text ~= nil and type(text) ~= "string" then
         text = tostring(text)
       end
@@ -1388,11 +1445,11 @@ function Tree:RenderNow()
       else
         -- the worth of the row's entity in gold (C3), where the row has no value of its own;
         -- cached on the facade, so this costs a lookup per visible row
-        local worth = Util.worthText(row, self:WorthOn())
+        local worth, short = Util.worthText(row, self:WorthOn())
         if worth and two and not tile then
-          worthLine = worth
+          worthLine = Util.worthUnder(worth, short, width) -- its own lines under the row
         elseif worth then
-          valueText = worth
+          valueText = short -- the value column: the short line where the provider has one
           S.ink(frame.value, S.C.gold)
         elseif levelsAhead then
           -- "in 4 levels": how far the character is from the band (catalog review A2.2)
@@ -1403,11 +1460,16 @@ function Tree:RenderNow()
           S.ink(frame.value, S.C.dim)
         end
       end
-      if valueText and (tile or row.value == nil) then
+      -- a value in words (`valueKind = "text"`: "+10 mana every 5 seconds", a zone's name) takes
+      -- the room its words need, up to half the row (W9: Campfire's values needed 161 units of
+      -- the column's 70; the windows probe, 23.11.2026)
+      local words = row.value ~= nil and row.valueKind == "text"
+      if valueText and (tile or row.value == nil or words) then
         frame.value:SetText(valueText)
         -- never more than a third of the row, cut with an ellipsis (
         -- and Forever 23.10.2026: a long worth wrapped over the icons and the next row)
-        local cap = math.max(VALUE_W, math.floor(width / (tile and 2 or 3))) -- a tile has the line to share
+        -- a tile has the line to share, and so have words
+        local cap = math.max(VALUE_W, math.floor(width / ((tile or words) and 2 or 3)))
         valueW = math.min(WORTH_W, cap, math.max(VALUE_W, (frame.value:GetStringWidth() or 0) + 4))
       end
       if worthLine then
@@ -1494,8 +1556,8 @@ function Tree:RenderNow()
         Util.metaMore(frame, row.metaMore, textLeft, metaRight, y2)
         frame.div:SetShown(not tile) -- a tile's edge is its plate
       else
-        frame.text:SetPoint("TOPLEFT", textLeft, -3)
-        frame.text:SetPoint("BOTTOMRIGHT", -right, 2)
+        frame.text:SetPoint("TOPLEFT", textLeft, caps and -CAPS_TOP or -3)
+        frame.text:SetPoint("BOTTOMRIGHT", -right, caps and CAPS_FOOT or 2)
         frame.meta:Hide()
         Util.metaMore(frame)
         frame.div:Hide()
@@ -1515,7 +1577,7 @@ function Tree:RenderNow()
       elseif self.keyRowID ~= nil and not frame:IsMouseOver() then
         frame.hl:Hide()
       end
-      if row.kind == "section" then
+      if row.kind == "section" and not caps then
         frame.sec:Show()
       else
         frame.sec:Hide()
@@ -1578,7 +1640,7 @@ function Tree:SetFilters(dims)
   -- hears of its height (opts.onFilterHeight)
   local host = self.opts.filterHost
   if not bar then
-    bar = B.UI.FilterBar(host or self.chips)
+    bar = B.UI.FilterBar(host or self.chips, { band = host == nil })
     bar.frame:SetPoint("TOPLEFT", 0, 0)
     if host then
       if self.filterWidth then
@@ -1593,7 +1655,7 @@ function Tree:SetFilters(dims)
       if host then
         host:SetHeight(h)
         if self.opts.onFilterHeight then
-          self.opts.onFilterHeight(h)
+          self.opts.onFilterHeight(h, bar.bottom) -- and the pills' own height, without the air
         end
       else
         self.chips:SetHeight(h)

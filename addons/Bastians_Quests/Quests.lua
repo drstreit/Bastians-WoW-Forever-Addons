@@ -100,8 +100,11 @@ end
 local mod = B:NewModule("Quests", {
   news = ns.NEWS, -- What's new (ADR 0021)
   addon = ADDON,
+  -- the minimap button, the hub's Open and the suite's bar open the quest log, My quests in its
+  -- own frame ("retarget that to the quest log again"; ~~the zone
+  -- page in the Browser~~, which /bq and the Browser's own button still open)
   open = function()
-    ns.Window.Toggle()
+    ns.Tracker.Toggle()
   end,
   title = L["Quests"],
   apiVersion = 1,

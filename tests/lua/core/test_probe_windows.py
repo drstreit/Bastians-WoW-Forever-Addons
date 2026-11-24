@@ -1,7 +1,8 @@
-"""The windows probe (W4 of plan-suite-waves.md, ADR 0084): every app with a window opened in
-turn, measured, photographed and closed; what overflows named; the windows open before opened
-again; once by itself after a login, `/bprobe windows` by hand; tools/look_windows.py prints the
-record. On the mock nothing is laid out from its anchors as the client does, so what overflows in
+"""The windows probe (W4 and W5 of plan-suite-waves.md, ADR 0084): every app with a window opened
+in turn, measured, photographed and closed; its head measured and held against the frame's
+numbers, at its own size and at the other widths and the small screen's scale its bounds allow
+(W5); what overflows named; the windows open before opened again; once by itself after a login,
+`/bprobe windows` by hand; tools/look_windows.py prints the record and its verdict on the heads. On the mock nothing is laid out from its anchors as the client does, so what overflows in
 the game is not held here: the record's shape, the order of the run and the named kinds are."""
 
 import sys
@@ -27,7 +28,7 @@ def load_probe(wow: WowRuntime) -> None:
     wow.fire("ADDON_LOADED", "Bastians_Probe")
 
 
-def wait(wow: WowRuntime, steps: int = 20) -> None:
+def wait(wow: WowRuntime, steps: int = 60) -> None:
     for _ in range(steps):
         wow.advance(0.7)
 
@@ -56,11 +57,111 @@ def test_every_apps_window_is_opened_photographed_and_closed(wow: WowRuntime):
         name = wow.eval(f"{out}.windows[{i}].window")
         if name != before:
             assert wow.eval(f"Bastians.UI.Windows['{name}'].frame:IsShown()") is False, name
-    assert wow.eval("BastiansProbeDB.sequences['w4-1'].at ~= nil") is True
-    lines = look_windows.report(wow.eval(out))
+    assert wow.eval("BastiansProbeDB.sequences['w9-2'].at ~= nil") is True
+    lines, wrong = look_windows.report(wow.eval(out))
     assert lines[0].startswith("windows ") and "theme folio, look book" in lines[0]
     assert any("Notes / " in line for line in lines)
+    # W5: each window's head as the game drew it, and the tool's verdict on it
+    notes = next(
+        f"{out}.windows[{i}]"
+        for i in range(1, wow.eval(f"#{out}.windows") + 1)
+        if wow.eval(f"{out}.windows[{i}].app") == "Notes"
+    )
+    head = f"{notes}.head"
+    assert wow.eval(f"{head}.kind") == "tall"  # Notes' lists: a window opened to read
+    assert wow.eval(f"{head}.nameSize") == 18 and wow.eval(f"{head}.mark") == 34
+    assert wow.eval(f"{head}.nameFont") == wow.eval("Bastians.UI.Style.BOOK_FONTS.bookDisplay")
+    assert wow.eval(f"type({notes}.variants)") == "table"
+    assert isinstance(wrong, int)
+    assert lines[-1].startswith("\n") and "head" in lines[-1]
     assert wow.errors == []
+
+
+def head(**values):
+    """A recorded head, as the saved variables hand it to the tool."""
+    from types import SimpleNamespace
+
+    base = dict.fromkeys(
+        (
+            "kind",
+            "bare",
+            "shown",
+            "portraitGone",
+            "barRow",
+            "left",
+            "top",
+            "height",
+            "contentTop",
+            "contentLeft",
+            "nameFont",
+            "nameSize",
+            "nameShown",
+            "mark",
+            "markShown",
+        )
+    )
+    base.update(values)
+    return SimpleNamespace(**base)
+
+
+def test_the_tool_holds_a_head_against_the_frames_numbers():
+    """W5's acceptance in numbers (ADR 0084 decisions 2 to 4): a tall head 50 and a low one 30,
+    one unit under the look's own edge or 22 under the game's strip; a bare head none."""
+    faults = look_windows.head_faults
+    # the look's own edge
+    tall = head(kind="tall", shown=True, top=1, height=50, contentTop=51, nameSize=18, mark=34)
+    low = head(kind="low", shown=True, top=1, height=30, contentTop=31, nameSize=13, mark=20)
+    assert faults(tall, False) == [] and faults(low, False) == []
+    # the game's frame: a tall head beside the ring, a low one from the frame's side
+    framed = head(kind="tall", shown=True, top=22, left=58, height=50, contentTop=72)
+    assert faults(framed, True) == []
+    assert (
+        faults(
+            head(
+                kind="low", shown=True, top=22, left=6, height=30, contentTop=52, portraitGone=True
+            ),
+            True,
+        )
+        == []
+    )
+    # a client that kept the ring: the low head starts beside it
+    assert (
+        faults(
+            head(
+                kind="low",
+                shown=True,
+                top=22,
+                left=58,
+                height=30,
+                contentTop=52,
+                portraitGone=False,
+            ),
+            True,
+        )
+        == []
+    )
+    # a bare head has no band in the game's frame
+    assert faults(head(kind="low", bare=True, shown=False, contentTop=22), True) == []
+    assert faults(head(kind="low", bare=True, shown=True, contentTop=52), True) != []
+    # what differs is named
+    old = head(kind="tall", shown=True, top=22, left=58, height=34, contentTop=56)
+    named = faults(old, True)
+    assert any("34 high, 50 wanted" in line for line in named)
+    assert any("56 under the top, 72 wanted" in line for line in named)
+    assert faults(
+        head(kind="low", shown=True, top=1, height=30, contentTop=31, nameSize=15, mark=20), False
+    ) == ["the name is 15, 13 wanted"]
+    # half a unit is the tolerance; a probe from before W5 has no head
+    assert (
+        faults(
+            head(
+                kind="tall", shown=True, top=1.4, height=50.4, contentTop=51.4, nameSize=18, mark=34
+            ),
+            False,
+        )
+        == []
+    )
+    assert faults(None, False) != [] and faults(head(), False) != []
 
 
 LONG = "A label far too long for a button of sixty"
@@ -82,6 +183,18 @@ def test_a_cut_label_and_a_part_outside_are_named(wow: WowRuntime):
             local out = CreateFrame("Frame", "BastiansProbeTestOutside", win.frame)
             out:SetPoint("TOPLEFT", win.frame, "TOPLEFT", 0, 0)
             out:SetSize(340, 20) -- the mock lays a frame at 0,0: wider than its window
+            -- a text wider than its room, and the same cut on purpose: its row's tip says it whole
+            local box = CreateFrame("Frame", nil, win.content)
+            box:SetSize(60, 20)
+            local wide = box:CreateFontString(nil, "OVERLAY")
+            wide:SetWidth(50)
+            wide:SetText("a text far wider than its room")
+            local row = CreateFrame("Button", nil, win.content)
+            row:SetSize(60, 20)
+            row.tip = "a cut on purpose, said whole by the tip"
+            local sub = row:CreateFontString(nil, "OVERLAY")
+            sub:SetWidth(50)
+            sub:SetText(row.tip)
           end
           win:Show()
         end }})
@@ -99,9 +212,17 @@ def test_a_cut_label_and_a_part_outside_are_named(wow: WowRuntime):
     assert wow.eval(f"{mine}.cut[1]") == LONG
     assert wow.eval(f"{mine}.outside[1].what") == "BastiansProbeTestOutside"
     assert round(wow.eval(f"{mine}.outside[1].r")) == 40  # 40 units past the right edge
-    lines = "\n".join(look_windows.report(wow.eval(out)))
+    lines = "\n".join(look_windows.report(wow.eval(out))[0])
     assert f"cut: {LONG}" in lines
     assert "outside: BastiansProbeTestOutside (right 40)" in lines
+    wide = [wow.eval(f"{mine}.wide[{i}]") for i in range(1, wow.eval(f"#{mine}.wide") + 1)]
+    texts = [w.text for w in wide]
+    assert "a text far wider than its room" in texts
+    assert not any(t.startswith("a cut on purpose") for t in texts)  # the hub's rail, 24.11.2026
+    # where it stands: its frame by kind, up to the first named frame above it
+    where = wide[texts.index("a text far wider than its room")].where
+    assert where.startswith("Frame < ") and where.endswith("BastiansProbeTestWindow"), where
+    assert f"({where})" in lines
     assert wow.errors == []
 
 
@@ -135,7 +256,7 @@ def test_the_city_maps_pins_are_counted_and_undrawn_trainers_named(wow: WowRunti
     assert wow.eval(f"{city}.trainers") == 1  # the path is no trainer
     assert wow.eval(f"{city}.trainersOn") is False  # the layer is off in that window by default
     assert wow.eval(f"{city}.missing[1]") == "Daryl Riknussun (Cooking)"
-    text = "\n".join(look_windows.report(wow.eval(f"{RESULTS}.windows")))
+    text = "\n".join(look_windows.report(wow.eval(f"{RESULTS}.windows"))[0])
     assert "Stormwind City: " in text and "trainers 1 (layer off)" in text
     assert "trainers not drawn: Daryl Riknussun (Cooking)" in text
     assert wow.errors == []

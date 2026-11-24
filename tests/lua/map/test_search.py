@@ -128,81 +128,127 @@ def test_without_route_no_route_button_and_escape_closes(wow: WowRuntime):
     assert wow.errors == []
 
 
-def anchors(wow: WowRuntime, region: str) -> dict[str, str]:
-    """A toolbar region's points as {point: "<what>:<relPoint>"}."""
-    out = wow.eval(
+def head_layout(wow: WowRuntime, width: float) -> int:
+    """Lays the map's window out `width` wide (the mock gives anchors no size) -> its rows."""
+    wow.execute(
+        f"local w = {MAP_}.win; w.frame:SetWidth({width}); w.head:SetWidth({width} - 2);"
+        f" w.content:SetWidth({width} - 2); {MAP_}.LayoutToolbar()"
+    )
+    return wow.eval(f"{MAP_}.toolbar.rows")
+
+
+def test_the_search_box_stands_in_the_head_and_ends_before_the_tools(wow: WowRuntime):
+    """(N1): the box covered Dock and half of Follow. Since W9 (ADR
+    0084) the search and the toolbar's parts are the head's: Core's bar lays the box out after
+    the name and the tools before the window's own pictograms."""
+    boot(wow)
+    bar, head = f"{MAP_}.toolbar", f"{MAP_}.win.headBar"
+    assert wow.eval(f"{head}.search == {SEARCH}.box") is True
+    assert wow.eval(f"{SEARCH}.box:GetParent() == {MAP_}.win.head") is True
+    assert wow.eval(f"{SEARCH}.box:GetHeight()") == 28  # a tall head's tool
+    assert head_layout(wow, 1458) == 1
+    # every part is a tool of the head, in the board's order; Full the one filled plate
+    names = (
+        "continent",
+        "player",
+        "centred",
+        "browser",
+        "route",
+        "dock",
+        "city",
+        "zoomOut",
+        "zoomIn",
+        "full",
+    )
+    order = wow.eval(
         f"""(function()
-          local r, tb = {region}, {MAP_}.toolbar
           local out = {{}}
-          for i = 1, r:GetNumPoints() do
-            local point, rel, relPoint = r:GetPoint(i)
-            local name = "other"
-            for _, key in ipairs({{ "continent", "player", "centred", "dock", "zoomOut", "full" }}) do
-              if rel == tb[key] then name = key end
+          for _, t in ipairs({head}.order) do
+            for _, k in ipairs({{ "{'", "'.join(names)}" }}) do
+              if {bar}[k] == t then out[#out + 1] = k end
             end
-            if rel == tb then name = "bar" end
-            out[point] = name .. ":" .. relPoint
           end
-          return out
+          return table.concat(out, " ")
         end)()"""
     )
-    return dict(out)
-
-
-def test_the_search_box_ends_before_the_right_hand_buttons(wow: WowRuntime):
-    """(N1): the box covered Dock and half of Follow. It spans from
-    Centred to the leftmost
-    button of the right group, whatever modules added there."""
-    boot(wow)
-    assert anchors(wow, f"{SEARCH}.box") == {"LEFT": "centred:RIGHT", "RIGHT": "dock:LEFT"}
-    assert wow.eval(f"{MAP_}.toolbar.rows") == 1
+    assert order == " ".join(names)
+    assert wow.eval(f"{bar}.full.spec.primary") is True
+    assert wow.eval(f"{bar}.continent.spec.menu") is True  # a select: a small arrow
+    for k in ("continent", "player", "centred", "dock", "zoomOut", "zoomIn"):
+        assert wow.eval(f"{bar}.{k}:GetParent() == {MAP_}.win.head") is True
+        assert wow.eval(f"{bar}.{k}:GetHeight()") == 28
+    # the tools from the right: Full before the options, each tool left of the next shown one
+    assert wow.eval(f"select(2, {bar}.full:GetPoint(1)) == {MAP_}.win.options") is True
+    assert wow.eval(f"select(2, {bar}.zoomIn:GetPoint(1)) == {bar}.full") is True
+    assert wow.eval(f"select(2, {bar}.zoomOut:GetPoint(1)) == {bar}.zoomIn") is True
+    assert wow.eval(f"select(2, {bar}.dock:GetPoint(1)) == {bar}.zoomOut") is True
+    # the box after the name, as wide as the bar allows; the map begins under the head
+    assert wow.eval(f"{SEARCH}.box:GetWidth()") == 230
+    assert tuple(wow.eval(f"{{ {MAP_}.clip:GetPoint(1) }}").values())[3:] == (0, 0)
+    # the foot: 20 high on the band's ground with a rule over it; the map ends on it
+    assert wow.eval(f"{MAP_}.footer:GetHeight()") == 20
+    assert wow.eval(f"{MAP_}.footer.rule:GetHeight()") == 1
+    assert tuple(wow.eval(f"{{ {MAP_}.clip:GetPoint(2) }}").values())[3:] == (0, 20)
     assert wow.errors == []
 
 
-def test_a_narrow_map_wraps_the_toolbar_into_rows(wow: WowRuntime):
+def test_a_narrow_map_puts_the_tools_under_the_head(wow: WowRuntime):
     """in a narrow map the right-hand buttons lay over the search and
-    the left-hand buttons. They go to a second row; the search to a row of its own when even
-    that is too tight; the map starts under the last row."""
+    the left-hand buttons. Since W9 the head keeps the search at its least width and the tools
+    take rows of their own under it; the map starts under the last row."""
     boot(wow)
-    bar = f"{MAP_}.toolbar"
-    widths = wow.eval(
+    bar, head = f"{MAP_}.toolbar", f"{MAP_}.win.headBar"
+    tools = wow.eval(
         f"""(function()
-          local tb = {bar}
-          local left = tb.continent:GetWidth() + 6 + tb.player:GetWidth() + 6 + tb.centred:GetWidth()
-          local right = tb.full:GetWidth() + 6 + tb.zoomIn:GetWidth() + 2 + tb.zoomOut:GetWidth()
-            + 8 + tb.dock:GetWidth()
-          return {{ left, right }}
+          local w, n = 0, 0
+          for _, t in ipairs({head}.order) do
+            if t:IsShown() then w, n = w + t:GetWidth(), n + 1 end
+          end
+          return w + (n - 1) * 8
         end)()"""
     )
-    left, right = widths[1], widths[2]
-    search = wow.eval(f"{MAP_}.SEARCH_MIN")
+    # what the head needs for the search at its least width, the tools and its own pictograms
+    start = wow.eval(f"{MAP_}.win:HeadStart()")
+    right = wow.eval(f"select(2, {MAP_}.win:HeadEnd())")
+    need = start + 150 + 15 + tools + 15 + right
+    assert head_layout(wow, need + 2) == 1 and wow.eval(f"{head}:Room()") == 0
+    # one unit less: the tools leave the head for a row under it
+    assert head_layout(wow, need + 1) == 2
+    assert wow.eval(f"{bar}.full:GetParent() == {head}.toolFrame") is True
+    assert wow.eval(f"{head}.toolFrame:IsShown()") is True and wow.eval(f"{head}:Room()") == 38
+    assert wow.eval(f"{SEARCH}.box:GetParent() == {MAP_}.win.head") is True  # the search stays
+    assert wow.eval(f"{SEARCH}.box:GetWidth()") >= 150
+    assert tuple(wow.eval(f"{{ {MAP_}.clip:GetPoint(1) }}").values())[3:] == (0, -38)
+    # the least width: the tools wrap on their rows, none past the window's edge
+    assert head_layout(wow, 400) >= 3
+    rows = wow.eval(f"{head}.toolRows")
+    assert wow.eval(f"{head}:Room()") == rows * 28 + (rows + 1) * 6 - 2
+    for k in ("continent", "player", "centred", "dock", "zoomOut", "zoomIn", "full"):
+        point = tuple(wow.eval(f"{{ {bar}.{k}:GetPoint(1) }}").values())
+        assert point[3] + wow.eval(f"{bar}.{k}:GetWidth()") <= 400 - 2 - 2 * 15
+    # wide again: one row, the tools in the head
+    assert head_layout(wow, 2000) == 1
+    assert wow.eval(f"{bar}.full:GetParent() == {MAP_}.win.head") is True
+    assert wow.eval(f"{head}.toolFrame:IsShown()") is False
+    assert wow.errors == []
 
-    def resize(width: float) -> int:
-        wow.execute(f"BastiansMapFrame:SetWidth({width + 14}); {MAP_}.LayoutToolbar()")
-        return wow.eval(f"{bar}.rows")
 
-    assert resize(left + search + right + 16) == 1
-    # one pixel less: the right group goes to the second row, the search fills the first
-    assert resize(left + search + right + 15) == 2
-    assert anchors(wow, f"{SEARCH}.box") == {"LEFT": "centred:RIGHT", "TOPRIGHT": "bar:TOPRIGHT"}
-    point = wow.eval(f"{{ {bar}.full:GetPoint(1) }}")
-    assert (point[1], point[3], point[5]) == ("TOPRIGHT", "TOPRIGHT", -26)
-    assert wow.eval(f"{bar}:GetHeight()") == 48
-    clip = wow.eval(f"{{ {MAP_}.clip:GetPoint(1) }}")
-    assert (
-        clip[1] == "TOPLEFT"
-        and clip[3] == "BOTTOMLEFT"
-        and wow.eval(f"select(2, {MAP_}.clip:GetPoint(1)) == {bar}")
+def test_the_continent_is_a_select_of_the_head(wow: WowRuntime):
+    boot(wow)
+    continent = f"{MAP_}.toolbar.continent"
+    assert wow.eval(f"{continent}.label:GetText()") == wow.eval(
+        f"{continent}.values[{continent}:GetValue()]"
     )
-    # narrower than the left group and the search: the search goes beside the right group
-    if left + 8 + search > search + 8 + right:
-        assert resize(left + 8 + search - 1) == 2
-        assert anchors(wow, f"{SEARCH}.box") == {"TOPLEFT": "bar:TOPLEFT", "RIGHT": "dock:LEFT"}
-    # too narrow for both: three rows, the search alone on the last
-    assert resize(min(left + 8 + search, search + 8 + right) - 1) == 3
-    assert anchors(wow, f"{SEARCH}.box") == {"TOPLEFT": "bar:TOPLEFT", "TOPRIGHT": "bar:TOPRIGHT"}
-    assert wow.eval(f"{bar}:GetHeight()") == 74
-    # wide again: one row
-    assert resize(2000) == 1
-    assert wow.eval(f"{bar}:GetHeight()") == 22
+    wow.execute(f"{continent}:Click()")
+    menu = wow.eval("Bastians.UI.FilterMenuFrame()")
+    labels = [i.label.GetText(i.label) for i in menu["items"].values() if i.IsShown(i)]
+    assert labels == sorted(labels) and len(labels) >= 2  # by name
+    other = next(
+        k
+        for k, v in dict(wow.eval(f"{continent}.values")).items()
+        if k != wow.eval(f"{continent}:GetValue()")
+    )
+    wow.execute(f"{MAP_}.SetContinent({other})")
+    assert wow.eval(f"{continent}:GetValue()") == other
+    assert wow.eval(f"{continent}.label:GetText()") == wow.eval(f"{continent}.values[{other}]")
     assert wow.errors == []

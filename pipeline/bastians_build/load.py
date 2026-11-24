@@ -152,6 +152,15 @@ def load_sources(client: str, paths: SourcePaths, *, eq_spawns: bool = True) -> 
                 s.map_types = {m: r.type for m, r in ui_maps.items()}
             s.notes.extend(notes)
             s.source_names.append(f"clientdump UiMap ({prefix})")
+            # the maps' overlays, so the book draws a zone whole (R4.5); without the three
+            # tables the zones have none and the book shows what the character explored
+            overlay_tables = [
+                paths.dumps / f"{prefix}_{name}.json"
+                for name in ("UiMapXMapArt", "WorldMapOverlay", "WorldMapOverlayTile")
+            ]
+            if all(p.is_file() for p in overlay_tables):
+                s.map_overlays = clientdump.read_map_overlays(paths.dumps, prefix)
+                s.source_names.append(f"clientdump WorldMapOverlay ({prefix})")
         taxi_paths = paths.dumps / f"{prefix}_TaxiPath.json"
         taxi_points = paths.dumps / f"{prefix}_TaxiPathNode.json"
         if taxi_paths.is_file() and taxi_points.is_file():  # the travel level (ADR 0026, W4)

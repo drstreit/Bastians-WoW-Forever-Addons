@@ -37,8 +37,13 @@ local function bestReward(rw, ctx)
   return best, unknown
 end
 
--- Worth.quest(q, ctx) -> { text, copper, xp } for a known quest record (rewards: money, xp,
--- rep = { { factionID, value } }, items and choices = { { itemID, count } }); nil for no record.
+-- Worth.quest(q, ctx) -> { text, short, copper, xp } for a known quest record (rewards: money,
+-- xp, rep = { { factionID, value } }, items and choices = { { itemID, count } }); nil for no
+-- record. `short` is the line for a row's value column (W9: "1150 XP - +37 Ironforge - +37
+-- Gnomeregan Exiles - +150 Darnassus" needed far more than a tile's 170 units; the windows probe,
+-- 23.11.2026): the coin, the XP, the largest reputation gain ("yes, we try
+-- it") and the best reward; the other reputations and what the quest unlocks stand in `text`,
+-- which the page shows whole. nil when it would say the same as `text`.
 -- ctx = { price = fn(itemID), sell = fn(itemID), factionName = fn(factionID), unlocks = n }.
 function Worth.quest(q, ctx)
   if not q then
@@ -46,15 +51,18 @@ function Worth.quest(q, ctx)
   end
   ctx = ctx or {}
   local rw = (q.id and ns.Logic.rewards(q.id)) or q.rewards or {}
-  local parts, copper, xp = {}, nil, nil
+  local parts, short, copper, xp = {}, {}, nil, nil
   if rw.money and rw.money > 0 then
     parts[#parts + 1] = B.UI.Money(rw.money)
+    short[#short + 1] = parts[#parts]
     copper = rw.money
   end
   if rw.xp and rw.xp > 0 then
     parts[#parts + 1] = tostring(rw.xp) .. " " .. L["XP"]
+    short[#short + 1] = parts[#parts]
     xp = rw.xp
   end
+  local bestRep, bestValue -- the largest gain keeps its place on a row
   for _, rep in ipairs(rw.rep or {}) do
     local value = rep[2] or 0
     if value ~= 0 then
@@ -63,7 +71,13 @@ function Worth.quest(q, ctx)
         .. value
         .. " "
         .. (name or (L["faction"] .. " " .. rep[1]))
+      if value > 0 and (bestValue == nil or value > bestValue) then
+        bestRep, bestValue = parts[#parts], value
+      end
     end
+  end
+  if bestRep then
+    short[#short + 1] = bestRep
   end
   local best, unknown = bestReward(rw, ctx)
   if best then
@@ -72,9 +86,11 @@ function Worth.quest(q, ctx)
       text = text .. " " .. L["(vendor)"]
     end
     parts[#parts + 1] = text
+    short[#short + 1] = text
     copper = (copper or 0) + best.copper
   elseif unknown > 0 then
     parts[#parts + 1] = L["reward price unknown"]
+    short[#short + 1] = parts[#parts]
   end
   if ctx.unlocks and ctx.unlocks > 0 then
     parts[#parts + 1] = string.format(L["unlocks %d"], ctx.unlocks)
@@ -82,7 +98,9 @@ function Worth.quest(q, ctx)
   if #parts == 0 then
     return nil -- nothing known, no line (ADR 0052)
   end
-  return { text = table.concat(parts, " - "), copper = copper, xp = xp }
+  -- a quest that gives only reputation or only unlocks keeps its whole line on the row
+  local row = (#short > 0 and #short < #parts) and table.concat(short, " - ") or nil
+  return { text = table.concat(parts, " - "), short = row, copper = copper, xp = xp }
 end
 
 -- The stat name the client shows for an ITEM_MOD_* key, else the key in words ("Crit rating").

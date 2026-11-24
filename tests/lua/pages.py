@@ -227,21 +227,33 @@ def pills(wow: WowRuntime, tree: str) -> list[str]:
 
 
 def _pill(tree: str, dim: str) -> str:
-    """A Lua expression for a dimension's pill. The Browser's "where" is no pill of the bar since
-    ADR 0056 (PA1.2): it is the scope chip inside the search box, which clicks and clears alike."""
-    return (
-        f"({tree}.filterBar:Pill('{dim}') "
-        f"or ('{dim}' == 'where' and {tree} == {BROWSER}.tree and {BROWSER}.scope) or nil)"
-    )
+    """A Lua expression for a dimension's pill."""
+    return f"{tree}.filterBar:Pill('{dim}')"
+
+
+def _scope(tree: str, dim: str) -> bool:
+    """The Browser's "where" is no pill of the bar since ADR 0056 (PA1.2): until W9 the scope chip
+    inside the search box, since then (24.11.2026) a group of chips in the band, one per choice
+    and "Everywhere". The helpers below pick and clear it by the dimension's own words."""
+    return dim == "where" and tree == f"{BROWSER}.tree"
 
 
 def scope(wow: WowRuntime) -> str | None:
-    """The words of the Browser's scope chip ("in Elwynn Forest"), None while it is hidden."""
+    """The words of the Browser's scope ("in Elwynn Forest"), None while it has none."""
     return wow.eval(f"({BROWSER}.Browser.Scope())")
 
 
 def menu(wow: WowRuntime, tree: str, dim: str) -> list[str]:
-    """Opens the dropdown of a pill (by dimension id) and returns its entries: "label  count"."""
+    """Opens the dropdown of a pill (by dimension id) and returns its entries: "label  count".
+    The Browser's "where": its choices as the dimension names them, "All" first."""
+    if _scope(tree, dim):
+        wow.execute(
+            f"ScopeMenu = {{}} local d = {BROWSER}.Browser.ScopeDim() "
+            "local function say(c) return c.count and (c.label .. '  ' .. c.count) or c.label end "
+            "ScopeMenu[1] = say(d.all) "
+            "for _, c in ipairs(d.choices) do ScopeMenu[#ScopeMenu + 1] = say(c) end"
+        )
+        return [str(x) for x in wow.eval("ScopeMenu").values()]
     wow.execute(f"{_pill(tree, dim)}:Click()")
     frame = wow.eval("Bastians.UI.FilterMenuFrame()")
     out = []
@@ -254,7 +266,17 @@ def menu(wow: WowRuntime, tree: str, dim: str) -> list[str]:
 
 
 def pick(wow: WowRuntime, tree: str, dim: str, label: str) -> None:
-    """Opens a pill's dropdown and clicks the entry whose label is `label`."""
+    """Opens a pill's dropdown and clicks the entry whose label is `label`. The Browser's
+    "where": a click on the band's chip of that choice ("All": Everywhere)."""
+    if _scope(tree, dim):
+        wow.execute(
+            f"local d, id = {BROWSER}.Browser.ScopeDim(), nil "
+            f"if d.all.label == {label!r} then id = 'where:all' end "
+            f"for _, c in ipairs(d.choices) do if c.label == {label!r} then id = 'where:' .. c.key end end "
+            f"assert(id, 'no choice {label} in where') "
+            f"{BROWSER}.band.byId[id]:Click()"
+        )
+        return
     wow.execute(f"{_pill(tree, dim)}:Click()")
     wow.execute(
         "for _, b in ipairs(Bastians.UI.FilterMenuFrame().items) do "
@@ -264,7 +286,10 @@ def pick(wow: WowRuntime, tree: str, dim: str, label: str) -> None:
 
 
 def clear(wow: WowRuntime, tree: str, dim: str) -> None:
-    """Clicks the pill's "x"."""
+    """Clicks the pill's "x". The Browser's "where": its Everywhere chip."""
+    if _scope(tree, dim):
+        wow.execute(f"{BROWSER}.band.byId['where:all']:Click()")
+        return
     wow.execute(f"{_pill(tree, dim)}.clear:Click()")
 
 
@@ -314,11 +339,12 @@ def nav_active(wow: WowRuntime) -> str | None:
 
 
 def rail_rows(wow: WowRuntime) -> list[tuple[str, str, bool, str | None]]:
-    """The rail's seven entries as (id, label, lit, needs)."""
+    """The seven sections (the head's tabs since W9) as (id, label, lit, needs)."""
     wow.execute(
-        f"RailRows = {{}} for _, b in ipairs({BROWSER}.rail.buttons) do "
-        "if b:IsShown() and b.section then RailRows[#RailRows + 1] = "
-        "{ b.section.id, b.section.label, b.spec.primary == true, b.section.needs or false } end end"
+        f"RailRows = {{}} local t = {BROWSER}.head.tabs "
+        "for _, p in ipairs(t.parts) do local tip = p.item.disabled and p.item.tip or nil "
+        "RailRows[#RailRows + 1] = { p.item.id, p.item.word, t.spec.value == p.item.id, "
+        "tip and select(2, tip()) or false } end"
     )
     return [
         (str(r[1]), str(r[2]), bool(r[3]), (str(r[4]) if r[4] else None))
@@ -327,10 +353,12 @@ def rail_rows(wow: WowRuntime) -> list[tuple[str, str, bool, str | None]]:
 
 
 def tab_rows(wow: WowRuntime) -> list[tuple[str, str, bool]]:
-    """The shown section's tabs as (id, label, lit); empty for a section of one list."""
+    """The shown section's lists and views (chips in the band since W9) as (id, label, lit);
+    empty for a section of one list. A search's count stands after two spaces, as it did."""
     wow.execute(
-        f"TabRows = {{}} for _, b in ipairs({BROWSER}.tabs.buttons) do "
-        "if b:IsShown() and b.cat then TabRows[#TabRows + 1] = { b.cat.id, b.spec.label, b.spec.primary == true } end end"
+        f"TabRows = {{}} for _, b in ipairs({BROWSER}.tabs.chips) do local c = b.control "
+        "TabRows[#TabRows + 1] = { c.cat.id, c.count and (c.label .. '  ' .. c.count) or c.label, "
+        "b.spec.on == true } end"
     )
     return [(str(r[1]), strip(r[2]), bool(r[3])) for r in wow.eval("TabRows").values()]
 
@@ -343,11 +371,10 @@ def nav_click(wow: WowRuntime, row_id: str, button: str = "LeftButton") -> None:
 
 
 def rail_click(wow: WowRuntime, section: str) -> None:
-    """Clicks a rail entry."""
+    """Clicks a section's tab in the head."""
     wow.execute(
-        f"for _, b in ipairs({BROWSER}.rail.buttons) do if b:IsShown() and b.section and b.section.id == {section!r} then "
-        "b:Click('LeftButton') return end end "
-        f"error('no rail entry {section}')"
+        f"local p = assert({BROWSER}.head.tabs:Part({section!r}), 'no section {section}') "
+        "p:Click('LeftButton')"
     )
 
 

@@ -322,7 +322,6 @@ local function build(id)
     minWidth = 240,
     minHeight = 180,
     lockable = true,
-    headIcons = true, -- the chat's windows: Lock, Options, Close as pictograms (V27)
     db = s.windows[id],
     escape = false, -- Escape must not close the chat
     strata = "LOW", -- with the chat window, under every other

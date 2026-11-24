@@ -394,11 +394,10 @@ ns.L:Register("ptBR", {
   ["Window text"] = "Texto das janelas",
   ["Heads and tabs"] = "Cabeçalhos e abas",
   ["Numbers and times"] = "Números e horários",
-  ["By the look (%s in Modern and Glass)"] = "Conforme a aparência (%s em Moderno e Vidro)",
   ["By the look"] = "Conforme a aparência",
-  ["By the look: in Modern and Glass the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono; WoW and Parchment their own fonts."] = "Conforme a aparência: em Moderno e Vidro, os títulos e abas usam Barlow Condensed SemiBold, os números e horários IBM Plex Mono; WoW e Pergaminho suas próprias fontes.",
+  ["By the look: the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono."] = "Conforme a aparência: os títulos e abas usam Barlow Condensed SemiBold, os números e horários IBM Plex Mono.",
   ["The look's own"] = "A da aparência",
-  ["Modern and Glass take IBM Plex Sans, Barlow Condensed and IBM Plex Mono, WoW and Parchment their own fonts; the chat's lines keep the Font under Text."] = "Moderno e Vidro usam IBM Plex Sans, Barlow Condensed e IBM Plex Mono; WoW e Pergaminho, as próprias fontes; as linhas do chat mantêm a Fonte de Texto.",
+  ["By the look, the chat's windows take IBM Plex Sans, Barlow Condensed and IBM Plex Mono; the chat's lines keep the Font under Text."] = "Conforme a aparência, as janelas do chat usam IBM Plex Sans, Barlow Condensed e IBM Plex Mono; as linhas do chat mantêm a Fonte de Texto.",
   -- an offer: how many of the item the bags hold (plan-chat-v3.md V18)
   ["you have %d"] = "você tem %d",
   -- the watch list (plan-chat-v3.md V19)

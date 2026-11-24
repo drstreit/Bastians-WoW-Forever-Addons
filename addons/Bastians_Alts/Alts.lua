@@ -809,17 +809,19 @@ local function register(self)
     -- Equipment, Bags, Bank, Mail, Requests; a place not read yet says so
     chapters = {
       { id = "equipment", tab = true },
-      { id = "bags", tab = true, always = true, empty = L["The bags were not read yet."] },
+      { id = "bags", tab = true, always = true, label = L["Bags"], empty = L["The bags were not read yet."] },
       {
         id = "bank",
         tab = true,
         always = true,
+        label = L["Bank"],
         empty = L["The bank was not read yet: open it once on this character."],
       },
       {
         id = "mail",
         tab = true,
         always = true,
+        label = L["Mail"],
         empty = L["The mailbox was not read yet: open one on this character."],
       },
       { id = "requests", tab = true },

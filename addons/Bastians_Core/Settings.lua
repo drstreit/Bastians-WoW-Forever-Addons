@@ -974,6 +974,29 @@ ns.core = B:NewModule("Core", {
         B:Log(nil, "info", "one look for the suite: %d profile(s) mapped to a theme", mapped)
       end
     end,
+    -- 5 (ADR 0084 decision 7, W5, 23.11.2026): headings and labels wear the book's faces, the
+    -- numbers the text font. The three face settings go from every profile; the text font stays.
+    [5] = function(db)
+      local sv = rawget(db, "sv")
+      local profiles = sv and sv.profiles or { db.profile }
+      local cleared = 0
+      for _, p in pairs(profiles) do
+        if type(p) == "table" then
+          local had = false
+          for _, key in ipairs({ "headingFont", "labelFont", "numberFont" }) do
+            if rawget(p, key) ~= nil then
+              p[key], had = nil, true
+            end
+          end
+          if had then
+            cleared = cleared + 1
+          end
+        end
+      end
+      if cleared > 0 then
+        B:Log(nil, "info", "the book's faces for headings and labels: %d profile(s) cleared", cleared)
+      end
+    end,
   },
   options = {
     { type = "header", label = L["Profiles"] },
@@ -1040,62 +1063,6 @@ ns.core = B:NewModule("Core", {
         return Settings_.FontChoices()
       end,
       set = function()
-        S.applyFont()
-      end,
-    },
-    {
-      -- the heading font (ADR 0038): window titles, page names and section titles; "" is the text font
-      type = "select",
-      key = "headingFont",
-      desc = L["The font of window titles, page names and section titles."],
-      label = L["Heading font"],
-      values = function()
-        local values = Settings_.FontChoices()
-        values[""] = L["Same as the text"]
-        return values
-      end,
-      get = function(mod)
-        return mod.db.profile.headingFont or ""
-      end,
-      set = function(path, mod)
-        mod.db.profile.headingFont = path ~= "" and path or nil
-        S.applyFont()
-      end,
-    },
-    -- the faces of the small heads and of the numbers (plan-chat-v3.md V17); "" is the text font
-    {
-      type = "select",
-      key = "labelFont",
-      desc = L["The font of section titles and tabs."],
-      label = L["Labels and tabs font"],
-      values = function()
-        local values = Settings_.FontChoices()
-        values[""] = L["Same as the text"]
-        return values
-      end,
-      get = function(mod)
-        return mod.db.profile.labelFont or ""
-      end,
-      set = function(path, mod)
-        mod.db.profile.labelFont = path ~= "" and path or nil
-        S.applyFont()
-      end,
-    },
-    {
-      type = "select",
-      key = "numberFont",
-      desc = L["The font of counts, times and prices where an app marks them."],
-      label = L["Numbers font"],
-      values = function()
-        local values = Settings_.FontChoices()
-        values[""] = L["Same as the text"]
-        return values
-      end,
-      get = function(mod)
-        return mod.db.profile.numberFont or ""
-      end,
-      set = function(path, mod)
-        mod.db.profile.numberFont = path ~= "" and path or nil
         S.applyFont()
       end,
     },
@@ -2203,8 +2170,9 @@ local function cardFrame(canvas, n)
   if not card then
     card = CreateFrame("Frame", nil, canvas)
     card:SetFrameLevel(canvas:GetFrameLevel() or 0) -- under the widgets, which are a level up
-    card.plate = S.roundFill(card, S.C.card, "radiusSmall")
-    card.edge = S.roundEdges(card, S.C.cardEdge, "radiusSmall")
+    -- an option's card (ADR 0084, the suite's board): the band's ground, corners 5, no edge
+    card.plate = S.roundFill(card, S.C.panel, 5)
+    card.edge = S.roundEdges(card, S.C.cardEdge, 5)
     card.desc = S.text(card, 10, S.C.dim)
     card.desc:SetJustifyH("LEFT")
     card.desc:SetWordWrap(false)
@@ -2246,7 +2214,7 @@ local function layout(canvas, widgets)
       c.desc:SetText(desc or "")
       c.desc:SetShown(desc ~= nil)
       c.plate:Show()
-      c.edge:Show()
+      c.edge:Hide()
       c:Show()
       y = y + h + descH + CARD_PAD + GAP
     else

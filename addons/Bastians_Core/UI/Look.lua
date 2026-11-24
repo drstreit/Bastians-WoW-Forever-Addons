@@ -112,7 +112,10 @@ end
 -- `only` draws the pictogram alone ("More", a window's head with `headIcons`), `row` the smaller
 -- button inside a row, `boxed` a face and edges in Modern (a quiet button has none), `toggle` a
 -- switch whose pictogram is lit while `on` and dim while off (the window's lock, plan-chat-v3.md
--- V27). It sizes itself (Fit).
+-- V27). It sizes itself (Fit). A head's part (ADR 0084, Window.HEADS) names its own numbers:
+-- `height`, `glyph` (the pictogram's size), `size` (the text's), `pad` (beside the words), `role`
+-- (the text's face) and `caps` (small capitals, S.SmallCaps). `menu`: a small arrow after the
+-- words (a select as a tool, W9).
 -- ---------------------------------------------------------------------------------------------
 
 function S.action(parent, spec)
@@ -125,7 +128,14 @@ function S.action(parent, spec)
   b.label = S.text(b, 12, S.C.text)
   b.label:SetJustifyH("LEFT")
   b.label:SetWordWrap(false) -- one line; a fixed width cuts it (layoutAction)
+  if spec.role then
+    S.SetRole(b.label, spec.role)
+  end
+  if spec.size then
+    S.setSize(b.label, spec.size)
+  end
   b.tip = spec.tip or (spec.only and spec.label) or nil
+  b.tipNow = spec.only and true or nil -- a pictogram alone: its name at once (S.TipEnter)
   b:SetScript("OnEnter", function(self)
     local hover = look(self).hover
     if hover and self.enabledFlat ~= false then
@@ -169,7 +179,7 @@ function S.action(parent, spec)
       self.badge:SetPoint("TOPRIGHT", 4, 4)
       self.badge:SetFrameLevel((self:GetFrameLevel() or 1) + 2)
       self.badge.bg = S.roundFill(self.badge, S.C.accent, "radiusSmall")
-      self.badge.text = S.SetRole(S.text(self.badge, 10, S.C.headerText), "number")
+      self.badge.text = S.SetRole(S.text(self.badge, 10, S.C.bg), "number")
       self.badge.text:SetPoint("CENTER")
     end
     self.badge:SetShown(n > 0)
@@ -194,10 +204,12 @@ local function iconInk(b, lit)
   return lit or S.Tok(b, "accent")
 end
 
+S.MENU_ARROW, S.MENU_GAP = 8, 7 -- a select's arrow and the room before it (the suite's board)
+
 -- The shared layout of an action: the icon left, the text after it, the size from both.
 local function layoutAction(b, h, icon, gap, pad)
   local spec = b.spec
-  local iconW = icon and (h - 8) or 0
+  local iconW = icon and (spec.glyph or (h - 8)) or 0
   b.icon:ClearAllPoints()
   b.icon:SetSize(math.max(iconW, 1), math.max(iconW, 1))
   b.icon:SetPoint("LEFT", pad, 0)
@@ -209,16 +221,39 @@ local function layoutAction(b, h, icon, gap, pad)
     b.icon:Hide()
   end
   local text = spec.only and "" or (spec.label or "")
+  if spec.caps then
+    text = S.SmallCaps(text)
+  end
   local lead = pad + iconW + (icon and text ~= "" and gap or 0)
   b.label:SetText(text)
   b.label:ClearAllPoints()
-  if spec.width and not icon then
+  if spec.width and not icon and not spec.menu then
     b.label:SetPoint("CENTER") -- a fixed width without a pictogram: the word in the middle
   else
     b.label:SetPoint("LEFT", lead, 0)
   end
   local textW = textWidth(b.label, text)
   local w = lead + textW + pad
+  -- a select is a tool with a small arrow after its words (ADR 0084 decision 2; `spec.menu`)
+  if spec.menu then
+    if not b.arrow then
+      b.arrow = b:CreateTexture(nil, "ARTWORK")
+      b.arrow:SetTexture(S.ARROW)
+      b.arrow:SetSize(S.MENU_ARROW, S.MENU_ARROW)
+      b.arrow:SetRotation(-math.pi / 2) -- the arrow points east; a select's points down
+    end
+    b.arrow:ClearAllPoints()
+    if spec.width then
+      b.arrow:SetPoint("RIGHT", -pad, 0) -- a select of a fixed width: the arrow at its end
+    else
+      b.arrow:SetPoint("LEFT", lead + textW + S.MENU_GAP, 0)
+    end
+    S.tint(b.arrow, S.Tok(b, "dim"), 1)
+    b.arrow:Show()
+    w = w + S.MENU_GAP + S.MENU_ARROW
+  elseif b.arrow then
+    b.arrow:Hide()
+  end
   -- a fixed width never draws its label past the edge (, screens 5 and
   -- 8: the settings' choices ran out of their buttons): the label is cut to the room (the client
   -- ends it with "...") and the whole label is the tooltip, unless the button has a tip of its own
@@ -229,7 +264,7 @@ local function layoutAction(b, h, icon, gap, pad)
   b.label:SetWidth(0) -- as wide as its text
   if spec.width then
     w = spec.width -- a column of equal buttons (the hub's rows): the app's choice
-    local room = math.max(1, w - lead - pad)
+    local room = math.max(1, w - lead - pad - (spec.menu and (S.MENU_GAP + S.MENU_ARROW) or 0))
     if textW > room then
       b.label:SetWidth(room)
       b.cutTip = text
@@ -285,6 +320,7 @@ end
 -- ---------------------------------------------------------------------------------------------
 
 S.STAT_H = 56
+S.STAT_FIGURE = 17 -- the figure's size
 
 function S.stat(parent, spec)
   spec = spec or {}
@@ -296,7 +332,9 @@ function S.stat(parent, spec)
   f.label:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -6)
   f.label:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.label:SetWordWrap(false)
-  f.value = S.heading(f, 16, 18, S.C.text)
+  -- the figure in the reader's text font (ADR 0084 decision 7: numbers stay the text font):
+  -- the heading face's old-style digits read "17" as "I7" (the windows probe, 23.11.2026)
+  f.value = S.SetRole(S.text(f, S.STAT_FIGURE, S.C.text), "number")
   f.value:SetPoint("TOPLEFT", f, "TOPLEFT", 8, -19)
   f.value:SetPoint("RIGHT", f, "RIGHT", -6, 0)
   f.value:SetWordWrap(false)
@@ -351,7 +389,7 @@ end
 LOOKS.book = {
   action = function(b)
     local spec, G = b.spec, S.G
-    local h = spec.row and G.actionRow or G.action
+    local h = spec.height or (spec.row and G.actionRow or G.action)
     b:SetNormalTexture("")
     b:SetPushedTexture("")
     b:SetHighlightTexture("")
@@ -359,11 +397,18 @@ LOOKS.book = {
     b.edges:Show()
     S.tint(b.face, S.Tok(b, spec.primary and "accent" or "panel"), spec.primary and 1 or 0)
     local outline = spec.boxed and not spec.primary
-    S.setEdges(b.edges, S.Tok(b, spec.on and "accent" or "line"), outline and 1 or 0)
+    if spec.primary then
+      -- the filled plate while `on` (the book's Atlas while it shows): an edge in the text's ink
+      S.setEdges(b.edges, S.Tok(b, "text"), spec.on and 1 or 0)
+    else
+      S.setEdges(b.edges, S.Tok(b, spec.on and "accent" or "line"), outline and 1 or 0)
+    end
     local ink = spec.primary and "bg" or (spec.on and "accent" or "text")
     S.ink(b.label, S.Tok(b, ink))
     S.tint(b.icon, iconInk(b, spec.only and not spec.on and S.Tok(b, "muted") or nil), 1)
-    local pad = spec.only and S.PAD_ONLY or ((spec.boxed or spec.primary) and S.PAD_TOOL or S.PAD_QUIET)
+    local pad = spec.only and S.PAD_ONLY
+      or spec.pad
+      or ((spec.boxed or spec.primary) and S.PAD_TOOL or S.PAD_QUIET)
     layoutAction(b, h, spec.icon and B.UI.Pictogram(spec.icon) or nil, G.gap, pad)
   end,
   hover = function(b, over)
@@ -665,7 +710,7 @@ function S.tab(parent, spec)
       self.badge = CreateFrame("Frame", nil, self)
       self.badge:SetSize(16, 13)
       self.badge.bg = S.roundFill(self.badge, S.C.accent, "radiusSmall")
-      self.badge.text = S.SetRole(S.text(self.badge, 10, S.C.headerText), "number")
+      self.badge.text = S.SetRole(S.text(self.badge, 10, S.C.bg), "number")
       self.badge.text:SetPoint("CENTER")
     end
     self.badge:SetShown(n > 0)
@@ -685,7 +730,7 @@ local function layoutTab(t, h, inkTok, faceAlpha, upper)
   local x = spec.kind and (6 + S.G.tile + S.G.gap) or 10
   local label = spec.label or ""
   if upper then
-    label = string.upper(label)
+    label = S.LabelCaps(t.label, label)
   end
   t.label:SetText(label)
   t.label:ClearAllPoints()
@@ -782,7 +827,7 @@ local function layoutSection(s, inkTok, upper)
     s.icon:Hide()
   end
   local title = spec.title or ""
-  s.title:SetText(upper and string.upper(title) or title)
+  s.title:SetText(upper and S.LabelCaps(s.title, title) or title)
   s.title:ClearAllPoints()
   s.title:SetPoint("LEFT", icon and 20 or 0, 0)
   S.ink(s.title, S.Tok(s, inkTok))
@@ -932,9 +977,13 @@ end
 -- plate, the chosen one filled, so the switch says which is shown. spec = { items = { { id,
 -- label, icon, tip } }, value (the chosen id; nil: none), onChange(self, id) }. A click on another
 -- part chooses it and calls onChange; SetValue chooses without the call; Part(id) is its button.
+-- An item with `disabled` is drawn dim and takes no click; its tip still shows (W9: the Browser's
+-- section whose app is missing says what it needs). `spec.again`: a click on the chosen part
+-- calls onChange too (the Browser's lit section leads back to its first list).
 -- ---------------------------------------------------------------------------------------------
 
 S.SEGMENT_HOVER = 0.25 -- the fill's opacity under the mouse on a part not chosen
+S.SEGMENT_OFF = 0.4 -- a part that is `disabled` (S.action's SetEnabledFlat draws the same)
 
 function S.segmented(parent, spec)
   spec = spec or {}
@@ -954,7 +1003,7 @@ function S.segmented(parent, spec)
     b.label:SetJustifyH("LEFT")
     b.tip = item.tip
     b:SetScript("OnEnter", function(self)
-      if f.spec.value ~= self.item.id and f.fillTok then
+      if f.spec.value ~= self.item.id and f.fillTok and not self.item.disabled then
         S.tint(self.fill, f.fillTok, S.SEGMENT_HOVER)
         self.fill:Show()
       end
@@ -966,7 +1015,7 @@ function S.segmented(parent, spec)
     end)
     b:SetScript("OnClick", function(self)
       local id = self.item.id
-      if f.spec.value == id then
+      if self.item.disabled or (f.spec.value == id and not f.spec.again) then
         return
       end
       f:SetValue(id)
@@ -1043,6 +1092,7 @@ local function layoutSegmented(f, c)
     else
       b.fill:Hide()
     end
+    b:SetAlpha(item.disabled and S.SEGMENT_OFF or 1) -- as an action that is not enabled
     x = x + w + (f.spec.gap or 0) -- `spec.gap`: room between the parts (words in a row)
   end
   f:SetSize(math.max(x, h), h)
@@ -1147,7 +1197,7 @@ local function layoutSlider(f, titleTok, numberTok, wordsTok)
   local lo, hi = f.slider:GetMinMaxValues()
   local frac = (hi and lo and hi > lo) and math.max(0, math.min(1, (v - lo) / (hi - lo))) or 0
   local title = spec.title or ""
-  f.title:SetText(spec.plain and title or string.upper(title))
+  f.title:SetText(spec.plain and title or S.LabelCaps(f.title, title))
   S.ink(f.title, titleTok)
   local number
   if spec.number then
@@ -1207,36 +1257,128 @@ S.DECKLE_H = 12 -- the torn edge's height
 -- corners, its middle row and column the sides), in the `folioShadow` token. -> the pieces, also
 -- kept as frame.shadow.
 function S.shadow(frame, spread, drop)
-  local s, d = spread or S.SHADOW_SPREAD, drop or S.SHADOW_DROP
-  local c = 2 * s
-  local function piece(l, r, top, bottom)
-    local tex = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
-    tex:SetTexture(S.SHADOW)
-    tex:SetTexCoord(l, r, top, bottom)
-    S.tint(tex, S.C.folioShadow)
-    return tex
+  local pieces = frame.shadow
+  if not pieces then
+    local function piece(l, r, top, bottom)
+      local tex = frame:CreateTexture(nil, "BACKGROUND", nil, -8)
+      tex:SetTexture(S.SHADOW)
+      tex:SetTexCoord(l, r, top, bottom)
+      S.tint(tex, S.C.folioShadow)
+      return tex
+    end
+    local tl, tr = piece(0, 0.5, 0, 0.5), piece(0.5, 1, 0, 0.5)
+    local bl, br = piece(0, 0.5, 0.5, 1), piece(0.5, 1, 0.5, 1)
+    local top, bottom = piece(0.49, 0.51, 0, 0.5), piece(0.49, 0.51, 0.5, 1)
+    local left, right = piece(0, 0.5, 0.49, 0.51), piece(0.5, 1, 0.49, 0.51)
+    top:SetPoint("TOPLEFT", tl, "TOPRIGHT")
+    top:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
+    bottom:SetPoint("TOPLEFT", bl, "TOPRIGHT")
+    bottom:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT")
+    left:SetPoint("TOPLEFT", tl, "BOTTOMLEFT")
+    left:SetPoint("BOTTOMRIGHT", bl, "TOPRIGHT")
+    right:SetPoint("TOPLEFT", tr, "BOTTOMLEFT")
+    right:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT")
+    pieces = { tl, tr, bl, br, top, bottom, left, right }
+    frame.shadow = pieces
   end
-  local tl, tr = piece(0, 0.5, 0, 0.5), piece(0.5, 1, 0, 0.5)
-  local bl, br = piece(0, 0.5, 0.5, 1), piece(0.5, 1, 0.5, 1)
+  -- the corners carry the spread and the drop; a second call lays the same shadow out again
+  -- (a tile under the mouse casts a longer one, book-look.md 10.3)
+  local s, d = spread or S.SHADOW_SPREAD, drop or S.SHADOW_DROP
+  local tl, tr, bl, br = pieces[1], pieces[2], pieces[3], pieces[4]
   for _, corner in ipairs({ tl, tr, bl, br }) do
-    corner:SetSize(c, c)
+    corner:SetSize(2 * s, 2 * s)
+    corner:ClearAllPoints()
   end
   tl:SetPoint("TOPLEFT", frame, "TOPLEFT", -s, s - d)
   tr:SetPoint("TOPRIGHT", frame, "TOPRIGHT", s, s - d)
   bl:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", -s, -s - d)
   br:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", s, -s - d)
-  local top, bottom = piece(0.49, 0.51, 0, 0.5), piece(0.49, 0.51, 0.5, 1)
-  local left, right = piece(0, 0.5, 0.49, 0.51), piece(0.5, 1, 0.49, 0.51)
-  top:SetPoint("TOPLEFT", tl, "TOPRIGHT")
-  top:SetPoint("BOTTOMRIGHT", tr, "BOTTOMLEFT")
-  bottom:SetPoint("TOPLEFT", bl, "TOPRIGHT")
-  bottom:SetPoint("BOTTOMRIGHT", br, "BOTTOMLEFT")
-  left:SetPoint("TOPLEFT", tl, "BOTTOMLEFT")
-  left:SetPoint("BOTTOMRIGHT", bl, "TOPRIGHT")
-  right:SetPoint("TOPLEFT", tr, "BOTTOMLEFT")
-  right:SetPoint("BOTTOMRIGHT", br, "TOPRIGHT")
-  frame.shadow = { tl, tr, bl, br, top, bottom, left, right }
-  return frame.shadow
+  frame.shadowSpread, frame.shadowDrop = s, d
+  return pieces
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- A tile as an object (ADR 0084 decision 2; book-look.md 10.3; the
+-- hover should be seen "without looking for it"): it lies on the table with a shadow, a light
+-- line at its top and a dark one at its foot; under the mouse it rises 2, its shadow grows and
+-- its edge is lit 2 wide in the book's gold; pressed it sinks 1. No tween: the game moves the
+-- anchor in the frame the mouse arrives.
+-- S.object(frame, { radius = 5, edge = "folioGold" }) makes `frame` (a Button, or a frame with
+-- the mouse) one; call it after the frame's own OnEnter, OnLeave and mouse scripts are set (it
+-- hooks them, and a script set later would replace the hooks). The owner places it with
+-- frame:Rest(point, relativeTo, relativePoint, x, y)
+-- (the tile's place at rest; the states move it from there) and may call
+-- frame:SetObjectState("rest" | "hover" | "press") itself (a list that hands a tile on).
+-- ---------------------------------------------------------------------------------------------
+
+S.OBJECT = {
+  radius = 5,
+  rest = { lift = 0, drop = 4, spread = 12 },
+  hover = { lift = 2, drop = 8, spread = 20 },
+  press = { lift = -1, drop = 2, spread = 6 },
+}
+
+function S.object(frame, spec)
+  spec = spec or {}
+  local radius = spec.radius or S.OBJECT.radius
+  frame.objectSpec = spec
+  S.shadow(frame, S.OBJECT.rest.spread, S.OBJECT.rest.drop)
+  -- the lit edge, 2 wide: one outline at the tile's edge and one a unit inside it, over
+  -- everything the tile holds
+  local lit = CreateFrame("Frame", nil, frame)
+  lit:SetAllPoints(frame)
+  lit:SetFrameLevel((frame:GetFrameLevel() or 0) + 12)
+  lit.outer = S.roundEdges(lit, S.C[spec.edge or "folioGold"], radius)
+  lit.innerFrame = CreateFrame("Frame", nil, lit)
+  lit.innerFrame:SetPoint("TOPLEFT", lit, "TOPLEFT", 1, -1)
+  lit.innerFrame:SetPoint("BOTTOMRIGHT", lit, "BOTTOMRIGHT", -1, 1)
+  lit.inner = S.roundEdges(lit.innerFrame, S.C[spec.edge or "folioGold"], math.max(1, radius - 1))
+  -- a light line at the top edge, a dark one at the foot (inside the round corners)
+  lit.top = S.fill(lit, S.C.folioLight, "OVERLAY")
+  lit.top:ClearAllPoints()
+  lit.top:SetPoint("TOPLEFT", lit, "TOPLEFT", radius, 0)
+  lit.top:SetPoint("TOPRIGHT", lit, "TOPRIGHT", -radius, 0)
+  lit.top:SetHeight(1)
+  lit.foot = S.fill(lit, S.C.folioDark, "OVERLAY")
+  lit.foot:ClearAllPoints()
+  lit.foot:SetPoint("BOTTOMLEFT", lit, "BOTTOMLEFT", radius, 0)
+  lit.foot:SetPoint("BOTTOMRIGHT", lit, "BOTTOMRIGHT", -radius, 0)
+  lit.foot:SetHeight(1)
+  frame.lit = lit
+  function frame.Rest(self, point, rel, relPoint, x, y)
+    self.rest = { point, rel, relPoint, x or 0, y or 0 }
+    self:SetObjectState(self.objectState or "rest")
+  end
+  function frame.SetObjectState(self, state)
+    local st = S.OBJECT[state] or S.OBJECT.rest
+    self.objectState = S.OBJECT[state] and state or "rest"
+    local on = self.objectState ~= "rest"
+    S.setEdges(self.lit.outer, S.Tok(self, spec.edge or "folioGold"), on and 1 or 0)
+    S.setEdges(self.lit.inner, S.Tok(self, spec.edge or "folioGold"), on and 1 or 0)
+    S.shadow(self, st.spread, st.drop)
+    local r = self.rest
+    if r then
+      self:ClearAllPoints()
+      self:SetPoint(r[1], r[2], r[3], r[4], r[5] + st.lift)
+    end
+  end
+  frame:HookScript("OnEnter", function(self)
+    self:SetObjectState("hover")
+  end)
+  frame:HookScript("OnLeave", function(self)
+    self:SetObjectState("rest")
+  end)
+  frame:HookScript("OnMouseDown", function(self)
+    self:SetObjectState("press")
+  end)
+  frame:HookScript("OnMouseUp", function(self)
+    self:SetObjectState(self:IsMouseOver() and "hover" or "rest")
+  end)
+  frame:HookScript("OnHide", function(self)
+    self:SetObjectState("rest") -- a tile that goes while lifted comes back at rest
+  end)
+  frame:SetObjectState("rest")
+  return frame
 end
 
 -- A torn paper edge over `parent`'s picture, `level` frame levels above it, in the paper's colour

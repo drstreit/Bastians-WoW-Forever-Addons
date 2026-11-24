@@ -55,7 +55,7 @@ def test_open_lands_on_the_home_with_here_views_and_chips(wow: WowRuntime):
     wow.execute(f"{BR}.Open()")
     wow.execute(SIZE)
     assert wow.eval(f"{BR}.Current().kind") == "home"
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Search"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "Search"
     assert wow.eval(f"{MOD}.toolbar.types") is None  # the dropdown is gone (ADR 0013 F)
     assert chips(wow) == []  # the types are the navigation's lists (ADR 0018)
     assert nav_lists(wow) == [

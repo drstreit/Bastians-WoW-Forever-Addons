@@ -362,3 +362,27 @@ def test_a_tabbed_sheet_reads_one_chapter_at_a_time_and_facts_as_tiles(app: WowR
     app.run_frames(2)
     assert app.eval("dossier.tabId") == "overview"
     assert app.errors == []
+
+
+def test_an_always_tab_without_a_section_reads_its_label(app: WowRuntime):
+    """Forever 23.11.2026: a character's bank and mail, not read yet, stood as two tabs named
+    "nil". An `always` chapter takes its name from its first section; with none it reads its
+    `label`."""
+    chapters = app.eval(
+        """(function()
+          local out = Bastians.UI.DossierUtil.chapters({}, {
+            { id = 'bank', tab = true, always = true, label = 'Bank', empty = 'Not read yet.' },
+            { id = 'mail', tab = true, always = true, title = 'Post', label = 'Mail' } })
+          return out[1].title .. '|' .. out[2].title
+        end)()"""
+    )
+    assert chapters == "Bank|Post"
+    named = app.eval(
+        """(function()
+          local out = Bastians.UI.DossierUtil.chapters(
+            { { id = 'b', chapter = 'bank', title = 'Bank  5 min ago' } },
+            { { id = 'bank', tab = true, always = true, label = 'Bank' } })
+          return out[1].title
+        end)()"""
+    )
+    assert named == "Bank  5 min ago"  # a section's own title (with its age) wins over the label

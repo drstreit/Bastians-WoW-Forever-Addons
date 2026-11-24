@@ -6,6 +6,7 @@ local B = Bastians
 ns.L = ns.L or B.NewLocale()
 local L = ns.L
 local S = B.UI.Style
+local Widgets = B.UI.Widgets
 local Today, Spots = ns.Today, ns.Spots
 
 local W = {}
@@ -30,8 +31,10 @@ local TAB_TIPS = {
 local TAB_ICONS = { today = "gold", spots = "spot", price = "ledger", bags = "item", ledger = "note" }
 local RENDER_DELAY = 0.05
 
-local mod, win, tree, summary, hint
-local tabs = {}
+local SUM_TOP, SUM_H, SUM_FOOT, SIDE = 8, 14, 6, 15 -- the line that says what is shown (the board)
+local TREE_LEFT, TREE_RIGHT = 6, 20 -- the rows' room beside the fold marks and the scroll bar
+
+local mod, win, tree, summary, hint, tabs
 local filterItem -- the item of the Farm spots tab (nil = all) and of the Price tab
 
 local function db()
@@ -64,9 +67,12 @@ function W.Context()
 end
 
 local function setTabs()
-  for _, b in ipairs(tabs) do
-    b:SetOn(b.view == view()) -- the look draws the chosen tab (ADR 0046)
-  end
+  tabs.tabs:SetValue(view()) -- the head's filled tab (ADR 0084 decision 3)
+end
+
+-- A section's words without their colour codes, as a quiet heading's title.
+local function plain(text)
+  return (tostring(text or ""):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
 end
 
 -- The income block: gold per day, AH apart from loot, the
@@ -120,6 +126,7 @@ local function incomeRows()
   return {
     id = "today:income",
     kind = "section",
+    title = L["Income"] .. ", " .. L["gold per day"], -- a quiet heading (the board)
     text = S.accent() .. string.upper(L["Income"]) .. "|r  " .. S.H.muted .. L["gold per day"] .. "|r",
     children = rows,
   }
@@ -170,6 +177,8 @@ local function todayRows()
     roots[#roots + 1] = {
       id = "today:" .. group.action,
       kind = "section",
+      title = L[group.action],
+      count = #rows,
       text = S.accent() .. string.upper(L[group.action]) .. "|r  " .. S.H.muted .. #rows .. "|r",
       children = rows,
     }
@@ -276,8 +285,13 @@ local function priceRows()
   local roots = {}
   for _, section in ipairs(B:GetDetailSections(ref)) do
     if section.id == "gold.price" or section.id == "gold.farm" then
-      roots[#roots + 1] =
-        { id = "section:" .. section.id, text = section.title, kind = "section", children = section.rows }
+      roots[#roots + 1] = {
+        id = "section:" .. section.id,
+        title = plain(section.title),
+        text = section.title,
+        kind = "section",
+        children = section.rows,
+      }
     end
   end
   return roots, B:Entity(ref):Name() or ref
@@ -291,6 +305,7 @@ local function ledgerRows()
     roots[#roots + 1] = {
       id = "ledger:hours",
       kind = "section",
+      title = L["When the market runs high"],
       text = S.accent() .. string.upper(L["When the market runs high"]) .. "|r",
       children = hours,
     }
@@ -323,6 +338,11 @@ local function bagRows()
           id = "bag:" .. tostring(it.bag) .. ":" .. tostring(it.slot),
           ref = "item:" .. it.itemID,
           icon = it.icon,
+          -- two lines (W9): the item, then the reason; on one line the reason needed about 400
+          -- units of the 256 the window has (the windows probe, 23.11.2026)
+          title = it.name .. (it.count > 1 and (" x" .. it.count) or ""),
+          meta = S.H.muted .. a.reason .. "|r",
+          worth = false, -- the reason says the prices: no worth line under it
           text = it.name
             .. (it.count > 1 and (" x" .. it.count) or "")
             .. "  "
@@ -336,6 +356,7 @@ local function bagRows()
       roots[#roots + 1] = {
         id = "bags:" .. verdict,
         kind = "section",
+        title = titles[verdict][1] .. ", " .. titles[verdict][2],
         text = S.accent()
           .. string.upper(titles[verdict][1])
           .. "|r  "
@@ -395,6 +416,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansGoldFrame", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     module = "Gold", -- the options button opens this page (R27.1)
     title = L["Gold"],
     width = 520,
@@ -413,33 +435,56 @@ local function build()
     end,
   })
   local content = win.content
-  local x = 6
-  for i, t in ipairs(TABS) do
-    local b = S.action(content, { icon = TAB_ICONS[t[1]], label = L[t[2]], boxed = true })
-    b.tip = TAB_TIPS[t[1]]
-    b:SetPoint("TOPLEFT", content, "TOPLEFT", x, -6)
-    b.view = t[1]
-    b:SetScript("OnClick", function()
-      W.Open(t[1])
-    end)
-    tabs[i] = b
-    x = x + b:GetWidth() + 4
+  -- the five views as the head's tabs (ADR 0084 decision 3; gold.md "The one look"): on a head
+  -- too narrow for them a row of their own under it; their pictograms when even that is tight
+  local items = {}
+  for _, t in ipairs(TABS) do
+    items[#items + 1] = { id = t[1], label = L[t[2]], icon = TAB_ICONS[t[1]], tip = TAB_TIPS[t[1]] }
   end
-  summary = S.text(content, 11, S.C.dim)
-  summary:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -34)
-  summary:SetPoint("TOPRIGHT", content, "TOPRIGHT", -8, -34)
-  summary:SetHeight(14)
-  hint = S.text(content, 10, S.C.dim)
-  hint:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 8, 4)
+  tabs = win:Bar({
+    tabs = {
+      items = items,
+      value = view(),
+      onChange = function(id)
+        W.Open(id)
+      end,
+    },
+    onLayout = function()
+      W.Layout()
+    end,
+  })
+  summary = S.text(content, 13, S.C.dim) -- what is shown, in the text size (the board)
+  summary:SetHeight(SUM_H)
+  summary:SetJustifyH("LEFT")
+  summary:SetWordWrap(false)
+  hint = Widgets.Foot(content) -- the window's last line, on the band's ground
   hint:SetText(L["Right click a line for its entity menu."])
-  tree = B.UI.Tree(content, { db = db().tree, ctx = { source = "gold" } })
+  tree = B.UI.Tree(content, {
+    db = db().tree,
+    ctx = { source = "gold" },
+    capsSections = true, -- the sections as quiet headings (the board)
+    twoLine = true, -- a bag's row: the item, then the reason
+  })
+  W.win, W.tree, W.summary, W.tabs, W.hint = win, tree, summary, tabs, hint
+  W.Layout()
+end
+
+-- The line of what is shown and the rows: under the head, or under the tabs' own row.
+function W.Layout()
+  if not (win and tree and tabs) then
+    return
+  end
+  local content = win.content
+  local top = tabs:Room() + SUM_TOP
+  summary:ClearAllPoints()
+  summary:SetPoint("TOPLEFT", content, "TOPLEFT", SIDE, -top)
+  summary:SetPoint("TOPRIGHT", content, "TOPRIGHT", -SIDE, -top)
   tree.chips:ClearAllPoints()
-  tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -52)
-  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, -52)
+  tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", TREE_LEFT, -(top + SUM_H + SUM_FOOT))
+  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -TREE_RIGHT, -(top + SUM_H + SUM_FOOT))
   tree.scroll:ClearAllPoints()
-  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
-  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 18)
-  W.win, W.tree, W.summary, W.tabs = win, tree, summary, tabs
+  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, 0)
+  tree.scroll:SetPoint("BOTTOMRIGHT", hint, "TOPRIGHT", -TREE_RIGHT, 0)
 end
 
 -- Open a tab: "today", "spots" (arg = itemID or nil), "price" (arg = itemID), "bags", "ledger".

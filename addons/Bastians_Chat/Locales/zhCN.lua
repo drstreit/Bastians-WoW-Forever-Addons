@@ -396,11 +396,10 @@ ns.L:Register("zhCN", {
   ["Window text"] = "窗口文字",
   ["Heads and tabs"] = "栏头和标签页",
   ["Numbers and times"] = "数字和时间",
-  ["By the look (%s in Modern and Glass)"] = "随外观（现代和玻璃中为 %s）",
   ["By the look"] = "随外观",
-  ["By the look: in Modern and Glass the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono; WoW and Parchment their own fonts."] = "随外观：现代和玻璃中标题和标签用 Barlow Condensed SemiBold，数字和时间用 IBM Plex Mono；WoW 和羊皮纸用各自的字体。",
+  ["By the look: the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono."] = "随外观：标题和标签用 Barlow Condensed SemiBold，数字和时间用 IBM Plex Mono。",
   ["The look's own"] = "外观自带的",
-  ["Modern and Glass take IBM Plex Sans, Barlow Condensed and IBM Plex Mono, WoW and Parchment their own fonts; the chat's lines keep the Font under Text."] = "现代和玻璃使用 IBM Plex Sans、Barlow Condensed 和 IBM Plex Mono，WoW 和羊皮纸使用各自的字体；聊天的行保留“文字”下的字体。",
+  ["By the look, the chat's windows take IBM Plex Sans, Barlow Condensed and IBM Plex Mono; the chat's lines keep the Font under Text."] = "随外观，聊天窗口使用 IBM Plex Sans、Barlow Condensed 和 IBM Plex Mono；聊天的行保留“文字”下的字体。",
   -- an offer: how many of the item the bags hold (plan-chat-v3.md V18)
   ["you have %d"] = "你有 %d 个",
   -- the watch list (plan-chat-v3.md V19)

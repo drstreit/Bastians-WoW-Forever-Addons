@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from harness import WowRuntime
-from test_book_pages import MOD, boot
+from test_book_pages import MOD, boot, size
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools"))
 import book_look
@@ -29,6 +29,7 @@ def test_the_book_is_measured_at_three_widths_and_put_back(wow: WowRuntime):
     boot(wow)
     wow.slash("/bbook")
     wow.execute(f"{MOD}.Window.win.db.size = {{ 940, 640 }}")
+    size(wow)  # the mock sizes nothing from its anchors: the list's room by hand
     run_probe(wow)
     assert wow.eval(f"#{OUT}.runs") == 3
     assert [wow.eval(f"{OUT}.runs[{i}].asked") for i in (1, 2, 3)] == [1100, 1532, 2100]
@@ -42,6 +43,12 @@ def test_the_book_is_measured_at_three_widths_and_put_back(wow: WowRuntime):
     assert wow.eval(f"{run}.fonts.chip.size") == 11 and wow.eval(f"{run}.fonts.title.size") == 18
     assert wow.eval(f"{run}.colours.band.r ~= nil") is True
     assert wow.eval(f"{run}.screenshot.ok") is True
+    # W6: the front table's cabinet is measured at each width too, then the shelf shows again
+    cab = f"{run}.cabinet"
+    assert wow.eval(f"{cab}.error") is None
+    assert wow.eval(f"{cab}.cols") in (1, 2, 3) and wow.eval(f"#{cab}.tiles") >= 1
+    assert wow.eval(f"{cab}.tiles[1].slot") == 0 and wow.eval(f"{cab}.tiles[1].kind") is not None
+    assert wow.eval(f"{MOD}.Window.Current().kind") == "shelf"
     # the reader's own size is back
     assert wow.eval(f"{MOD}.Window.win.frame:GetWidth()") == 940
     assert wow.errors == []
@@ -91,3 +98,43 @@ def test_the_tool_holds_the_record_against_the_look(wow: WowRuntime, tmp_path: P
     config.write_text(f'[clients]\nforever = "{client}"\n', encoding="utf-8")
     assert book_look.saved_variables(config) == saved / "Bastians_Probe.lua"
     assert book_look.saved_variables(tmp_path / "none.toml") is None
+
+
+def test_the_tool_holds_the_cabinet_against_its_cells():
+    """book-look.md 10.2 in the tool: the cells of a table as wide as the window less its
+    padding, each tile in its cell to a unit."""
+    from types import SimpleNamespace as NS
+
+    want = book_look.cabinet(1532 - 30)
+    assert (want["cols"], want["c"], want["h"], want["height"]) == (3, 493, 241, 997)
+    assert want["cells"][0] == (0, 0, 997, 493) and want["cells"][5] == (0, 756, 997, 241)
+    assert book_look.cabinet(880 - 30)["cols"] == 2 and book_look.cabinet(560 - 30)["cols"] == 1
+    assert book_look.cabinet_checks(None) == []  # a record from before W6
+
+    def tile(slot, cell, dx=0.0):
+        x, y, w, h = cell
+        return NS(slot=slot, kind="picture", x=x + dx, y=y, width=w, height=h)
+
+    def record(dx=0.0, **over):
+        tiles = {i + 1: tile(s, c, dx) for i, (s, c) in enumerate(sorted(want["cells"].items()))}
+        base = dict(error=None, row=NS(width=1502), cols=3, c=493, h=241, height=997, tiles=tiles)
+        base.update(over)
+        return _Table(base)
+
+    assert all(c.ok for c in book_look.cabinet_checks(record()))
+    assert all(c.ok for c in book_look.cabinet_checks(record(dx=0.8)))  # within a unit
+    off = [c for c in book_look.cabinet_checks(record(dx=3)) if not c.ok]
+    assert len(off) == 7 and "tile 0" in off[0].what
+    assert not all(c.ok for c in book_look.cabinet_checks(record(cols=2)))
+    failed = book_look.cabinet_checks(_Table(dict(error="no cabinet on the front table")))
+    assert len(failed) == 1 and not failed[0].ok
+
+
+class _Table(dict):
+    """A saved table as the tool reads it: fields by name, lists by number, a length."""
+
+    def __getattr__(self, name):
+        return self.get(name)
+
+    def __getitem__(self, key):
+        return self.get(key)

@@ -42,21 +42,38 @@ function Record.IsDone(id)
   return me ~= nil and me.done[id] ~= nil
 end
 
--- What this character did with the wonder: { how = "mark" | "found", at, name } or nil.
+-- What this character did with the wonder: { how = "mark" | "found", at, name, zone, level } or
+-- nil.
 function Record.Entry(id)
   local me = Record.Mine()
   return me and me.done[id] or nil
 end
 
+-- Where the character is and at which level, for a mark made now (the diary's line, R4.11):
+-- { zone = uiMapID, level }, each nil where the client does not say.
+function Record.Here()
+  local _, _, _, map = B.Coords.Player()
+  local level = UnitLevel and UnitLevel("player") or nil
+  return { zone = map, level = (level and level > 0) and level or nil }
+end
+
 -- `name`: the wonder's title, kept with the mark, so a wonder that later leaves the pack (what
 -- is not obtainable is removed, book.md "What is obtainable") still has a name in the record.
-function Record.Mark(id, how, at, name)
+-- `where`: { zone, level } at the find (Record.Here), kept for the diary's line; nil when the
+-- book cannot know them (what the first look after a login finds was had before).
+function Record.Mark(id, how, at, name, where)
   local me = Record.Mine()
   if not me or not id then
     return false
   end
   if not me.done[id] then
-    me.done[id] = { how = how or "mark", at = at or time(), name = name }
+    me.done[id] = {
+      how = how or "mark",
+      at = at or time(),
+      name = name,
+      zone = where and where.zone or nil,
+      level = where and where.level or nil,
+    }
   end
   return true
 end
@@ -137,6 +154,28 @@ function Record.Lists()
     return a.id < b.id
   end)
   return { mine = mine, alts = alts }
+end
+
+-- The journal (book.md "Your record becomes the diary", R4.11): this character's marks by the
+-- day they were made, the newest day first and the newest mark first within it ->
+-- { { day = "2026-11-17", at = the day's newest mark, marks = { { id, how, at, name, zone,
+-- level } } } }. The day is the reader's own (the client's clock).
+function Record.Journal()
+  local days, byDay = {}, {}
+  local me = Record.Mine()
+  for _, m in ipairs(Record.Lists().mine) do
+    local d = me.done[m.id]
+    local day = date("%Y-%m-%d", m.at)
+    local entry = byDay[day]
+    if not entry then
+      entry = { day = day, at = m.at, marks = {} }
+      byDay[day] = entry
+      days[#days + 1] = entry
+    end
+    entry.marks[#entry.marks + 1] =
+      { id = m.id, how = d.how, at = m.at, name = d.name, zone = d.zone, level = d.level }
+  end
+  return days
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -229,7 +268,9 @@ end
 
 -- Checks `entries` (the shelf's) that have a rule and are not done yet: found ones are marked.
 -- `onFound(n)` after the end when any was found. Through Core's jobs when there are many.
-function Record.Scan(owner, entries, onFound)
+-- `where`: { zone, level } kept with what is found (Record.Here), nil for the first look after
+-- a login.
+function Record.Scan(owner, entries, onFound, where)
   if not Record.Mine() then
     return
   end
@@ -248,7 +289,7 @@ function Record.Scan(owner, entries, onFound)
   local function step(i)
     local e = todo[i]
     if Record.Check(e.done, ask, side) then
-      Record.Mark(e.id, "found", nil, e.title)
+      Record.Mark(e.id, "found", nil, e.title, where)
       found = found + 1
     end
   end

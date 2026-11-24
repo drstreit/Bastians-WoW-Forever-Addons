@@ -443,7 +443,7 @@ def test_a_page_shows_its_picture_and_none_before_a_restart(wow: WowRuntime):
     wow.execute("PAGE = Bastians:GetService('data'):Get('page', 'hogger-camp'); PAGE.art = true")
     page = "Bastians:GetService('data'):Get('page', 'hogger-camp')"
     assert wow.eval(f"{page}.art") is True, "the data service hands out its cached record"
-    path = wow.eval(f"{WIN}.ART") + "hogger-camp"
+    path = wow.eval(f"{MOD}.Picture.ArtOf('hogger-camp')")
     assert path == r"Interface\AddOns\Bastians_Data_Strategies\Generated\Art\hogger-camp"
     wow.execute(f"{WIN}.Open() {WIN}.Show({{ kind = 'page', id = 'hogger-camp' }})")
     pic = wow.eval(f"{WIN}.left.pics[1]")
@@ -557,7 +557,7 @@ def test_the_books_own_pages_open_with_their_pictures(wow: WowRuntime):
     the bookmarks each show their picture (content/strategies/art/front) above the text."""
     boot(wow, CORE, DATA, GOLD, STRAT)
     wow.slash("/bbook")
-    art = f"{WIN}.ART"
+    art = f"{MOD}.Picture.ArtOf('')"
 
     def pictures(side: str) -> list[str]:
         page = wow.eval(f"{WIN}.{side}")
@@ -584,8 +584,9 @@ def test_a_larger_window_gives_room_not_scale_and_three_sizes(wow: WowRuntime):
     assert wow.eval(f"{WIN}.win.content:GetScale()") == 1
     wow.execute(f"{WIN}.win.frame:SetSize(1880, 1280); {WIN}.win.opts.onResize(nil, false)")
     assert wow.eval(f"{WIN}.win.content:GetScale()") == 1
-    assert wow.eval(f"{WIN}.bar:GetParent() == {WIN}.win.frame") is True  # not in the content
-    assert wow.eval(f"{WIN}.bar:GetScale()") in (1, None)
+    # the bar's parts stand in the window's head, not in the content
+    assert wow.eval(f"{WIN}.bar.atlas:GetParent() == {WIN}.win.head") is True
+    assert wow.eval(f"{WIN}.win.head:GetScale()") in (1, None)
     size = "Bastians:GetModule('Strategies').Book.Size"
     assert [wow.eval(f"{size}({n})") for n in (10, 11, 12, 13, 14, 18, 24)] == [
         11,

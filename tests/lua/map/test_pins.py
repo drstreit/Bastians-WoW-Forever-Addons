@@ -420,6 +420,35 @@ def test_the_bar_slides_shut_as_it_slides_open(wow: WowRuntime):
     assert wow.errors == []
 
 
+def test_a_shown_quest_of_the_log_has_the_hand_ins_question_mark(wow: WowRuntime):
+    """ "completed quests do not have the completed questionmark
+    anymore": a quest shown beside its page stood as the quest type's "!". A quest of the log
+    shows the "?" (grey while not done), one outside the log the type's glyph."""
+    boot(wow)
+    icon = "Bastians.UI.IconTexture"
+
+    def quest_pins(ref: str) -> list:
+        wow.execute(f"{MAP_}.ViewChanged()")
+        wow.advance(0.2)
+        return [p.pin for p in shown(wow, "pinPool") if p.pin.ref == ref and p.pin.priority == 95]
+
+    wow.execute("Bastians:RunAction('map.show', 'quest:176', { source = 'test' })")
+    pins = quest_pins("quest:176")
+    assert pins and all(p.icon == wow.eval(f"{icon}('questActive')") for p in pins)
+    assert all(p.color is not None for p in pins)  # in the log, not done: grey
+    wow.execute(
+        "for _, e in ipairs(Mock.questLog) do if e.questID == 176 then e.complete = true end end"
+    )
+    wow.fire("QUEST_LOG_UPDATE")
+    wow.advance(0.3)
+    pins = quest_pins("quest:176")  # asked at the draw: done now, without showing it again
+    assert pins and all(p.icon == wow.eval(f"{icon}('questActive')") for p in pins)
+    assert all(p.color is None for p in pins)
+    # a quest not in the log keeps its type's glyph
+    assert wow.eval("Bastians:Entity('quest:7'):Facet('pin')") is None
+    assert wow.errors == []
+
+
 def test_show_on_map_draws_the_entity_with_the_waypoint_layer_off(wow: WowRuntime):
     """ "the map I open per right click still has nothing to show on":
     with My waypoint switched off nothing drew the shown entity; Show on map switches the layer on."""

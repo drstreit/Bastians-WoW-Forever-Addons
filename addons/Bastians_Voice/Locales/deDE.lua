@@ -124,6 +124,10 @@ ns.L:Register("deDE", {
   ["Playing: %s"] = "Spielt: %s",
   ["Paused: %s"] = "Pause: %s",
   ["Marked heard: %s"] = "Als gehört markiert: %s",
+  ["%s: the game did not take it"] = "%s: das Spiel hat es nicht angenommen",
+  ["%s ..."] = "%s ...",
+  ["The game did not answer. Click again, or open its window with the magnifier on the ring."] = "Das Spiel hat nicht geantwortet. Klick nochmal oder öffne sein Fenster mit der Lupe am Ring.",
+  ["Nothing is playing"] = "Es läuft nichts",
   -- the game's voice (text to speech) where Spoken has no line
   ["Read quest texts with the game's voice where Spoken has no line"] = "Questtexte mit der Stimme des Spiels lesen, wo Spoken keine Zeile hat",
   ["Spoken is not installed: the game's voice reads the quest texts"] = "Spoken ist nicht installiert: die Stimme des Spiels liest die Questtexte",

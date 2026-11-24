@@ -417,6 +417,8 @@ local strings = {
   ["Follow"] = "Seguir",
   ["Following"] = "Siguiendo",
   ["Route to the giver"] = "Ruta al dador de la misión",
+  ["Close My quests"] = "Cerrar Mis misiones",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "Vuelve el seguimiento de misiones del juego. El botón de Misiones del minimapa o /bq tracker abre Mis misiones de nuevo.",
 }
 ns.L:Register("esES", strings)
 ns.L:Register("esMX", strings)

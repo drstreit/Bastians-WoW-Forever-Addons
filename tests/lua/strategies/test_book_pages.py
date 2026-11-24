@@ -1,5 +1,5 @@
 """Bastian's Book in the window (book.md "The pages", ADR 0080): the front table, a chapter's page
-with its filter, the details page of every kind of wonder, Your record; the wonders come from the
+with its filter, the details page of every kind of wonder, Your diary; the wonders come from the
 fixture book pack the generator built (tests/fixtures/forever-wonders)."""
 
 from harness import WowRuntime
@@ -95,6 +95,10 @@ def text_of(wow: WowRuntime, side: str) -> list[str]:
         local page = {WIN}.{side}
         for i = 1, page.nfs do TEXTS[#TEXTS + 1] = page.fs[i]:GetText() end
         for i = 1, page.nrows do TEXTS[#TEXTS + 1] = page.rows[i].label:GetText() end
+        -- a wonder's page (W7): its acts are tools, its links and sources words of their own
+        for i = 1, page.ntools or 0 do TEXTS[#TEXTS + 1] = page.tools[i].spec.label end
+        for i = 1, page.nlinks or 0 do TEXTS[#TEXTS + 1] = page.links[i].text:GetText() end
+        for i = 1, page.nsources or 0 do TEXTS[#TEXTS + 1] = page.sources[i].name.text:GetText() end
         """
     )
     return list(wow.eval("TEXTS").values())
@@ -107,35 +111,35 @@ def click_row(wow: WowRuntime, side: str, label: str) -> None:
         for i = 1, page.nrows do
           if page.rows[i].label:GetText() == "{label}" then page.rows[i]:Click() return end
         end
+        for i = 1, page.ntools or 0 do
+          if page.tools[i].spec.label == "{label}" then page.tools[i]:Click() return end
+        end
+        for i = 1, page.nlinks or 0 do
+          if page.links[i].text:GetText() == "{label}" then page.links[i]:Click() return end
+        end
         error("no row {label}")
         """
     )
 
 
-def test_the_front_table_shows_the_newest_and_a_strip_per_chapter(wow: WowRuntime):
+def test_the_front_table_is_the_cabinet_the_note_and_the_entrances(wow: WowRuntime):
+    """W6 (book.md "The front table", E3): the cabinet of seven tiles, Bastian's note, one entrance
+    per chapter. ~~The newest on a hero, New on the table and a strip of tiles per chapter~~ (until
+    23.11.2026). The table itself is held in test_cabinet.py."""
     boot(wow)
     wow.slash("/bbook")
     assert wow.eval(f"{WIN}.Current().kind") == "front"
     size(wow)
     assert wow.eval(f"{FRONT}.view:IsShown()") is True
     assert wow.eval(f"{WIN}.left:IsShown()") is False
-    shown = heads(wow)
-    assert shown[0] == "New on the table"
-    assert {"Secrets", "Collections", "Camp", "Rares"} <= set(shown)
-    assert "Treasures" not in shown and "Curiosities" not in shown  # E1: they are dissolved
+    kinds = [item.kind for item in wow.eval(f"{FRONT}.list.items").values()]
+    assert kinds == ["cabinet", "bnote", "entrances"]
+    assert heads(wow) == []  # no strips, no "New on the table"
     assert tiles(wow)  # pictures on the table
     # E2: what nobody reported in Forever yet is never on the front table
-    wow.execute(
-        f"""
-        ONTABLE = {{}}
-        for _, item in ipairs({FRONT}.list.items) do
-          if item.entry then ONTABLE[item.entry.id] = true end
-          for _, e in ipairs(item.entries or {{}}) do ONTABLE[e.id] = true end
-        end
-        """
-    )
-    table = set(wow.eval("ONTABLE").keys())
-    assert {"mount:5784", "rare:61", "title:144"} <= table
+    front = f"{FRONT}.list.items[1].front"
+    table = {e.id for e in wow.eval(f"{front}.six").values()} | {wow.eval(f"{front}.main.id")}
+    assert {"mount:5784", "rare:61", "title:144"} & table
     assert not table & {"mount:458", "pet:4055", "pet:10675", "rare:99", "rare:5912", "title:1258"}
     assert wow.errors == []
 
@@ -339,14 +343,16 @@ def test_a_treasure_keeps_its_steps_sealed_until_opened(wow: WowRuntime):
     wow.execute(f"{WIN}.Show({{ kind = 'wonder', id = 'chain:sleeping-bag' }})")
     right = text_of(wow, "right")
     assert right[0] == "chain" and right[1] == "Cozy Sleeping Bag"  # small capitals
-    assert "I have slept in more barns than most cows." in right  # Bastian's line
-    assert "A bedroll you can unroll anywhere." in right  # the source's
     assert "nixie's envelope" in right
     assert not any(t.startswith("1. A note") for t in right)
     assert "Break the seal" in right
+    # W7 (book-look.md 10.5): the tale lies on the left page under the plate; how to get it and
+    # what it gives stand on the right (~~"where it starts" and "it gives" on the left~~)
     left = text_of(wow, "left")
-    assert "where it starts" in left and "a charred note" in left
-    assert "it gives" in left
+    assert "I have slept in more barns than most cows." in left  # Bastian's line
+    assert "A bedroll you can unroll anywhere." in left  # the source's
+    assert "how to get it" in right and "a charred note" in right
+    assert "it gives" in right
     click_row(wow, "right", "Break the seal")
     right = text_of(wow, "right")
     assert any(t.startswith("1. A note: Read the note.") for t in right)
@@ -375,42 +381,41 @@ def test_every_kind_of_wonder_has_its_page(wow: WowRuntime):
         assert right[1] == wow.eval(f"{FRONT}.Find('{wid}').title"), wid
         assert "Mark done" in right, wid
     wow.execute(f"{WIN}.Show({{ kind = 'wonder', id = 'rare:61' }})")
-    assert "it drops" in text_of(wow, "left")
+    assert "it drops" in text_of(wow, "right")
     assert wow.errors == []
 
 
-def test_mark_done_leaves_the_shelf_and_stands_in_your_record(wow: WowRuntime):
+def test_mark_done_leaves_the_shelf_and_stands_in_your_diary(wow: WowRuntime):
+    """~~Your record, a list of tiles with a chip "Not done yet"~~ until 24.11.2026: the diary's
+    journal holds the find (R4.11, test_diary.py), and a mark is undone on the wonder's page."""
     boot(wow)
     wow.execute(f"{WIN}.Show({{ kind = 'wonder', id = 'rare:61' }})")
     click_row(wow, "right", "Mark done")
     assert wow.eval(f"{REC}.IsDone('rare:61')") is True
+    # a mark by hand keeps where the reader stood and at which level (the diary's line)
+    assert wow.eval(f"{REC}.Entry('rare:61').zone") == 1429
+    assert wow.eval(f"{REC}.Entry('rare:61').level") == 12
     assert any(t.startswith("Marked done on") for t in text_of(wow, "right"))
     wow.slash("/bbook rares")
     size(wow)
     assert tiles(wow) == []  # Morgaine and the dragon wait behind the chip
     unconfirmed(wow, "rares")
     assert set(tiles(wow)) == {"rare:99", "rare:5912"}
-    # the hidden ones stand beside the switch, a link to Your record
+    # the hidden ones stand beside the switch, a link to Your diary
     assert wow.eval(f"{FRONT}.view.done:IsShown()") is True
-    assert wow.eval(f"{FRONT}.view.done.text:GetText()") == "1 done, in Your record"
-    wow.slash("/bbook record")
-    size(wow)
-    assert "Done: Rares" in heads(wow)
-    assert "rare:61" in tiles(wow)
-    # Not done yet, from the record's chip
-    wow.execute(
-        f"""
-        for _, row in ipairs({FRONT}.list:Rows()) do
-          for _, t in ipairs(row.tiles or {{}}) do
-            if t:IsShown() and t.entry.id == "rare:61" then
-              for _, p in ipairs(t.chips) do
-                if p:IsShown() and p.spec.label == "Not done yet" then p:Click() end
-              end
-            end
-          end
-        end
-        """
-    )
+    assert wow.eval(f"{FRONT}.view.done.text:GetText()") == "1 done, in Your diary"
+    wow.execute(f"{FRONT}.view.done:Click()")
+    assert wow.eval(f"{WIN}.Current().kind") == "record"
+    assert wow.eval(f"{FRONT}.view:IsShown()") is False  # the spread, not a shelf
+    narg = wow.eval(f"{FRONT}.Find('rare:61').title")
+    assert narg in text_of(wow, "left")  # the journal's line names it, a link to its page
+    wow.slash("/bbook front")
+    wow.slash("/bbook record")  # the old word still leads there
+    assert wow.eval(f"{WIN}.Current().kind") == "record"
+    # Not done yet, on the wonder's page
+    click_row(wow, "left", narg)
+    assert wow.eval(f"{WIN}.Current().id") == "rare:61"
+    click_row(wow, "right", "Not done yet")
     assert wow.eval(f"{REC}.IsDone('rare:61')") is False
     assert wow.errors == []
 
@@ -440,8 +445,7 @@ def test_another_characters_done_shows_on_the_tile(wow: WowRuntime):
     )
     assert wow.eval("ALT") == "Done by Bran"
     wow.slash("/bbook record")
-    size(wow)
-    assert "Your other characters" in heads(wow)
+    assert "your other characters" in text_of(wow, "left")  # a block of the diary's left page
     assert wow.errors == []
 
 
@@ -490,22 +494,26 @@ def first_tile(wow: WowRuntime) -> None:
 def test_a_tile_drawn_again_lets_go_of_the_mouse(wow: WowRuntime):
     """ "yellow hover effect does not go away": a tile is paper in every
     look, its edge lit in the book's gold under the mouse only, and plain when the list draws it
-    again under a resting mouse."""
+    again under a resting mouse. Since W6 (R4.6) the tile is an object of the table: under the
+    mouse it also rises 2 and its edge is 2 wide (Core's S.object)."""
     boot(wow)
     wow.slash("/bbook rares")
     size(wow)
     first_tile(wow)
     S = "Bastians.UI.Style"
     paper = f"{S}.painted[TILE.face][1] == {S}.C.folioPaper"
-    rim = f"{S}.painted[TILE.edges][2]"
+    rim = f"{S}.painted[TILE.lit.outer][2]"
+    rest = wow.eval("(select(5, TILE:GetPoint(1)))")
     assert wow.eval(paper) is True and wow.eval(rim) == 0
     wow.execute("TILE:GetScript('OnEnter')(TILE)")
     assert wow.eval(paper) is True and wow.eval(rim) == 1
+    assert wow.eval(f"{S}.painted[TILE.lit.outer][1] == {S}.C.folioGold") is True
+    assert wow.eval("(select(5, TILE:GetPoint(1)))") == rest + 2  # it rises
     wow.execute("TILE:GetScript('OnLeave')(TILE)")
-    assert wow.eval(rim) == 0
+    assert wow.eval(rim) == 0 and wow.eval("(select(5, TILE:GetPoint(1)))") == rest
     wow.execute("TILE:GetScript('OnEnter')(TILE)")
     wow.execute(f"{WIN}.Render()")  # the list hands the frame on, the mouse never left it
-    assert wow.eval(rim) == 0
+    assert wow.eval(rim) == 0 and wow.eval("TILE.objectState") == "rest"
     # paper on the light theme too: never the theme's card colour (~~the WoW look~~, ADR 0084)
     wow.execute(
         "local c = Bastians:GetModule('Core'); c.db.profile.theme = 'parchment'; "
@@ -576,7 +584,7 @@ def test_the_tabs_are_words_and_share_the_head_when_there_is_room(wow: WowRuntim
             W.win.frame:SetWidth({width})
             W.win.head:SetWidth({width} - 2)
             W.win.content:SetWidth({width} - 2)
-            W.bar.Layout()
+            W.bar:Layout()
             """
         )
 
@@ -595,8 +603,13 @@ def test_the_tabs_are_words_and_share_the_head_when_there_is_room(wow: WowRuntim
     assert wow.eval(f"{WIN}.bar.oneBar") is False
     assert wow.eval(f"{WIN}.BarRoom()") == 38
     assert wow.eval(f"{WIN}.bar.front.item.icon") is None  # the words still fit on their row
+    # the tabs alone stand on that row (the search and the tools stay in the head since W5), so
+    # their words fit down to the window's least width; narrower, the pictograms come back
     layout(700)
+    assert wow.eval(f"{WIN}.bar.front.item.icon") is None
+    layout(400)
     assert wow.eval(f"{WIN}.bar.front.item.icon") == "ledger"  # too narrow: the pictograms
+    assert wow.eval(f"{WIN}.bar.front.tip") is not None  # the word in the tip
     assert wow.errors == []
 
 
@@ -614,10 +627,10 @@ def test_a_drawing_is_cut_to_its_frame_never_stretched(wow: WowRuntime):
     assert abs((bottom - top) - 0.5) < 1e-9 and abs(top - 0.2) < 1e-9  # a little more of the top
     assert cover(100, 100) == [0.25, 0.75, 0, 1]  # a square: the sides cut evenly
     assert cover(512, 256) == [0, 1, 0, 1]  # its own shape: all of it
-    # the hero: the window's width over 2.6, within its bounds
-    assert wow.eval(f"{FRONT}.HeroHeight(900)") == 346
-    assert wow.eval(f"{FRONT}.HeroHeight(2800)") == 480
-    assert wow.eval(f"{FRONT}.HeroHeight(400)") == 220
+    # ~~the hero: the window's width over 2.6~~: the cabinet's main tile took its place (W6); its
+    # cell is 2 : 1, the drawings' own shape, so nothing of a drawing is cut there
+    lay = f"{MOD}.Cabinet.Layout(1532 - 30)"
+    assert cover(wow.eval(f"{lay}.rects[1].w"), wow.eval(f"{lay}.rects[1].h"))[:2] == [0, 1]
     assert wow.errors == []
 
 
@@ -656,6 +669,7 @@ def test_the_filter_says_what_each_chip_filters(wow: WowRuntime):
     """ "I selected pet and object ... the object is also a pet": the
     facet is where a wonder comes from, named so on its row, its tiles and the line over them."""
     boot(wow)
+    wow.execute(f"{FRONT}.SetView('collections', 'tiles')")  # Collections opens as a list (E4)
     wow.slash("/bbook collections")
     unconfirmed(wow, "collections")
     wow.execute(
@@ -810,7 +824,7 @@ def test_the_bar_is_the_concept_boards(wow: WowRuntime):
     """ "The header feels squeezed. make it higher", "Add the book
     bastian logo top left and make that clickable to the front page", "the 3 buttons top right are
     isolated from the rest and break the style" (docs/addons/book-look.md section 4): a head of
-    50, tabs and tools 28 high, the crest before the name in the book's face, Your record and
+    50, tabs and tools 28 high, the crest before the name in the book's face, Your diary and
     the bookmark as words in an outline, the Atlas the filled plate, the options a quiet pictogram."""
     boot(wow)
     wow.slash("/bbook rares")
@@ -828,24 +842,30 @@ def test_the_bar_is_the_concept_boards(wow: WowRuntime):
     assert wow.eval(f"(select(2, {bar}.front.label:GetFont()))") == 13
     for tool in ("record", "mark", "atlas"):
         assert wow.eval(f"{bar}.{tool}:GetHeight()") == 28, tool
-    assert wow.eval(f"{bar}.record.label:GetText()") == "Your record"
+    assert wow.eval(f"{bar}.record.label:GetText()") == "Your diary"  # the board's question 3
     assert wow.eval(f"{S}.painted[{bar}.record.face][2]") == 0  # words in an outline, no plate
     assert wow.eval(f"{S}.painted[{bar}.atlas.face][2]") == 1  # the Atlas: the filled plate
     assert wow.eval(f"{bar}.atlas.label:GetText()") == "atlas"  # small capitals
     assert wow.eval(f"{bar}.atlas.icon:IsShown()") is True
-    assert wow.eval(f"{win}.options:IsShown()") is False  # the bar has its own quiet pictogram
-    assert wow.eval(f"{bar}.gear:GetWidth()") == 20
+    # the options: Core's quiet pictogram of 20 (the book's own until W5, 23.11.2026)
+    assert wow.eval(f"{bar}.gear == {win}.options") is True
+    assert (
+        wow.eval(f"{win}.options:IsShown()") is True and wow.eval(f"{bar}.gear.spec.only") is True
+    )
+    assert wow.eval(f"{bar}.gear.icon:GetWidth()") == 20
     # the logo: the crest, a click leads to the front table
     assert wow.eval(f"{bar}.logo:IsShown()") is True and wow.eval(f"{bar}.logo:GetWidth()") == 34
     assert wow.eval(f"{bar}.logo.icon:GetTexture()") == wow.eval(f"{S}.CREST")
     wow.execute(f"{bar}.logo:Click()")
     assert wow.eval(f"{WIN}.Current().kind") == "front"
-    # Your record lights its tool; the tools still answer as Core's actions did
+    # Your diary lights its tool; the tools still answer as Core's actions did
     wow.execute(f"{bar}.record:Click()")
     assert wow.eval(f"{WIN}.Current().kind") == "record"
     assert wow.eval(f"{bar}.record.spec.on") is True
-    assert wow.eval(f"{bar}.ground:IsShown()") is False  # no dark bar outside the game's frame
-    assert wow.eval(f"{bar}.palette == {S}.FolioPalette()") is True  # the dark table: Folio
+    assert wow.eval(f"{win}.ground") is None  # no band of the game's frame outside it
+    assert wow.eval(f"{win}.head.palette == {S}.FolioPalette()") is True  # the dark table: Folio
+    # Core lays the bar out (W5): the book's bar is the window's
+    assert wow.eval(f"{win}:Bar() == {bar}") is True
     assert wow.errors == []
 
 
@@ -857,7 +877,7 @@ def test_the_bar_lies_on_the_dark_table_in_the_games_frame(wow: WowRuntime):
     wow.execute("Mock.templates.PortraitFrameTemplate = true")  # the client has the game's frame
     wow.slash("/bbook rares")  # Folio and the game's frame: the defaults since W4 (ADR 0084)
     size(wow)
-    wow.execute(f"{WIN}.bar.Layout()")
+    wow.execute(f"{WIN}.bar:Layout()")
     S = "Bastians.UI.Style"
     bar = f"{WIN}.bar"
     win = f"{WIN}.win"
@@ -870,9 +890,10 @@ def test_the_bar_lies_on_the_dark_table_in_the_games_frame(wow: WowRuntime):
     wow.execute(f"{WIN}.Show({{ kind = 'record' }})")
     wow.execute(f"{win}.portraitButton:Click()")
     assert wow.eval(f"{WIN}.Current().kind") == "front"
-    assert wow.eval(f"{bar}.ground:IsShown()") is True
-    assert wow.eval(f"{bar}.palette == {S}.FolioPalette()") is True
-    assert wow.eval(f"{S}.painted[{bar}.ground.rule][1] == {S}.C.folioRule") is True
+    assert wow.eval(f"{win}.ground.band:IsShown()") is True
+    assert wow.eval(f"{win}.head.palette == {S}.FolioPalette()") is True
+    assert wow.eval(f"{S}.painted[{win}.ground.band.rule][1] == {S}.C.folioRule") is True
+    assert wow.eval(f"{S}.painted[{win}.ground.band.fill][1] == {S}.C.folioBarTop") is True
     assert wow.eval(f"{S}.painted[{bar}.atlas.face][1] == {S}.C.folioGold") is True
     assert wow.eval(f"{S}.inked[{bar}.atlas.label] == {S}.C.folioGoldInk") is True
     assert wow.eval(f"{S}.inked[{bar}.record.label] == {S}.C.folioText") is True

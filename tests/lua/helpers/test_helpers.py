@@ -363,6 +363,25 @@ def test_warnings_and_the_session_panel(wow: WowRuntime):
     assert lines["This session"] == "30 min"
     assert lines["Money"] == "36s 00c  (72s 00c per hour)"
     assert lines["Durability"] == "10%" and lines["Free bag slots"] == "0 / 4"
+    # the panel on the board's spacing (W9): rows of 20 in the text size 13, 15 from the side and
+    # 6 under the top; a value that wants attention in its status colour
+    tokens = {ln.label: ln.token for ln in wow.eval(f"{H}.Info.Lines()").values()}
+    assert tokens["Durability"] == "bad" and tokens["Free bag slots"] == "bad"
+    assert tokens["Money"] is None
+    rows = "BastiansHelpersPanel and Bastians.UI.Windows.BastiansHelpersPanel.rows"
+    first = tuple(wow.eval(f"{{ ({rows})[1].label:GetPoint(1) }}").values())
+    second = tuple(wow.eval(f"{{ ({rows})[2].value:GetPoint(1) }}").values())
+    assert first[3:] == (15, -6) and second[3:] == (-15, -26)
+    assert tuple(wow.eval(f"({rows})[1].label:GetFont()"))[1] == 13
+    style = "Bastians.UI.Style"
+    worn = next(i for i, ln in wow.eval(f"{H}.Info.Lines()").items() if ln.label == "Durability")
+    assert wow.eval(f"{style}.inked[({rows})[{worn}].value] == {style}.C.bad") is True
+    assert wow.eval(f"{style}.inked[({rows})[1].value] == {style}.C.text") is True
+    # worn, not yet at the warning: the warning's colour; mended: plain
+    wow.execute("Mock.durability[16] = { 64, 100 }")
+    assert wow.eval(f"{H}.Info.Lines()[{worn}].token") == "warn"
+    wow.execute("Mock.durability[16] = { 90, 100 }")
+    assert wow.eval(f"{H}.Info.Lines()[{worn}].token") is None
     assert wow.chat == []
     assert wow.errors == []
 

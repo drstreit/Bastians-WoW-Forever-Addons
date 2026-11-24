@@ -11,13 +11,13 @@ from pages import (
     band_buttons,
     block_rows,
     block_titles,
+    chip,
     click_ref,
-    menu,
     page_entries,
     page_rows,
-    pick,
     pills,
 )
+from pages import chips as bar_chips
 
 CORE, DATA, QUESTS = "Bastians_Core", "Bastians_Data", "Bastians_Quests"
 WIN = "Bastians:GetModule('Quests').Window"
@@ -62,6 +62,11 @@ def summary(wow: WowRuntime) -> str:
 
 def title(wow: WowRuntime) -> str:
     return strip(wow.eval(f"{WIN}.win.title:GetText()"))
+
+
+def tab(wow: WowRuntime) -> str | None:
+    """The head's filled tab (W9): the shown view's id, None on a page."""
+    return wow.eval(f"{WIN}.tabs.tabs.spec.value")
 
 
 def errors(wow: WowRuntime) -> list[str]:
@@ -236,12 +241,13 @@ def test_log_view_lists_each_quest_on_two_lines(wow: WowRuntime):
     """ADR 0053: the name, then the one thing to know; nothing under a quest, no chain steps."""
     boot(wow)
     open_view(wow, "/bq log")
-    assert title(wow) == "My quests"
+    assert title(wow) == "Quests" and tab(wow) == "quests.log"  # the view is the tab
     assert strip(wow.eval(f"{WIN}.bar.byId.zone:GetText()")) == "Elwynn Forest"
     assert summary(wow) == "2 in the log - 1 to hand in - 1 objectives here"
     assert flat(wow) == [
         "HAND IN, THIS ZONE  1",
-        "[7] The Fargodeep Mine II  Done. Hand in to Marshal Dughan",  # the client's title wins
+        # the client's title wins; under "hand in" the line is who takes it (W9)
+        "[7] The Fargodeep Mine II  Marshal Dughan",
         "IN PROGRESS  1",
         "[11] The Fargodeep Mine  0/1 Explore the Fargodeep Mine",
     ]
@@ -255,7 +261,7 @@ def test_log_view_lists_each_quest_on_two_lines(wow: WowRuntime):
     assert (open_.target, open_.map, open_.x, open_.y) == ("objective", 1429, 0.40, 0.70)
     assert wow.eval(f"{WIN}.CurrentMap()") == 1429
     open_view(wow, "/bq active")  # the old name still works
-    assert title(wow) == "My quests"
+    assert title(wow) == "Quests" and tab(wow) == "quests.log"  # the view is the tab
     assert errors(wow) == []
 
 
@@ -310,14 +316,16 @@ def test_all_view_builds_in_a_job_with_filters(wow: WowRuntime):
     wow.execute(SIZE)
     wow.run_frames(10)
     assert flat(wow) == ["ELWYNN FOREST  3  7-11", "WESTFALL  3  9-10"]  # zone sections, folded
-    assert chips(wow) == ["Status: All"]  # one pill of the filter bar (ADR 0016)
-    assert menu(wow, f"{WIN}.tree", "chips1") == [
-        "All",
-        "Available  1",  # the mage's errand (A3.1)
-        "In log  2",
-        "Blocked  2",
-        "Not for this character  1",
+    # the status as chips on the band, All first (W9; a dropdown pill until then, ADR 0016)
+    assert chips(wow) == []
+    assert bar_chips(wow, f"{WIN}.tree") == [
+        ("All", None, True),
+        ("Available", 1, False),  # the mage's errand (A3.1)
+        ("In log", 2, False),
+        ("Blocked", 2, False),
+        ("Not for this character", 1, False),
     ]
+    assert wow.eval(f"{WIN}.tree.filterBar.frame:GetParent():GetParent() == {WIN}.bar.frame")
     assert summary(wow).startswith("6 quests shown")
     wow.execute(f"{WIN}.tree:ToggleFold({WIN}.tree.flat[1])")
     assert flat(wow) == [
@@ -327,14 +335,16 @@ def test_all_view_builds_in_a_job_with_filters(wow: WowRuntime):
         '[11] Wanted: "Hogger"  Group',
         "WESTFALL  3  9-10",
     ]
-    pick(wow, f"{WIN}.tree", "chips1", "In log")
+    chip(wow, "In log", f"{WIN}.tree")
     wow.run_frames(10)
+    assert ("In log", 2, True) in bar_chips(wow, f"{WIN}.tree")
     assert [t for t in flat(wow) if "[" in t] == [
         "[7] The Fargodeep Mine  Chain 1/3",
         '[11] Wanted: "Hogger"  Group',
     ]
-    pick(wow, f"{WIN}.tree", "chips1", "All")
+    chip(wow, "All", f"{WIN}.tree")
     wow.run_frames(10)
+    assert bar_chips(wow, f"{WIN}.tree")[0] == ("All", None, True)
     wow.execute("Bastians:GetModule('Quests').db.profile.allKind = 'Group'")
     wow.execute(f"{WIN}.Render()")
     wow.run_frames(10)

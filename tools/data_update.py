@@ -30,7 +30,7 @@ Usage: python tools/data_update.py [--export <dir>] [--out build/data] [--send]
    `<Data's TOC version>+data.<YYYYMMDD>.<n>` and a changelog: What's new (book.toml's entries
    and the build's), the release notes of Data's commits since the last sent edition (ADR 0020).
 4. `--send` uploads that file (tools/curseforge.py: the token from CF_API_KEY or
-   ~/.curseforge/.secrets, never in the repo). CurseForge refuses it, and so does this command,
+   ~/.secrets/curseforge.env, never in the repo). CurseForge refuses it, and so does this command,
    while the project id or the slug is unknown (tools/curseforge.toml).
 
 With the read API's key (tools/curseforge.py `core_key`) the edition also carries the projects'
@@ -1139,7 +1139,7 @@ def send(
         raise DataUpdateError("the file is not ready: " + "; ".join(problems))
     token = token or curseforge.api_token()
     if not token:
-        raise DataUpdateError("no upload token (CF_API_KEY or ~/.curseforge/.secrets)")
+        raise DataUpdateError("no upload token (CF_API_KEY or ~/.secrets/curseforge.env)")
     config = curseforge.load_config()
     sent = []
     try:

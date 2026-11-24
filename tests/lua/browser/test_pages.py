@@ -59,6 +59,14 @@ def test_a_page_holds_what_fits_and_the_foot_says_where_you_are(wow: WowRuntime)
     )
     # the rows stop above the foot
     assert wow.eval(f"select(2, {TREE}.scroll:GetPoint(2)) == {MOD}.pager") is True
+    # the foot is Core's (W9, the board): 34 high on the band's ground with a rule over it, the
+    # arrows 12 from its ends and the page between them
+    foot = f"{MOD}.pager"
+    assert wow.eval(f"{foot}:GetHeight()") == 34 and wow.eval(f"{foot}.rule:IsShown()") is True
+    assert wow.eval(f"{foot}.ground:IsShown()") is True
+    assert tuple(wow.eval(f"{foot}.prev:GetPoint(1)"))[3] == 12
+    assert tuple(wow.eval(f"{foot}.next:GetPoint(1)"))[3] == -12
+    assert (wow.eval(f"({foot}.text:GetPoint(1))")) == "CENTER"
     # only the page's rows have frames
     shown = [f for f in wow.eval(f"{TREE}.pool").values() if f.IsShown(f)]
     assert len(shown) == per

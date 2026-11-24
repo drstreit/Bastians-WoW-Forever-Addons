@@ -112,7 +112,8 @@ def test_every_widget_kind_in_the_one_look(wow: WowRuntime, theme_id: str):
     assert alpha(wow, "W.other.face") == 0 and ink(wow, "W.other.label", "dim")
     assert alpha(wow, "W.tab.edges") == 0 and wow.eval("W.tab.under:IsShown()") is False
     # the section: small capitals in the dim ink, no rule
-    assert wow.eval("W.sec.title:GetText()") == "MY NOTES" and ink(wow, "W.sec.title", "dim")
+    # small capitals: the labels' face makes them of lower case letters (W5)
+    assert wow.eval("W.sec.title:GetText()") == "my notes" and ink(wow, "W.sec.title", "dim")
     assert wow.eval("W.sec.rule:IsShown()") is False
     # the switch: the book's 28 x 15, a knob of 11, the accent while on, the muted ink while off
     assert wow.eval("W.sw:GetWidth()") == 28 and wow.eval("W.sw:GetHeight()") == 15
@@ -281,7 +282,7 @@ def test_the_segmented_switch_the_flat_tab_and_the_lit_lock(wow: WowRuntime):
     assert wow.eval("LookTest.tab.under:IsShown()") is True
     assert wow.eval(f"{PAINTED}[LookTest.tab.under][1] == {S}.Tok(LookTest.tab, 'tier3')")
     assert wow.eval("LookTest.tab.count:GetText()") == "3"
-    assert wow.eval("LookTest.tab.label:GetText()") == "MARKET"  # capitals as the sections
+    assert wow.eval("LookTest.tab.label:GetText()") == "market"  # small capitals as the sections
     # the lock's pictogram alone, dim while off, the accent while on
     assert wow.eval("LookTest.lock.label:GetText()") == ""
     assert tok(wow, "LookTest.lock.icon", "dim")

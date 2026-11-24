@@ -41,17 +41,24 @@ def test_npc_list_builds_with_chips_from_the_fixture_packs(wow: WowRuntime):
 
 
 def test_select_list_closes_on_a_click_elsewhere(wow: WowRuntime):
-    """The Browser's type dropdown is gone (ADR 0013 F); the Map's continent select is the same
-    widget."""
+    """The Browser's type dropdown is gone (ADR 0013 F). The kit's select (the settings' choices)
+    closes its list on a click elsewhere, and so does the Map's continent, since W9 a tool of
+    the window's head with the filter menu as its list."""
     wow.start(CORE, DATA, MAP)
     wow.run_frames(5)
     wow.slash("/bmap")
-    select = "Bastians:GetModule('Map').Map.toolbar.continent"
-    wow.execute(f"{select}:Open()")
-    assert wow.eval(f"{select}.list:IsShown()") is True
+    wow.execute(
+        "SEL = Bastians.UI.Widgets.Select(UIParent, 'Theme', { a = 'Folio', b = 'Paper' }); SEL:Open()"
+    )
+    assert wow.eval("SEL.list:IsShown()") is True
     wow.execute("Mock.cursorX, Mock.cursorY = -5000, -5000")  # far from the list and its button
     wow.fire("GLOBAL_MOUSE_DOWN", "LeftButton")
-    assert wow.eval(f"{select}.list:IsShown()") is False
+    assert wow.eval("SEL.list:IsShown()") is False
+    continent = "Bastians:GetModule('Map').Map.toolbar.continent"
+    wow.execute(f"{continent}:Click()")
+    assert wow.eval("Bastians.UI.FilterMenuFrame():IsShown()") is True
+    wow.fire("GLOBAL_MOUSE_DOWN", "LeftButton")
+    assert wow.eval("Bastians.UI.FilterMenuFrame():IsShown()") is False
     assert wow.errors == []
 
 

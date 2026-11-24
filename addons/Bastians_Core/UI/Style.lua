@@ -161,6 +161,9 @@ function S.FolioPalette()
       bg = "folioGoldInk", -- the words on a chosen pill's fill
       panel = "folioBand",
       faceHover = "folioHover",
+      header = "folioBarTop", -- the head's ground, running down into
+      headerFoot = "folioBar", -- its foot
+      headerText = "folioGold", -- the name on it
     }
     local C, H = setmetatable({}, { __index = themeC }), setmetatable({}, { __index = themeH })
     for token, own in pairs(map) do
@@ -497,12 +500,25 @@ function S.FontOf(region, role)
     local text = own.font or S.font()
     return key ~= "font" and own[key] or text
   end
-  if key == "font" then
-    return S.font()
-  elseif key == "headingFont" then
+  -- the suite's faces (ADR 0084 decision 7): headings in the book's display face, labels in its
+  -- small capitals; the body and the numbers in the reader's text font (the `font` setting).
+  -- ~~The settings headingFont, labelFont, numberFont~~ went on 23.11.2026 (W5).
+  if key == "headingFont" then
     return S.headingFont()
+  elseif key == "labelFont" then
+    return S.BOOK_FONTS.bookCaps
   end
-  return S.Skin(key) or S.font()
+  return S.font()
+end
+
+-- A label's words in capitals as its face sets them: small capitals where it stands in the
+-- suite's label face (S.SmallCaps), plain capitals in a window's own face (Bastian's Chat).
+function S.LabelCaps(fs, text)
+  text = text or ""
+  if S.FontOf(fs, "label") == S.BOOK_FONTS.bookCaps then
+    return S.SmallCaps(text)
+  end
+  return string.upper(text)
 end
 
 -- A kit text's font and size again, by its role and where it stands.
@@ -513,10 +529,20 @@ function S.refont(fs)
   end
   local role = S.roles[fs] or "text"
   local path = S.FontOf(fs, role)
-  if role == "label" and path ~= S.FontOf(fs, "text") then
+  -- a window's own label face reads small (the condensed ones); the suite's small capitals keep
+  -- the size they were given
+  if role == "label" and path ~= S.FontOf(fs, "text") and path ~= S.BOOK_FONTS.bookCaps then
     base = base + S.LABEL_STEP
   end
   fs:SetFont(path, S.size(base), "")
+end
+
+-- A label in small capitals (ADR 0084 decision 7): the labels' face (Alegreya Sans SC) makes
+-- them of lower case letters; a client that keeps its own font (S.CLIENT_FONT) gets plain
+-- capitals instead.
+function S.SmallCaps(text)
+  text = text or ""
+  return S.CLIENT_FONT and string.upper(text) or string.lower(text)
 end
 
 -- Gives a kit text its role ("text", "label", "number") and the font of it.
@@ -731,13 +757,14 @@ function S.Skin(key)
   return v
 end
 
--- The heading font: the profile's `headingFont`, else the text font; a client with its own script
--- keeps its own (Morpheus and the suite's fonts carry no Hangul or Han, Cyrillic is unverified).
+-- The heading font: the book's display face (ADR 0084 decision 7; ~~the profile's `headingFont`,
+-- else the text font~~ until 23.11.2026); a client with its own script keeps its own (the
+-- suite's fonts carry no Hangul or Han, Cyrillic is unverified).
 function S.headingFont()
   if S.CLIENT_FONT then
     return S.font()
   end
-  return S.Skin("headingFont") or S.font()
+  return S.BOOK_FONTS.bookDisplay
 end
 
 S.BLIZZARD_FONT = "Fonts\\FRIZQT__.TTF" -- the game's own text font (a choice of the Font select)
@@ -1339,6 +1366,9 @@ end
 -- page (`tipDelay`, seconds, default 1; `tips` off shows none). A widget with `tipNow` is an icon
 -- without words (the map's layer bar): its tip is its name and shows at once (owner, retail
 -- 31.10.2026: "needs to be superfast - really immediately - if you search for something").
+-- Since 24.11.2026 (owner: the map's layers stay icons, "but we need immediate hover text") that
+-- name shows whatever the tips switch says: it is the icon's only label, not an explanation.
+-- The kit sets `tipNow` on every action drawn as its pictogram alone (`only`).
 local tipToken = 0
 
 function S.TipDelay()
@@ -1383,11 +1413,15 @@ function S.TipEnter(widget)
   if not widget.tip then
     return
   end
+  if widget.tipNow then -- an icon's name: at once, and with the tips switched off too
+    showTip(widget)
+    return
+  end
   local delay = S.TipDelay()
   if not delay then
     return
   end
-  if delay <= 0 or widget.tipNow then
+  if delay <= 0 then
     showTip(widget)
     return
   end

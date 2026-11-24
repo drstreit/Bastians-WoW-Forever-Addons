@@ -679,6 +679,7 @@ end
 
 local function build()
   win = B.UI.Window(B.UI.DOCK.city, {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     module = "Map",
     title = L["City & dungeon map"],
     width = 900,
@@ -915,12 +916,16 @@ end
 -- --- the wiring ----------------------------------------------------------------------------------
 
 table.insert(Map.onBuild, function()
-  local button = S.tileButton(Map.toolbar, L["City map"], "zone", "accent")
-  button.tip = function()
-    return L["City & dungeon map"], L["The painted map of a city in its own window."]
-  end
-  button:SetScript("OnClick", City.Toggle)
-  Map.toolbar.city = button
+  Map.AddTool({ -- a tool of the head, only with the art (Map.LayoutToolbar)
+    id = "city",
+    label = L["City map"],
+    tip = function()
+      return L["City & dungeon map"], L["The painted map of a city in its own window."]
+    end,
+    onClick = function()
+      City.Toggle()
+    end,
+  })
 end)
 
 table.insert(Map.onEnable, function(self)

@@ -83,6 +83,7 @@ ns.L:Register("zhTW", {
   ["Click: the options. Right click: edit the rings."] = "點擊：選項。右鍵：編輯環。",
   ["Courtesy: %s"] = "禮貌：%s",
   ["Default rings"] = "預設環",
+  ["Click again: every ring back as shipped"] = "再次點擊：所有環恢復為預設",
   ["Edit the ring"] = "編輯此環",
   ["Edit the rings"] = "編輯這些環",
   ["Emote"] = "表情指令",

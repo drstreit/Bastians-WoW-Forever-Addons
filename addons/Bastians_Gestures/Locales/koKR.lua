@@ -83,6 +83,7 @@ ns.L:Register("koKR", {
   ["Click: the options. Right click: edit the rings."] = "클릭: 옵션. 오른쪽 클릭: 링 편집.",
   ["Courtesy: %s"] = "예의: %s",
   ["Default rings"] = "기본 링",
+  ["Click again: every ring back as shipped"] = "다시 클릭: 모든 링을 처음 상태로",
   ["Edit the ring"] = "링 편집",
   ["Edit the rings"] = "링 편집",
   ["Emote"] = "감정 표현",

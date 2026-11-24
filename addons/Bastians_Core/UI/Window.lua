@@ -5,7 +5,6 @@ local B = ns.B
 local S = ns.Style
 local L = ns.L
 
-local HEADER_H = 30
 local DEFAULTS =
   { width = 420, height = 520, minWidth = 300, minHeight = 240, maxWidth = 1200, maxHeight = 1200 }
 -- `maxWidth` or `maxHeight` = B.UI.NO_LIMIT: as large as the player drags it (owner, retail
@@ -24,6 +23,42 @@ end
 
 local Window = {}
 Window.__index = Window
+B.UI.WindowClass = Window -- the bar (UI/Bar.lua) adds Window:Bar
+
+-- The two heads in numbers (ADR 0084 decision 2; book-look.md section 4 for the tall one, the
+-- suite's board for the low one): the head's height, its side padding and the gap between its
+-- groups, the home mark, the name's size and face, the window's own pictograms and the gap
+-- between two of them, the height of a tool, a tab or the search, a tool's text and side padding.
+Window.HEADS = {
+  tall = {
+    height = 50,
+    pad = 15,
+    gap = 15,
+    mark = 34,
+    markGap = 8,
+    name = 18,
+    role = "bookDisplay",
+    glyph = 20,
+    glyphGap = 5,
+    tool = 28,
+    toolText = 13,
+    toolPad = 10,
+  },
+  low = {
+    height = 30,
+    pad = 10,
+    gap = 8,
+    mark = 20,
+    markGap = 6,
+    name = 13,
+    role = "bookCaps",
+    glyph = 16,
+    glyphGap = 2,
+    tool = 22,
+    toolText = 11,
+    toolPad = 8,
+  },
+}
 
 -- Every window by frame name (ADR 0013 E: the dock needs to find its partner), and the dock pair:
 -- the map left, the Browser right. `B.UI.DOCK_MODULES` names the module that opens each window.
@@ -146,8 +181,10 @@ end
 
 -- opts: { title, width, height, minWidth, minHeight, maxWidth, maxHeight, db (table for pos and size),
 --         onShow(win), onHide(win), onResize(win), escape (default true), onTop (above every
---         other window, Window.TOP_STRATA), headHeight (a taller head), portrait (the round
---         picture of the game's frame), onPortrait(win) with portraitTip (a click on it) }
+--         other window, Window.TOP_STRATA), head ("tall" | "low", the default), bareHead (a low
+--         head that carries nothing: no band in the game's frame), mark (the home mark's
+--         texture), portrait (the round picture of the game's frame), onHome(win) with homeTip
+--         (a click on the mark or the portrait) }
 function B.UI.Window(name, opts)
   opts = opts or {}
   local db = opts.db or {}
@@ -194,61 +231,93 @@ function B.UI.Window(name, opts)
   -- each of the leader's size events gave the follower two full refreshes, the map with the
   -- Browser docked crawled.
   frame:SetScript("OnSizeChanged", function()
+    -- `headBar`, never `bar`: an app keeps its own part under that name (the minimap buttons'
+    -- window its scroll bar, which has no Layout: an error on every size change, Forever 23.11.2026)
+    if win.headBar then
+      win.headBar:Layout() -- the tabs keep their words while the head has room for them
+    end
     if not win.placing then -- PlaceDocked refreshes the content itself
       win:ResizeContent(win.sizing or win.followSizing)
     end
     win:SizeFollowers(win.sizing)
   end)
 
-  -- header: title, close
+  -- the head (ADR 0084 decisions 2 and 3, core.md "The frame"): tall for a window opened to read,
+  -- low for what stays on screen. Its parts: the home mark, the name, the app's own parts (a bar,
+  -- Window:Bar, or what the app anchors itself), then the window's own pictograms.
+  local kind = opts.head == "tall" and "tall" or "low"
+  local H = Window.HEADS[kind]
+  win.headKind, win.headSpec, win.headH = kind, H, H.height
   local head = CreateFrame("Frame", nil, frame)
   head:SetPoint("TOPLEFT", 1, -1)
   head:SetPoint("TOPRIGHT", -1, -1)
-  -- `opts.headHeight`: a taller head (Bastian's Book's bar, 50: , "the
-  -- header feels squeezed. make it higher"; docs/addons/book-look.md section 4)
-  win.headH = opts.headHeight or HEADER_H
-  head:SetHeight(win.headH)
+  head:SetHeight(H.height)
   head.bg = S.roundFill(head, S.C.header, "radius", nil, "top") -- the window's top corners
+  head.rule = S.fill(head, S.C.line, "BORDER") -- the rule under the head
+  head.rule:ClearAllPoints()
+  head.rule:SetPoint("BOTTOMLEFT", head, "BOTTOMLEFT", 0, 0)
+  head.rule:SetPoint("BOTTOMRIGHT", head, "BOTTOMRIGHT", 0, 0)
+  head.rule:SetHeight(1)
   draggable(head, win)
   win.head = head
 
-  win.title = S.heading(head, 15, 17, S.C.headerText) -- the heading font; gold on the Azeroth bar
-  win.title:SetPoint("LEFT", 10, 0)
-  win.title:SetPoint("RIGHT", -34, 0)
-  win.title:SetWordWrap(false) -- a title never breaks into two lines
-  win.title:SetText(opts.title or name)
+  -- the home mark: the app's pictogram in the name's ink (`opts.mark` a texture of its own);
+  -- with `opts.onHome` a button (the book's crest leads to the front table)
+  local mark = CreateFrame("Button", nil, head)
+  mark:SetSize(H.mark, H.mark)
+  mark:SetPoint("LEFT", head, "LEFT", H.pad, 0)
+  mark.icon = mark:CreateTexture(nil, "ARTWORK")
+  mark.icon:SetAllPoints(mark)
+  mark.icon:SetTexture(win:MarkIcon())
+  S.tint(mark.icon, S.C.headerText)
+  mark.tip = opts.homeTip
+  mark:EnableMouse(opts.onHome ~= nil) -- without a way home the head drags there too
+  if opts.onHome then
+    mark:SetScript("OnEnter", S.TipEnter)
+    mark:SetScript("OnLeave", S.TipLeave)
+    mark:SetScript("OnClick", function()
+      opts.onHome(win)
+    end)
+  end
+  win.mark = mark
 
-  -- the header's actions (ADR 0046: declared, the look draws the pictogram and the text);
-  -- `opts.headIcons`: the pictograms alone, the words in the tooltips (plan-chat-v3.md V27)
-  local only = opts.headIcons and true or nil
-  win.close = S.action(head, {
+  -- the name: the heading face 18 on a tall head, small capitals 13 on a low one
+  win.title = S.SetRole(S.text(head, H.name, S.C.headerText), H.role)
+  win.title:SetPoint("LEFT", mark, "RIGHT", H.markGap, 0)
+  win.title:SetWordWrap(false) -- a title never breaks into two lines
+  win.titleText = opts.title or name
+  win.title:SetText(win:TitleWords(win.titleText))
+
+  -- the window's own actions: quiet pictograms, their words in the tooltips (ADR 0084: the
+  -- options and the close 20 on a tall head, 16 on a low one; `opts.headIcons` until 23.11.2026)
+  local function glyph(spec)
+    spec.only, spec.glyph, spec.height = true, H.glyph, H.tool
+    return S.action(head, spec)
+  end
+  win.close = glyph({
     icon = "close",
     label = L["Close"],
     tip = L["Close (Escape)"],
-    only = only,
-    row = true,
     onClick = function()
       frame:Hide()
     end,
   })
-  win.close:SetPoint("RIGHT", -6, 0)
+  win.close:SetPoint("RIGHT", -(H.pad - S.PAD_ONLY), 0)
 
   -- the window's options, straight to its app's page of the settings (,
   -- R27.1): `opts.module` names the app, `opts.page` one of its own pages (core-contracts §8)
   if opts.module then
-    local b = S.action(head, {
+    local b = glyph({
       icon = "settings",
       label = L["Options"],
       tip = L["Options of this window"],
-      only = only,
-      row = true,
       onClick = function()
         if B.UI.Hub then
           B.UI.Hub.Open(opts.module, opts.page)
         end
       end,
     })
-    b:SetPoint("RIGHT", win.close, "LEFT", -4, 0)
+    b:SetPoint("RIGHT", win.close, "LEFT", -H.glyphGap, 0)
     win.options = b
   end
 
@@ -256,17 +325,15 @@ function B.UI.Window(name, opts)
   -- window): `opts.lockable` shows it left of the options; locked, the window neither moves
   -- nor sizes, and `db.locked` keeps it so
   if opts.lockable then
-    local b = S.action(head, {
+    local b = glyph({
       icon = "lock",
       label = L["Lock"],
-      only = only,
       toggle = true, -- the pictogram lit while locked, dim while free
-      row = true,
       onClick = function()
         win:SetLocked(not win.db.locked)
       end,
     })
-    b:SetPoint("RIGHT", win.options or win.close, "LEFT", -4, 0)
+    b:SetPoint("RIGHT", win.options or win.close, "LEFT", -H.glyphGap, 0)
     win.lock = b
   end
   win.title:SetPoint("RIGHT", win.lock or win.options or win.close, "LEFT", -8, 0)
@@ -728,32 +795,64 @@ function Window:ApplyLook()
   if self.frame.bg then
     S.tint(self.frame.bg, color, a)
   end
-  -- the game's grounds follow the opacity too: the rock of its window, the marble or parchment
-  -- of its insets
   S.insetAlpha = a
   self:ApplyFrame()
   self:ApplyMedia(color, a) -- LibSharedMedia's border and background (V25)
+  -- inside the game's border the look's table takes the colour and the opacity (owner, retail
+  -- 31.10.2026: "the slider does nothing"); the game's rock never shows (ADR 0084: the table is
+  -- the ground in every theme)
+  if self.ground then
+    S.tint(self.ground.table, color, a)
+    self:PaintHead()
+  end
   if self.chrome and self.chrome.Bg then
-    self.chrome.Bg:SetAlpha(a)
+    self.chrome.Bg:SetAlpha(0)
   end
 end
 
--- The game's own window behind ours (, "a clearly skinned style according
--- to Blizzard examples"): the client's PortraitFrameTemplate with its metal frame, rock ground,
--- the title in its bar, its red close button and the app's icon as the round portrait; our header
--- moves into the band beside the portrait, the content below it.
-Window.CHROME_TOP = 56 -- the title bar and the band beside the portrait
+-- The game's own window around ours (, "a clearly skinned style according
+-- to Blizzard examples"; ADR 0084 decision 4: the optional border): the client's
+-- PortraitFrameTemplate with its metal frame, the name in its title strip and its red close
+-- button. A tall head: the round portrait is the home mark and our head starts beside it. A low
+-- head: no portrait (Compat.GameWindowPortrait), the head under the strip from the frame's left;
+-- a low head that carries nothing (`opts.bareHead`) has no band at all, its options pictogram
+-- stands on the strip. Inside the border lies the look's own ground: the head's band with its
+-- rule and the table (the theme's `bg` at the window's opacity), never the game's rock.
 Window.CHROME_SIDE = 6
-Window.PORTRAIT_X = 58 -- the band starts right of the portrait
-Window.PORTRAIT_SIZE = 58 -- the portrait as a button (`opts.onPortrait`)
-Window.CHROME_TITLE = 22 -- the game frame's title bar, over our head
+Window.PORTRAIT_X = 58 -- a tall head starts right of the portrait
+Window.PORTRAIT_SIZE = 58 -- the portrait as a button (`opts.onHome`)
+Window.CHROME_TITLE = 22 -- the game frame's title strip, over our head
+Window.STRIP_GLYPH = { x = -27, y = -1 } -- a bare head's options pictogram on the strip
+Window.STRIP_LEVEL = 520 -- above the template's title container (510)
+Window.GROUND_TOP = 21 -- the template's ground starts this far under the frame's top
 
--- The content's top under the game's frame: its title bar and our head (`opts.headHeight`: a
--- head of that height directly over the content; else the band of CHROME_TOP).
+-- The content's top under the game's frame: its title strip and our head (none on a bare one).
 function Window:ChromeTop()
-  local own = self.opts.headHeight
-  return own and (Window.CHROME_TITLE + own) or Window.CHROME_TOP
+  return Window.CHROME_TITLE + (self:IsBare() and 0 or self.headH)
 end
+
+-- A low head that carries nothing but the window's own pictograms (the Route, the helpers' panel).
+function Window:IsBare()
+  return self.headKind == "low" and self.opts.bareHead == true and not self.opts.lockable
+end
+
+-- The home mark's texture: the window's own (`opts.mark`), else its app's pictogram, else the
+-- suite's.
+function Window:MarkIcon()
+  if self.opts.mark then
+    return self.opts.mark
+  end
+  local icon = self.opts.module and B.UI.AppIcon and B.UI.AppIcon(self.opts.module)
+  return icon or (B.UI.IconTexture and B.UI.IconTexture(B.UI.SUITE_ICON)) or nil
+end
+
+-- The name as the head writes it: small capitals on a low head (the labels' face makes them of
+-- lower case letters, S.SmallCaps), as written on a tall one.
+function Window:TitleWords(text)
+  text = text or ""
+  return self.headKind == "low" and S.SmallCaps(text) or text
+end
+
 function Window:PortraitIcon()
   if self.opts.portrait then
     return self.opts.portrait
@@ -780,25 +879,50 @@ function Window:Chrome()
           self:Hide()
         end
       end)
-      chrome:SetPortraitToAsset(self:PortraitIcon())
-      chrome:SetTitle(self.title:GetText() or "")
-      -- `opts.onPortrait`: the round portrait is a button (Bastian's Book: its crest leads to
-      -- the front table; ). Assumed: the template draws the portrait
-      -- about 58 px wide over the frame's top left corner (measured on a screenshot of
-      -- 17.11.2026: from 8 left of and 7 above the corner).
-      if self.opts.onPortrait then
-        local b = CreateFrame("Button", nil, chrome)
-        b:SetSize(Window.PORTRAIT_SIZE, Window.PORTRAIT_SIZE)
-        b:SetPoint("TOPLEFT", chrome, "TOPLEFT", -8, 7)
-        b:SetFrameLevel((self.frame:GetFrameLevel() or 1) + 60)
-        b.tip = self.opts.portraitTip
-        b:SetScript("OnEnter", S.TipEnter)
-        b:SetScript("OnLeave", S.TipLeave)
-        b:SetScript("OnClick", function()
-          self.opts.onPortrait(self)
-        end)
-        self.portraitButton = b
+      chrome:SetTitle(self.titleText or "")
+      if self.headKind == "tall" then
+        chrome:SetPortraitToAsset(self:PortraitIcon())
+        -- `opts.onHome`: the round portrait is the home mark and a button (Bastian's Book: its
+        -- crest leads to the front table; ). Assumed: the template draws
+        -- the portrait about 58 px wide over the frame's top left corner (measured on a
+        -- screenshot of 17.11.2026: from 8 left of and 7 above the corner).
+        if self.opts.onHome then
+          local b = CreateFrame("Button", nil, chrome)
+          b:SetSize(Window.PORTRAIT_SIZE, Window.PORTRAIT_SIZE)
+          b:SetPoint("TOPLEFT", chrome, "TOPLEFT", -8, 7)
+          b:SetFrameLevel((self.frame:GetFrameLevel() or 1) + 60)
+          b.tip = self.opts.homeTip
+          b:SetScript("OnEnter", S.TipEnter)
+          b:SetScript("OnLeave", S.TipLeave)
+          b:SetScript("OnClick", function()
+            self.opts.onHome(self)
+          end)
+          self.portraitButton = b
+        end
+      else
+        -- a low head has no ring (ADR 0084 decision 4); a client that cannot take the portrait
+        -- away keeps it, and the head starts beside it as a tall one does
+        self.portraitGone = B.Compat.GameWindowPortrait(chrome, false) == true
+        if not self.portraitGone then
+          chrome:SetPortraitToAsset(self:PortraitIcon())
+        end
       end
+      -- the look's ground inside the game's border: the table and the head's band with its rule
+      local ground = CreateFrame("Frame", nil, self.frame)
+      ground:SetFrameLevel(self.frame:GetFrameLevel() or 1)
+      ground:SetAllPoints(chrome.Bg or chrome)
+      ground.table = S.fill(ground, S.C.bg, "BACKGROUND")
+      ground.band = CreateFrame("Frame", nil, ground)
+      ground.band:SetFrameLevel(self.frame:GetFrameLevel() or 1)
+      ground.band:SetPoint("TOPLEFT", ground, "TOPLEFT", 0, 0)
+      ground.band:SetPoint("TOPRIGHT", ground, "TOPRIGHT", 0, 0)
+      ground.band.fill = S.fill(ground.band, S.C.header, "BORDER")
+      ground.band.rule = S.fill(ground.band, S.C.line, "ARTWORK")
+      ground.band.rule:ClearAllPoints()
+      ground.band.rule:SetPoint("BOTTOMLEFT", ground.band, "BOTTOMLEFT", 0, 0)
+      ground.band.rule:SetPoint("BOTTOMRIGHT", ground.band, "BOTTOMRIGHT", 0, 0)
+      ground.band.rule:SetHeight(1)
+      self.ground = ground
     end
   end
   return self.chrome or nil
@@ -900,19 +1024,28 @@ function Window:ApplyChrome()
   local on = (self.opts.gameFrames or self:Skin("gameFrames") == true) and self:Chrome() ~= nil
   if self.chrome then
     self.chrome:SetShown(on)
+    self.ground:SetShown(on)
   end
   if self.gameFramed == on then
     return on
   end
   self.gameFramed = on
-  local head, frame = self.head, self.frame
+  local head, frame, H = self.head, self.frame, self.headSpec
+  local bare = on and self:IsBare()
   head:ClearAllPoints()
   self.content:ClearAllPoints()
   if on then
-    head:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.PORTRAIT_X, -Window.CHROME_TITLE)
+    -- a tall head (or a low one whose portrait the client keeps) starts right of the ring
+    local ring = self.headKind == "tall" or not self.portraitGone
+    local left = ring and Window.PORTRAIT_X or Window.CHROME_SIDE
+    head:SetPoint("TOPLEFT", frame, "TOPLEFT", left, -Window.CHROME_TITLE)
     head:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -Window.CHROME_SIDE, -Window.CHROME_TITLE)
     self.content:SetPoint("TOPLEFT", frame, "TOPLEFT", Window.CHROME_SIDE, -self:ChromeTop())
     self.content:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -Window.CHROME_SIDE, Window.CHROME_SIDE)
+    -- the band under the strip, down to the head's foot; none for a bare head
+    local band = self.ground.band
+    band:SetShown(not bare)
+    band:SetHeight(math.max(1, self.headH + Window.CHROME_TITLE - Window.GROUND_TOP))
   else
     head:SetPoint("TOPLEFT", 1, -1)
     head:SetPoint("TOPRIGHT", -1, -1)
@@ -920,9 +1053,33 @@ function Window:ApplyChrome()
     self.content:SetPoint("BOTTOMRIGHT", -1, 1)
     self.framed = nil -- ApplyFrame places them again
   end
-  head:SetHeight(on and (self.opts.headHeight or 32) or self.headH)
-  for _, part in ipairs({ frame.bg, frame.edges, head.bg, self.title, self.close }) do
+  head:SetHeight(self.headH)
+  head:SetShown(not bare)
+  -- in the game's frame the strip carries the name, the ring is the mark and the game's own
+  -- button closes; the look's own edge, ground and head ground rest
+  for _, part in ipairs({ frame.bg, frame.edges, head.bg, head.rule, self.title, self.close, self.mark }) do
     S.showPart(part, not on)
+  end
+  -- the window's own pictograms end at the head's right edge, where the close stood; on a bare
+  -- head they stand on the game's strip, left of its close button
+  local first = self.options or self.lock
+  if first then
+    first:ClearAllPoints()
+    if bare then
+      first:SetParent(self.chrome)
+      first:SetFrameLevel((frame:GetFrameLevel() or 1) + Window.STRIP_LEVEL)
+      first:SetPoint("TOPRIGHT", self.chrome, "TOPRIGHT", Window.STRIP_GLYPH.x, Window.STRIP_GLYPH.y)
+    else
+      first:SetParent(head)
+      if on then
+        first:SetPoint("RIGHT", head, "RIGHT", -(H.pad - S.PAD_ONLY), 0)
+      else
+        first:SetPoint("RIGHT", self.close, "LEFT", -H.glyphGap, 0)
+      end
+    end
+  end
+  if self.headBar then
+    self.headBar:Layout()
   end
   return on
 end
@@ -949,10 +1106,95 @@ function B.UI.ApplyWindowLook()
 end
 
 function Window:SetTitle(text)
-  self.title:SetText(text)
+  self.titleText = text
+  self.title:SetText(self:TitleWords(text))
   if self.chrome then
     self.chrome:SetTitle(text or "")
   end
+  if self.headBar then
+    self.headBar:Layout() -- the bar starts after the name
+  end
+end
+
+-- The head's ground in the game's frame: the band in the head's `header` with the rule under it;
+-- a palette that names `headerFoot` (the Folio's) runs the ground down into it.
+function Window:PaintHead()
+  local band = self.ground and self.ground.band
+  if not band then
+    return
+  end
+  local top, foot = S.Tok(self.head, "header"), S.Tok(self.head, "headerFoot")
+  S.tint(band.fill, top, 1)
+  if foot then
+    S.gradient(band.fill, foot, top)
+  end
+  S.tint(band.rule, S.Tok(self.head, "line"), 1)
+end
+
+-- The head draws in a palette of its own (nil: the theme's again): Bastian's Book lays its dark
+-- table on every dark theme. What the kit drew in the head takes the new tokens, its widgets
+-- draw again; nothing happens while the palette stays.
+function Window:SetHeadPalette(palette)
+  local from = self.head.palette
+  if from == palette then
+    return
+  end
+  self.head.palette = palette
+  S.Repalette(self.head, from, palette)
+  self:PaintHead()
+end
+
+-- The head in numbers (Window.HEADS), for an app that places parts of its own in it.
+function Window:Head()
+  return self.headSpec
+end
+
+-- Where the name starts in the head, from the head's left edge: after the home mark off the
+-- game's frame; in it (the strip carries the name) where the head's parts start.
+function Window:NameStart()
+  local H = self.headSpec
+  if self.gameFramed then
+    return self.headKind == "tall" and 4 or H.pad
+  end
+  return H.pad + H.mark + H.markGap
+end
+
+-- Puts the name's left end back after the home mark (an app that lays its own parts beside the
+-- name clears the name's points first).
+function Window:AnchorTitle()
+  self.title:SetPoint("LEFT", self.mark, "RIGHT", self.headSpec.markGap, 0)
+end
+
+-- Where an app's own parts start in the head, from the head's left edge: after the mark and the
+-- name off the game's frame; in it the strip carries the name, so at the head's padding (a tall
+-- head starts right of the ring already).
+function Window:HeadStart()
+  local H = self.headSpec
+  if self.gameFramed then
+    return self.headKind == "tall" and 4 or H.pad
+  end
+  local nameW = self.title:GetStringWidth() or 0
+  if nameW <= 0 then
+    nameW = #(self.title:GetText() or "") * 7
+  end
+  return H.pad + H.mark + H.markGap + nameW + H.gap
+end
+
+-- The leftmost of the window's own pictograms and the room they take from the head's right edge:
+-- an app's parts end before them.
+function Window:HeadEnd()
+  local H = self.headSpec
+  local first, n = nil, 0
+  for _, b in ipairs({ self.close, self.options, self.lock }) do
+    if b and b:IsShown() and b:GetParent() == self.head then
+      first, n = b, n + 1
+    end
+  end
+  if not first then
+    return nil, H.pad
+  end
+  local w = n * (H.glyph + 2 * S.PAD_ONLY) + (n - 1) * H.glyphGap
+  return first, (H.pad - S.PAD_ONLY) + w + H.gap
 end
 -- Opens the window, and brings one already open to the front ("every
 -- window that is newly opened should always be on top of all others").

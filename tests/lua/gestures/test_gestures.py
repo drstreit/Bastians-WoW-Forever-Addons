@@ -307,8 +307,18 @@ def test_the_editor_changes_a_slot_and_the_change_survives_a_reload(wow: WowRunt
     fresh.run_frames(5)
     assert fresh.eval(f"{MOD}.db.global.rings[2].slots[6].title") == "Stars"
     assert fresh.eval(f"{MOD}.db.global.rings[1].slots[8].token") == "DANCE"
-    fresh.execute(f"{E}.Open(); {E}.Defaults()")
+    # it asks first: one click arms it and says so, the second resets
+    fresh.execute(f"{E}.Open(); {E}.AskDefaults()")
+    assert fresh.eval(f"{MOD}.db.global.rings[1].slots[8].token") == "DANCE"
+    assert fresh.eval(f"{E}.armedAt") is not None
+    # armed, it falls back by itself: a click after the time arms again, nothing reset
+    fresh.advance(fresh.eval(f"{E}.ARM_SECONDS") + 0.5)
+    assert fresh.eval(f"{E}.armedAt") is None
+    fresh.execute(f"{E}.AskDefaults()")
+    assert fresh.eval(f"{MOD}.db.global.rings[1].slots[8].token") == "DANCE"
+    fresh.execute(f"{E}.AskDefaults()")  # the second click in time
     assert fresh.eval(f"{MOD}.db.global.rings[1].slots[8].token") == "BYE"
+    assert fresh.eval(f"{E}.armedAt") is None
     assert errors(fresh) == []
 
 

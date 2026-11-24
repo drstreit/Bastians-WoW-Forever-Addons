@@ -52,7 +52,7 @@ def type_filter(wow: WowRuntime, text: str) -> None:
 def test_the_monsters_have_their_own_list(wow: WowRuntime):
     boot(wow)
     open_list(wow, "mob")
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Monsters"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "Monsters"
     pick(wow, TREE, "where", "All")
     rows = flat(wow)
     assert "Hogger  11" in rows and "Goldtooth  8" in rows

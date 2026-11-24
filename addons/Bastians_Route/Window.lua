@@ -6,6 +6,7 @@ local B = Bastians
 ns.L = ns.L or B.NewLocale()
 local L = ns.L
 local S = B.UI.Style
+local Widgets = B.UI.Widgets
 local Graph = ns.Graph
 
 local W = {}
@@ -13,11 +14,16 @@ ns.Window = W
 
 local RENDER_DELAY = 0.05
 
-local mod, win, tree, summary, hint, clearButton, replanButton, homeButton
+-- The one look (ADR 0084, W9; route.md "The one look"): the line of what the route is, the
+-- kinds as chips in a band, the steps, the row of /way, and a foot with the hint and the tools.
+local SIDE, SUM_TOP, SUM_H, SUM_FOOT = 15, 8, 14, 6
+local TREE_LEFT, TREE_RIGHT = 6, 20 -- the rows' room beside the fold marks and the scroll bar
+local WAY_H, WAY_GAP = 18, 4 -- the row of /way over the foot
+
+local mod, win, tree, summary, hint, clearButton, replanButton, homeButton, band
 local wayOwnerButton, wayModeButton -- who answers /way, and what it does (ADR 0062)
 local kindButtons = {} -- kind -> button (R26.5)
 local KIND_LABELS = { fastest = "Fastest", safe = "Safest", nocost = "No flights" }
-local KIND_ICONS = { fastest = "arrow", safe = "keep", nocost = "gold" } -- their pictograms (ADR 0046)
 
 local function db()
   return mod.db.profile
@@ -102,12 +108,13 @@ local function stepRows(route)
   return rows
 end
 
--- The kinds row (R26.5): "Fastest 4 min | Safest 5 min | No flights 9 min", the kind in use
--- accented; a kind still being planned reads "..."; a kind equal to one before it is left out.
+-- The kinds (R26.5) as chips in a band under the line: "Fastest 4 min", "Safest 5 min", "No
+-- flights 9 min", the kind in use filled; a kind still being planned reads "..."; a kind equal to
+-- one before it is left out. Without a route there is no band.
 function W.RenderKinds(route)
   local alts = route and route.alternatives
-  local x = 0
   local shown = {}
+  band:Begin(win.content:GetWidth())
   for _, kind in ipairs(ns.Route.KINDS) do
     local b = kindButtons[kind]
     local alt = alts and alts[kind]
@@ -123,26 +130,31 @@ function W.RenderKinds(route)
       local time = alt and Graph.FormatSeconds(alt.seconds) or "..."
       b.spec.label = L[KIND_LABELS[kind]] .. " " .. time
       b:SetOn(route.kind == kind) -- the look draws the kind in use (ADR 0046)
-      b:ClearAllPoints()
-      b:SetPoint("TOPLEFT", win.content, "TOPLEFT", 8 + x, -24)
+      band:Place(b, b:GetWidth() or 0, b:GetHeight() or 0)
       b:Show()
-      x = x + b:GetWidth() + 4
       if alt then
         shown[#shown + 1] = alt
       end
     end
   end
+  local any = alts ~= nil
+  band:End()
+  if not any then
+    band.frame:SetHeight(1)
+  end
+  band.ground:SetShown(any)
+  band.rule:SetShown(any)
 end
 
 -- The row of /way (ADR 0062): "/way: TomTom" only where another addon has the command; what /way
 -- does only while Route is the one answering.
 function W.RenderWay()
-  local Way, x = ns.Way, 8
+  local Way, x = ns.Way, SIDE
   local name = Way.OwnerName()
   local ours = not name or Way.OverOwner()
   local function place(button)
     button:ClearAllPoints()
-    button:SetPoint("BOTTOMLEFT", win.content, "BOTTOMLEFT", x, 30)
+    button:SetPoint("BOTTOMLEFT", win.content, "BOTTOMLEFT", x, Widgets.FOOT_H + WAY_GAP)
     button:Show()
     x = x + button:GetWidth() + 4
   end
@@ -168,10 +180,16 @@ function W.Render()
   W.RenderKinds(route)
   W.RenderWay()
   if not route then
+    -- two lines: the hint needed 402 units of the window's 398 and was cut (the windows probe,
+    -- 24.11.2026); nothing stands under it without a route
+    summary:SetWordWrap(true)
+    summary:SetHeight(2 * SUM_H + 2)
     summary:SetText(L["No route. Right click anything with a place and choose Route to."])
     tree:SetRows({})
     clearButton:Hide()
     replanButton:Hide()
+    hint:SetText("") -- nothing to click: the foot keeps Home alone
+    hint:Layout()
     return
   end
   local goal = route.goal and route.goal.name or L["the target"]
@@ -187,10 +205,14 @@ function W.Render()
   if verdict then
     text = text .. "  " .. S.H[Graph.VERDICT_TOKENS[verdict]] .. words .. "|r"
   end
+  summary:SetWordWrap(false) -- one line over the kinds' chips
+  summary:SetHeight(SUM_H)
   summary:SetText(text)
   tree:SetRows(stepRows(route))
   clearButton:Show()
   replanButton:Show()
+  hint:SetText(L["Click a step to see its end on the map."])
+  hint:Layout()
 end
 
 function W.Schedule()
@@ -201,6 +223,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansRouteFrame", {
+    bareHead = true, -- a low head that carries nothing (ADR 0084 decision 4)
     module = "Route", -- the options button opens this page (R27.1)
     title = L["Route"],
     width = 440,
@@ -212,49 +235,58 @@ local function build()
     end,
     onResize = function()
       if tree then
+        W.RenderKinds(ns.Route.Active()) -- the chips wrap at the window's width
         tree:Refresh()
       end
     end,
   })
   local content = win.content
-  summary = S.text(content, 11, S.C.text)
-  summary:SetPoint("TOPLEFT", content, "TOPLEFT", 8, -8)
-  summary:SetPoint("TOPRIGHT", content, "TOPRIGHT", -8, -8)
-  summary:SetHeight(14)
+  summary = S.text(content, 13, S.C.text) -- what the route is, in the text size (the board)
+  summary:SetPoint("TOPLEFT", content, "TOPLEFT", SIDE, -SUM_TOP)
+  summary:SetPoint("TOPRIGHT", content, "TOPRIGHT", -SIDE, -SUM_TOP)
+  summary:SetHeight(SUM_H)
   summary:SetJustifyH("LEFT")
-  clearButton = S.action(content, { icon = "clear", label = L["Clear"], boxed = true })
-  clearButton.tip = L["Clear the route."]
-  clearButton:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -8, 4)
-  clearButton:SetScript("OnClick", function()
-    ns.Route.Clear()
-  end)
-  replanButton = S.action(content, { icon = "route", label = L["Replan"], boxed = true })
-  replanButton.tip = L["Plan the route again from where you stand."]
-  replanButton:SetPoint("RIGHT", clearButton, "LEFT", -4, 0)
-  replanButton:SetScript("OnClick", function()
-    ns.Route.Replan("button")
-  end)
-  -- Home (R26.7): the way to the inn, with the hearth and every ready teleport
-  homeButton = S.action(content, { icon = "innkeeper", label = L["Home"], boxed = true })
-  homeButton.tip = L["The way to your inn, with the hearthstone and every teleport you have ready."]
-  homeButton:SetPoint("RIGHT", replanButton, "LEFT", -4, 0)
-  homeButton:SetScript("OnClick", function()
-    ns.Route.Home()
-  end)
-  hint = S.text(content, 10, S.C.dim)
-  hint:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 8, 6)
-  hint:SetText(L["Click a step to see its end on the map."])
+  -- the kinds as chips in a band under the line
+  band = B.UI.Band(content, { labels = false })
+  band.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -(SUM_TOP + SUM_H + SUM_FOOT))
+  band.frame:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -(SUM_TOP + SUM_H + SUM_FOOT))
   for _, kind in ipairs(ns.Route.KINDS) do
-    local b =
-      S.action(content, { icon = KIND_ICONS[kind], label = L[KIND_LABELS[kind]], row = true, boxed = true })
-    b.tip = L["Switch to this kind of route; it stays the default."]
-    b:SetScript("OnClick", function()
-      ns.Route.UseKind(kind)
-      W.Render()
-    end)
+    local b = S.pill(band.frame, {
+      small = true,
+      label = L[KIND_LABELS[kind]],
+      tip = L["Switch to this kind of route; it stays the default."],
+      onClick = function()
+        ns.Route.UseKind(kind)
+        W.Render()
+      end,
+    })
     b:Hide()
     kindButtons[kind] = b
   end
+  -- the foot: the hint, and Home, Replan and Clear as tools at its end (the board)
+  hint = Widgets.Foot(content)
+  -- Home (R26.7): the way to the inn, with the hearth and every ready teleport
+  homeButton = hint:Tool({
+    label = L["Home"],
+    tip = L["The way to your inn, with the hearthstone and every teleport you have ready."],
+    onClick = function()
+      ns.Route.Home()
+    end,
+  })
+  replanButton = hint:Tool({
+    label = L["Replan"],
+    tip = L["Plan the route again from where you stand."],
+    onClick = function()
+      ns.Route.Replan("button")
+    end,
+  })
+  clearButton = hint:Tool({
+    label = L["Clear"],
+    tip = L["Clear the route."],
+    onClick = function()
+      ns.Route.Clear()
+    end,
+  })
   wayOwnerButton = S.action(content, { icon = "arrow", label = "/way", row = true, boxed = true })
   wayOwnerButton.tip = L["Which addon answers /way: Bastian's Route, or the one that had it first."]
   wayOwnerButton:SetScript("OnClick", function()
@@ -270,12 +302,14 @@ local function build()
   end)
   tree = B.UI.Tree(content, { db = db().tree, ctx = { source = "route" } })
   tree.chips:ClearAllPoints()
-  tree.chips:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -46)
-  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, -46)
+  tree.chips:SetPoint("TOPLEFT", band.frame, "BOTTOMLEFT", TREE_LEFT, 0)
+  tree.chips:SetPoint("TOPRIGHT", band.frame, "BOTTOMRIGHT", -TREE_RIGHT, 0)
   tree.scroll:ClearAllPoints()
-  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
-  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 54) -- above the row of /way
+  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -4)
+  -- above the row of /way, which stands over the foot
+  tree.scroll:SetPoint("BOTTOMRIGHT", hint, "TOPRIGHT", -TREE_RIGHT, WAY_H + 2 * WAY_GAP)
   W.win, W.tree, W.summary, W.homeButton, W.kindButtons = win, tree, summary, homeButton, kindButtons
+  W.band, W.hint, W.clearButton, W.replanButton = band, hint, clearButton, replanButton
   W.wayOwnerButton, W.wayModeButton = wayOwnerButton, wayModeButton
 end
 

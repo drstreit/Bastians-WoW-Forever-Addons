@@ -573,6 +573,7 @@ table.insert(Map.onBuild, function(clip)
   tab.arrow:SetTexture(S.ARROW)
   tab.arrow:SetSize(12, 12)
   tab.arrow:SetVertexColor(S.C.accent[1], S.C.accent[2], S.C.accent[3], 1)
+  tab.tipNow = true -- an arrow, no word while the panel is open: its name at once
   tab.label = S.text(tab, 11, S.C.dim)
   tab.label:SetPoint("LEFT", tab.arrow, "RIGHT", 6, 0)
   tab:SetScript("OnClick", function()

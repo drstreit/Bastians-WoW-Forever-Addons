@@ -4,11 +4,21 @@
 local _, ns = ...
 local B = Bastians
 local S = B.UI.Style
+local L = ns.L
 
 local Picture = {}
 ns.Picture = Picture
 
-Picture.ART = "Interface\\AddOns\\Bastians_Data_Strategies\\Generated\\Art\\"
+-- The texture of a drawing by its id ("world": the atlas's map): the book's pack names its own
+-- art folder, the data service answers it (ADR 0082's crossing, gone with W6; ~~a path into the
+-- pack's folder written here~~ until 23.11.2026). nil without the Data addon.
+-- A wonder's or a chapter's id names its file with a dash for the colon (`camp:279938` is
+-- `camp-279938.blp`, tools/book_art.py), a page's id is its file's name already.
+function Picture.ArtOf(id)
+  local data = B:GetService("data")
+  local folder = data and data.PackArt and data:PackArt("book")
+  return folder and (folder .. (string.gsub(tostring(id), ":", "-"))) or nil
+end
 Picture.DISC = "Interface\\AddOns\\Bastians_Core\\Media\\Disc"
 Picture.ART_ASPECT = 2 -- Bastian's drawings ship at 2:1 (tools/book_art.py)
 Picture.FOCUS_Y = 0.4 -- a cut drawing keeps a little more of its top: the faces are there
@@ -140,7 +150,7 @@ function Picture.Draw(f, e, w, h)
     f.model:Hide()
   end
   if e.art and not e.sim then
-    f.art:SetTexture(Picture.ART .. e.id)
+    f.art:SetTexture(Picture.ArtOf(e.id))
     if f.art:GetTexture() then
       hidePaint(f)
       if f.model then
@@ -159,7 +169,10 @@ function Picture.Draw(f, e, w, h)
     p, span = { e.zones[1], 0.5, 0.5 }, Picture.ZONE_SPAN
   end
   if p and p[1] then
-    local px, py = B.UI.Scenery.DrawCut(f, f.paint, p[1], p[2], p[3], w, h, span, Picture.PAINT_ALPHA)
+    -- the zone whole (R4.5): every area's overlay from the pack, not only what the reader's
+    -- character uncovered; the Map keeps what the character explored
+    local px, py =
+      B.UI.Scenery.DrawCut(f, f.paint, p[1], p[2], p[3], w, h, span, Picture.PAINT_ALPHA, nil, true)
     if px then
       drew = "painting"
       if not e.npc and e.place then
@@ -199,4 +212,98 @@ function Picture.Clear(f)
     f.model:Hide()
   end
   hidePaint(f)
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- The stamp on a plate (book.md "Your record becomes the diary", R4.11; book-look.md 10.9): a
+-- done wonder wears "found - 17.11" in the seal's red, in a border of 2, padded 4 and 8, on the
+-- paper at 70 %, turned 12 degrees, at the plate's top right (16 in, 14 down). The game turns a
+-- texture and a text about their middle (forever-api.md, verified 17.11.2026), so the border
+-- is four bars, each turned and set on the turned box's edge.
+-- ---------------------------------------------------------------------------------------------
+
+Picture.STAMP_IN, Picture.STAMP_DOWN = 16, 14 -- from the plate's top right corner
+Picture.STAMP_PAD_X, Picture.STAMP_PAD_Y = 8, 4
+Picture.STAMP_EDGE = 2
+Picture.STAMP_SIZE = 11
+Picture.STAMP_TURN = -math.rad(12) -- clockwise, as the board draws it
+Picture.STAMP_PAPER = 0.7
+
+-- `lift`: how far above `parent` the stamp lies (a tile's ribbons lie 9 above it).
+function Picture.NewStamp(parent, lift)
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetFrameLevel((parent:GetFrameLevel() or 0) + (lift or 9))
+  f.ground = S.fill(f, S.C.folioPaper, "BACKGROUND")
+  f.sides = {}
+  for i = 1, 4 do
+    f.sides[i] = S.fill(f, S.C.folioSeal, "BORDER")
+  end
+  f.text = S.SetRole(S.text(f, Picture.STAMP_SIZE, S.C.folioSeal, "OVERLAY"), "bookCaps")
+  f.text:SetPoint("CENTER", f, "CENTER", 0, 0)
+  f.text:SetWordWrap(false)
+  return f
+end
+
+-- The stamp's words for a mark { how, at }: what the game found is "found", a mark by hand
+-- "done", then the day and the month.
+function Picture.StampText(mark)
+  local word = mark.how == "found" and L["found"] or L["done"]
+  return S.SmallCaps(word) .. " - " .. (date and date("%d.%m", mark.at or 0) or "")
+end
+
+-- Writes the stamp for `mark` and lays its parts out -> its width and height before the turn.
+function Picture.SetStamp(f, mark)
+  local text = Picture.StampText(mark)
+  f.text:SetText(text)
+  S.ink(f.text, S.C.folioSeal)
+  local tw = f.text:GetStringWidth()
+  tw = (tw and tw > 0) and tw or (#text * 6)
+  local w = math.floor(tw + 2 * Picture.STAMP_PAD_X + 0.5)
+  local h = Picture.STAMP_SIZE + 2 * Picture.STAMP_PAD_Y
+  f:SetSize(w, h)
+  local turn, edge = Picture.STAMP_TURN, Picture.STAMP_EDGE
+  local cos, sin = math.cos(turn), math.sin(turn)
+  local function lay(tex, x, y, tw2, th2)
+    tex:ClearAllPoints()
+    tex:SetSize(tw2, th2)
+    tex:SetPoint("CENTER", f, "CENTER", x * cos - y * sin, x * sin + y * cos)
+    if tex.SetRotation then
+      tex:SetRotation(turn)
+    end
+  end
+  S.tint(f.ground, S.C.folioPaper, Picture.STAMP_PAPER)
+  lay(f.ground, 0, 0, w, h)
+  for _, side in ipairs(f.sides) do
+    S.tint(side, S.C.folioSeal, 1)
+  end
+  lay(f.sides[1], 0, (h - edge) / 2, w, edge)
+  lay(f.sides[2], 0, -(h - edge) / 2, w, edge)
+  lay(f.sides[3], -(w - edge) / 2, 0, edge, h)
+  lay(f.sides[4], (w - edge) / 2, 0, edge, h)
+  if f.text.SetRotation then
+    f.text:SetRotation(turn)
+  end
+  f.mark = mark
+  return w, h
+end
+
+-- A plate's stamp: made at the first done wonder, set at the plate's top right, hidden for a
+-- wonder that is not done -> the stamp or nil. `holder` keeps it as `holder.stamp`.
+function Picture.Stamp(holder, plate, mark, lift)
+  local st = holder.stamp
+  if not mark then
+    if st then
+      st:Hide()
+    end
+    return nil
+  end
+  if not st then
+    st = Picture.NewStamp(holder, lift)
+    holder.stamp = st
+  end
+  Picture.SetStamp(st, mark)
+  st:ClearAllPoints()
+  st:SetPoint("TOPRIGHT", plate, "TOPRIGHT", -Picture.STAMP_IN, -Picture.STAMP_DOWN)
+  st:Show()
+  return st
 end

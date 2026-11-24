@@ -777,7 +777,6 @@ local function logWindow()
     height = 240,
     minWidth = 280,
     minHeight = 120,
-    headIcons = true,
     db = s.logWin,
     escape = false, -- Escape must not close it, as the chat's other windows
     strata = "LOW",
@@ -1493,7 +1492,7 @@ mod = B:NewModule("Chat", {
       -- until 20.11.2026: one look (ADR 0084), migration 2 maps a saved one to its theme
       look = "folio", -- the artifact's dark plate
       toastLook = "folio",
-      -- the faces of the chat's windows (plan-chat-v3.md V17): the artifact's in Modern and Glass
+      -- the faces of the chat's windows (plan-chat-v3.md V17): the artifact's (one look, ADR 0084)
       uiFont = "auto",
       labelFont = "auto",
       numberFont = "auto",
@@ -1600,7 +1599,7 @@ mod = B:NewModule("Chat", {
       type = "select",
       key = "uiFont",
       label = L["Window text"],
-      desc = L["Modern and Glass take IBM Plex Sans, Barlow Condensed and IBM Plex Mono, WoW and Parchment their own fonts; the chat's lines keep the Font under Text."], -- luacheck: ignore 631 (a locale key stays one literal)
+      desc = L["By the look, the chat's windows take IBM Plex Sans, Barlow Condensed and IBM Plex Mono; the chat's lines keep the Font under Text."], -- luacheck: ignore 631 (a locale key stays one literal)
       values = function()
         return ns.View.FaceChoices("uiFont")
       end,
@@ -1609,7 +1608,7 @@ mod = B:NewModule("Chat", {
       type = "select",
       key = "labelFont",
       label = L["Heads and tabs"],
-      desc = L["By the look: in Modern and Glass the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono; WoW and Parchment their own fonts."], -- luacheck: ignore 631 (a locale key stays one literal)
+      desc = L["By the look: the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono."], -- luacheck: ignore 631 (a locale key stays one literal)
       values = function()
         return ns.View.FaceChoices("labelFont")
       end,
@@ -1618,7 +1617,7 @@ mod = B:NewModule("Chat", {
       type = "select",
       key = "numberFont",
       label = L["Numbers and times"],
-      desc = L["By the look: in Modern and Glass the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono; WoW and Parchment their own fonts."], -- luacheck: ignore 631 (a locale key stays one literal)
+      desc = L["By the look: the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono."], -- luacheck: ignore 631 (a locale key stays one literal)
       values = function()
         return ns.View.FaceChoices("numberFont")
       end,

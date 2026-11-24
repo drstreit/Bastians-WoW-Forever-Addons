@@ -14,6 +14,9 @@ ns.Editor = Editor
 
 Editor.ROW = 32 -- pixels of one line in the list
 Editor.ROWS = 8 -- lines the list shows; the mouse wheel moves through the rest
+Editor.TOP = 8 -- the list under the head (the one look's 8)
+Editor.FORM_ROW = 28 -- from one row of the form to the next
+Editor.SELECT_GAP, Editor.SELECT_APART = 10, 18 -- a select's label to its button; two selects
 Editor.MOODS = { "polite", "roleplay", "snarky", "philosophic", "cheerful", "weary" }
 -- the stand-ins of Try for the facts nobody gives outside a moment
 Editor.STAND_IN = {
@@ -27,7 +30,9 @@ Editor.STAND_IN = {
 }
 
 local win, view, offset, editing = nil, "mine", 0, nil
-local rows, tabs, form = {}, {}, {}
+local rows, form = {}, {}
+local bar -- the head's bar: the three views as its tabs (W9, ADR 0084)
+local counted -- the counts the tabs say now
 
 local function moodWord(mood)
   return L[mood:sub(1, 1):upper() .. mood:sub(2)]
@@ -263,15 +268,18 @@ function Editor.Refresh()
   end
   local items = Editor.Items(view)
   offset = math.max(0, math.min(offset, math.max(0, #items - Editor.ROWS)))
-  tabs.mine:SetLabel(string.format(L["Mine (%d)"], #Mine.List()))
-  local neverCount = 0
+  local mineCount, neverCount = #Mine.List(), 0
   for _ in pairs(Mine.NeverSet()) do
     neverCount = neverCount + 1
   end
-  tabs.never:SetLabel(string.format(L["Never (%d)"], neverCount))
-  for key, b in pairs(tabs) do
-    b:SetOn(key == view)
+  local counts = mineCount .. "," .. neverCount
+  if counts ~= counted then -- the tabs say how many: written again only when a count moved
+    counted = counts
+    bar:SetTab("mine", { label = string.format(L["Mine (%d)"], mineCount) })
+    bar:SetTab("never", { label = string.format(L["Never (%d)"], neverCount) })
+    bar:Layout()
   end
+  bar.tabs:SetValue(view)
   win.note:SetText(L[NOTES[view]])
   for i = 1, Editor.ROWS do
     local item = items[offset + i]
@@ -315,6 +323,7 @@ local function build()
   local mod = ns.Main.mod
   mod.db.profile.linesWindow = mod.db.profile.linesWindow or {}
   win = B.UI.Window("BastiansCourtesyLines", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     title = L["My lines"],
     width = 600,
     height = 560,
@@ -322,28 +331,35 @@ local function build()
     minHeight = 560,
     db = mod.db.profile.linesWindow,
   })
-  local c = win.content
-  local x = 10
-  for _, spec in ipairs({
-    { "mine", L["Mine (%d)"]:format(0) },
-    { "offered", L["Offered lately"] },
-    { "never", L["Never (%d)"]:format(0) },
-  }) do
-    local b = S.action(c, { label = spec[2], toggle = true })
-    b:SetPoint("TOPLEFT", x, -8)
-    b:SetScript("OnClick", function()
-      Editor.SetView(spec[1])
-    end)
-    tabs[spec[1]] = b
-    x = x + 150
+  -- the three views are the head's tabs (W9, ADR 0084; ~~three buttons in the content~~); what
+  -- stands under the head moves under the tabs' row when the head is too narrow for them
+  local c = CreateFrame("Frame", nil, win.content)
+  local function place(headBar)
+    c:ClearAllPoints()
+    c:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, -(headBar and headBar:Room() or 0))
+    c:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", 0, 0)
   end
-  win.note = S.text(c, 11, S.C.muted)
-  win.note:SetPoint("TOPLEFT", 10, -38)
-  win.note:SetPoint("TOPRIGHT", -10, -38)
-  win.note:SetJustifyH("LEFT")
+  place()
+  bar = win:Bar({
+    tabs = {
+      items = {
+        { id = "mine", label = L["Mine (%d)"]:format(0) },
+        { id = "offered", label = L["Offered lately"] },
+        { id = "never", label = L["Never (%d)"]:format(0) },
+      },
+      value = view,
+      onChange = function(id)
+        Editor.SetView(id)
+      end,
+    },
+    onLayout = place,
+  })
+  counted = nil
+  -- what the view is, in the window's foot (~~a line of size 11 under the buttons~~)
+  win.note = W.Foot(c)
   win.list = CreateFrame("Frame", nil, c)
-  win.list:SetPoint("TOPLEFT", 6, -58)
-  win.list:SetPoint("TOPRIGHT", -6, -58)
+  win.list:SetPoint("TOPLEFT", 6, -Editor.TOP)
+  win.list:SetPoint("TOPRIGHT", -6, -Editor.TOP)
   win.list:SetHeight(Editor.ROW * Editor.ROWS)
   win.list:EnableMouseWheel(true)
   win.list:SetScript("OnMouseWheel", function(_, delta)
@@ -353,31 +369,40 @@ local function build()
   win.empty:SetPoint("TOP", 0, -20)
   win.empty:SetText(L["Nothing here yet."])
   -- the form
-  local top = -(58 + Editor.ROW * Editor.ROWS + 12)
+  local top = -(Editor.TOP + Editor.ROW * Editor.ROWS + 12)
   local situations = {}
   for situation in pairs(Voice.Situations(ns.CourtesyLines)) do
     situations[situation] = situation
   end
+  -- A select is as wide as its label and its button (Core's button is never under 160). ~~280,
+  -- 160 and 100 in one row~~: the button lay over its own label and over the select before it
+  -- (seen on the review sketch of W9, 24.11.2026). The situation has a row of its own.
+  local function fit(sel)
+    local labelW = math.ceil(sel.label:GetStringWidth() or 0)
+    sel:SetWidth(labelW + Editor.SELECT_GAP + (sel.button:GetWidth() or 160))
+    return sel:GetWidth()
+  end
   form.situation = W.Select(c, L["Situation"], situations)
   form.situation:SetPoint("TOPLEFT", 10, top)
-  form.situation:SetWidth(280)
   form.situation:SetValue("buff")
+  fit(form.situation)
+  top = top - Editor.FORM_ROW
   local moods = {}
   for _, mood in ipairs(Editor.MOODS) do
     moods[mood] = moodWord(mood)
   end
   form.mood = W.Select(c, L["Mood"], moods)
-  form.mood:SetPoint("TOPLEFT", 300, top)
-  form.mood:SetWidth(160)
+  form.mood:SetPoint("TOPLEFT", 10, top)
   form.mood:SetValue("polite")
+  local moodW = fit(form.mood)
   local languages = {}
   for _, language in ipairs(Voice.LANGUAGES) do
     languages[language] = Voice.Pack(language).name
   end
   form.lang = W.Select(c, L["Language"], languages)
-  form.lang:SetPoint("TOPLEFT", 470, top)
-  form.lang:SetWidth(100)
+  form.lang:SetPoint("TOPLEFT", 10 + moodW + Editor.SELECT_APART, top)
   form.lang:SetValue(Voice.language)
+  fit(form.lang)
   local function check()
     setProblem(Mine.Problem(Editor.FormLine()))
   end
@@ -400,7 +425,7 @@ local function build()
   form.clear = S.action(c, { icon = "clear", label = L["Clear"] })
   form.clear:SetPoint("LEFT", form.try, "RIGHT", 8, 0)
   form.clear:SetScript("OnClick", Editor.Clear)
-  Editor.form, Editor.rows, Editor.tabs, Editor.win = form, rows, tabs, win
+  Editor.form, Editor.rows, Editor.bar, Editor.win = form, rows, bar, win
 end
 
 function Editor.Open()

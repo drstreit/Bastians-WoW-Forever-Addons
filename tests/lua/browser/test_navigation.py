@@ -178,7 +178,8 @@ def test_my_quests_is_one_click_in_the_navigation(wow: WowRuntime):
     nav_click(wow, "nav:list:quest")
     wow.run_frames(5)
     # how many are in the log is the tab's tip
-    assert list(wow.eval(f"{{ {MOD}.tabs.buttons[2].tip() }}").values()) == [
+    chip = f"{MOD}.tabs.chips[2]"
+    assert list(wow.eval(f"{{ {chip}.tip({chip}) }}").values()) == [
         "My quests",
         "2 in the log",
     ]

@@ -83,6 +83,7 @@ local strings = {
   ["Click: the options. Right click: edit the rings."] = "Clic: las opciones. Clic derecho: editar los anillos.",
   ["Courtesy: %s"] = "Cortesía: %s",
   ["Default rings"] = "Anillos predeterminados",
+  ["Click again: every ring back as shipped"] = "Haz clic otra vez: todos los anillos como venían",
   ["Edit the ring"] = "Editar el anillo",
   ["Edit the rings"] = "Editar los anillos",
   ["Emote"] = "Gesto",

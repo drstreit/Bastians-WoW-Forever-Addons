@@ -150,11 +150,8 @@ def test_what_nobody_reported_waits_behind_the_chip(wow: WowRuntime):
         f"""
         local front = {SHELF}.Front(shelf, ctx)
         bad = 0
-        if front.hero.state == "unknown" then bad = bad + 1 end
-        for _, e in ipairs(front.new) do if e.state == "unknown" then bad = bad + 1 end end
-        for _, s in ipairs(front.strips) do
-          for _, e in ipairs(s.entries) do if e.state == "unknown" then bad = bad + 1 end end
-        end
+        if front.main.state == "unknown" then bad = bad + 1 end
+        for _, e in ipairs(front.six) do if e.state == "unknown" then bad = bad + 1 end end
         for seed = 1, 200 do
           if {SHELF}.Surprise(shelf, ctx, seed * 7919).state == "unknown" then bad = bad + 1 end
         end
@@ -401,24 +398,29 @@ def test_done_leaves_the_shelf_and_is_counted(wow: WowRuntime):
 
 
 def test_the_front_table(wow: WowRuntime):
+    """The newest gold story and six more (W6; the chooser for ten characters is held in
+    test_cabinet.py). ~~A hero, eight new ones and a strip of four per chapter~~."""
     boot(wow)
     wow.execute(
         f"""
         front = {SHELF}.Front(shelf, ctx)
         newest = nil
-        for _, e in ipairs(shelf) do if e.added and (not newest or e.added > newest) then newest = e.added end end
+        for _, e in ipairs(shelf) do
+          if e.chapter == "gold" and e.added and (not newest or e.added > newest) then
+            newest = e.added
+          end
+        end
         """
     )
-    assert wow.eval("front.hero.added") == wow.eval("newest")
-    assert wow.eval("#front.new") == 8
-    strips = list(wow.eval("front.strips").values())
-    assert [s.chapter for s in strips] == ["gold", "secrets", "collections", "camp", "rares"]
-    assert all(len(list(s.entries.values())) == 4 for s in strips)
-    # every wonder but the ones nobody reported yet (E2)
-    assert sum(s.total for s in strips) == count(wow, f"{SHELF}.NewFilter()") < N
-    hero = wow.eval("front.hero.id")
-    wow.execute(f'done["{hero}"] = true; front = {SHELF}.Front(shelf, ctx)')
-    assert wow.eval("front.hero.id") != hero  # done is not on the table
+    assert wow.eval("front.main.added") == wow.eval("newest")
+    assert wow.eval("#front.six") == 6
+    # every wonder but the ones nobody reported yet (E2) counts for its chapter's entrance
+    chapters = wow.eval("front.chapters")
+    names = ["gold", "secrets", "collections", "camp", "rares"]
+    assert sum(chapters[c].open for c in names) == count(wow, f"{SHELF}.NewFilter()") < N
+    first = wow.eval("front.six[1].id")
+    wow.execute(f'done["{first}"] = true; front = {SHELF}.Front(shelf, ctx)')
+    assert wow.eval("front.six[1].id") != first  # done is not on the table
     assert wow.eval(f"{SHELF}.Surprise(shelf, ctx, 3).id") == wow.eval(
         f"{SHELF}.Surprise(shelf, ctx, 3).id"
     )

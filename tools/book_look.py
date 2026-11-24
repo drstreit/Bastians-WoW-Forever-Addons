@@ -147,6 +147,83 @@ def checks(run, look: str | None, game_framed: bool) -> list[Check]:
     return out
 
 
+CABINET_GAP = 11
+CABINET_SIDE = 15
+
+
+def cabinet(width: float) -> dict:
+    """The cabinet's cells in a table `width` wide (book-look.md 10.2; the addon's
+    Cabinet.Layout): { cols, c, h, height, cells = { slot: (x, y, w, h) } }."""
+    window = width + 2 * CABINET_SIDE
+    cols = 3 if window >= 900 else 2 if window >= 600 else 1
+    g = CABINET_GAP
+    c = int((width - (cols - 1) * g) // cols)
+    h = (c - g) // 2
+
+    def cell(col: int, row: int, wide: int, tall: int) -> tuple[int, int, int, int]:
+        return (col * (c + g), row * (h + g), wide * c + (wide - 1) * g, tall * h + (tall - 1) * g)
+
+    if cols == 3:
+        cells = {
+            0: cell(0, 0, 2, 2),
+            1: cell(2, 0, 1, 2),
+            2: cell(0, 2, 1, 1),
+            3: cell(1, 2, 1, 1),
+            4: cell(2, 2, 1, 1),
+            5: cell(0, 3, 2, 1),
+            6: cell(2, 3, 1, 1),
+        }
+        rows = 4
+    elif cols == 2:
+        cells = {
+            0: cell(0, 0, 2, 2),
+            1: cell(0, 2, 1, 2),
+            2: cell(1, 2, 1, 1),
+            3: cell(1, 3, 1, 1),
+            4: cell(0, 4, 1, 1),
+            6: cell(1, 4, 1, 1),
+            5: cell(0, 5, 2, 1),
+        }
+        rows = 6
+    else:
+        cells = {0: cell(0, 0, 1, 2), 1: cell(0, 2, 1, 2)}
+        cells.update({i: cell(0, 2 + i, 1, 1) for i in range(2, 7)})
+        rows = 9
+    return {"cols": cols, "c": c, "h": h, "height": rows * h + (rows - 1) * g, "cells": cells}
+
+
+def cabinet_checks(cab) -> list[Check]:
+    """The front table's cabinet as the game laid it against book-look.md 10.2."""
+    if cab is None:
+        return []  # a record from before W6
+    if cab.error:
+        return [Check("the front table's cabinet", "seven tiles", str(cab.error), False)]
+    out: list[Check] = []
+    width = cab.row.width if cab.row is not None else None
+    if width is None:
+        return [Check("the cabinet's row", "a width", None, False)]
+    want = cabinet(float(width))
+    for key in ("cols", "c", "h", "height"):
+        out.append(
+            Check(f"the cabinet's {key}", want[key], _round(cab[key]), cab[key] == want[key])
+        )
+    tiles = {int(t.slot): t for t in _list(cab.tiles)}
+    for slot, (x, y, w, h) in sorted(want["cells"].items()):
+        t = tiles.get(slot)
+        if t is None:
+            continue  # fewer than seven wonders for this character: the cell stays empty
+        got = (_round(t.x), _round(t.y), _round(t.width), _round(t.height))
+        # under the mouse a tile stands 2 higher: the probe keeps the mouse off, a unit is the rest
+        ok = (
+            _near(t.x, x)
+            and _near(t.y, y)
+            and _near(t.width, w, SIZE_TOLERANCE)
+            and _near(t.height, h, SIZE_TOLERANCE)
+        )
+        out.append(Check(f"the cabinet's tile {slot} ({t.kind})", (x, y, w, h), got, ok))
+    return out
+
+
 def saved_variables(config: Path = INSTALL) -> Path | None:
     """The probe's newest saved variables under the Forever client; None when there are none."""
     if not config.is_file():
@@ -183,7 +260,7 @@ def report(record) -> tuple[list[str], bool]:
             lines.append(f"  error: {run.error}")
             good = False
             continue
-        for check in checks(run, look, bool(record.gameFramed)):
+        for check in checks(run, look, bool(record.gameFramed)) + cabinet_checks(run.cabinet):
             mark = "ok " if check.ok else "OFF"
             lines.append(f"  {mark} {check.what}: spec {check.want}, drawn {check.got}")
             good = good and check.ok

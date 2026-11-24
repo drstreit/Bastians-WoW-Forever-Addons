@@ -150,7 +150,7 @@ def test_saved_variables_round_trip_through_reload(wow: WowRuntime):
     fresh.fire("PLAYER_LOGOUT")
     text = fresh.saved_variables("Bastians_Core")
     assert (
-        '["__schema"] = 4' in text
+        '["__schema"] = 5' in text
     )  # the schema stamp (ADR 0038; 3 since ADR 0046, 4 since ADR 0084)
     again = fresh.reload()
     again.fire("PLAYER_LOGOUT")

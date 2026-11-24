@@ -5,6 +5,24 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.9.0:1",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "The Browser's sections are tabs in its head, and Back, Forward, a section's lists and the filters share one band under it.",
+  },
+  {
+    id = "2.9.0:2",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "In the Browser, where a list looks (your zone, your continent, everywhere) is a row of chips beside the lists, each with its count.",
+  },
+  {
+    id = "2.9.0:3",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "In the Browser, a view's own switches (My quests: Hide done, Tracked) stand in the band beside the lists.",
+  },
+  {
     id = "2.1.0:1",
     date = "2026-11-09",
     version = "2.1.0",

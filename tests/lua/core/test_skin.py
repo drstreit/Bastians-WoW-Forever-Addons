@@ -92,10 +92,7 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
     assert keys == [
         "theme",
         "gameFrames",  # the one switch beside the theme (ADR 0084 decision 4)
-        "font",
-        "headingFont",
-        "labelFont",  # since V17 (13.11.2026): section titles and tabs
-        "numberFont",  # since V17: counts, times, prices
+        "font",  # ~~headingFont, labelFont, numberFont~~ went with W5 (ADR 0084 decision 7)
         "fontScale",
         "windowColor",
         None,  # since V25 (13.11.2026): the note when LibSharedMedia is not loaded
@@ -120,18 +117,21 @@ def test_one_section_holds_every_look_setting(core: WowRuntime):
     assert core.errors == []
 
 
-def test_the_heading_font_is_a_setting_of_its_own(core: WowRuntime):
-    """ADR 0038: window titles, page names and section titles take `headingFont` (nil: the text
-    font) in the title bar's colour; Morpheus and the like draw at the heading's bigger size."""
-    core.execute("W = Bastians.UI.Window('SkinTestFrame', { title = 'T' }); W:Show()")
-    font, size = core.eval("W.title:GetFont()")[:2]
-    assert font != "Fonts\\MORPHEUS.TTF"
-    set_option(core, "headingFont", "'Fonts\\\\MORPHEUS.TTF'")
-    assert core.eval("(W.title:GetFont())") == "Fonts\\MORPHEUS.TTF"
-    assert core.eval("(select(2, W.title:GetFont()))") > size
+def test_headings_wear_the_books_display_face(core: WowRuntime):
+    """ADR 0084 decision 7 (W5, 23.11.2026): window names, page names and section titles in the
+    book's display face in the title bar's colour, whatever the text font. ~~ADR 0038:
+    `headingFont` a setting of its own (nil: the text font)~~."""
+    core.execute(
+        "W = Bastians.UI.Window('SkinTestFrame', { title = 'T', head = 'tall' }); W:Show();"
+        f" H = {S}.heading(W.content, 15, 17)"
+    )
+    display = core.eval(f"{S}.BOOK_FONTS.bookDisplay")
+    assert core.eval("(W.title:GetFont())") == display
+    assert core.eval("(H:GetFont())") == display
+    assert core.eval("(select(2, H:GetFont()))") == 17  # a face of its own: the bigger size
     assert core.eval("{ W.title:GetTextColor() }")[1] == core.eval(f"{S}.C.headerText[1]")
-    set_option(core, "headingFont", "nil")
-    assert core.eval("(W.title:GetFont())") == font
+    set_option(core, "font", "'Fonts\\\\FRIZQT__.TTF'")
+    assert core.eval("(H:GetFont())") == display  # the text font changes the body alone
     assert core.errors == []
 
 

@@ -534,7 +534,14 @@ function Region:GetDrawLayer()
 end
 -- Model frames (PlayerModel, DressUpModel; the Browser's portraits): what was shown, for tests.
 -- the plate's width when the subject was set: a model set on a frame of no size stays empty
+-- The display of the creature shown: 0 until it has loaded. A test says what the client knows
+-- at once (Mock.displays[npcID]) and loads the rest itself (model.display, then the script
+-- OnModelLoaded).
+function Region:GetDisplayInfo()
+  return self.display or (Mock.displays and Mock.displays[self.creature]) or 0
+end
 function Region:SetCreature(id)
+  self.display = nil
   self.creature, self.unit, self.worn, self.item = id, nil, nil, nil
   self.plateWidthAtSet = self.parent and self.parent.width
 end
@@ -563,6 +570,10 @@ function Region:SetFacing(f)
 end
 function Region:GetFacing()
   return self.facing or 0
+end
+-- the retail family's table form (the book's album draws a model lit black, forever-api.md)
+function Region:SetLight(enabled, light)
+  self.light = { enabled = enabled, light = light }
 end
 -- kept for the tests (V25: LibSharedMedia's borders and backgrounds)
 function Region:SetBackdrop(b)
@@ -1090,6 +1101,13 @@ local TEMPLATE_PARTS = {
     end
     function f.SetPortraitToAsset(self, path)
       self.portrait:SetTexture(path)
+    end
+    -- PortraitFrameMixin (Blizzard_SharedXML/PortraitFrame.lua of Forever 1.60.1)
+    function f.SetBorder(self, layout)
+      self.borderLayout = layout
+    end
+    function f.SetPortraitShown(self, shown)
+      self.portrait:SetShown(shown)
     end
   end,
   InsetFrameTemplate = function(f)

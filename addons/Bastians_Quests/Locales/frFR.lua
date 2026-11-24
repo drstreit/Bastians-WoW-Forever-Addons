@@ -417,4 +417,6 @@ ns.L:Register("frFR", {
   ["Follow"] = "Suivre",
   ["Following"] = "Suivie",
   ["Route to the giver"] = "Itinéraire vers le donneur",
+  ["Close My quests"] = "Fermer Mes quêtes",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "Le suivi des quêtes du jeu revient. Le bouton Quêtes de la minicarte ou /bq tracker rouvre Mes quêtes.",
 })

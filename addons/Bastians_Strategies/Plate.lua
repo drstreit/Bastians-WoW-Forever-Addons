@@ -213,7 +213,19 @@ function Obj:DrawSpot(spec, w, h, ctx)
     not (
       box
       and place
-      and B.UI.Scenery.DrawBox(frame, self.art, place[1], box[1], box[2], box[3], box[4], w, h, MAP_ALPHA)
+      and B.UI.Scenery.DrawBox(
+        frame,
+        self.art,
+        place[1],
+        box[1],
+        box[2],
+        box[3],
+        box[4],
+        w,
+        h,
+        MAP_ALPHA,
+        true
+      )
     )
   then
     B.UI.Scenery.DrawBox(frame, self.art, nil)

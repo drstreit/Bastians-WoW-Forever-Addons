@@ -417,4 +417,6 @@ ns.L:Register("koKR", {
   ["Follow"] = "따라가기",
   ["Following"] = "따라가는 중",
   ["Route to the giver"] = "퀘스트 제공자에게 가는 경로",
+  ["Close My quests"] = "내 퀘스트 닫기",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "게임의 퀘스트 추적기가 다시 나타납니다. 미니맵의 퀘스트 버튼이나 /bq tracker로 내 퀘스트를 다시 엽니다.",
 })

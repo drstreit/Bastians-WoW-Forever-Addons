@@ -89,12 +89,13 @@ end
 -- The panel
 -- ---------------------------------------------------------------------------------------------
 
--- The panel's lines: { label, value } (a value nil reads "unknown").
+-- The panel's lines: { label, value, token } (a value nil reads "unknown"; `token` the status
+-- colour of a value that wants attention: worn gear, bags nearly full).
 function Info.Lines()
   local s = Info.Stats() or {}
   local lines = {}
-  local function add(label, value)
-    lines[#lines + 1] = { label = label, value = value }
+  local function add(label, value, token)
+    lines[#lines + 1] = { label = label, value = value, token = token }
   end
   add(L["This session"], Helpers.Duration(s.seconds))
   local money = s.money and B.UI.Money(s.money)
@@ -108,9 +109,18 @@ function Info.Lines()
     add(L["Next level in"], Helpers.Duration(s.toLevel))
   end
   local lowest = B.Compat.GetDurability()
-  add(L["Durability"], lowest and (math.floor(lowest * 100) .. "%") or nil)
+  add(
+    L["Durability"],
+    lowest and (math.floor(lowest * 100) .. "%") or nil,
+    lowest and (lowest < Helpers.DURABILITY_WARN and "bad" or lowest < Helpers.DURABILITY_WORN and "warn")
+      or nil
+  )
   local free, total = B.Compat.BagSpace()
-  add(L["Free bag slots"], free and string.format("%d / %d", free, total) or nil)
+  add(
+    L["Free bag slots"],
+    free and string.format("%d / %d", free, total) or nil,
+    free and (free == 0 and "bad" or free < Helpers.BAGS_WARN and "warn") or nil
+  )
   local hearth = B.Compat.GetHearthstone()
   if hearth and hearth.bindName then
     local when = hearth.ready and L["ready"] or Helpers.Duration(hearth.remaining)
@@ -119,11 +129,14 @@ function Info.Lines()
   return lines
 end
 
-local ROW_H = 20
+-- The one look (ADR 0084, W9; helpers.md "The one look"): rows of 20 in the text size 13, 15
+-- from the side, 6 under the top; the label dim, the value at the right.
+local ROW_H, SIDE, TOP, SIZE = 20, 15, 6, 13
 
 local function build()
   local db = Helpers.Profile().window
   win = B.UI.Window("BastiansHelpersPanel", {
+    bareHead = true, -- a low head that carries nothing (ADR 0084 decision 4)
     module = "Helpers",
     title = L["Helpers"],
     width = 320,
@@ -152,16 +165,19 @@ function Info.Refresh()
     local row = win.rows[i]
     if not row then
       row = {
-        label = S.text(win.content, 12, S.C.muted),
-        value = S.text(win.content, 12, S.C.text),
+        label = S.text(win.content, SIZE, S.C.dim),
+        value = S.text(win.content, SIZE, S.C.text),
       }
-      row.label:SetPoint("TOPLEFT", win.content, "TOPLEFT", 10, -8 - (i - 1) * ROW_H)
-      row.value:SetPoint("TOPRIGHT", win.content, "TOPRIGHT", -10, -8 - (i - 1) * ROW_H)
+      row.label:SetPoint("TOPLEFT", win.content, "TOPLEFT", SIDE, -TOP - (i - 1) * ROW_H)
+      row.label:SetHeight(ROW_H)
+      row.value:SetPoint("TOPRIGHT", win.content, "TOPRIGHT", -SIDE, -TOP - (i - 1) * ROW_H)
+      row.value:SetHeight(ROW_H)
       row.value:SetJustifyH("RIGHT")
       win.rows[i] = row
     end
     row.label:SetText(line.label)
     row.value:SetText(line.value or (S.H.muted .. L["unknown"] .. "|r"))
+    S.ink(row.value, S.C[line.token or "text"]) -- a value that wants attention in its colour
     row.label:Show()
     row.value:Show()
   end

@@ -8,7 +8,7 @@ ns.Shelf = Shelf
 
 local ipairs, pairs, type, tostring = ipairs, pairs, type, tostring
 local lower, find, gsub, byte, char = string.lower, string.find, string.gsub, string.byte, string.char
-local floor = math.floor
+local floor, max, sqrt = math.floor, math.max, math.sqrt
 
 -- The chapters, named by what the reader does (book.md "The chapters", E1; ~~treasures,
 -- curiosities~~ until 17.11.2026). The order is the tabs'.
@@ -16,8 +16,6 @@ Shelf.CHAPTERS = { "gold", "secrets", "collections", "camp", "rares" }
 Shelf.LEVEL_CAP = 60
 Shelf.NEW_DAYS = 7 -- a wonder this new wears the ribbon
 Shelf.MY_LEVEL = 3 -- "my level": yours, three below to three above
-Shelf.FRONT_NEW = 8 -- New on the table
-Shelf.FRONT_STRIP = 4 -- tiles per chapter strip on the front table
 
 -- The facets of each chapter, in the order the filter shows them (book.md "The chapters").
 -- `all`: the facets every chapter shares, for the Everything tab.
@@ -368,9 +366,60 @@ local function distance(e, ctx)
   return 3, 0
 end
 
--- Sorts a list of entries in place by `how` ("newest", "level", "nearest", "az", "dated").
+-- The views of a shelf (book.md "The views", E4): tiles or a list. Collections opens as a list,
+-- the others as tiles; `saved` is the character's own choice by chapter.
+Shelf.VIEWS = { tiles = true, list = true }
+
+function Shelf.DefaultView(chapter)
+  return chapter == "collections" and "list" or "tiles"
+end
+
+function Shelf.ViewOf(saved, chapter)
+  local v = saved and saved[chapter or "all"]
+  return Shelf.VIEWS[v] and v or Shelf.DefaultView(chapter)
+end
+
+-- Sorts a list of entries in place by `how` ("newest", "level", "nearest", "az", "dated", and
+-- the list's columns: "how" by the way to get it, "have" the reader's own first, newest first;
+-- `ctx.doneAt(id)` the time of this character's mark).
 function Shelf.Sort(list, how, ctx)
   local today = ctx and ctx.today
+  if how == "how" then
+    -- by the first source's way, then the name; a wonder without a source last
+    table.sort(list, function(a, b)
+      local ha, hb = a.from and a.from[1] and a.from[1][1], b.from and b.from[1] and b.from[1][1]
+      if ha ~= hb then
+        if ha and hb then
+          return ha < hb
+        end
+        return ha ~= nil
+      end
+      if a.title ~= b.title then
+        return lower(a.title) < lower(b.title)
+      end
+      return a.id < b.id
+    end)
+    return list
+  elseif how == "have" then
+    local at = {}
+    for _, e in ipairs(list) do
+      at[e] = ctx and ctx.doneAt and ctx.doneAt(e.id) or nil
+    end
+    table.sort(list, function(a, b)
+      local ta, tb = at[a], at[b]
+      if ta ~= tb then
+        if ta and tb then
+          return ta > tb
+        end
+        return ta ~= nil
+      end
+      if a.title ~= b.title then
+        return lower(a.title) < lower(b.title)
+      end
+      return a.id < b.id
+    end)
+    return list
+  end
   if how == "dated" then
     -- the Gold shelf (R4.8): by the page's date, newest first; the undated last, in the book's
     -- own order (`order`, the page's place in the contents), never the day's shuffle
@@ -555,48 +604,308 @@ function Shelf.IsNew(e, today)
 end
 
 -- ---------------------------------------------------------------------------------------------
--- The front table (book.md "The pages")
+-- The front table (book.md "The front table", E3; R4.7 of plan-book-round4.md): the newest gold
+-- story as the main tile, six more chosen for the character, the chapters' counts for their
+-- entrances. Pure: the same answer for the same day, zone and level, so a /reload changes
+-- nothing and a new zone or level does.
 -- ---------------------------------------------------------------------------------------------
 
--- -> { hero = entry, new = { entries }, strips = { { chapter, entries, total } } }, done left out,
--- and what nobody reported in Forever yet (E2: never on the front table).
+Shelf.FRONT_SIX = 6 -- the tiles beside and under the main one
+Shelf.FRONT_PER_CHAPTER = 2 -- at most this many of one chapter
+Shelf.NEAR_YARDS = 4000 -- a place this far from your zone's middle counts as nothing nearer
+-- the points: place (your zone, then by distance on your continent, then your continent), level
+-- (yours in the band, then within 3, then within 6), a point for new
+Shelf.POINTS = { zone = 6, near = 4, continent = 2, band = 3, within3 = 2, within6 = 1, new = 1 }
+-- what stands as a collection on the wide tile: the kinds a character collects
+Shelf.COLLECTION_KINDS = { mount = true, pet = true, title = true, ["library book"] = true }
+
+-- Where the character is, as the table sees it: the zone's middle, not the spot the character
+-- stands on, so the table holds still while walking through a zone.
+local function anchor(ctx)
+  local here = ctx and ctx.here
+  if not (here and here.map and ctx.worldOf) then
+    return nil
+  end
+  local c, wx, wy = ctx.worldOf(here.map, 0.5, 0.5)
+  if c and wx then
+    return { continent = c, wx = wx, wy = wy }
+  end
+  return nil
+end
+
+-- 0 in your zone, 1 on your continent with the yards from your zone's middle, 2 on your
+-- continent, 3 elsewhere or without a place.
+local function placeOf(e, ctx, from)
+  local here = ctx and ctx.here
+  if not (here and e.zones) then
+    return 3
+  end
+  for i = 1, #e.zones do
+    if e.zones[i] == here.map then
+      return 0
+    end
+  end
+  local p = e.place
+  if from and p and ctx.worldOf then
+    local c, wx, wy = ctx.worldOf(p[1], p[2], p[3])
+    if c and c == from.continent and wx then
+      local dx, dy = wx - from.wx, wy - from.wy
+      return 1, sqrt(dx * dx + dy * dy)
+    end
+  end
+  for i = 1, #e.zones do
+    if here.continent and continentOf(e.zones[i], ctx) == here.continent then
+      return 2
+    end
+  end
+  return 3
+end
+
+-- A wonder's points for this character -> the score, and whether it is in the character's zone.
+function Shelf.Score(e, ctx, from)
+  local P = Shelf.POINTS
+  local score = 0
+  local rank, yards = placeOf(e, ctx, from)
+  if rank == 0 then
+    score = score + P.zone
+  elseif rank == 1 then
+    score = score + P.continent + P.near * max(0, 1 - yards / Shelf.NEAR_YARDS)
+  elseif rank == 2 then
+    score = score + P.continent
+  end
+  local level = ctx and ctx.level
+  if level and (e.levelMin or e.levelMax) then
+    local lo, hi = e.levelMin or 1, e.levelMax or Shelf.LEVEL_CAP
+    local gap = (level < lo and lo - level) or (level > hi and level - hi) or 0
+    if gap == 0 then
+      score = score + P.band
+    elseif gap <= 3 then
+      score = score + P.within3
+    elseif gap <= 6 then
+      score = score + P.within6
+    end
+  end
+  if Shelf.IsNew(e, ctx and ctx.today) then
+    score = score + P.new
+  end
+  return score, rank == 0
+end
+
+-- -> { main = the newest gold story (nil without one), six = { up to six entries, the best
+-- first }, collection = { kind, have, total, entry } or nil (what the wide tile stands for: the
+-- collection of the best Collections wonder among the six), chapters = { [chapter] = { open,
+-- near } } }. On the table: open (not done), obtainable (E2: never what nobody reported in
+-- Forever yet), on no back shelf, of the character's side. At most FRONT_PER_CHAPTER of a
+-- chapter while other chapters have something; ties by the day's order.
 function Shelf.Front(entries, ctx)
-  local open = {}
+  local today = ctx and ctx.today
+  local side = ctx and ctx.side
+  local from = anchor(ctx)
+  local front = { six = {}, chapters = {} }
+  for _, chapter in ipairs(Shelf.CHAPTERS) do
+    front.chapters[chapter] = { open = 0, near = 0 }
+  end
+  local gold, open, score = {}, {}, {}
   for i = 1, #entries do
     local e = entries[i]
-    if e.state ~= "unknown" and not (ctx and ctx.isDone and ctx.isDone(e.id)) then
+    if e.chapter == "gold" and not e.back then
+      gold[#gold + 1] = e
+    end
+    local done = ctx and ctx.isDone and ctx.isDone(e.id)
+    if e.state ~= "unknown" and not e.back and not done and not (side and e.side and e.side ~= side) then
+      local s, here = Shelf.Score(e, ctx, from)
+      score[e] = s
       open[#open + 1] = e
-    end
-  end
-  Shelf.Sort(open, "newest", ctx)
-  local front = { hero = open[1], new = {}, strips = {} }
-  local used = {}
-  if open[1] then
-    used[open[1]] = true
-  end
-  for i = 2, #open do
-    if #front.new >= Shelf.FRONT_NEW then
-      break
-    end
-    front.new[#front.new + 1] = open[i]
-    used[open[i]] = true
-  end
-  for _, chapter in ipairs(Shelf.CHAPTERS) do
-    local strip = { chapter = chapter, entries = {}, total = 0 }
-    for i = 1, #open do
-      local e = open[i]
-      if e.chapter == chapter then
-        strip.total = strip.total + 1
-        if not used[e] and #strip.entries < Shelf.FRONT_STRIP then
-          strip.entries[#strip.entries + 1] = e
+      local c = front.chapters[e.chapter]
+      if c then
+        c.open = c.open + 1
+        if here then
+          c.near = c.near + 1
         end
       end
     end
-    if strip.total > 0 then
-      front.strips[#front.strips + 1] = strip
+  end
+  -- the main tile: the newest gold story, whatever its level, done or not
+  Shelf.Sort(gold, "dated", ctx)
+  front.main = gold[1]
+  table.sort(open, function(a, b)
+    if score[a] ~= score[b] then
+      return score[a] > score[b]
+    end
+    local ka, kb = dayKey(a, today), dayKey(b, today)
+    if ka ~= kb then
+      return ka < kb
+    end
+    return a.id < b.id
+  end)
+  -- the best first, at most two of a chapter; what is left fills the table when fewer than
+  -- three chapters have something
+  local per, taken = {}, {}
+  for pass = 1, 2 do
+    for i = 1, #open do
+      local e = open[i]
+      if #front.six >= Shelf.FRONT_SIX then
+        break
+      end
+      if e ~= front.main and not taken[e] then
+        local n = per[e.chapter] or 0
+        if pass == 2 or n < Shelf.FRONT_PER_CHAPTER then
+          per[e.chapter] = n + 1
+          taken[e] = true
+          front.six[#front.six + 1] = e
+        end
+      end
+    end
+  end
+  front.score = score
+  -- the wide tile's collection: of the best collectable among the six
+  for i = 1, #front.six do
+    local e = front.six[i]
+    if e.chapter == "collections" and Shelf.COLLECTION_KINDS[e.kind] then
+      local have, total = 0, 0
+      for j = 1, #entries do
+        local o = entries[j]
+        if o.chapter == "collections" and o.kind == e.kind then
+          local counts, done = Shelf.Counted(o, ctx)
+          if counts then
+            total = total + 1
+            if done then
+              have = have + 1
+            end
+          end
+        end
+      end
+      front.collection = { kind = e.kind, have = have, total = total, entry = e }
+      break
     end
   end
   return front
+end
+
+-- ---------------------------------------------------------------------------------------------
+-- Progress and the album (book.md "Your record becomes the diary", R4.11)
+-- ---------------------------------------------------------------------------------------------
+
+-- Whether a wonder counts in a total -> counts, done. It counts when it can be had (E2: "in";
+-- never what nobody reported in Forever yet) or when the reader has it, which is the proof. A
+-- gold page is read, not owned; the other side's wonders do not count unless the reader has one.
+function Shelf.Counted(e, ctx)
+  if e.page or e.back then
+    return false, false
+  end
+  local done = (ctx and ctx.isDone and ctx.isDone(e.id)) and true or false
+  if done then
+    return true, true
+  end
+  if e.state == "unknown" then
+    return false, false
+  end
+  local side = ctx and ctx.side
+  if side and e.side and e.side ~= side then
+    return false, false
+  end
+  return true, false
+end
+
+-- The diary's collections, in its order: what a character collects by kind (the cabinet's wide
+-- tile counts the same), then the chapters that are no collection of one kind.
+Shelf.PROGRESS = {
+  { id = "mount", chapter = "collections", kind = "mount" },
+  { id = "pet", chapter = "collections", kind = "pet" },
+  { id = "title", chapter = "collections", kind = "title" },
+  { id = "library book", chapter = "collections", kind = "library book" },
+  { id = "secrets", chapter = "secrets" },
+  { id = "camp", chapter = "camp" },
+  { id = "rares", chapter = "rares" },
+}
+Shelf.PROGRESS_ZONES = 6 -- the zones' rows: where the reader is, then where the most is done
+
+-- -> { rows = { { id, chapter, kind, have, total } }, zones = { { zone, name, have, total } } }.
+-- A row without anything to have is left out. The zones: the one the reader stands in (when it
+-- holds a wonder), then the zones with something done, the most first, then by name.
+function Shelf.Progress(entries, ctx)
+  local rows, byId = {}, {}
+  for _, p in ipairs(Shelf.PROGRESS) do
+    local row = { id = p.id, chapter = p.chapter, kind = p.kind, have = 0, total = 0 }
+    rows[#rows + 1] = row
+    byId[p.id] = row
+  end
+  local zoneRows, zoneOf = {}, {}
+  for i = 1, #entries do
+    local e = entries[i]
+    local counts, done = Shelf.Counted(e, ctx)
+    if counts then
+      local row = byId[e.chapter == "collections" and e.kind or e.chapter]
+      if row then
+        row.total = row.total + 1
+        row.have = row.have + (done and 1 or 0)
+      end
+      for _, z in ipairs(e.zones or {}) do
+        local zr = zoneOf[z]
+        if not zr then
+          local info = ctx and ctx.zoneOf and ctx.zoneOf(z)
+          zr = { zone = z, name = info and info.name or nil, have = 0, total = 0 }
+          zoneOf[z] = zr
+          zoneRows[#zoneRows + 1] = zr
+        end
+        zr.total = zr.total + 1
+        zr.have = zr.have + (done and 1 or 0)
+      end
+    end
+  end
+  local out = { rows = {}, zones = {} }
+  for _, row in ipairs(rows) do
+    if row.total > 0 then
+      out.rows[#out.rows + 1] = row
+    end
+  end
+  local here = ctx and ctx.here and ctx.here.map
+  table.sort(zoneRows, function(a, b)
+    if (a.zone == here) ~= (b.zone == here) then
+      return a.zone == here
+    end
+    if a.have ~= b.have then
+      return a.have > b.have
+    end
+    local na, nb = a.name or "", b.name or ""
+    if na ~= nb then
+      return na < nb
+    end
+    return a.zone < b.zone
+  end)
+  for _, zr in ipairs(zoneRows) do
+    -- a zone without a name cannot be written (a pack without the World pack's zones)
+    if #out.zones < Shelf.PROGRESS_ZONES and zr.name and (zr.zone == here or zr.have > 0) then
+      out.zones[#out.zones + 1] = zr
+    end
+  end
+  return out
+end
+
+-- A collection as an album: the wonders of `kind` that count and have a model (`npc`), the ones
+-- the reader has first, then by name -> { { entry, have } }.
+function Shelf.Album(entries, kind, ctx)
+  local out = {}
+  for i = 1, #entries do
+    local e = entries[i]
+    if e.chapter == "collections" and e.kind == kind and e.npc then
+      local counts, done = Shelf.Counted(e, ctx)
+      if counts then
+        out[#out + 1] = { entry = e, have = done }
+      end
+    end
+  end
+  table.sort(out, function(a, b)
+    if a.have ~= b.have then
+      return a.have
+    end
+    local ta, tb = lower(a.entry.title or ""), lower(b.entry.title or "")
+    if ta ~= tb then
+      return ta < tb
+    end
+    return a.entry.id < b.entry.id
+  end)
+  return out
 end
 
 -- A wonder this character has not done, by `seed` (any number): nil when all are done. Never

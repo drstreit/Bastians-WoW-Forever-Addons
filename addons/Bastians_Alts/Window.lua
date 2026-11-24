@@ -8,6 +8,7 @@ local _, ns = ...
 local B = Bastians
 local L = ns.L
 local S = B.UI.Style
+local Widgets = B.UI.Widgets
 local Alts = ns.Alts
 local Model = Alts.Model
 
@@ -32,12 +33,15 @@ W.EMPTY = {
   mail = "The mailbox was not read yet: open one on this character.",
   requests = "No requests.",
 }
-W.GAP = 4 -- between the pills
-W.PAD = 6 -- the window's inner margin
 W.RENDER_DELAY = 0.05
+-- The one look (ADR 0084, W9; alts.md "The one look"): the views are the head's tabs, the
+-- characters chips in a band with the search at its end, the line of what is shown, a foot.
+W.SEARCH_MIN, W.SEARCH_MAX = 150, 260 -- the search in the band (the board: 260 at most)
+local SIDE, SUM_TOP, SUM_H, SUM_FOOT = 15, 8, 14, 6
+local TREE_LEFT, TREE_RIGHT = 6, 20 -- the rows' room beside the fold marks and the scroll bar
 
-local mod, win, tree, summary, hint, search
-local pills, tabs, realmLabels = {}, {}, {}
+local mod, win, tree, summary, hint, search, bar, band
+local pills = {}
 
 local function db()
   return mod.db.profile
@@ -133,45 +137,36 @@ local function pillTip(key)
   end
 end
 
--- The pills laid out in rows across the window's width, a realm's name in grey before its
--- characters when there is more than one realm; returns the height used.
+-- The characters as chips in the band, in rows across the window's width, a realm's name in
+-- small capitals before its characters when there is more than one realm; the search at the
+-- first row's end. Returns the band's height.
 function W.LayoutPills()
   if not win then
     return 0
   end
-  local content = win.content
-  local width = (win.frame:GetWidth() or 0) - 2 - 2 * W.PAD -- the frame: its width is known at once
+  local width = (win.frame:GetWidth() or 0) - 2 -- the frame: its width is known at once
   local groups = W.Groups()
   local several = #groups > 1
-  local x, y, n, nl = 0, 0, 0, 0
-  local rowH = S.G.pill or 26
   local chosen = W.Character()
-  local function place(widget, w)
-    if x > 0 and x + w > width then
-      x, y = 0, y + rowH + W.GAP
-    end
-    widget:ClearAllPoints()
-    widget:SetPoint("TOPLEFT", content, "TOPLEFT", W.PAD + x, -(W.PAD + y))
-    widget:Show()
-    x = x + w + W.GAP
-  end
-  for _, g in ipairs(groups) do
+  local top = bar:Room() -- under the head, or under the tabs' own row
+  band.frame:ClearAllPoints()
+  band.frame:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, -top)
+  band.frame:SetPoint("TOPRIGHT", win.content, "TOPRIGHT", 0, -top)
+  band:Begin(width)
+  local sw = math.max(W.SEARCH_MIN, math.min(W.SEARCH_MAX, math.floor(width * 0.4)))
+  search:SetWidth(sw)
+  band:PlaceRight(search, sw, search:GetHeight() or 22)
+  local n = 0
+  for gi, g in ipairs(groups) do
     if several then
-      nl = nl + 1
-      local label = realmLabels[nl]
-      if not label then
-        label = S.text(content, 11, S.C.dim)
-        label:SetHeight(rowH)
-        realmLabels[nl] = label
-      end
-      label:SetText(g.realm)
-      place(label, (label:GetStringWidth() or 0) + 2)
+      band:Group(g.realm, gi == 1)
     end
     for _, key in ipairs(g.chars) do
       n = n + 1
       local p = pills[n]
       if not p then
-        p = S.pill(content, {
+        p = S.pill(band.frame, {
+          small = true,
           onClick = function(self)
             W.Open(self.key)
           end,
@@ -185,16 +180,14 @@ function W.LayoutPills()
       p.spec.count = c.level
       p.spec.on = key == chosen or nil
       S.Draw(p)
-      place(p, p:GetWidth() or 60)
+      band:Place(p, p:GetWidth() or 60, p:GetHeight() or 22)
+      p:Show()
     end
   end
   for i = n + 1, #pills do
     pills[i]:Hide()
   end
-  for i = nl + 1, #realmLabels do
-    realmLabels[i]:Hide()
-  end
-  return y + rowH
+  return band:End()
 end
 
 -- ---------------------------------------------------------------------------------------------
@@ -294,22 +287,16 @@ function W.SearchRows(text)
   return out, string.format(L["%d items on %d characters"], #out, n)
 end
 
+-- The head's filled tab: the shown view; none while a search shows.
 local function setTabs(searching)
-  local v = view()
-  for _, t in ipairs(tabs) do
-    t:SetOn(not searching and t.view == v)
-    t:SetAlpha(searching and 0.5 or 1)
-  end
+  bar.tabs:SetValue(not searching and view() or nil)
 end
 
 function W.Render()
   if not (win and win:IsShown()) then
     return
   end
-  local height = W.LayoutPills()
-  search:ClearAllPoints()
-  search:SetPoint("TOPLEFT", win.content, "TOPLEFT", W.PAD, -(W.PAD + height + W.GAP))
-  search:SetPoint("TOPRIGHT", win.content, "TOPRIGHT", -W.PAD, -(W.PAD + height + W.GAP))
+  W.LayoutPills() -- the line and the rows hang under the band
   local text = query()
   local rows, words
   if text ~= "" then
@@ -334,6 +321,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansAltsFrame", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     module = "Alts", -- the options button opens this page (R27.1)
     title = L["Characters"],
     width = 640,
@@ -348,8 +336,28 @@ local function build()
     end,
   })
   local content = win.content
-  -- the search over everything they hold, under the pills (placed by Render)
-  search = S.search(content, L["Search everything your characters hold"])
+  -- the views as the head's tabs (ADR 0084 decision 3)
+  local items = {}
+  for _, t in ipairs(W.VIEWS) do
+    items[#items + 1] = { id = t[1], label = L[t[2]] }
+  end
+  bar = win:Bar({
+    tabs = {
+      items = items,
+      value = view(),
+      onChange = function(id)
+        W.Open(nil, id)
+      end,
+    },
+    onLayout = function()
+      if band and win:IsShown() then
+        W.Schedule() -- the tabs took or left their own row: the band moves
+      end
+    end,
+  })
+  -- the band: the characters as chips, the search over everything they hold at its end
+  band = B.UI.Band(content, { labels = false })
+  search = S.search(band.frame, L["Search everything your characters hold"])
   search:SetScript("OnTextChanged", function(self)
     local text = self:GetText() or ""
     if text == "" then
@@ -361,38 +369,23 @@ local function build()
     end
     W.Schedule()
   end)
-  -- the views as tabs under the search
-  local x = W.PAD
-  for i, t in ipairs(W.VIEWS) do
-    local tab = S.tab(content, {
-      kind = t[3],
-      label = L[t[2]],
-      onClick = function()
-        W.Open(nil, t[1])
-      end,
-    })
-    tab.view = t[1]
-    tab:SetPoint("TOPLEFT", search, "BOTTOMLEFT", x - W.PAD, -W.GAP)
-    tabs[i] = tab
-    x = x + (tab:GetWidth() or 60) + 2
-  end
-  summary = S.text(content, 11, S.C.dim)
-  summary:SetPoint("TOPLEFT", tabs[1], "BOTTOMLEFT", 2, -W.GAP)
-  summary:SetPoint("RIGHT", content, "RIGHT", -W.PAD, 0)
-  summary:SetHeight(14)
+  summary = S.text(content, 13, S.C.dim) -- what is shown, in the text size (the board)
+  summary:SetPoint("TOPLEFT", band.frame, "BOTTOMLEFT", SIDE, -SUM_TOP)
+  summary:SetPoint("TOPRIGHT", band.frame, "BOTTOMRIGHT", -SIDE, -SUM_TOP)
+  summary:SetHeight(SUM_H)
   summary:SetJustifyH("LEFT")
-  hint = S.text(content, 10, S.C.dim)
-  hint:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", W.PAD + 2, 4)
+  summary:SetWordWrap(false)
+  hint = Widgets.Foot(content) -- the window's last line, on the band's ground
   hint:SetText(L["Click a line: its page. Right click: its entity menu."])
-  tree = B.UI.Tree(content, { db = db().tree, ctx = { source = "alts" } })
+  tree = B.UI.Tree(content, { db = db().tree, ctx = { source = "alts" }, capsSections = true })
   tree.chips:ClearAllPoints()
-  tree.chips:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", -2, -2)
-  tree.chips:SetPoint("TOPRIGHT", content, "TOPRIGHT", -20, 0)
+  tree.chips:SetPoint("TOPLEFT", summary, "BOTTOMLEFT", TREE_LEFT - SIDE, -SUM_FOOT)
+  tree.chips:SetPoint("TOPRIGHT", summary, "BOTTOMRIGHT", SIDE - TREE_RIGHT, -SUM_FOOT)
   tree.scroll:ClearAllPoints()
-  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
-  tree.scroll:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 18)
-  W.win, W.tree, W.summary, W.tabs, W.pills, W.search = win, tree, summary, tabs, pills, search
-  W.realmLabels = realmLabels
+  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, 0)
+  tree.scroll:SetPoint("BOTTOMRIGHT", hint, "TOPRIGHT", -TREE_RIGHT, 0)
+  W.win, W.tree, W.summary, W.pills, W.search = win, tree, summary, pills, search
+  W.bar, W.band, W.hint = bar, band, hint
 end
 
 -- Opens the window on a character (nil keeps the chosen one) and a view (nil keeps it).

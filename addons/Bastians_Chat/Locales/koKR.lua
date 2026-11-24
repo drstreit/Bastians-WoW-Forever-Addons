@@ -396,11 +396,10 @@ ns.L:Register("koKR", {
   ["Window text"] = "창 텍스트",
   ["Heads and tabs"] = "머리글과 탭",
   ["Numbers and times"] = "숫자와 시간",
-  ["By the look (%s in Modern and Glass)"] = "모양에 따라 (모던과 글래스에서는 %s)",
   ["By the look"] = "모양에 따라",
-  ["By the look: in Modern and Glass the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono; WoW and Parchment their own fonts."] = "모양에 따라: 모던과 글래스에서는 제목과 탭에 Barlow Condensed SemiBold, 숫자와 시간에 IBM Plex Mono; WoW와 양피지는 자체 글꼴.",
+  ["By the look: the heads and tabs take Barlow Condensed SemiBold, the numbers and times IBM Plex Mono."] = "모양에 따라: 제목과 탭에 Barlow Condensed SemiBold, 숫자와 시간에 IBM Plex Mono.",
   ["The look's own"] = "모양 자체의 글꼴",
-  ["Modern and Glass take IBM Plex Sans, Barlow Condensed and IBM Plex Mono, WoW and Parchment their own fonts; the chat's lines keep the Font under Text."] = "모던과 글래스는 IBM Plex Sans, Barlow Condensed, IBM Plex Mono를, WoW와 양피지는 자체 글꼴을 씁니다. 대화 줄은 텍스트 아래의 글꼴을 유지합니다.",
+  ["By the look, the chat's windows take IBM Plex Sans, Barlow Condensed and IBM Plex Mono; the chat's lines keep the Font under Text."] = "모양에 따라 대화 창은 IBM Plex Sans, Barlow Condensed, IBM Plex Mono를 씁니다. 대화 줄은 텍스트 아래의 글꼴을 유지합니다.",
   -- an offer: how many of the item the bags hold (plan-chat-v3.md V18)
   ["you have %d"] = "보유 %d개",
   -- the watch list (plan-chat-v3.md V19)

@@ -14,7 +14,7 @@ Usage: python tools/site_deploy.py [--overlay <dir>] [--list] [--setup] [--previ
   --preview  deploy to the preview branch: a private-looking address, not bastians.dev
 
 The account id and the API token come from CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, else
-from ~/.cloudflare/.cloudflare-secret: ACCOUNT_ID_BASTIAN=... (the owner's Bastian account, where
+from ~/.secrets/cloudflare.env: ACCOUNT_ID_BASTIAN=... (the owner's Bastian account, where
 the Pages project and the zone live; the owner's 1vo5 account in the same file is never used here)
 and API_TOKEN=... (a token of that account). Never from the repo. Before wrangler runs, the token
 is checked against the account (check_account). The upload runs wrangler through npx, pinned below.
@@ -35,7 +35,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SITE = ROOT / "site"
-SECRETS = Path.home() / ".cloudflare" / ".cloudflare-secret"
+SECRETS = Path.home() / ".secrets" / "cloudflare.env"
+# The old place, until the file has moved on every machine (24.11.2026)
+_OLD_SECRETS = Path.home() / ".cloudflare" / ".cloudflare-secret"
+if _OLD_SECRETS.exists() and not SECRETS.exists():
+    SECRETS = _OLD_SECRETS
 PROJECT = "bastians"
 DOMAIN = "bastians.dev"
 WWW = "www." + DOMAIN

@@ -164,11 +164,11 @@ def test_the_here_column_honours_the_tracker_filters(wow: WowRuntime):
     settle(wow)
     rows = block_rows(wow, HD, "My quests here  1")
     assert len(rows) == 1 and "Fargodeep Mine II" not in rows[0]
-    # the toggles sit on the log view's bar in the Browser too
+    # the toggles sit in the Browser's band on the log view too
     wow.execute(f"{BMOD}.Browser.ShowView('quests.log')")
     wow.run_frames(5)
-    assert wow.eval(f"{BMOD}.controlBar.byId.logHideDone:IsShown()") is True
-    assert wow.eval(f"{BMOD}.controlBar.byId.logTrackedOnly:IsShown()") is True
+    assert wow.eval(f"{BMOD}.band.byId.logHideDone:IsShown()") is True
+    assert wow.eval(f"{BMOD}.band.byId.logTrackedOnly:IsShown()") is True
     assert wow.errors == []
 
 
@@ -326,10 +326,10 @@ def test_the_tracker_frame_shows_the_log_under_the_minimap_and_replaces_the_game
     assert wow.eval(f"{TRACKER}.tree.opts.twoLine") is True
     labels = [
         strip(b.label.GetText(b.label))
-        for b in wow.eval(f"{TRACKER}.bar.pools.button").values()
+        for b in wow.eval(f"{TRACKER}.bar.pools.chip").values()
         if b.IsShown(b)
     ]
-    assert "Hide done" in labels and "Tracked" in labels
+    assert "Hide done" in labels and "Tracked" in labels  # chips on the band (W9)
     # the item bar sits beside the frame; ESC leaves the frame alone
     assert wow.eval(f"{WIN}.ItemsOf") is not None
     assert TF not in list(wow.eval("UISpecialFrames").values())
@@ -357,12 +357,33 @@ def test_the_tracker_frame_shows_the_log_under_the_minimap_and_replaces_the_game
     assert fresh.eval(f"{GAME}:IsShown()") is True
     fresh.slash("/bq tracker")
     assert fresh.eval(f"{TF}:IsShown()") is True and fresh.eval(f"{GAME}:IsShown()") is False
+    # the frame's own close button switches it off as the setting does (owner, Forever
+    # 23.11.2026: "I closed our quest log. I cannot reopen it": a closed frame was still "on", so
+    # the first /bq tracker switched the setting off and showed nothing) ...
+    fresh.execute(f"{TRACKER}.win.close:Click()")
+    assert fresh.eval(f"{TF}:IsShown()") is False
+    assert fresh.eval(f"{MOD}.db.profile.trackerFrame") is False
+    assert fresh.eval(f"{GAME}:IsShown()") is True
+    # ... and one /bq tracker brings it back
+    fresh.slash("/bq tracker")
+    assert fresh.eval(f"{TF}:IsShown()") is True and fresh.eval(f"{GAME}:IsShown()") is False
+    # the minimap button, the hub's Open and the suite's bar open My quests ("retarget that to
+    # the quest log again"): the app's `open` shows the frame, and takes it away when it shows
+    fresh.execute(f"{TRACKER}.win.close:Click()")
+    assert fresh.eval("Bastians:OpenApp('Quests')") is True
+    assert fresh.eval(f"{TF}:IsShown()") is True and fresh.eval(f"{GAME}:IsShown()") is False
+    assert fresh.eval(f"{MOD}.db.profile.trackerFrame") is True
+    # a frame only hidden (another addon, the clear-screen key) while the setting is on comes
+    # back with the first call too
+    fresh.execute(f"{TF}:Hide()")
+    fresh.slash("/bq tracker")
+    assert fresh.eval(f"{TF}:IsShown()") is True
     # the lock: no drag, no grip
     fresh.execute(f"{MOD}.db.profile.trackerLocked = true")
     fresh.execute("Bastians:Fire('BASTIANS_SETTING_CHANGED', 'Quests', 'trackerLocked', true)")
     assert fresh.eval(f"{TRACKER}.win.grip:IsShown()") is False
     # the lock on the frame itself: it shows the state and switches it
-    lock = f"{TRACKER}.win.lock"
+    lock = f"{TRACKER}.lock"
     assert fresh.eval(f"{lock}.label:GetText()") == "Locked"
     fresh.execute(f"{lock}:Click()")
     assert fresh.eval(f"{MOD}.db.profile.trackerLocked") is False
@@ -410,5 +431,8 @@ def test_the_game_shows_its_tracker_again_and_it_goes_again(wow: WowRuntime):
 def test_lock_sits_left_of_the_options_button(wow: WowRuntime):
     """Lock and the window's options button (R27.1) overlapped."""
     boot_tracker(wow)
-    assert wow.eval(f"select(2, {TRACKER}.win.lock:GetPoint(1)) == {TRACKER}.win.options") is True
+    # since W9 the lock is a tool of the low head: Core's bar ends it before the options
+    assert wow.eval(f"{TRACKER}.win.headBar.tools.lock == {TRACKER}.lock") is True
+    assert wow.eval(f"select(2, {TRACKER}.lock:GetPoint(1)) == {TRACKER}.win.options") is True
+    assert wow.eval(f"{TRACKER}.win.lock") is None  # the window's own lock pictogram is not it
     assert wow.errors == []

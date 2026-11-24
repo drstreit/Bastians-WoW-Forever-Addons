@@ -9,7 +9,7 @@ Reads `tools/curseforge.toml` and the release manifest that `tools/release.py` w
 client. For every project it writes the upload zip (the project's folders from the release zips;
 Data's file carries its packs) to `<release-dir>/curseforge/` and prints the metadata. Without
 `--send` nothing leaves the machine. `--send` needs the upload token (CF_API_KEY, else the
-API-TOKEN line of ~/.curseforge/.secrets; never stored in the repo), a project id and a verified
+API-TOKEN line of ~/.secrets/curseforge.env; never stored in the repo), a project id and a verified
 slug for every project and relation it touches, and at least one game version name for the
 client; it resolves
 the names to ids (`GET /api/game/versions`) and posts each file (`POST /api/projects/<id>/
@@ -39,7 +39,11 @@ CLIENTS = ("forever",)
 CLIENT_NAMES = {"forever": "WoW Forever"}
 API = "https://wow.curseforge.com"
 # the owner's upload token, outside the repo: a line API-TOKEN=<token> (the environment wins)
-SECRETS = Path.home() / ".curseforge" / ".secrets"
+SECRETS = Path.home() / ".secrets" / "curseforge.env"
+# The old place, until the file has moved on every machine (24.11.2026)
+_OLD_SECRETS = Path.home() / ".curseforge" / ".secrets"
+if _OLD_SECRETS.exists() and not SECRETS.exists():
+    SECRETS = _OLD_SECRETS
 STAMP = (1980, 1, 1, 0, 0, 0)
 # a copy of the last file sent per project and client: what players have (the daily Data edition
 # boots its packs with the Suite kept here, tools/data_update.py)

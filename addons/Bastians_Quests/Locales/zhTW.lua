@@ -417,4 +417,6 @@ ns.L:Register("zhTW", {
   ["Follow"] = "跟隨",
   ["Following"] = "跟隨中",
   ["Route to the giver"] = "前往任務發布者",
+  ["Close My quests"] = "關閉我的任務",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "遊戲內建的任務追蹤會重新出現。小地圖上的任務按鈕或 /bq tracker 可再次開啟我的任務。",
 })

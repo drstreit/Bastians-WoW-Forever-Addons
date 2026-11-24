@@ -122,12 +122,16 @@ end
 local function waypointPins(view)
   local pins = {}
   if shown and shown.continent == view.continent then
+    -- the thing's own pin where an app says one (the facet `pin`: a quest's "?" by its state,
+    -- asked at every draw, so a quest done meanwhile shows done), else its icon
+    local look = shown.ref and B:Entity(shown.ref):Facet("pin") or nil
     for _, p in ipairs(shown.points) do
       pins[#pins + 1] = {
         ref = shown.ref,
         wx = p.wx,
         wy = p.wy,
-        icon = shown.icon,
+        icon = look and look.icon or shown.icon,
+        color = look and look.color or nil,
         size = 24,
         label = shown.label,
         priority = 95,

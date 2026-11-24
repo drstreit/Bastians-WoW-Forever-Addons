@@ -76,14 +76,17 @@ def test_the_navigation_is_there_on_every_entry(wow: WowRuntime):
         "Recipes",
         "Farm spots",  # its pack is not loaded here: unknown, so shown
     ]
-    assert wow.eval(f"{MOD}.rail:IsShown()") is True and wow.eval(f"{MOD}.rail.active") == "here"
+    assert (
+        wow.eval(f"{MOD}.head.tabs:IsShown()") is True
+        and wow.eval(f"{MOD}.head.tabs.spec.value") == "here"
+    )
     nav_click(wow, "nav:list:npc")  # NPCs, from the page, without Home
     wow.run_frames(5)
     assert wow.eval(f"{BR}.Current().kind") == "list" and wow.eval(f"{BR}.Current().type") == "npc"
     assert nav_active(wow) == "nav:list:npc"
     assert band(wow, f"{MOD}.dossier")["name"] == "Marshal Dughan"  # the page stays beside it
     wow.slash("/bq log")
-    assert wow.eval(f"{MOD}.rail:IsShown()") is True  # a view too
+    assert wow.eval(f"{MOD}.head.tabs:IsShown()") is True  # a view too
     assert nav_active(wow) == "nav:view:quests.log"
     assert wow.errors == []
 

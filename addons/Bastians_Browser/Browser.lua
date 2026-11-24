@@ -370,15 +370,18 @@ end
 local mod, win, tree, summary, toolbar, search
 local filterBox -- the list pane's own filter: narrows the rows shown as you type
 local filterHost -- where the filter chips stand: beside the search, under it when narrow (ADR 0056)
-local scope -- the scope chip inside the search box (ADR 0056)
+local scopeDim -- where the list and the search look (ADR 0056): the band's "where" chips draw it
 local searching -- a narrow window: the magnifier opened the search box over the title (ADR 0058)
 local layingOut -- Browser.Layout is giving the filter bar its width: its height comes back to it
 local syncingFilter -- the filter box follows the entry, nobody typed
-local header -- the block above the list: a view's control bar
+local header -- the list tile's top edge: its line and its filter hang under it
 local dossier -- the detail pane's dossier: the page of the subject (ADR 0018)
 local hereDossier -- the Here entry in the list pane: the player's zone in `here` mode (C4)
-local rail -- the rail of seven on top (ADR 0058; the category bar of ADR 0056 until then)
-local tabs -- the shown section's lists and views as a row of tabs under the rail (ADR 0058)
+local head -- the head's bar (ADR 0084, W9): the seven sections as its tabs, the search, Dock
+local navBand -- the band under the head (W9): Back, Forward, the section's lists, where, the filters
+local tabs -- what the band's chips say: { count, active (the lit tab's nav id), chips }
+local pageTitle -- what the list tile shows, in words (the window's name stays "Browser", W9)
+local wasNarrow -- the window showed one tile at its last resize
 local crumbs -- the breadcrumb row: where the two tiles are (ADR 0056)
 local pageFilter -- the page tile's filter (R2)
 local listPane, detailPane, splitter -- the list pane, the detail pane and the divider between them
@@ -388,11 +391,8 @@ local show -- show(entry, record): the one way an entry gets on screen, defined 
 local LIST_MIN, DETAIL_MIN = 240, 300
 local ONE_MIN = 640 -- narrower, one tile at a time: the list or the page (ADR 0056)
 local WIN_MIN = 320 -- the window's least width
-local CAT_GAP = 4 -- between two tabs, and between their rows
-local RAIL_GAP = 4 -- between two rail entries
 local CRUMB_H = 18 -- the breadcrumb row
-local PAGER_H = 22 -- the list tile's foot (ADR 0058)
-local TOOLBAR_H = 26
+local PAGER_PAD = 12 -- the foot's padding at its sides (Core's foot): the arrows stand there
 -- entries { kind = "page" | "list" | "view" | "home" | "here" | "bookmarks", ref, type, id, text }
 local history, cursor = {}, 0
 local current -- the entry at the cursor
@@ -1269,24 +1269,19 @@ function Browser.UpdateDock()
   S.setEdges(dock.edges, on and S.C.accent or S.C.line, on and 0.8 or nil)
 end
 
+-- Back and Forward follow the history with the band (Browser.RenderNav draws them).
 local function setNav()
   Browser.UpdateDock()
-  toolbar.back.enabledFlat = cursor > 1
-  toolbar.forward.enabledFlat = cursor < #history
-  local back, fwd = S.C.dim, S.C.dim
-  if cursor > 1 then
-    back = S.C.text
-  end
-  if cursor < #history then
-    fwd = S.C.text
-  end
-  toolbar.back.label:SetTextColor(back[1], back[2], back[3])
-  toolbar.forward.label:SetTextColor(fwd[1], fwd[2], fwd[3])
 end
 
--- The header block of an entry that is not a view: no control bar.
-local function noHeader()
-  header:SetHeight(1)
+-- What the list tile shows, in words ("People", "Here: Elwynn Forest", "Quests: My quests"). The
+-- window's name stays "Browser" (W9, the board): the lit tab, the lit chip and the trail say it.
+local function setTitle(text)
+  pageTitle = text
+end
+
+function Browser.Title()
+  return pageTitle
 end
 
 -- The list's row of the kept subject carries the selection mark.
@@ -1382,8 +1377,7 @@ Browser.RenderDetail = renderDetail
 
 local function renderList(typ)
   local def = listDef(typ)
-  win:SetTitle(L[def and def.label or typ])
-  noHeader()
+  setTitle(L[def and def.label or typ])
   local entry = shownList
   -- a list built once is kept until a pack loads or the player changes zone (R5, owner
   -- 22.10.2026: "the lists are always rebuilt"); the entry takes the cached rows at once
@@ -1432,7 +1426,7 @@ end
 
 -- What a list opens on: everything ("when I click on Dungeons it jumps
 -- automatically to a zone ... instead of automatically setting that"). ~~C9: the player's zone when
--- it has rows, else the continent.~~ The player narrows it: the scope chip, the list's Zone filter.
+-- it has rows, else the continent.~~ The player narrows it: the band's where chips, the list's Zone filter.
 function Browser.DefaultNear()
   return nil
 end
@@ -1789,7 +1783,7 @@ function Browser.UpdatePager()
     tree.scroll:ClearAllPoints()
     tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
     if shown then
-      tree.scroll:SetPoint("BOTTOMRIGHT", pager, "TOPRIGHT", 0, 2)
+      tree.scroll:SetPoint("BOTTOMRIGHT", pager, "TOPRIGHT", -14, 2)
     else
       tree.scroll:SetPoint("BOTTOMRIGHT", listPane, "BOTTOMRIGHT", -14, 0)
     end
@@ -1858,7 +1852,8 @@ function Browser.ShowList(entry)
     result = Browser.Filter(list, entry, order)
   end
   local dims = Browser.FilterDims(entry, result)
-  -- "Where" is the scope chip inside the search box (ADR 0056), the rest the chips beside it
+  -- "Where" is the band's own group after the lists (W9; ~~the scope chip inside the search
+  -- box~~, ADR 0056), the rest the filter chips under it
   local where = dims[1] and dims[1].id == "where" and table.remove(dims, 1) or nil
   tree:SetFilters(dims)
   Browser.SetScope(where)
@@ -2255,8 +2250,9 @@ end
 
 -- ---------------------------------------------------------------------------------------------
 -- The scope (ADR 0056, PA1.2): where the list and the search look: the player's zone, the
--- continent, everywhere. A chip inside the search box. For a list it is the "Where" dimension
--- (C9), taken out of the filter bar; a search typed on a list keeps the list's scope.
+-- continent, everywhere. A group of chips in the band (W9; ~~a chip inside the search box~~).
+-- For a list it is the "Where" dimension (C9), taken out of the filter bar; a search typed on a
+-- list keeps the list's scope.
 -- ---------------------------------------------------------------------------------------------
 
 -- The player's map, its continent and its zone record.
@@ -2281,47 +2277,92 @@ function Browser.ScopeWords(near)
   return L["Everywhere"]
 end
 
--- Shows the chip for a dimension (a list's Where, the search's own), nil: no chip.
-function Browser.SetScope(dim)
-  if not scope then
-    return
+-- A choice's words on its chip: "in Elwynn Forest", "in Eastern Kingdoms", "in <the zone a
+-- search was typed in>".
+local function scopeLabel(choice)
+  if choice.key == "here" or choice.key == "continent" then
+    return Browser.ScopeWords(choice.key)
   end
-  if scope.dim ~= dim then
-    local m = B.UI.FilterMenuFrame()
-    if m and m:IsShown() and m.anchor == scope then
-      m:Hide() -- the menu belonged to the chip's old choices
-    end
-  end
-  scope.dim = dim
-  local inset = 22 -- the box's clearing x
-  if dim then
-    local on = dim.active ~= nil
-    scope.label:SetText(dim.words or Browser.ScopeWords(dim.active))
-    S.ink(scope.label, on and S.C.text or S.C.dim)
-    S.tint(scope.face, on and S.C.accent or S.C.press, on and 0.25 or nil)
-    scope.clear:SetShown(on)
-    local width = math.floor((scope.label:GetStringWidth() or 0) + 0.5) + 16 + (on and 14 or 0)
-    scope:SetWidth(width)
-    scope.face:Show() -- lays the pill out for its new width
-    scope:Show()
-    inset = inset + width + 4
-  else
-    scope:Hide()
-  end
-  search:SetTextInsets(8, inset, 0, 0)
-  -- beside a chip the box is short: the hint is one word
-  search.hint:SetText(dim and L["Search"] or search.longHint)
-  search.hint:ClearAllPoints()
-  search.hint:SetPoint("LEFT", 8, 0)
-  search.hint:SetPoint("RIGHT", -inset, 0)
+  return string.format(L["in %s"], tostring(choice.label))
 end
 
--- The chip as the tests and the hub read it: its words and its choice, nil while it is hidden.
+-- What the band shows of a dimension: its choices, the chosen one and their counts.
+local function scopeSig(dim)
+  if not dim then
+    return ""
+  end
+  local out = { tostring(dim.active), tostring(dim.all and dim.all.count) }
+  for _, c in ipairs(dim.choices or {}) do
+    out[#out + 1] = tostring(c.key) .. "=" .. tostring(c.label) .. ":" .. tostring(c.count)
+  end
+  return table.concat(out, "|")
+end
+
+-- The band's "where" group (W9, the board): a chip per choice and "Everywhere", the chosen one
+-- filled, each with its count where the list knows it.
+local function scopeControls(controls)
+  local dim = scopeDim
+  if not (dim and Browser.FiltersShown()) then
+    return
+  end
+  controls[#controls + 1] = { id = "where", kind = "label", text = L["Where"] }
+  for _, choice in ipairs(dim.choices or {}) do
+    controls[#controls + 1] = {
+      id = "where:" .. tostring(choice.key),
+      kind = "toggle",
+      on = dim.active == choice.key,
+      label = scopeLabel(choice),
+      count = choice.count,
+      scope = choice.key,
+      tipTitle = L["Where"],
+      tooltip = dim.tip,
+      onClick = function()
+        dim.onSelect(choice.key)
+      end,
+    }
+  end
+  controls[#controls + 1] = {
+    id = "where:all",
+    kind = "toggle",
+    on = dim.active == nil,
+    label = L["Everywhere"],
+    count = dim.all and dim.all.count or nil,
+    tipTitle = L["Where"],
+    tooltip = dim.tip,
+    onClick = function()
+      dim.onSelect(nil)
+    end,
+  }
+end
+
+-- Sets the dimension the band's "where" chips draw (a list's Where, the search's own); nil: no
+-- such group. ~~A chip inside the search box~~ (ADR 0056 until W9, 24.11.2026: the board draws
+-- "where" in the band, and the box is 230 wide).
+function Browser.SetScope(dim)
+  local sig = scopeSig(dim)
+  local changed = scopeDim ~= dim or sig ~= (scopeDim and scopeDim.sig or "")
+  scopeDim = dim
+  if dim then
+    dim.sig = sig
+  end
+  if changed and win and win:IsShown() then
+    Browser.RenderNav()
+  end
+end
+
+-- The dimension the band draws, nil without one (the tests read its choices and counts).
+function Browser.ScopeDim()
+  return scopeDim
+end
+
+-- The scope as the tests and the hub read it: the chosen one's words and its choice, nil while
+-- there is none.
 function Browser.Scope()
-  if not (scope and scope:IsShown() and scope.dim) then
+  local dim = scopeDim
+  if not dim then
     return nil
   end
-  return scope.label:GetText(), scope.dim.active
+  return dim.words or Browser.ScopeWords(dim.active), dim.active
 end
 
 -- The search home: no list on open, results from
@@ -2707,8 +2748,7 @@ local function drawSearch(entry)
 end
 
 function renderHome(text)
-  win:SetTitle(L["Search"])
-  noHeader()
+  setTitle(L["Search"])
   tree:SetChips({}, nil, nil)
   local entry = shownList
   local query = B.ParseSearch(text or "")
@@ -2770,8 +2810,7 @@ function renderHome(text)
 end
 
 local function renderBookmarks()
-  win:SetTitle(L["Bookmarks"])
-  noHeader()
+  setTitle(L["Bookmarks"])
   tree:SetChips({}, nil, nil)
   local rows = {}
   for _, ref in ipairs(bookmarks()) do
@@ -2832,8 +2871,7 @@ function Browser.MoreRows()
 end
 
 local function renderMore()
-  win:SetTitle(L["More"])
-  noHeader()
+  setTitle(L["More"])
   tree:SetChips({}, nil, nil)
   tree:SetRows(Browser.MoreRows())
   summary:SetText(L["Everything else: the other apps' views, your bookmarks, the settings."])
@@ -2852,7 +2890,10 @@ end
 -- Views (ADR 0012, core-contracts §7b): the Browser is the one window; apps' views render here
 -- ---------------------------------------------------------------------------------------------
 
-local controlBar -- the toolbar line of a view, in place of the action bar
+-- the controls the shown view handed its host (core-contracts 7b), nil off a view: the band
+-- draws them after the lists (W9; ~~a bar of their own in the list tile~~)
+local viewControls
+local rendering -- Browser.Render is at work: it draws the band once, at its end
 local shownView -- id of the view whose onShow ran last
 local viewJob -- the shown view's background job
 local listening = {} -- bus messages the Browser re-renders on
@@ -2883,7 +2924,10 @@ local function viewHost(entry, def)
     tree:SetChips(chips or {}, active, onChip, nil, title)
   end
   function host.SetControls(_, controls)
-    controlBar:SetControls(controls)
+    viewControls = controls or {}
+    if not rendering then
+      Browser.RenderNav() -- a view that changes its controls between two renders
+    end
   end
   function host.Job(_, name, fn, onDone)
     if viewJob then
@@ -3034,21 +3078,18 @@ end
 
 local function renderView(entry)
   local def = B:GetView(entry.id)
-  noHeader()
-  controlBar:Show()
-  controlBar:SetControls({})
-  header:SetHeight(22)
+  viewControls = {} -- the view hands its own (host:SetControls)
   tree:SetChips({}, nil, nil)
   summary:SetText("")
   if not def then
     leaveView()
-    win:SetTitle(L["Not available"])
+    setTitle(L["Not available"])
     tree:SetRows({
       { kind = "para", text = S.H.muted .. L["This view is not available: its addon is off."] .. "|r" },
     })
     return
   end
-  win:SetTitle(tostring(def.group) .. ": " .. tostring(def.title))
+  setTitle(tostring(def.group) .. ": " .. tostring(def.title))
   listen(def)
   local host = viewHost(entry, def)
   if shownView ~= entry.id then
@@ -3444,8 +3485,7 @@ end
 
 local function renderInside(entry)
   local name = B:Entity(entry.ref):Name() or entry.ref
-  win:SetTitle(name)
-  noHeader()
+  setTitle(name)
   for _, def in ipairs(B:GetDetailSectionDefs(entry.ref)) do
     listen(def) -- a section invalidated (a quest handed in) redraws the entry
   end
@@ -3521,8 +3561,7 @@ end
 local function renderHereEntry()
   local ref = zoneRef()
   local name = ref and B:Entity(ref):Name()
-  win:SetTitle(name and string.format(L["Here: %s"], name) or L["Here"])
-  noHeader()
+  setTitle(name and string.format(L["Here: %s"], name) or L["Here"])
   summary:SetText("")
   Browser.RenderHere()
 end
@@ -3532,6 +3571,7 @@ function Browser.Render()
     return
   end
   setNav()
+  rendering = true
   local entry = Browser.ListEntry()
   if entry ~= shownList then
     shownList = entry
@@ -3539,7 +3579,7 @@ function Browser.Render()
   end
   if entry.kind ~= "view" then
     leaveView()
-    controlBar:Hide()
+    viewControls = nil
   end
   showHere(entry.kind == "here")
   if entry.kind ~= "list" and entry.kind ~= "home" then
@@ -3554,8 +3594,7 @@ function Browser.Render()
     local cached = Browser.listCache[entry.type]
     local stale = def and cached and cached.gen ~= facetGen(def) -- a quest's status moved
     if entry.list and not stale then
-      win:SetTitle(L[def and def.label or entry.type])
-      noHeader()
+      setTitle(L[def and def.label or entry.type])
       Browser.ShowList(entry)
     else
       renderList(entry.type)
@@ -3571,6 +3610,7 @@ function Browser.Render()
   end
   Browser.RenderStats()
   renderDetail()
+  rendering = false
   Browser.RenderNav()
   Browser.RenderCrumbs()
   Browser.Layout() -- the chips beside the search come and go with what the list tile shows
@@ -3678,20 +3718,6 @@ end
 -- the list tile shows. The navigation pane of ADR 0018 A went with ADR 0056; the recent pages are
 -- the history's, on Back.
 -- ---------------------------------------------------------------------------------------------
-
--- Places boxes of `widths` left to right in rows of `maxWidth`: -> { { x, y }, ... } from the top
--- left (y down), and the height they take. Pure. A box wider than a row stands alone in its row.
-function Browser.Flow(widths, maxWidth, gap, rowHeight)
-  local out, x, y = {}, 0, 0
-  for i, w in ipairs(widths) do
-    if x > 0 and x + w > maxWidth then
-      x, y = 0, y + rowHeight + gap
-    end
-    out[i] = { x = x, y = y }
-    x = x + w + gap
-  end
-  return out, (#widths > 0) and (y + rowHeight) or 0
-end
 
 local CAT_ORDER = {
   zone = 1,
@@ -3906,13 +3932,11 @@ function Browser.Sections()
     end)
     local needs = SECTION_NEEDS[section.id]
     if #section.tabs == 0 and needs then
-      local module = B:GetModule(needs)
-      local title = "Bastian's " .. tostring(module and module.title or needs) -- as Core's Works with
-      section.needs = string.format(L["%s needs %s"], section.label, title)
+      -- the app by its name, never its module (ADR 0082: an app does not take another's table)
+      section.needs = string.format(L["%s needs %s"], section.label, "Bastian's " .. needs)
     end
   end
-  local gold = B:GetModule("Gold")
-  if not (gold and gold:IsEnabled()) then
+  if not B:HasApp("Gold") then -- asked of Core, not of Gold's module (ADR 0082)
     byId.gold.label = L["Items"]
   end
   return out
@@ -4004,101 +4028,97 @@ function Browser.NavOf(entry)
   return nil
 end
 
-local function railButton(i)
-  local b = rail.buttons[i]
-  if not b then
-    b = S.action(rail, { label = "" })
-    b:SetScript("OnClick", function(self)
-      if self.section and not self.section.needs then
-        Browser.GoSection(self.section.id)
-      end
-    end)
-    rail.buttons[i] = b
-  end
-  return b
-end
-
-local function tabButton(i)
-  local b = tabs.buttons[i]
-  if not b then
-    b = S.action(tabs, { label = "", row = true })
-    b:SetScript("OnClick", function(self)
-      if self.cat then
+-- The band's controls (W9): Back and Forward as tools, then the shown section's lists and views
+-- as chips, the shown one filled, a search's count after its word.
+local function navControls(list, active)
+  local controls = {
+    {
+      id = "back",
+      label = L["Back"],
+      icon = "back",
+      enabled = cursor > 1,
+      tipTitle = L["Back"],
+      tooltip = L["The page before. Also: hold the right mouse button and drag to the left."],
+      onClick = function()
+        Browser.Back()
+      end,
+    },
+    {
+      id = "forward",
+      label = L["Forward"],
+      icon = "forward",
+      enabled = cursor < #history,
+      tipTitle = L["Forward"],
+      tooltip = L["The page after. Also: hold the right mouse button and drag to the right."],
+      onClick = function()
+        Browser.Forward()
+      end,
+    },
+  }
+  for _, cat in ipairs(list) do
+    controls[#controls + 1] = {
+      id = cat.id,
+      kind = "toggle",
+      on = cat.id == active,
+      label = cat.text,
+      count = cat.count,
+      cat = cat,
+      tipTitle = cat.tip and cat.text or nil,
+      tooltip = cat.tip,
+      onClick = function()
         Browser.SetListOpen(true) -- a tab fills the list tile
-        Browser.Navigate(self.cat.nav)
-      end
-    end)
-    tabs.buttons[i] = b
+        Browser.Navigate(cat.nav)
+      end,
+    }
   end
-  return b
+  scopeControls(controls) -- where the list looks: its group after the lists
+  for _, c in ipairs(viewControls or {}) do -- a view's own: its label, toggles, selects, buttons
+    controls[#controls + 1] = c
+  end
+  return controls
 end
 
--- Draws the rail (seven equal entries; pictograms alone when narrow) and the shown section's
--- tabs, which flow; the window lays out again when their rows change.
+-- Draws the navigation (ADR 0084, W9): the lit one of the head's seven tabs, and in the band
+-- Back, Forward and the shown section's lists and views as chips (one list alone, Here and More
+-- draw none). The head's tabs follow the apps that are on: Gold's reads Items without Gold, a
+-- section whose app is missing is dim and says what it needs.
 function Browser.RenderNav()
-  if not rail then
+  if not (head and navBand) then
     return
   end
   local sections = Browser.Sections()
   local activeSection = Browser.ActiveSection()
   local active = Browser.NavActive()
-  local narrow = Browser.IsNarrow()
-  local width = math.max(WIN_MIN, (win.frame:GetWidth() or 1000)) - 12
-  local entryW = math.floor((width - RAIL_GAP * (#sections - 1)) / #sections)
   local shown
+  local sig = {}
   for i, section in ipairs(sections) do
-    local b = railButton(i)
-    b.section = section
-    b.spec.icon, b.spec.label = section.icon, section.label
-    b.spec.hue = section.hue
-    b.spec.only = narrow or nil
-    b.spec.width = entryW
-    b.spec.primary = (section.id == activeSection) or nil
-    b.tip = function()
-      return section.label, section.needs
-    end
-    b:SetEnabledFlat(not section.needs)
-    b:Fit()
-    b:ClearAllPoints()
-    b:SetPoint("TOPLEFT", rail, "TOPLEFT", (i - 1) * (entryW + RAIL_GAP), 0)
-    b:Show()
+    sig[i] = section.label .. "|" .. (section.needs or "")
     if section.id == activeSection then
       shown = section
     end
   end
-  rail.count, rail.active = #sections, activeSection
-  -- the tabs: the section's lists and views; one list alone, Here and More draw no row
+  sig = table.concat(sig, ";")
+  if sig ~= head.sig then
+    head.sig = sig
+    for _, section in ipairs(sections) do
+      local needs = section.needs
+      head:SetTab(section.id, {
+        label = section.label,
+        disabled = needs ~= nil,
+        tip = needs and function()
+          return section.label, needs
+        end or nil,
+      })
+    end
+    head:Layout()
+  end
+  head.tabs:SetValue(activeSection)
   local list = (shown and #shown.tabs > 1) and shown.tabs or {}
-  local widths = {}
+  navBand:SetControls(navControls(list, active))
+  toolbar.back, toolbar.forward = navBand.byId.back, navBand.byId.forward
+  tabs.count, tabs.active, tabs.chips = #list, active, {}
   for i, cat in ipairs(list) do
-    local b = tabButton(i)
-    b.cat = cat
-    b.spec.icon, b.spec.label = cat.icon, cat.count and (cat.text .. "  " .. cat.count) or cat.text
-    b.spec.hue = shown and shown.hue or nil
-    b.spec.primary = (cat.id == active) or nil
-    b.tip = cat.tip and function()
-      return cat.text, cat.tip
-    end or nil
-    b:Fit()
-    b:Show()
-    widths[i] = b:GetWidth() or 60
-  end
-  for i = #list + 1, #tabs.buttons do
-    tabs.buttons[i]:Hide()
-    tabs.buttons[i].cat = nil
-  end
-  local places, height = Browser.Flow(widths, width, CAT_GAP, S.G.actionRow)
-  for i, place in ipairs(places) do
-    local b = tabs.buttons[i]
-    b:ClearAllPoints()
-    b:SetPoint("TOPLEFT", tabs, "TOPLEFT", place.x, -place.y)
-  end
-  tabs.count, tabs.active = #list, active
-  tabs:SetShown(#list > 0)
-  if height ~= tabs.height then
-    tabs.height = height
-    tabs:SetHeight(math.max(1, height))
-    Browser.Layout()
+    tabs.chips[i] = navBand.byId[cat.id]
   end
 end
 
@@ -4274,31 +4294,30 @@ function Browser.FiltersShown()
   return listOpen or not Browser.IsNarrow()
 end
 
-local SEARCH_SHARE, SEARCH_W_MIN, SEARCH_W_MAX = 0.4, 200, 420 -- the box's part of the title row
-local FILTER_TAIL = 4 -- the air a filter bar keeps under its last line
+local BAND_SIDE = 15 -- the band's padding at its sides (Core's): the filter chips flow between them
 
--- The search box in the title row (ADR 0058, PH2): right of the title, before Dock; under
--- ONE_MIN a magnifier stands there instead, and a click on it opens the box over the title.
-local function placeSearch(narrow, width)
-  local head = win.head
+-- The search box in the head (W9): Core's bar places it after the tabs and Dock before the
+-- window's pictograms; this runs after each of its layouts. Under ONE_MIN (ADR 0058, PH2) a
+-- magnifier stands before Dock instead, and a click on it opens the box over the name.
+local function placeSearch(bar)
+  local narrow = Browser.IsNarrow()
   local mag = toolbar.mag
-  search:ClearAllPoints()
-  win.title:ClearAllPoints()
-  win.title:SetPoint("LEFT", head, "LEFT", 10, 0)
+  mag:ClearAllPoints()
+  mag:SetPoint("RIGHT", bar.tools.dock, "LEFT", -4, 0)
   mag:SetShown(narrow)
+  win.title:ClearAllPoints()
+  win:AnchorTitle() -- after the home mark (Core's head, ADR 0084)
   if narrow then
     local open = searching == true
+    search:ClearAllPoints()
     search:SetShown(open)
-    win.title:SetShown(not open)
-    search:SetPoint("LEFT", head, "LEFT", 10, 0)
+    win.title:SetShown(not open and not win.gameFramed)
+    search:SetPoint("LEFT", win.head, "LEFT", win:NameStart(), 0)
     search:SetPoint("RIGHT", mag, "LEFT", -4, 0)
     win.title:SetPoint("RIGHT", mag, "LEFT", -8, 0)
   else
     search:Show()
-    win.title:Show()
-    search:SetWidth(math.max(SEARCH_W_MIN, math.min(SEARCH_W_MAX, math.floor(width * SEARCH_SHARE))))
-    search:SetPoint("RIGHT", toolbar.dock, "LEFT", -8, 0)
-    win.title:SetPoint("RIGHT", search, "LEFT", -8, 0)
+    win.title:SetShown(not win.gameFramed) -- the game's strip carries the name
   end
 end
 
@@ -4319,43 +4338,42 @@ function Browser.IsSearching()
 end
 
 function Browser.Layout()
-  if not win then
+  if not (win and navBand and listPane) then
     return
   end
   local content = win.content
   local narrow = Browser.IsNarrow()
-  local bar = 6 + S.G.action + ((tabs:IsShown() and (4 + tabs.height)) or 0) + 6
-  toolbar:ClearAllPoints()
-  toolbar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -bar)
-  toolbar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -bar)
-  local width = math.max(WIN_MIN, (win.frame:GetWidth() or 1000)) - 12
-  placeSearch(narrow, width)
-  -- the row under the rail (ADR 0058): Back, Forward, and right of them the filter chips; they
-  -- flow into more lines at the row's width
-  local arrows = (toolbar.back:GetWidth() or 0) + 2 + (toolbar.forward:GetWidth() or 0) + 8
-  local hostW = math.max(120, width - arrows)
+  local width = content:GetWidth() or 0
+  if width <= 0 then
+    width = win.frame:GetWidth() or 1000
+  end
+  width = math.max(WIN_MIN, width)
+  head:Layout() -- the head's parts, and the magnifier of a narrow window (placeSearch)
+  local room = head:Room() -- the tabs' row under a head too narrow for them
+  navBand.frame:ClearAllPoints()
+  navBand.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 0, -room)
+  navBand.frame:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, -room)
+  -- the list's filter chips on rows of their own under Back, Forward and the section's chips;
+  -- they flow at the band's width
   local hostH = 0
+  layingOut = true
   if Browser.FiltersShown() then
-    layingOut = true
-    tree:SetFilterWidth(hostW)
-    layingOut = false
-    hostH = tree.filterBar and tree.filterBar:Height() or 0
-    if hostH <= 1 then
-      hostH = 0 -- nothing to filter by
+    tree:SetFilterWidth(math.max(120, width - 2 * BAND_SIDE))
+    local bar = tree.filterBar
+    local h = bar and bar:Height() or 0
+    if h > 1 then -- 1: nothing to filter by
+      hostH = bar.bottom or h
     end
   end
-  local rowH = TOOLBAR_H
-  filterHost:ClearAllPoints()
-  filterHost:SetPoint("TOPLEFT", toolbar, "TOPLEFT", arrows, 0)
-  if hostH > 0 then
-    rowH = math.max(TOOLBAR_H, hostH - FILTER_TAIL)
-  end
-  filterHost:SetWidth(hostW)
-  filterHost:SetShown(hostH > 0)
+  navBand:SetBlockHeight(hostH)
+  navBand:Layout(width)
+  layingOut = false
+  local top = room + navBand:Height() + 4
   crumbs:ClearAllPoints()
-  crumbs:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -(bar + rowH + 4))
-  crumbs:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -(bar + rowH + 4))
-  local top = -(bar + rowH + 4 + CRUMB_H + 4)
+  crumbs:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -top)
+  crumbs:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -top)
+  top = -(top + CRUMB_H + 4)
+
   listPane:ClearAllPoints()
   detailPane:ClearAllPoints()
   if narrow then
@@ -4433,6 +4451,7 @@ local function build(self)
   end
   saved.slim, saved.slimWidth, saved.wideSize, saved.hideTracker = nil, nil, nil, nil
   win = B.UI.Window("BastiansBrowserFrame", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     module = "Browser", -- the options button opens this page (R27.1)
     title = L["Browser"],
     width = 1000,
@@ -4459,7 +4478,11 @@ local function build(self)
       previewRef, hovered = nil, nil
     end,
     onResize = function()
-      Browser.RenderNav() -- the rail and the tabs follow the new width
+      local narrow = Browser.IsNarrow()
+      if narrow ~= wasNarrow then -- one tile or two: the band's where chips go with the list
+        wasNarrow = narrow
+        Browser.RenderNav()
+      end
       Browser.RenderCrumbs()
       Browser.Layout()
       if tree then
@@ -4474,99 +4497,90 @@ local function build(self)
     end,
   })
   local content = win.content
-  -- the rail (ADR 0058): seven entries on top, then the shown section's tabs, as high as their rows
-  rail = CreateFrame("Frame", nil, content)
-  rail:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -6)
-  rail:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
-  rail:SetHeight(S.G.action)
-  rail.buttons = {}
-  tabs = CreateFrame("Frame", nil, content)
-  tabs:SetPoint("TOPLEFT", rail, "BOTTOMLEFT", 0, -4)
-  tabs:SetPoint("TOPRIGHT", rail, "BOTTOMRIGHT", 0, -4)
-  tabs:SetHeight(1)
-  tabs.buttons = {}
-  tabs:Hide()
-  toolbar = CreateFrame("Frame", nil, content)
-  Browser.toolbar = toolbar -- for the tests and the tips check
-  toolbar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -(6 + S.G.action + 6)) -- Layout places it
-  toolbar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -(6 + S.G.action + 6))
-  -- the breadcrumb under the search row
+  -- the head's and the band's parts by name (the tests, the tips check): back, forward, dock, mag
+  toolbar = {}
+  Browser.toolbar = toolbar
+  tabs = { count = 0, chips = {} }
+  -- the breadcrumb under the band (Layout places it)
   crumbs = CreateFrame("Frame", nil, content)
-  crumbs:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 0, -4)
-  crumbs:SetPoint("TOPRIGHT", toolbar, "BOTTOMRIGHT", 0, -4)
+  crumbs:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -50)
+  crumbs:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -50)
   crumbs:SetHeight(CRUMB_H)
   crumbs.buttons = {}
-  -- the bar is 26 px with 30 px arrows: the owner wanted Back and Forward prominent (22.10.2026)
-  toolbar:SetHeight(TOOLBAR_H)
-  -- Back and Forward as declared actions (ADR 0046): the pictogram and the word in every look
-  toolbar.back = S.action(toolbar, { icon = "back", label = L["Back"], boxed = true, row = true })
-  toolbar.back.tip = function()
-    return L["Back"], L["The page before. Also: hold the right mouse button and drag to the left."]
-  end
-  toolbar.back:SetPoint("LEFT", toolbar, "LEFT", 0, 0)
-  toolbar.back:SetScript("OnClick", function()
-    Browser.Back()
-  end)
-  toolbar.forward = S.action(toolbar, { icon = "forward", label = L["Forward"], boxed = true, row = true })
-  toolbar.forward.tip = function()
-    return L["Forward"], L["The page after. Also: hold the right mouse button and drag to the right."]
-  end
-  toolbar.forward:SetPoint("LEFT", toolbar.back, "RIGHT", 2, 0)
-  toolbar.forward:SetScript("OnClick", function()
-    Browser.Forward()
-  end)
+
   -- ~~Target~~ (target follow, C6) left the toolbar (its use was never
   -- clear); following the target stays a setting (followTarget, on by default)
   -- the search box fills the bar after the arrows; typing searches the world
   search = S.search(win.head, L["Search: a name, or a type first (npc wel)"]) -- the title row (ADR 0058)
+  search:SetHeight(win:Head().tool) -- a part of the head: its tools' height (ADR 0084)
   search.queryFields = L["type (npc, item, quest, zone, ...)"] -- the world search's (ADR 0045)
   search:SetPoint("RIGHT", win.head, "RIGHT", -120, 0) -- Layout places it before Dock
-  search.longHint = L["Search: a name, or a type first (npc wel)"]
   search.hint:SetWordWrap(false)
   search.hint:SetJustifyH("LEFT")
-  -- the filter chips stand beside the box (ADR 0056); the list's tree draws its bar in here
-  filterHost = CreateFrame("Frame", nil, content)
+  -- the magnifier of a narrow window (ADR 0058): the search box over the name on a click
+  local H = win:Head()
+  toolbar.mag = S.action(
+    win.head,
+    { icon = "search", label = L["Search"], only = true, glyph = H.glyph, height = H.tool }
+  )
+  toolbar.mag.tip = function()
+    return L["Search"], L["Opens the search box over the title; a second click brings the title back."]
+  end
+  toolbar.mag:SetScript("OnClick", function()
+    Browser.ToggleSearch()
+  end)
+  toolbar.mag:Hide()
+  -- the head's bar (ADR 0084, W9): the seven sections as its tabs, the search after them, Dock
+  -- beside the map (ADR 0013 E) as its tool before the window's pictograms
+  local items = {}
+  for i, r in ipairs(Browser.RAIL) do
+    items[i] = { id = r.id, label = L[r.label], icon = r.icon }
+  end
+  head = win:Bar({
+    tabs = {
+      items = items,
+      value = "here",
+      again = true, -- the lit tab leads to its section's first list too (Here from a search)
+      onChange = function(id)
+        if not Browser.GoSection(id) then
+          Browser.RenderNav() -- nothing opened: the lit tab is where the list tile is
+        end
+      end,
+    },
+    search = { frame = search },
+    tools = {
+      {
+        id = "dock",
+        icon = "dock",
+        label = L["Dock"],
+        tip = function()
+          return L["Dock to the map"],
+            L["The window sits beside the map at its height and moves with it. Click again to undock."]
+        end,
+        onClick = function()
+          B.UI.ToggleDock()
+          Browser.UpdateDock()
+        end,
+      },
+    },
+    onLayout = placeSearch,
+  })
+  toolbar.dock = head.tools.dock
+  -- the band under the head (W9): Back, Forward and the section's lists as chips, and on rows
+  -- of their own the list's filter chips (ADR 0056: the list's tree draws its bar in the host)
+  navBand = Widgets.ControlBand(content)
+  navBand.frame:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+  navBand.frame:SetPoint("TOPRIGHT", content, "TOPRIGHT", 0, 0)
+  navBand.onHeight = function()
+    if not layingOut then
+      Browser.Layout() -- more or fewer rows of chips: the tiles move
+    end
+  end
+  filterHost = CreateFrame("Frame", nil, navBand.frame)
   filterHost:SetHeight(1)
   filterHost:Hide()
-  -- the scope chip inside the box (ADR 0056): where the list and the search look. A click opens
-  -- its choices, the x looks everywhere
-  scope = CreateFrame("Button", nil, search)
-  scope:SetHeight(18)
-  scope:SetPoint("RIGHT", search.clear, "LEFT", -2, 0)
-  scope.face = S.roundFill(scope, S.C.press, "pill")
-  scope.label = S.text(scope, 11, S.C.text)
-  scope.label:SetPoint("LEFT", 8, 0)
-  scope.label:SetWordWrap(false)
-  scope.tip = function(chip)
-    return L["Where"], chip.dim and chip.dim.tip or nil
-  end
-  scope:SetScript("OnEnter", S.TipEnter)
-  scope:SetScript("OnLeave", S.TipLeave)
-  scope:SetScript("OnClick", function(chip)
-    local m = B.UI.FilterMenuFrame()
-    if m and m:IsShown() and m.anchor == chip then
-      m:Hide()
-    elseif chip.dim then
-      B.UI.FilterMenu(chip.dim, chip)
-    end
-  end)
-  scope.clear = CreateFrame("Button", nil, scope)
-  scope.clear:SetSize(14, 18)
-  scope.clear:SetPoint("RIGHT", -2, 0)
-  scope.clear.label = S.text(scope.clear, 12, S.C.dim)
-  scope.clear.label:SetPoint("CENTER")
-  scope.clear.label:SetText("x")
-  scope.clear.tip = L["Look everywhere"]
-  scope.clear:SetScript("OnEnter", S.TipEnter)
-  scope.clear:SetScript("OnLeave", S.TipLeave)
-  scope.clear:SetScript("OnClick", function()
-    B.UI.HideFilterMenu()
-    local dim = scope.dim
-    if dim and dim.onSelect then
-      dim.onSelect(nil)
-    end
-  end)
-  scope:Hide()
+  navBand:SetBlock(filterHost)
+
   -- the keys (ADR 0038): while the box has focus, Up and Down move a lit row through the list,
   -- Enter opens it, Escape clears the box; the rows take no keys of their own
   search:SetScript("OnKeyDown", function(_, key)
@@ -4636,10 +4650,6 @@ local function build(self)
   header:SetPoint("TOPLEFT", listPane, "TOPLEFT", 0, 0)
   header:SetPoint("TOPRIGHT", listPane, "TOPRIGHT", 0, 0)
   header:SetHeight(1)
-  controlBar = Widgets.ControlBar(header)
-  controlBar:SetPoint("TOPLEFT", header, "TOPLEFT", 0, 0)
-  controlBar:SetPoint("TOPRIGHT", header, "TOPRIGHT", 0, 0)
-  controlBar:Hide()
   -- the filter of the rows shown, beside the summary
   filterBox = S.search(listPane, L["Filter"])
   filterBox:SetHeight(20)
@@ -4674,7 +4684,7 @@ local function build(self)
     box:SetText("")
     box:ClearFocus()
   end)
-  summary = S.text(listPane, 11, S.C.dim)
+  summary = S.text(listPane, 13, S.C.dim) -- the line of what is shown: the text size (ADR 0084)
   summary:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 2, -2)
   summary:SetPoint("RIGHT", filterBox, "LEFT", -6, 0)
   summary:SetHeight(20)
@@ -4707,22 +4717,23 @@ local function build(self)
     end,
   })
   -- the foot of the list tile (ADR 0058): "1-12 of 430" between the arrows that turn the page
-  pager = CreateFrame("Frame", nil, listPane)
-  pager:SetHeight(PAGER_H)
-  pager:SetPoint("BOTTOMLEFT", listPane, "BOTTOMLEFT", 0, 0)
-  pager:SetPoint("BOTTOMRIGHT", listPane, "BOTTOMRIGHT", -14, 0)
+  -- (W9: Core's foot, 34 high on the band's ground with a rule over it; the board draws the
+  -- arrows at its ends and the page between them)
+  pager = Widgets.Foot(listPane)
   pager.prev = S.action(pager, { icon = "back", label = L["Previous page"], only = true, row = true })
-  pager.prev:SetPoint("LEFT", pager, "LEFT", 2, 0)
+  pager.prev:SetPoint("LEFT", pager, "LEFT", PAGER_PAD, 0)
   pager.prev:SetScript("OnClick", function()
     Browser.TurnPage(-1)
   end)
   pager.next = S.action(pager, { icon = "forward", label = L["Next page"], only = true, row = true })
-  pager.next:SetPoint("RIGHT", pager, "RIGHT", -2, 0)
+  pager.next:SetPoint("RIGHT", pager, "RIGHT", -PAGER_PAD, 0)
   pager.next:SetScript("OnClick", function()
     Browser.TurnPage(1)
   end)
-  pager.text = S.text(pager, 11, S.C.dim)
+  pager.text:ClearAllPoints() -- the foot's own text, between the arrows
   pager.text:SetPoint("CENTER", pager, "CENTER", 0, 0)
+  pager.text:SetJustifyH("CENTER")
+  pager.text:SetWordWrap(false)
   pager:Hide()
   tree.chips:ClearAllPoints()
   tree.chips:SetPoint("TOPLEFT", stats, "BOTTOMLEFT", 0, 0)
@@ -4826,33 +4837,10 @@ local function build(self)
     onClick = rowClick,
   })
 
-  -- Dock beside the map (ADR 0013 E) lives in the title bar, left of the window's options
-  -- button
-  toolbar.dock = S.action(win.head, { icon = "dock", label = L["Dock"], row = true })
-  toolbar.dock.tip = function()
-    return L["Dock to the map"],
-      L["The window sits beside the map at its height and moves with it. Click again to undock."]
-  end
-  toolbar.dock:SetPoint("RIGHT", win.options or win.close, "LEFT", -4, 0)
-  toolbar.dock:SetScript("OnClick", function()
-    B.UI.ToggleDock()
-    Browser.UpdateDock()
-  end)
-  -- the magnifier of a narrow window (ADR 0058): the search box over the title on a click
-  toolbar.mag = S.action(win.head, { icon = "search", label = L["Search"], only = true, row = true })
-  toolbar.mag.tip = function()
-    return L["Search"], L["Opens the search box over the title; a second click brings the title back."]
-  end
-  toolbar.mag:SetPoint("RIGHT", toolbar.dock, "LEFT", -4, 0)
-  toolbar.mag:SetScript("OnClick", function()
-    Browser.ToggleSearch()
-  end)
-  toolbar.mag:Hide()
-
   self.win, self.tree, self.toolbar, self.summary, self.search = win, tree, toolbar, summary, search
-  self.filterBox, self.filterHost, self.scope = filterBox, filterHost, scope
-  self.header, self.controlBar, self.dossier, self.hereDossier = header, controlBar, dossier, hereDossier
-  self.rail, self.tabs, self.crumbs = rail, tabs, crumbs
+  self.filterBox, self.filterHost = filterBox, filterHost
+  self.header, self.dossier, self.hereDossier = header, dossier, hereDossier
+  self.head, self.band, self.tabs, self.crumbs = head, navBand, tabs, crumbs
   self.listPane, self.detailPane, self.pager, self.stats = listPane, detailPane, pager, stats
   self.splitter = splitter
   Browser.Layout()

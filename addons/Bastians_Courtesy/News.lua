@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.9.0:1",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "In Courtesy's My lines window the Situation, Mood and Language boxes no longer overlap, and the three lists are tabs at the top.",
+  },
+  {
     id = "2.7.0:1",
     date = "2026-11-22",
     version = "2.7.0",

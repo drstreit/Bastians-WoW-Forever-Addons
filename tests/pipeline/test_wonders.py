@@ -419,3 +419,22 @@ def test_the_fixture_book_pack_is_what_the_generator_writes(tmp_path, capsys):
     report = (tmp_path / "report" / "report.md").read_text(encoding="utf-8")
     assert "wonders: 10 in, 6 unknown, 5 out (the client not read)" in report
     assert "mount:10795" in report and "no item in the client teaches it" in report
+
+
+def test_a_wonder_with_a_drawing_is_marked(tmp_path):
+    """R4.9: a wonder whose drawing lies in the pictures' folder (its id with a dash for the
+    colon) gets `art`, as a page does; the others carry no mark, and the report counts them."""
+    art = tmp_path / "art"
+    art.mkdir()
+    (art / "chain-sleeping-bag.jpg").write_bytes(b"jpeg")
+    (art / "chain-nothing.jpg").write_bytes(b"jpeg")  # a picture of no wonder marks nothing
+    world = a_world()
+    add_wonders(world, read_wonders(DATA), hooks(tmp_path, ""), art=art)
+    w = world.records["wonder"]
+    assert w["chain:sleeping-bag"]["art"] is True
+    assert [wid for wid, rec in w.items() if rec.get("art")] == ["chain:sleeping-bag"]
+    assert "wonder pictures: 1 wonders have a drawing in art/" in world.notes
+    plain = a_world()
+    add_wonders(plain, read_wonders(DATA), hooks(tmp_path, ""))
+    assert not any(rec.get("art") for rec in plain.records["wonder"].values())
+    assert not any(n.startswith("wonder pictures") for n in plain.notes)

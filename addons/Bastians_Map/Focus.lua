@@ -108,10 +108,7 @@ function Focus.UpdateDock()
   if not dock then
     return
   end
-  local on = B.UI.IsDocked(B.UI.DOCK.left)
-  local color = S.C[dock.token] or S.C.accent
-  S.tint(dock.face, color, on and 0.75 or S.TILE_FACE_ALPHA) -- docked: the face lit
-  S.setEdges(dock.edges, on and S.C.text or color, 0.9)
+  dock:SetOn(B.UI.IsDocked(B.UI.DOCK.left)) -- docked: the tool lit (the look draws it)
 end
 
 table.insert(Map.onBuild, function(clip)
@@ -132,17 +129,18 @@ table.insert(Map.onBuild, function(clip)
   Map.strip = strip
 
   -- ~~Follow~~ removed
-  local dock = S.tileButton(Map.toolbar, L["Dock"], "open", "rare") -- the Browser beside the map (ADR 0013 E)
-  dock.tip = function()
-    return L["Dock the Browser"],
-      L["Opens the Browser beside the map at its height; both move together. Click again to undock."]
-  end
-  dock:SetPoint("RIGHT", Map.toolbar.zoomOut, "LEFT", -8, 0)
-  dock:SetScript("OnClick", function()
-    B.UI.ToggleDock(B.UI.DOCK.left)
-    Focus.UpdateDock()
-  end)
-  Map.toolbar.dock = dock
+  Map.AddTool({ -- the Browser beside the map (ADR 0013 E), a tool of the head
+    id = "dock",
+    label = L["Dock"],
+    tip = function()
+      return L["Dock the Browser"],
+        L["Opens the Browser beside the map at its height; both move together. Click again to undock."]
+    end,
+    onClick = function()
+      B.UI.ToggleDock(B.UI.DOCK.left)
+      Focus.UpdateDock()
+    end,
+  })
   Focus.UpdateDock()
   Focus.Update()
 end)

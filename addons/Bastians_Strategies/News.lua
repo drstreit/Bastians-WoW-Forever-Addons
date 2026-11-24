@@ -5,6 +5,12 @@ local _, ns = ...
 -- Release-note trailers of the commits (ADR 0020), kept by hand where a sentence needs it.
 ns.NEWS = {
   {
+    id = "2.9.0:1",
+    date = "2026-11-24",
+    version = "2.9.0",
+    text = "Bastian's Book: the Atlas now shows every chapter, with a filter row, one disc per zone that opens the zone's own map, a card under the mouse, your notes on it (with Bastian's Notes), the suite's menu on a right click and a round through a zone (with Bastian's Route).",
+  },
+  {
     id = "2.6.0:1",
     date = "2026-11-20",
     version = "2.6.0",

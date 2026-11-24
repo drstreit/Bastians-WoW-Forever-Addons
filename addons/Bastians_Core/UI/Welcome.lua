@@ -937,6 +937,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansWelcomeFrame", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     title = L["Welcome to Bastian's Suite"],
     width = Welcome.WIDTH,
     height = Welcome.HEIGHT,

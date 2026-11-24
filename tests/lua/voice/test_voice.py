@@ -579,8 +579,25 @@ def test_the_conversation_replaces_the_quest_windows(wow: WowRuntime):
         ("quest", "The Jasperlode Mine"),
         ("say", "Not now"),
     ]
+    # under the pointer the answer lights up and its symbol grows; pressed it gives
+    accept = next(i for i, b in enumerate(bubbles(wow)) if b.title == "Accept") + 1
+    bubble = f"{ORBIT}.Visible()[{accept}]"
+    size = wow.eval(f"{bubble}.glyphSize")
+    wow.execute(f"{bubble}:GetScript('OnEnter')({bubble})")
+    assert wow.eval(f"{bubble}.glyph:GetWidth()") > size
+    wow.execute(f"{bubble}:GetScript('OnMouseDown')({bubble})")
+    assert wow.eval(f"{bubble}.glyph:GetWidth()") < size
+    wow.execute(f"{bubble}:GetScript('OnMouseUp')({bubble})")
+    wow.execute(f"{bubble}:GetScript('OnLeave')({bubble})")
+    assert wow.eval(f"{bubble}.glyph:GetWidth()") == size
+    # every click answers ("I have to click multiple times - no
+    # clear feedback when I click and why nothing happens"); a game that does not move on is said
     click(wow, "Accept")
     assert wow.eval("Mock.npcCalls[#Mock.npcCalls]") == "accept"
+    assert wow.eval(f"{ORBIT}.hub.name:GetText()") == "Accept ..."
+    wow.advance(1.1)
+    assert wow.eval(f"{ORBIT}.hub.name:GetText()").startswith("The game did not answer.")
+    click(wow, "Accept")
     wow.fire("QUEST_FINISHED")
     assert wow.eval(f"{TALK}.state") is None
     assert wow.eval("QuestFrame:GetAlpha()") == 1 and wow.eval("GossipFrame:GetAlpha()") == 1
@@ -600,8 +617,19 @@ def test_the_conversation_replaces_the_quest_windows(wow: WowRuntime):
         ("say", "Not now"),
     ]
     assert next(b for b in items if b.kind == "act").disabled is True
-    wow.execute(f"{TALK}.HandIn()")
-    assert any("Choose a reward first" in line for line in wow.chat)
+    click(wow, "Hand in")
+    assert wow.eval(f"{ORBIT}.hub.name:GetText()") == "Choose a reward first"  # where you clicked
+    # the quest to hand in: the gold "?", in its own colours on a bubble that showed a dark
+    # answer before
+    quest = next(i for i, b in enumerate(bubbles(wow)) if b.kind == "quest") + 1
+    glyph = f"{ORBIT}.Visible()[{quest}].glyph"
+    wow.execute(f"Bastians.UI.Style.tint({glyph}, Bastians.UI.Style.C.bg); {ORBIT}.Render(true)")
+    assert wow.eval(f"{glyph}:GetTexture()") == wow.eval("Bastians.UI.IconTexture('questActive')")
+    assert wow.eval(f"{glyph}.desaturated") is False
+    assert tuple(wow.eval(f"{{ {glyph}:GetVertexColor() }}").values()) == (1, 1, 1, 1)
+    # a running quest is the grey "?"
+    wow.execute(f"{ORBIT}.Visible()[{quest}].item.status = 'log'; {ORBIT}.Render(true)")
+    assert wow.eval(f"{glyph}.desaturated") is True
     assert "reward" not in wow.eval("Mock.npcCalls[#Mock.npcCalls]")
     # a reward shows the game's whole item tooltip, and how to choose it (owner, Forever
     # 08.11.2026: "I cannot see the exact reward stats when hovering over it")
@@ -923,4 +951,22 @@ def test_two_quests_of_one_title_at_a_greeting_are_two_bubbles(wow: WowRuntime):
     ready = next(i for i, b in enumerate(bubbles(wow)) if b.status == "ready") + 1
     wow.execute(f"{ORBIT}.Visible()[{ready}]:Click()")
     assert wow.eval("Mock.npcCalls[#Mock.npcCalls]") == "greeting active 2"  # the done one
+    assert errors(wow) == []
+
+
+def test_the_orbiter_works_with_core_alone_and_needs_no_route(wow: WowRuntime):
+    """W9's gate (ADR 0083): the app loads and works with Core alone: no Data, no Spoken, no other
+    app. Its TOC asked for Bastian's Route to load first and no file of it names Route (Route
+    speaks through Core's Tell): the line went with W9 (ADR 0082, the suite's last known
+    crossing)."""
+    from pathlib import Path
+
+    boot(wow, CORE, VOICE)
+    assert wow.eval(f"{V}:IsEnabled()") is True
+    assert wow.eval("Bastians:GetModule('Data')") is None
+    wow.execute(f"{ORBIT}.Refresh()")
+    wow.run_frames(3)
+    toc = Path(__file__).resolve().parents[3] / "addons/Bastians_Voice/Bastians_Voice.toc"
+    deps = next(ln for ln in toc.read_text(encoding="utf-8").splitlines() if "OptionalDeps" in ln)
+    assert "Bastians_Route" not in deps
     assert errors(wow) == []

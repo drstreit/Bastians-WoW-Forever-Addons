@@ -99,16 +99,17 @@ def test_a_resize_in_progress_moves_the_live_textures_and_queries_once_at_the_en
 def test_the_full_button_fills_the_screen_and_comes_back(wow: WowRuntime):
     boot(wow)
     width = wow.eval(f"{MAP_}.Camera().width")
-    assert width == 600 and wow.eval(f"{MAP_}.toolbar.full.label:GetText()") == "Full"
+    # the head's filled plate (W9): its word in small capitals, so read what it was told
+    assert width == 600 and wow.eval(f"{MAP_}.toolbar.full.spec.label") == "Full"
     wow.execute(f"{MAP_}.toolbar.full:Click()")
     assert wow.eval(f"{MAP_}.win:IsFullScreen()") is True
     assert wow.eval(f"{MOD}.db.profile.window.full") is True
-    assert wow.eval(f"{MAP_}.toolbar.full.label:GetText()") == "Window"
+    assert wow.eval(f"{MAP_}.toolbar.full.spec.label") == "Window"
     assert wow.eval(f"{MAP_}.win.frame:GetWidth()") == 1920
     wow.execute(f"{MAP_}.toolbar.full:Click()")
     assert wow.eval(f"{MAP_}.win:IsFullScreen()") is False
     assert wow.eval(f"{MAP_}.win.frame:GetWidth()") == 760  # the Map's default size
-    assert wow.eval(f"{MAP_}.toolbar.full.label:GetText()") == "Full"
+    assert wow.eval(f"{MAP_}.toolbar.full.spec.label") == "Full"
     assert wow.errors == []
 
 

@@ -79,7 +79,7 @@ def test_the_list_tile_takes_the_thing_with_its_parts(wow: WowRuntime):
     settle(wow)
     assert wow.eval(f"{BR}.Current().kind") == "inside"
     assert wow.eval(f"{BR}.PageRef()") == "zone:1429"  # the thing itself on the right
-    assert wow.eval(f"{MOD}.win.title:GetText()") == "Elwynn Forest"
+    assert wow.eval(f"{MOD}.Browser.Title()") == "Elwynn Forest"
     # its own tile, then its parts with the number of their things; none open
     assert drawn(wow) == [
         ("zone:1429", "Elwynn Forest", True),

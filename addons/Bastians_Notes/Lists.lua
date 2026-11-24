@@ -1,6 +1,7 @@
 -- Bastian's Notes: the Lists window (notes.md "The Lists window"): every list with its notes as a
--- tree; a note row opens the editor, a list row's button shows or hides the list on the map; New
--- list, Rename and Remove at the bottom.
+-- tree; a note row opens the editor, a list row's button shows or hides the list on the map. In
+-- the one look (ADR 0084, W9; notes.md "The one look"): New list, Import and Share are the
+-- head's tools, the chosen list with Rename and Remove list stands in the foot.
 local _, ns = ...
 local B = Bastians
 local L = ns.L
@@ -11,7 +12,9 @@ local Notes = ns.Notes
 local Lists = {}
 ns.Lists = Lists
 
-local win, tree, nameBox, newButton, renameButton, removeButton
+local TREE_LEFT, TREE_RIGHT = 6, 20 -- the rows' room beside the fold marks and the scroll bar
+
+local win, tree, nameBox, renameButton, removeButton, foot
 local selected = "my" -- the list the buttons act on
 
 -- The tree's rows: the lists, "My notes" first, each with its notes.
@@ -82,6 +85,9 @@ function Lists.Rows()
     local id = list.id
     rows[#rows + 1] = {
       id = "list:" .. id,
+      kind = "section", -- a quiet heading with its count (the board)
+      title = Notes.ListName(list),
+      count = #notes + #marks,
       text = string.format("%s  %s(%d)|r", Notes.ListName(list), S.H.muted, #notes + #marks),
       list = list,
       children = children,
@@ -112,6 +118,10 @@ function Lists.RenderButtons()
   end
   renameButton:SetShown(selected ~= "my")
   removeButton:SetShown(selected ~= "my")
+  -- the foot names the list its tools act on
+  list = Notes.Global().lists[selected]
+  foot:SetText(list and Notes.ListName(list) or "")
+  foot:Layout()
 end
 
 function Lists.Render()
@@ -133,6 +143,7 @@ Lists.AskName = askName
 
 local function build()
   win = B.UI.Window("BastiansNotesLists", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     module = "Notes", -- the options button opens this page (R27.1)
     title = L["Notes"],
     width = 420,
@@ -148,9 +159,66 @@ local function build()
     end,
   })
   local c = win.content
+  -- the head's tools (the board): New list and Import as words in an outline, Share the one
+  -- filled plate (sharing, N3: the chosen list; Import takes a pasted text)
+  local head = win:Bar({
+    tools = {
+      {
+        id = "new",
+        label = L["New list"],
+        onClick = function()
+          Lists.AskName("", function(value)
+            local list = Notes.Model.NewList(Notes.Global(), value)
+            if list then
+              selected = list.id
+              Notes.Changed()
+            end
+          end)
+        end,
+      },
+      {
+        id = "import",
+        label = L["Import"],
+        onClick = function()
+          ns.Share.OpenImport()
+        end,
+      },
+      {
+        id = "share",
+        label = L["Share"],
+        primary = true,
+        onClick = function()
+          ns.Share.Open(selected)
+        end,
+      },
+    },
+  })
+  -- the foot: the chosen list, and what can be done with it
+  foot = Widgets.Foot(c)
+  renameButton = foot:Tool({
+    label = L["Rename"],
+    onClick = function()
+      local list = Notes.Global().lists[selected]
+      Lists.AskName(list and list.name, function(value)
+        if Notes.Model.RenameList(Notes.Global(), selected, value) then
+          Notes.Changed()
+        end
+      end)
+    end,
+  })
+  removeButton = foot:Tool({
+    label = L["Remove list"],
+    onClick = function()
+      if Notes.Model.RemoveList(Notes.Global(), selected) then
+        selected = "my"
+        Notes.Changed()
+      end
+    end,
+  })
   tree = B.UI.Tree(c, {
     db = ns.mod.db.profile.tree,
     ctx = { source = "notes" },
+    capsSections = true, -- a list's name as a quiet heading with its count
     onClick = function(row, button)
       if row.button and button == "RightButton" then
         row.button.onClick(row)
@@ -160,67 +228,29 @@ local function build()
     end,
   })
   tree.chips:ClearAllPoints()
-  tree.chips:SetPoint("TOPLEFT", c, "TOPLEFT", 6, -6)
-  tree.chips:SetPoint("TOPRIGHT", c, "TOPRIGHT", -20, -6)
+  tree.chips:SetPoint("TOPLEFT", c, "TOPLEFT", TREE_LEFT, -4)
+  tree.chips:SetPoint("TOPRIGHT", c, "TOPRIGHT", -TREE_RIGHT, -4)
   tree.scroll:ClearAllPoints()
-  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, -2)
-  tree.scroll:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -20, 58)
+  tree.scroll:SetPoint("TOPLEFT", tree.chips, "BOTTOMLEFT", 0, 0)
+  tree.scroll:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", -TREE_RIGHT, 30) -- the name box's room
 
+  -- the name box over the foot: Enter keeps, Esc cancels
   nameBox = Widgets.Edit(c, L["List name"], function(value)
     nameBox:Hide()
     if nameBox.onDone then
       nameBox.onDone(value)
     end
   end)
-  nameBox:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 8, 32)
-  nameBox:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -8, 32)
+  nameBox:SetPoint("BOTTOMLEFT", foot, "TOPLEFT", 8, 4)
+  nameBox:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT", -8, 4)
   nameBox:SetMaxLetters(Notes.TITLE_MAX)
   nameBox:SetScript("OnEscapePressed", function(self)
     self:ClearFocus()
     self:Hide()
   end)
   nameBox:Hide()
-
-  newButton = S.button(c, L["New list"], 76, 22)
-  newButton:SetPoint("BOTTOMLEFT", c, "BOTTOMLEFT", 8, 6)
-  newButton:SetScript("OnClick", function()
-    askName("", function(value)
-      local list = Notes.Model.NewList(Notes.Global(), value)
-      if list then
-        selected = list.id
-        Notes.Changed()
-      end
-    end)
-  end)
-  renameButton = S.button(c, L["Rename"], 76, 22)
-  renameButton:SetPoint("LEFT", newButton, "RIGHT", 4, 0)
-  renameButton:SetScript("OnClick", function()
-    local list = Notes.Global().lists[selected]
-    askName(list and list.name, function(value)
-      if Notes.Model.RenameList(Notes.Global(), selected, value) then
-        Notes.Changed()
-      end
-    end)
-  end)
-  removeButton = S.button(c, L["Remove list"], 80, 22)
-  removeButton:SetPoint("LEFT", renameButton, "RIGHT", 4, 0)
-  removeButton:SetScript("OnClick", function()
-    if Notes.Model.RemoveList(Notes.Global(), selected) then
-      selected = "my"
-      Notes.Changed()
-    end
-  end)
-  -- sharing (N3): the list the buttons act on, and a pasted text
-  local import = S.button(c, L["Import"], 76, 22)
-  import:SetPoint("BOTTOMRIGHT", c, "BOTTOMRIGHT", -8, 6)
-  import:SetScript("OnClick", function()
-    ns.Share.OpenImport()
-  end)
-  local share = S.button(c, L["Share"], 76, 22, true)
-  share:SetPoint("RIGHT", import, "LEFT", -4, 0)
-  share:SetScript("OnClick", function()
-    ns.Share.Open(selected)
-  end)
+  Lists.newButton, Lists.importButton, Lists.shareButton = head.tools.new, head.tools.import, head.tools.share
+  Lists.renameButton, Lists.removeButton, Lists.foot = renameButton, removeButton, foot
   Lists.win, Lists.tree, Lists.nameBox = win, tree, nameBox
 end
 

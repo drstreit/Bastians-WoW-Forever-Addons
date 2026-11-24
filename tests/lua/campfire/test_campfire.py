@@ -417,6 +417,11 @@ def test_the_planner_rows_and_unknown_values(wow: WowRuntime):
     kit = next(iter(stamina.children.values()))
     assert kit.title == "First Aid Kit" and kit.value == "+8 Stamina"
     assert "Power Word: Fortitude" in stamina.text
+    # a feature's facts stand on short lines (W9; one line of all of them needed 347 units of
+    # 282, the windows probe of 23.11.2026): the skill and the tier, then where it comes from
+    assert kit.meta == "First Aid 20, tier 1"
+    assert list(kit.metaMore.values())[:1] == ["from the trainer or a quest"]
+    assert "First Aid 20, tier 1, from the trainer or a quest" in kit.text  # the search reads all
     wow.execute("Mock.level = 0")
     rows = list(wow.eval(f"({PLAN}.Rows())").values())
     stamina = next(r for r in rows if r.text.startswith("Stamina"))
@@ -720,4 +725,39 @@ def test_the_company_at_the_fire_and_sitting_down(wow: WowRuntime):
         f"{{ {{ spellId = {NEARBY} }}, {{ spellId = {RESTING}, expirationTime = GetTime() + 59 }} }}",
     )
     assert wow.eval("#Sat") == 1  # still sitting: told once
+    assert errors(wow) == []
+
+
+def test_the_planner_in_the_browser_keeps_its_lines_short(wow: WowRuntime):
+    """W9 (ADR 0084): the planner draws in the Browser's rows. Its level stands in the band
+    ("Values at level 15" needed 113 units of the old bar's 112), where the numbers come from is
+    a paragraph under the rows (as the view's summary it needed 517 units of 264), and a
+    feature's row takes a line per fact."""
+    boot(wow, CORE, DATA, GESTURES, CAMP, "Bastians_Browser")
+    wow.execute("Mock.level = 15")
+    br = "Bastians:GetModule('Browser')"
+    wow.execute(f"{br}.Browser.OpenWindow(); {PLAN}.Open()")
+    wow.run_frames(5)
+    assert wow.eval(f"{br}.Browser.Current().id") == "campfire.planner"
+    labels = [
+        c.text
+        for c in wow.eval(f"{br}.band.controls").values()
+        if getattr(c, "kind", None) == "label"
+    ]
+    assert labels == ["Values at level 15"]
+    assert (wow.eval(f"{br}.summary:GetText()") or "") == ""
+    flat = list(wow.eval(f"{br}.tree.flat").values())
+    assert flat[-1].kind == "para" and "Numbers from Campfire Tooltips (GPLv3)" in flat[-1].text
+    kit = next(r for r in flat if r.title == "First Aid Kit")
+    assert kit.meta == "First Aid 20, tier 1" and len(list(kit.metaMore.values())) >= 1
+    assert errors(wow) == []
+
+
+def test_campfire_works_with_core_alone(wow: WowRuntime):
+    """W9's gate (ADR 0083): the app loads and works with Core alone: no Data, no other app."""
+    boot(wow, CORE, CAMP)
+    assert wow.eval(f"{MOD}:IsEnabled()") is True
+    assert wow.eval("Bastians:GetModule('Data')") is None
+    rows = list(wow.eval(f"({PLAN}.Rows())").values())
+    assert rows[0].text == "My camp now"
     assert errors(wow) == []

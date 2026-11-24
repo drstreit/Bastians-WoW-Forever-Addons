@@ -417,4 +417,6 @@ ns.L:Register("ruRU", {
   ["Follow"] = "Следовать",
   ["Following"] = "Отслеживается",
   ["Route to the giver"] = "Маршрут к квестодателю",
+  ["Close My quests"] = "Закрыть «Мои задания»",
+  ["The game's own tracker comes back. The Quests minimap button or /bq tracker opens My quests again."] = "Возвращается игровой список заданий. Кнопка заданий у миникарты или /bq tracker снова открывает «Мои задания».",
 })

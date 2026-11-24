@@ -57,8 +57,10 @@ def test_here_fills_the_list_pane_beside_the_page(wow: WowRuntime):
     wow.slash("/bb npc:240")
     wow.execute("Bastians:GetModule('Browser').Browser.SetListOpen(true)")  # out (R25.36)
     # the category bar, then two tiles (ADR 0056): the list (Here before any list), the page
-    assert wow.eval(f"{MOD}.rail:IsShown()") is True and wow.eval(f"{MOD}.rail.count") == 7
-    assert wow.eval(f"{MOD}.rail.active") == "here"
+    assert (
+        wow.eval(f"#{MOD}.head.tabs.parts") == 7 and wow.eval(f"{MOD}.head.tabs:IsShown()") is True
+    )
+    assert wow.eval(f"{MOD}.head.tabs.spec.value") == "here"
     assert wow.eval(f"{MOD}.listPane:GetWidth()") == wow.eval(f"{BR}.ListWidth()")
     assert wow.eval(f"select(2, {MOD}.splitter:GetPoint(1)) == {MOD}.listPane") is True
     # the page beside the divider

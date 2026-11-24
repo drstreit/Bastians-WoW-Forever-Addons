@@ -277,8 +277,8 @@ function Search.New(inst, parent, hint, onChoose)
   return inst
 end
 
--- The map's box on its toolbar (Map.LayoutToolbar places it).
-function Search.Attach(toolbar)
-  Search.New(Search, toolbar, L["Search the world ..."], mapTarget)
+-- The map's box in its window's head (Core's bar places it; `toolbar` keeps its name).
+function Search.Attach(toolbar, parent)
+  Search.New(Search, parent, L["Search the world ..."], mapTarget)
   toolbar.search = Search.box
 end

@@ -19,9 +19,7 @@ local SETTLE_MAX = 1 -- ... but at most this long: kept centred, the view moves 
 local CENTRED_PX = 0.5 -- kept centred: the camera follows once the player is this far off
 local WHEEL_STEP = 0.5 -- levels per wheel notch
 local KEY_PAN = 120 -- pixels per arrow key
-local FOOTER_H = 18
-local TOOLBAR_ROW, TOOLBAR_GAP = 22, 4 -- one toolbar row and the space between two
-Map.SEARCH_MIN = 140 -- the search box never gets narrower: the buttons wrap first
+local FOOTER_H = 20 -- the foot (the suite's board: the place under the mouse on the band's ground)
 -- Continent names come from Core (the transform table lists every world map with a zone; the two
 -- Azeroth continents without one). Map.CONTINENTS reads the same table.
 local function continentName(continent)
@@ -302,9 +300,7 @@ function centredLook()
   end
   local on = Map.KeepCentred()
   b.token = on and "accent" or "dim"
-  local color = S.C[b.token]
-  S.tint(b.face, color, S.TILE_FACE_ALPHA)
-  S.setEdges(b.edges, color, 0.9)
+  b:SetOn(on) -- the tool lit while the map follows (the look draws it, ADR 0046)
 end
 
 function Map.SetKeepCentred(on)
@@ -547,6 +543,7 @@ end
 
 local function build()
   win = B.UI.Window("BastiansMapFrame", {
+    head = "tall", -- a window opened to read (ADR 0084 decision 3)
     module = "Map", -- the options button opens this page (R27.1)
     title = L["Map"],
     width = 760,
@@ -579,69 +576,129 @@ local function build()
   })
   local content = win.content
 
-  toolbar = CreateFrame("Frame", nil, content)
-  toolbar:SetPoint("TOPLEFT", content, "TOPLEFT", 6, -6)
-  toolbar:SetPoint("TOPRIGHT", content, "TOPRIGHT", -6, -6)
-  toolbar:SetHeight(TOOLBAR_ROW)
+  -- The toolbar's parts are the head's tools (ADR 0084 decisions 2 and 3, W9; map.md "The one
+  -- look"): words in an outline, laid out by Core's bar, on rows of their own under a head too
+  -- narrow. `toolbar` keeps their names for the map's other files and the tests.
+  toolbar = {}
   local continents = {}
   for id, name in pairs(B.Coords.Continents()) do
-    continents[id] = L[name]
+    continents[#continents + 1] = { key = id, label = L[name] }
   end
-  toolbar.continent = Widgets.Select(toolbar, "", continents, function(key)
-    Map.SetContinent(key)
+  table.sort(continents, function(a, b)
+    return a.label < b.label
   end)
-  toolbar.continent:SetPoint("TOPLEFT", 0, 0) -- the first row (LayoutToolbar)
-  toolbar.continent:SetWidth(170)
-  toolbar.player = S.tileButton(toolbar, L["Player"], "waypoint", "good")
-  toolbar.player.tip = L["Centre the map on you. Right click: your characters, share your location."]
-  toolbar.player:SetPoint("LEFT", toolbar.continent, "RIGHT", 6, 0)
+  ns.Search.Attach(toolbar, win.head) -- the search box (Search.lua, map.md B8.6)
+  local function zoom(dir)
+    return function()
+      Map.ZoomAt(camera.width / 2, camera.height / 2, dir)
+    end
+  end
+  local head = win:Bar({
+    wrapTools = true, -- at the least width the tools stand under the head, the search stays whole
+    search = { frame = toolbar.search },
+    tools = {
+      { id = "continent", label = "", menu = true },
+      {
+        id = "player",
+        label = L["Player"],
+        tip = L["Centre the map on you. Right click: your characters, share your location."],
+        onClick = function(self, button)
+          if button == "RightButton" then
+            ns.Characters.OpenMenu(self) -- the account's characters and sharing (R26.16)
+            return
+          end
+          if not Map.CenterOnPlayer() then
+            B:Say(L["No map position here (instance?)"])
+          end
+        end,
+      },
+      {
+        id = "centred",
+        label = L["Centred"],
+        tip = function()
+          local text = "The map follows you and centres on you whenever it opens. Looking around lets go "
+            .. "until you close it; click to switch this off for good."
+          return L["Keep me centred"], L[text]
+        end,
+        onClick = function()
+          Map.SetKeepCentred(not Map.KeepCentred())
+        end,
+      },
+      -- the Browser and the Route window, one click away
+      {
+        id = "browser",
+        label = L["Browser"],
+        tip = L["Open or close the Browser."],
+        onClick = function()
+          B:OpenApp("Browser")
+        end,
+      },
+      {
+        id = "route",
+        label = L["Route"],
+        tip = L["Open or close the route's step list."],
+        onClick = function()
+          B:OpenApp("Route")
+        end,
+      },
+      { id = "zoomOut", label = "-", tip = L["Zoom out (or the mouse wheel)."], onClick = zoom(-1) },
+      { id = "zoomIn", label = "+", tip = L["Zoom in (or the mouse wheel)."], onClick = zoom(1) },
+      -- full screen and back: the head's one filled plate
+      {
+        id = "full",
+        label = L["Full"],
+        primary = true,
+        tip = L["Full screen, and back."],
+        onClick = function(self)
+          win:ToggleFullScreen()
+          self:SetLabel(win:IsFullScreen() and L["Window"] or L["Full"])
+          Map.LayoutToolbar()
+        end,
+      },
+    },
+  })
+  for id, tool in pairs(head.tools) do
+    toolbar[id] = tool
+  end
+  toolbar.browser.app, toolbar.route.app = "Browser", "Route"
   toolbar.player:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  toolbar.centred = S.tileButton(toolbar, L["Centred"], "arrow", "dim")
-  toolbar.centred.tip = function()
-    local text = "The map follows you and centres on you whenever it opens. Looking around lets go "
-      .. "until you close it; click to switch this off for good."
-    return L["Keep me centred"], L[text]
+  toolbar.zoomOut.tipNow, toolbar.zoomIn.tipNow = true, true -- a sign, no word: its name at once
+  toolbar.full:SetLabel(win:IsFullScreen() and L["Window"] or L["Full"])
+  -- the continent: a select (a tool with a small arrow); its choices by name
+  local continent = toolbar.continent
+  continent.values = {}
+  for _, c in ipairs(continents) do
+    continent.values[c.key] = c.label
   end
-  toolbar.centred:SetPoint("LEFT", toolbar.player, "RIGHT", 6, 0)
-  toolbar.centred:SetScript("OnClick", function()
-    Map.SetKeepCentred(not Map.KeepCentred())
-  end)
-  centredLook()
-  ns.Search.Attach(toolbar) -- the search bar (Search.lua, map.md B8.6)
-  toolbar.player:SetScript("OnClick", function(self, button)
-    if button == "RightButton" then
-      ns.Characters.OpenMenu(self) -- the account's characters and sharing (R26.16)
+  function continent.SetValue(self, key)
+    self.current = key
+    self:SetLabel(tostring(self.values[key] or key or ""))
+    win.headBar:Layout() -- the word's width changed
+  end
+  function continent.GetValue(self)
+    return self.current
+  end
+  continent:SetScript("OnClick", function(self)
+    local m = B.UI.FilterMenuFrame()
+    if m and m:IsShown() and m.anchor == self then
+      m:Hide()
       return
     end
-    if not Map.CenterOnPlayer() then
-      B:Say(L["No map position here (instance?)"])
-    end
+    B.UI.FilterMenu({
+      choices = continents,
+      active = self.current,
+      all = false,
+      onSelect = function(key)
+        Map.SetContinent(key)
+      end,
+    }, self)
   end)
-  -- full screen and back
-  toolbar.full = S.tileButton(toolbar, L["Full"], "zone", "accent", 76)
-  toolbar.full.tip = L["Full screen, and back."]
-  toolbar.full:SetPoint("RIGHT", 0, 0)
-  toolbar.full:SetScript("OnClick", function()
-    win:ToggleFullScreen()
-    toolbar.full.label:SetText(win:IsFullScreen() and L["Window"] or L["Full"])
-  end)
-  toolbar.full.label:SetText(win:IsFullScreen() and L["Window"] or L["Full"])
-  toolbar.zoomIn = S.tileButton(toolbar, "+", nil, "dim", 22)
-  toolbar.zoomIn.tip = L["Zoom in (or the mouse wheel)."]
-  toolbar.zoomIn:SetPoint("RIGHT", toolbar.full, "LEFT", -6, 0)
-  toolbar.zoomIn:SetScript("OnClick", function()
-    Map.ZoomAt(camera.width / 2, camera.height / 2, 1)
-  end)
-  toolbar.zoomOut = S.tileButton(toolbar, "-", nil, "dim", 22)
-  toolbar.zoomOut.tip = L["Zoom out (or the mouse wheel)."]
-  toolbar.zoomOut:SetPoint("RIGHT", toolbar.zoomIn, "LEFT", -2, 0)
-  toolbar.zoomOut:SetScript("OnClick", function()
-    Map.ZoomAt(camera.width / 2, camera.height / 2, -1)
-  end)
+  centredLook()
 
   clip = CreateFrame("Frame", nil, content)
-  clip:SetPoint("TOPLEFT", toolbar, "BOTTOMLEFT", 0, -TOOLBAR_GAP) -- under the last toolbar row
-  clip:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -6, FOOTER_H + 4)
+  -- the map from edge to edge under the head (or the tools' rows), down to the foot
+  clip:SetPoint("TOPLEFT", content, "TOPLEFT", 0, 0)
+  clip:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", 0, FOOTER_H)
   clip:SetClipsChildren(true)
   -- parchment, not black: the sea is transparent in the overview cells and the zone art under it
   -- arrives late on a streaming client
@@ -664,117 +721,48 @@ local function build()
     self:SetPropagateKeyboardInput(true)
   end)
 
-  footer = S.text(content, 11, S.C.dim)
-  footer:SetPoint("BOTTOMLEFT", content, "BOTTOMLEFT", 8, 4)
-  footer:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -8, 4)
-  footer:SetHeight(FOOTER_H - 4)
+  footer = Widgets.Foot(content, FOOTER_H) -- the place under the mouse, on the band's ground
 
   Map.win, Map.clip, Map.footer, Map.toolbar = win, clip, footer, toolbar
   for _, fn in ipairs(Map.onBuild) do
     fn(clip)
   end
-  -- the Route window and the Browser, one click away
-  toolbar.route = S.tileButton(toolbar, L["Route"], "route", "water")
-  toolbar.route.app = "Route"
-  toolbar.route.tip = L["Open or close the route's step list."]
-  toolbar.route:SetScript("OnClick", function()
-    B:OpenApp("Route")
-  end)
-  toolbar.browser = S.tileButton(toolbar, L["Browser"], "open", "rare")
-  toolbar.browser.app = "Browser"
-  toolbar.browser.tip = L["Open or close the Browser."]
-  toolbar.browser:SetScript("OnClick", function()
-    B:OpenApp("Browser")
-  end)
   Map.LayoutToolbar()
 end
 
--- The toolbar in rows: the continent, Player and Centred on the left, the right group (Browser,
--- Route, Dock, zoom, Full) on the right, the search box between them, from Centred to the right
--- group's leftmost button, whichever modules added them (a fixed right
--- margin let the box cover Dock; it began at Player and covered Centred).
--- A window too narrow for one row puts the right group on a second row, and the search on a row of
--- its own when even that is too tight. Returns
--- the number of rows.
+-- A tool another file of the map brings (the City map, Dock): into the head's bar before the
+-- zoom, under its name in `Map.toolbar`.
+function Map.AddTool(spec)
+  local tool = win.headBar:AddTool(spec, "zoomOut")
+  toolbar[spec.id] = tool
+  return tool
+end
+
+-- The head's tools as the apps and the art allow them, laid out by Core's bar: in the head while
+-- it has room, on rows of their own under it on a narrow window (the
+-- buttons overlapped), the search always in the head. The map begins under those rows. Returns
+-- the number of rows (the head's own is the first).
 function Map.LayoutToolbar()
   local bar = Map.toolbar
-  if not (bar and bar.search and win) then
+  if not (bar and bar.search and win and win.headBar) then
     return 0
   end
-  -- the right group from the right, each with its gap to the button on its right; the buttons of
-  -- other apps' windows only while the app is there
-  local group = { { bar.full, 0 }, { bar.zoomIn, 6 }, { bar.zoomOut, 2 } }
-  if bar.dock then
-    group[#group + 1] = { bar.dock, 8 }
-  end
+  -- the buttons of other apps' windows only while the app is there
   for _, name in ipairs({ "route", "browser" }) do
-    local b = bar[name]
-    if b then
-      b:SetShown(B:HasApp(b.app))
-      if b:IsShown() then
-        group[#group + 1] = { b, 6 }
-      end
-    end
+    bar[name]:SetShown(B:HasApp(bar[name].app))
   end
   if bar.city then -- the City & dungeon map, only with its art (ADR 0065)
     bar.city:SetShown(ns.City.Available())
-    if bar.city:IsShown() then
-      group[#group + 1] = { bar.city, 6 }
-    end
   end
-  local rightW = 0
-  for _, g in ipairs(group) do
-    rightW = rightW + g[2] + (g[1]:GetWidth() or 0)
+  local head = win.headBar
+  head:Layout()
+  bar.rows = 1 + head.toolRows
+  if clip then
+    clip:ClearAllPoints()
+    clip:SetPoint("TOPLEFT", win.content, "TOPLEFT", 0, -head:Room())
+    clip:SetPoint("BOTTOMRIGHT", win.content, "BOTTOMRIGHT", 0, FOOTER_H)
   end
-  local leftW = (bar.continent:GetWidth() or 0)
-    + 6
-    + (bar.player:GetWidth() or 0)
-    + 6
-    + (bar.centred:GetWidth() or 0)
-  -- the content's width: the toolbar's own is unknown until the client lays it out
-  local width = (win.frame:GetWidth() or 0) - 14
-  local search, gap = Map.SEARCH_MIN, 8
-  local rows, rightRow, searchRow
-  if leftW + gap + search + gap + rightW <= width then
-    rows, rightRow, searchRow = 1, 1, 1
-  elseif leftW + gap + search <= width then
-    rows, rightRow, searchRow = 2, 2, 1
-  elseif search + gap + rightW <= width then
-    rows, rightRow, searchRow = 2, 2, 2
-  else
-    rows, rightRow, searchRow = 3, 2, 3
-  end
-  local function rowY(row)
-    return -(row - 1) * (TOOLBAR_ROW + TOOLBAR_GAP)
-  end
-  bar.continent:ClearAllPoints()
-  bar.continent:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, 0)
-  local prev
-  for _, g in ipairs(group) do
-    local b = g[1]
-    b:ClearAllPoints()
-    if prev then
-      b:SetPoint("RIGHT", prev, "LEFT", -g[2], 0)
-    else
-      b:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, rowY(rightRow))
-    end
-    prev = b
-  end
-  local box = bar.search
-  box:ClearAllPoints()
-  if searchRow == 1 then
-    box:SetPoint("LEFT", bar.centred, "RIGHT", gap, 0)
-  else
-    box:SetPoint("TOPLEFT", bar, "TOPLEFT", 0, rowY(searchRow))
-  end
-  if searchRow == rightRow then
-    box:SetPoint("RIGHT", prev, "LEFT", -gap, 0)
-  else
-    box:SetPoint("TOPRIGHT", bar, "TOPRIGHT", 0, rowY(searchRow)) -- the bar's RIGHT is its middle
-  end
-  bar.rows = rows
-  bar:SetHeight(rows * TOOLBAR_ROW + (rows - 1) * TOOLBAR_GAP)
-  return rows
+  return bar.rows
 end
 
 -- An app came or went: its toolbar button with it (Route, Browser).

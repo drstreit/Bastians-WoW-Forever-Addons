@@ -535,6 +535,12 @@ def read_page(path: Path, root: Path) -> tuple[str, str, dict, str]:
     return slug, chapter, header, body
 
 
+def art_slug(wid: str) -> str:
+    """A drawing's file name for a wonder's or a chapter's id: its colon as a dash
+    (`camp:279938` is `camp-279938.jpg`; tools/book_art.py and the book's Picture.ArtOf agree)."""
+    return wid.replace(":", "-")
+
+
 def has_art(art: Path | None, slug: str) -> bool:
     """Whether the export brings the page's picture (AHSync, art/README.md). Nothing is decoded
     here: tools/book_art.py turns the pictures into the game's textures after the build."""

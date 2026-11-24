@@ -163,19 +163,10 @@ def test_the_suites_ten_fonts_are_in_the_choices(core: WowRuntime):
         # the file ships, its licence beside it
         assert (folder / file).is_file(), file
         assert (folder / file.replace(".ttf", "-LICENSE.txt")).is_file(), file
-    # the heading, the label and the number font offer the same plus "the text font"
-    for key in ("headingFont", "labelFont", "numberFont"):
-        values = dict(
-            core.eval(
-                f"""(function()
-                  for _, o in ipairs({CORE}.def.options) do
-                    if o.key == "{key}" then return o.values() end
-                  end
-                end)()"""
-            )
-        )
-        assert values[""] == "Same as the text", key
-        assert values[fonts + "Cinzel.ttf"] == "Cinzel", key
+    # ~~the heading, the label and the number font offer the same plus "the text font"~~: gone
+    # with W5 (ADR 0084 decision 7, 23.11.2026): headings and labels wear the book's faces
+    keys = {o.key for o in core.eval(f"{CORE}.def.options").values()}
+    assert "font" in keys and not {"headingFont", "labelFont", "numberFont"} & keys
     # a window of its own may name them too (Chat's faces, V17)
     assert {"labelFont", "numberFont"} <= set(core.eval(f"{SET}.FRAME_KEYS").values())
     assert core.errors == []
